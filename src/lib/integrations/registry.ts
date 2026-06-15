@@ -36,8 +36,8 @@ export const PROVIDERS: Record<IntegrationProviderKey, ProviderSpec> = {
     description: "Disparo e CRM de WhatsApp via Evolution API.",
     fields: [
       { key: "baseUrl", label: "URL base", type: "url", required: true, placeholder: "https://evo.suaempresa.com" },
-      { key: "apiKey", label: "API Key", type: "password", required: true },
-      { key: "instance", label: "Instância", type: "text", required: true },
+      { key: "apiKey", label: "API Key (global)", type: "password", required: true },
+      { key: "instance", label: "Instância (opcional)", type: "text", placeholder: "deixe em branco para gerar" },
     ],
   },
   META_CLOUD: {

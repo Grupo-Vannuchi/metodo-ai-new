@@ -1,5 +1,6 @@
 import "server-only";
 import type { ChannelAdapter } from "./types";
+import { normalizeWhatsappNumber } from "@/lib/phone";
 
 type EvoResponse = { key?: { id?: string }; message?: string };
 
@@ -14,7 +15,10 @@ const adapter: ChannelAdapter = {
       const res = await fetch(url, {
         method: "POST",
         headers: { apikey: creds.apiKey, "Content-Type": "application/json" },
-        body: JSON.stringify({ number: input.to, text: input.body }),
+        body: JSON.stringify({
+          number: normalizeWhatsappNumber(input.to),
+          text: input.body,
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as EvoResponse;
       if (!res.ok) {

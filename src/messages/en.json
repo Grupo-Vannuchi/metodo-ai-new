@@ -218,6 +218,18 @@
       "INACTIVE": "Inactive",
       "ERROR": "Error"
     },
+    "back": "Back",
+    "detailNote": "This integration is configured via credentials. Use \"Test\" in the list to verify.",
+    "evo": {
+      "title": "WhatsApp connection",
+      "idleHint": "Connect your WhatsApp by scanning a QR code.",
+      "connect": "Connect WhatsApp",
+      "scanHint": "Open WhatsApp > Linked devices > Link a device and scan:",
+      "pairingCode": "Pairing code",
+      "waiting": "Waiting for pairing…",
+      "connected": "WhatsApp connected",
+      "disconnect": "Disconnect"
+    },
     "error": {
       "unauthorized": "Session expired.",
       "invalid": "Fill in the required fields.",

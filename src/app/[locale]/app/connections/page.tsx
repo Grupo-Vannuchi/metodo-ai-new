@@ -87,7 +87,11 @@ export default async function ConnectionsPage({
             <tbody>
               {connections.map((c) => (
                 <tr key={c.id} className="border-b border-border last:border-0">
-                  <td className="px-5 py-3 font-medium">{c.label}</td>
+                  <td className="px-5 py-3 font-medium">
+                    <Link href={`/app/connections/${c.id}`} className="hover:underline">
+                      {c.label}
+                    </Link>
+                  </td>
                   <td className="px-5 py-3 text-muted-foreground">
                     {PROVIDERS[c.provider as IntegrationProviderKey]?.label ?? c.provider}
                   </td>

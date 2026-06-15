@@ -1,5 +1,6 @@
 import "server-only";
 import type { ChannelAdapter } from "./types";
+import { normalizeWhatsappNumber } from "@/lib/phone";
 
 type MetaResponse = {
   messages?: { id?: string }[];
@@ -22,7 +23,7 @@ const adapter: ChannelAdapter = {
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
-          to: input.to,
+          to: normalizeWhatsappNumber(input.to),
           type: "text",
           text: { body: input.body },
         }),

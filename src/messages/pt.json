@@ -218,6 +218,18 @@
       "INACTIVE": "Inativa",
       "ERROR": "Erro"
     },
+    "back": "Voltar",
+    "detailNote": "Esta integração é configurada pelas credenciais. Use \"Testar\" na lista para verificar.",
+    "evo": {
+      "title": "Conexão do WhatsApp",
+      "idleHint": "Conecte seu WhatsApp escaneando um QR code.",
+      "connect": "Conectar WhatsApp",
+      "scanHint": "Abra o WhatsApp > Aparelhos conectados > Conectar e escaneie:",
+      "pairingCode": "Código de pareamento",
+      "waiting": "Aguardando pareamento…",
+      "connected": "WhatsApp conectado",
+      "disconnect": "Desconectar"
+    },
     "error": {
       "unauthorized": "Sessão expirada.",
       "invalid": "Preencha os campos obrigatórios.",
