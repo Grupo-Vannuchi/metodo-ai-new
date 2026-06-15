@@ -62,6 +62,9 @@
   "app": {
     "nav": {
       "dashboard": "Dashboard",
+      "crm": "Pipeline",
+      "companies": "Companies",
+      "contacts": "Contacts",
       "team": "Team",
       "signOut": "Sign out"
     },
@@ -93,6 +96,90 @@
         "seat_limit": "Seat limit reached.",
         "already_member": "That email is already a member of the organization.",
         "generic": "Something went wrong. Please try again."
+      }
+    }
+  },
+  "validation": {
+    "required": "This field is required."
+  },
+  "crm": {
+    "common": {
+      "edit": "Edit",
+      "delete": "Delete",
+      "confirmDelete": "Are you sure you want to delete?"
+    },
+    "companies": {
+      "title": "Companies",
+      "subtitle": "Accounts and prospects in your CRM",
+      "new": "New company",
+      "newTitle": "New company",
+      "editTitle": "Edit company",
+      "sectionBasics": "Details",
+      "sectionAddress": "Address",
+      "name": "Name",
+      "cnpj": "CNPJ",
+      "email": "Email",
+      "phone": "Phone",
+      "street": "Street",
+      "city": "City",
+      "uf": "State",
+      "zip": "ZIP",
+      "notes": "Notes",
+      "create": "Create",
+      "save": "Save",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "empty": "No companies yet. Create the first one.",
+      "error": {
+        "invalid": "Invalid data.",
+        "unauthorized": "Session expired.",
+        "unknown": "Something went wrong."
+      }
+    },
+    "contacts": {
+      "title": "Contacts",
+      "subtitle": "People in your CRM",
+      "new": "New contact",
+      "newTitle": "New contact",
+      "editTitle": "Edit contact",
+      "sectionBasics": "Details",
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "role": "Role",
+      "company": "Company",
+      "noCompany": "— No company —",
+      "tags": "Tags",
+      "tagsHint": "Separate with commas.",
+      "create": "Create",
+      "save": "Save",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "empty": "No contacts yet. Create the first one.",
+      "error": {
+        "invalid": "Invalid data.",
+        "unauthorized": "Session expired.",
+        "unknown": "Something went wrong."
+      }
+    },
+    "board": {
+      "title": "Sales Pipeline",
+      "noPipeline": "No pipeline configured.",
+      "newOpportunity": "New opportunity",
+      "oppTitle": "Title",
+      "value": "Value",
+      "stage": "Stage",
+      "company": "Company",
+      "contact": "Contact",
+      "create": "Create",
+      "creating": "Creating…",
+      "cancel": "Cancel",
+      "emptyColumn": "Drag cards here",
+      "columnTotal": "Total: {total}",
+      "error": {
+        "invalid": "Invalid data.",
+        "unauthorized": "Session expired.",
+        "unknown": "Something went wrong."
       }
     }
   }

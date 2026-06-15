@@ -62,6 +62,9 @@
   "app": {
     "nav": {
       "dashboard": "Painel",
+      "crm": "Funil",
+      "companies": "Empresas",
+      "contacts": "Contatos",
       "team": "Equipe",
       "signOut": "Sair"
     },
@@ -93,6 +96,90 @@
         "seat_limit": "Limite de assentos atingido.",
         "already_member": "Esse e-mail já é membro da organização.",
         "generic": "Algo deu errado. Tente novamente."
+      }
+    }
+  },
+  "validation": {
+    "required": "Campo obrigatório."
+  },
+  "crm": {
+    "common": {
+      "edit": "Editar",
+      "delete": "Excluir",
+      "confirmDelete": "Tem certeza que deseja excluir?"
+    },
+    "companies": {
+      "title": "Empresas",
+      "subtitle": "Contas e prospects do seu CRM",
+      "new": "Nova empresa",
+      "newTitle": "Nova empresa",
+      "editTitle": "Editar empresa",
+      "sectionBasics": "Dados",
+      "sectionAddress": "Endereço",
+      "name": "Nome",
+      "cnpj": "CNPJ",
+      "email": "E-mail",
+      "phone": "Telefone",
+      "street": "Logradouro",
+      "city": "Cidade",
+      "uf": "UF",
+      "zip": "CEP",
+      "notes": "Observações",
+      "create": "Criar",
+      "save": "Salvar",
+      "saving": "Salvando…",
+      "cancel": "Cancelar",
+      "empty": "Nenhuma empresa ainda. Crie a primeira.",
+      "error": {
+        "invalid": "Dados inválidos.",
+        "unauthorized": "Sessão expirada.",
+        "unknown": "Algo deu errado."
+      }
+    },
+    "contacts": {
+      "title": "Contatos",
+      "subtitle": "Pessoas do seu CRM",
+      "new": "Novo contato",
+      "newTitle": "Novo contato",
+      "editTitle": "Editar contato",
+      "sectionBasics": "Dados",
+      "name": "Nome",
+      "email": "E-mail",
+      "phone": "Telefone",
+      "role": "Cargo",
+      "company": "Empresa",
+      "noCompany": "— Sem empresa —",
+      "tags": "Tags",
+      "tagsHint": "Separe por vírgula.",
+      "create": "Criar",
+      "save": "Salvar",
+      "saving": "Salvando…",
+      "cancel": "Cancelar",
+      "empty": "Nenhum contato ainda. Crie o primeiro.",
+      "error": {
+        "invalid": "Dados inválidos.",
+        "unauthorized": "Sessão expirada.",
+        "unknown": "Algo deu errado."
+      }
+    },
+    "board": {
+      "title": "Funil de Vendas",
+      "noPipeline": "Nenhum funil configurado.",
+      "newOpportunity": "Nova oportunidade",
+      "oppTitle": "Título",
+      "value": "Valor",
+      "stage": "Estágio",
+      "company": "Empresa",
+      "contact": "Contato",
+      "create": "Criar",
+      "creating": "Criando…",
+      "cancel": "Cancelar",
+      "emptyColumn": "Arraste cards para cá",
+      "columnTotal": "Total: {total}",
+      "error": {
+        "invalid": "Dados inválidos.",
+        "unauthorized": "Sessão expirada.",
+        "unknown": "Algo deu errado."
       }
     }
   }

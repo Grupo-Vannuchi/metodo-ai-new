@@ -1,14 +1,24 @@
 "use client";
 
-import { LayoutDashboard, Users } from "lucide-react";
+import {
+  LayoutDashboard,
+  KanbanSquare,
+  Building2,
+  Contact,
+  Users,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 
-type Item = { href: string; key: "dashboard" | "team"; icon: typeof LayoutDashboard };
+type NavKey = "dashboard" | "crm" | "companies" | "contacts" | "team";
+type Item = { href: string; key: NavKey; icon: typeof LayoutDashboard };
 
 const items: Item[] = [
   { href: "/app", key: "dashboard", icon: LayoutDashboard },
+  { href: "/app/crm", key: "crm", icon: KanbanSquare },
+  { href: "/app/companies", key: "companies", icon: Building2 },
+  { href: "/app/contacts", key: "contacts", icon: Contact },
   { href: "/app/settings/team", key: "team", icon: Users },
 ];
 

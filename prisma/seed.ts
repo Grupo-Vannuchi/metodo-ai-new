@@ -1,5 +1,6 @@
 import { PrismaClient, Plan, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { createDefaultPipeline } from "../src/lib/default-pipeline";
 
 /**
  * Seed: creates a demo organization and its owner user, idempotently.
@@ -43,6 +44,15 @@ async function main() {
     update: { role: Role.OWNER },
     create: { organizationId: org.id, userId: user.id, role: Role.OWNER },
   });
+
+  // Default pipeline (only if the org has none yet).
+  const hasPipeline = await prisma.pipeline.findFirst({
+    where: { organizationId: org.id },
+    select: { id: true },
+  });
+  if (!hasPipeline) {
+    await prisma.$transaction((tx) => createDefaultPipeline(tx, org.id));
+  }
 
   console.log("✓ Seed complete");
   console.log(`  Organization: ${org.name} (${org.slug})`);

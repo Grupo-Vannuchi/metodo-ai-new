@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { createSession, deleteSession } from "@/lib/session";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { slugify } from "@/lib/slug";
+import { createDefaultPipeline } from "@/lib/default-pipeline";
 import { PLANS } from "@/config/plans";
 import { loginSchema, signupSchema } from "@/lib/validations/auth";
 import { redirect } from "@/i18n/navigation";
@@ -113,6 +114,7 @@ export async function signup(
       await tx.membership.create({
         data: { organizationId: org.id, userId: user.id, role: "OWNER" },
       });
+      await createDefaultPipeline(tx, org.id);
       return { userId: user.id, organizationId: org.id };
     });
     session = result;

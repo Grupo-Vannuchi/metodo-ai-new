@@ -75,9 +75,36 @@ async function main() {
       "guarded update with mismatched tenant filter affects 0 rows",
     );
 
+    // 4) CRM data is tenant-scoped too: a company created in org A is invisible
+    //    to a query scoped to org B, and a cross-tenant guarded delete is a no-op.
+    const companyA = await prisma.company.create({
+      data: { organizationId: orgA.id, name: `ISO-CO-A-${stamp}` },
+    });
+    await prisma.company.create({
+      data: { organizationId: orgB.id, name: `ISO-CO-B-${stamp}` },
+    });
+    const companiesB = await prisma.company.findMany({
+      where: { organizationId: orgB.id, name: { startsWith: "ISO-CO-" } },
+    });
+    assert(
+      companiesB.length === 1 && companiesB[0].name.endsWith("-B-" + stamp),
+      "company list scoped to org B excludes org A's company",
+    );
+    const wrongDelete = await prisma.company.deleteMany({
+      where: { id: companyA.id, organizationId: orgB.id },
+    });
+    assert(
+      wrongDelete.count === 0,
+      "deleting org A's company with org B filter affects 0 rows",
+    );
+
     console.log("\n✅ Tenant isolation: all checks passed.");
   } finally {
-    // Cleanup (memberships cascade with org/user deletes).
+    // Cleanup. Companies carry organizationId (no FK cascade from org), so
+    // remove them explicitly before the orgs.
+    await prisma.company.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
     await prisma.membership.deleteMany({
       where: { organizationId: { in: created.orgs } },
     });

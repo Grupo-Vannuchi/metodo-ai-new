@@ -101,3 +101,121 @@ model Invitation {
   @@index([email])
   @@map("invitations")
 }
+
+// ---------------------------------------------------------------------------
+// CRM (P3) — all rows carry `organizationId` (the tenant boundary). Reads go
+// through the tenant-scoped client (src/lib/tenant-db.ts) / DAL; writes-by-id
+// use `where: { id, organizationId }`.
+// ---------------------------------------------------------------------------
+
+/// A company in the CRM (a prospect or client account).
+model Company {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  cnpj           String?
+  email          String?
+  phone          String?
+  /// Address broken down: { street, number, district, city, uf, zip, country }.
+  address        Json     @default("{}")
+  notes          String?
+  /// Where it came from: "manual", "extractor:google", "import"…
+  source         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  contacts      Contact[]
+  opportunities Opportunity[]
+
+  @@index([organizationId, name])
+  @@index([organizationId, cnpj])
+  @@map("companies")
+}
+
+/// A person in the CRM, optionally tied to a company.
+model Contact {
+  id             String   @id @default(cuid())
+  organizationId String
+  companyId      String?
+  name           String
+  email          String?
+  phone          String?
+  role           String?
+  tags           String[] @default([])
+  source         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company       Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  opportunities Opportunity[]
+
+  @@index([organizationId, companyId])
+  @@index([organizationId, name])
+  @@map("contacts")
+}
+
+/// A sales pipeline (a board). Each org gets a default one.
+model Pipeline {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  isDefault      Boolean  @default(false)
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  stages        Stage[]
+  opportunities Opportunity[]
+
+  @@index([organizationId])
+  @@map("pipelines")
+}
+
+/// A column of a pipeline (a funnel stage).
+model Stage {
+  id             String   @id @default(cuid())
+  organizationId String
+  pipelineId     String
+  name           String
+  order          Int      @default(0)
+  probability    Int      @default(0) // 0–100
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  pipeline      Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  opportunities Opportunity[]
+
+  @@index([organizationId, pipelineId, order])
+  @@map("stages")
+}
+
+enum OpportunityStatus {
+  OPEN
+  WON
+  LOST
+}
+
+/// A deal / card on the Kanban board.
+model Opportunity {
+  id             String            @id @default(cuid())
+  organizationId String
+  pipelineId     String
+  stageId        String
+  companyId      String?
+  contactId      String?
+  title          String
+  value          Decimal           @default(0) @db.Decimal(14, 2)
+  status         OpportunityStatus @default(OPEN)
+  order          Int               @default(0) // position within the stage column
+  ownerId        String? // membership/user responsible
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  pipeline Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage    Stage    @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  company  Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contact  Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, pipelineId, stageId, order])
+  @@map("opportunities")
+}
