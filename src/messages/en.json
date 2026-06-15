@@ -75,10 +75,18 @@
     "dashboard": {
       "title": "Dashboard",
       "welcome": "Welcome, {name}",
-      "org": "Organization",
-      "plan": "Plan",
-      "role": "Your role",
-      "comingSoon": "CRM, prospecting and campaigns arrive in the next phases."
+      "openCount": "Open opportunities",
+      "openValue": "Open value",
+      "forecast": "Weighted forecast",
+      "wonMonth": "Won this month",
+      "wonLost": "{won} won · {lost} lost",
+      "funnelTitle": "Funnel by stage",
+      "viewPipeline": "View pipeline",
+      "emptyFunnel": "No opportunities in the funnel yet.",
+      "companies": "Companies",
+      "contacts": "Contacts",
+      "dispatchMonth": "Dispatch (month)",
+      "leadsMonth": "Leads extracted (month)"
     },
     "team": {
       "title": "Team",

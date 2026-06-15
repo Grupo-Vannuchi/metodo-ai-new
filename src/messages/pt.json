@@ -75,10 +75,18 @@
     "dashboard": {
       "title": "Painel",
       "welcome": "Bem-vindo, {name}",
-      "org": "Organização",
-      "plan": "Plano",
-      "role": "Seu papel",
-      "comingSoon": "CRM, prospecção e campanhas chegam nas próximas fases."
+      "openCount": "Oportunidades abertas",
+      "openValue": "Valor em aberto",
+      "forecast": "Previsão ponderada",
+      "wonMonth": "Ganhos no mês",
+      "wonLost": "{won} ganhas · {lost} perdidas",
+      "funnelTitle": "Funil por estágio",
+      "viewPipeline": "Ver funil",
+      "emptyFunnel": "Sem oportunidades no funil ainda.",
+      "companies": "Empresas",
+      "contacts": "Contatos",
+      "dispatchMonth": "Disparos (mês)",
+      "leadsMonth": "Leads extraídos (mês)"
     },
     "team": {
       "title": "Equipe",
