@@ -1,0 +1,27 @@
+# Local PostgreSQL for development.
+# Usage:
+#   docker compose up -d      # start
+#   npm run db:migrate        # apply schema
+#   npm run db:seed           # load seed (demo org + owner user)
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: metodoai-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: metodoai
+      POSTGRES_PASSWORD: metodoai
+      POSTGRES_DB: metodoai
+    ports:
+      # Host port is configurable to avoid clashing with a local Postgres.
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - metodoai-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metodoai -d metodoai"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  metodoai-pgdata:

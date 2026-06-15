@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens.
+ *
+ * Brand-specific colours (`--brand`, `--accent`, `--background`, `--foreground`)
+ * are injected at runtime from `siteConfig.theme` by <ThemeStyle /> in the root
+ * layout, so the whole palette is driven by config. Neutral/UI tokens below are
+ * static. Everything is exposed to Tailwind via `@theme` so utilities like
+ * `bg-brand`, `text-muted-foreground`, `rounded-lg` work out of the box.
+ */
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-accent: var(--accent);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+
+  --font-sans:
+    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+
+  --spacing-section: 6rem;
+}
+
+/* Neutral / UI tokens (not brand-specific). Light + dark variants. */
+:root {
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --muted: #f4f4f5;
+  --muted-foreground: #52525b;
+  --border: #e4e4e7;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --card: #111113;
+    --card-foreground: #ededed;
+    --muted: #1c1c1f;
+    --muted-foreground: #a1a1aa;
+    --border: #27272a;
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Visible, brand-coloured focus ring for keyboard users. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}

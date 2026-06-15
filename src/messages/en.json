@@ -1,0 +1,99 @@
+{
+  "metadata": {
+    "defaultTitle": "{brand} — CRM with prospecting, dispatch and automations",
+    "titleTemplate": "%s · {brand}",
+    "description": "Find companies, organize your pipeline and reach out at scale. Prospecting, dispatch agents, extractors and integrations in one place.",
+    "keywords": "CRM, prospecting, dispatch, WhatsApp, automation, scraper, leads"
+  },
+  "nav": {
+    "features": "Features",
+    "pricing": "Pricing",
+    "contact": "Contact"
+  },
+  "common": {
+    "login": "Log in",
+    "getStarted": "Get started",
+    "talkToUs": "Talk to us"
+  },
+  "home": {
+    "hero": {
+      "title": "From prospecting to closing, in a single flow",
+      "subtitle": "Find companies with the extractors, qualify them in the pipeline and reach out at scale — WhatsApp and email — with integrations and webhooks.",
+      "ctaPrimary": "Get started",
+      "ctaSecondary": "See pricing"
+    }
+  },
+  "auth": {
+    "email": "Email",
+    "password": "Password",
+    "name": "Your name",
+    "organizationName": "Organization name",
+    "submitting": "Please wait…",
+    "login": {
+      "title": "Log in",
+      "subtitle": "Access your account",
+      "submit": "Log in",
+      "cta": "Log in",
+      "noAccount": "Don't have an account?"
+    },
+    "signup": {
+      "title": "Create account",
+      "subtitle": "Get started with MétodoAI",
+      "submit": "Create account",
+      "cta": "Create account",
+      "hasAccount": "Already have an account?"
+    },
+    "invite": {
+      "title": "Invitation",
+      "subtitle": "You were invited to {org} ({email})",
+      "submit": "Accept invitation",
+      "joined": "Invitation accepted. Log in to continue.",
+      "invalidTitle": "Invalid invitation",
+      "invalidBody": "This invitation has expired or was already used."
+    },
+    "errors": {
+      "invalid": "Invalid data. Please check and try again.",
+      "email_taken": "This email is already in use.",
+      "expired": "This invitation has expired.",
+      "seat_limit": "The organization has reached its seat limit.",
+      "generic": "Something went wrong. Please try again."
+    }
+  },
+  "app": {
+    "nav": {
+      "dashboard": "Dashboard",
+      "team": "Team",
+      "signOut": "Sign out"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "welcome": "Welcome, {name}",
+      "org": "Organization",
+      "plan": "Plan",
+      "role": "Your role",
+      "comingSoon": "CRM, prospecting and campaigns arrive in the next phases."
+    },
+    "team": {
+      "title": "Team",
+      "subtitle": "Manage your organization's members",
+      "inviteTitle": "Invite member",
+      "inviteEmail": "Email",
+      "inviteRole": "Role",
+      "roleMember": "Member",
+      "roleAdmin": "Admin",
+      "invite": "Invite",
+      "inviting": "Inviting…",
+      "inviteCreated": "Invitation created. Share this link:",
+      "colName": "Name",
+      "colEmail": "Email",
+      "colRole": "Role",
+      "errors": {
+        "forbidden": "You don't have permission to invite.",
+        "invalid": "Invalid data.",
+        "seat_limit": "Seat limit reached.",
+        "already_member": "That email is already a member of the organization.",
+        "generic": "Something went wrong. Please try again."
+      }
+    }
+  }
+}

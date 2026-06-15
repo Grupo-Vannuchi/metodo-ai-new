@@ -1,0 +1,99 @@
+{
+  "metadata": {
+    "defaultTitle": "{brand} — CRM com prospecção, disparos e automações",
+    "titleTemplate": "%s · {brand}",
+    "description": "Encontre empresas, organize seu funil e dispare contato em escala. Prospecção, agentes de disparo, extratores e integrações em um só lugar.",
+    "keywords": "CRM, prospecção, disparo, WhatsApp, automação, extrator, leads"
+  },
+  "nav": {
+    "features": "Funcionalidades",
+    "pricing": "Planos",
+    "contact": "Contato"
+  },
+  "common": {
+    "login": "Entrar",
+    "getStarted": "Começar agora",
+    "talkToUs": "Falar com a gente"
+  },
+  "home": {
+    "hero": {
+      "title": "Da prospecção ao fechamento, num fluxo só",
+      "subtitle": "Encontre empresas com os extratores, qualifique no funil e dispare contato em escala — WhatsApp e e-mail — com integrações e webhooks.",
+      "ctaPrimary": "Começar agora",
+      "ctaSecondary": "Ver planos"
+    }
+  },
+  "auth": {
+    "email": "E-mail",
+    "password": "Senha",
+    "name": "Seu nome",
+    "organizationName": "Nome da organização",
+    "submitting": "Aguarde…",
+    "login": {
+      "title": "Entrar",
+      "subtitle": "Acesse sua conta",
+      "submit": "Entrar",
+      "cta": "Entrar",
+      "noAccount": "Ainda não tem conta?"
+    },
+    "signup": {
+      "title": "Criar conta",
+      "subtitle": "Comece a usar o MétodoAI",
+      "submit": "Criar conta",
+      "cta": "Criar conta",
+      "hasAccount": "Já tem conta?"
+    },
+    "invite": {
+      "title": "Convite",
+      "subtitle": "Você foi convidado para {org} ({email})",
+      "submit": "Aceitar convite",
+      "joined": "Convite aceito. Faça login para continuar.",
+      "invalidTitle": "Convite inválido",
+      "invalidBody": "Este convite expirou ou já foi utilizado."
+    },
+    "errors": {
+      "invalid": "Dados inválidos. Verifique e tente novamente.",
+      "email_taken": "Este e-mail já está em uso.",
+      "expired": "Este convite expirou.",
+      "seat_limit": "A organização atingiu o limite de assentos.",
+      "generic": "Algo deu errado. Tente novamente."
+    }
+  },
+  "app": {
+    "nav": {
+      "dashboard": "Painel",
+      "team": "Equipe",
+      "signOut": "Sair"
+    },
+    "dashboard": {
+      "title": "Painel",
+      "welcome": "Bem-vindo, {name}",
+      "org": "Organização",
+      "plan": "Plano",
+      "role": "Seu papel",
+      "comingSoon": "CRM, prospecção e campanhas chegam nas próximas fases."
+    },
+    "team": {
+      "title": "Equipe",
+      "subtitle": "Gerencie os membros da sua organização",
+      "inviteTitle": "Convidar membro",
+      "inviteEmail": "E-mail",
+      "inviteRole": "Papel",
+      "roleMember": "Membro",
+      "roleAdmin": "Administrador",
+      "invite": "Convidar",
+      "inviting": "Convidando…",
+      "inviteCreated": "Convite criado. Compartilhe este link:",
+      "colName": "Nome",
+      "colEmail": "E-mail",
+      "colRole": "Papel",
+      "errors": {
+        "forbidden": "Você não tem permissão para convidar.",
+        "invalid": "Dados inválidos.",
+        "seat_limit": "Limite de assentos atingido.",
+        "already_member": "Esse e-mail já é membro da organização.",
+        "generic": "Algo deu errado. Tente novamente."
+      }
+    }
+  }
+}

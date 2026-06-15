@@ -1,0 +1,103 @@
+// Prisma schema for MétodoAI — multi-tenant SaaS CRM.
+//
+// Tenancy model: every tenant is an `Organization`. A `User` is a global
+// identity that joins one or more organizations via `Membership` (carrying the
+// role). Every business record (CRM, prospecting, campaigns…) added in later
+// phases MUST carry `organizationId` and be filtered by it in the DAL
+// (src/lib/queries) — that is the security boundary. See PLANO.md §5.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Runtime connection. On Neon/Supabase use the POOLED (pgBouncer) URL.
+  url       = env("DATABASE_URL")
+  // Direct (non-pooled) connection for `prisma migrate`/`db push` — migrations
+  // can't run through a transaction pooler. Locally it's the same URL.
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy & Auth
+// ---------------------------------------------------------------------------
+
+/// Role of a user *within* an organization.
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+/// Subscription tier. Gates features + seats + dispatch quota (src/config/plans.ts).
+enum Plan {
+  STANDARD
+  PLUS
+  GOLD
+  ENTERPRISE
+}
+
+/// A tenant. All business data hangs off an organization via `organizationId`.
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      Plan     @default(STANDARD)
+  seatLimit Int      @default(3)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships Membership[]
+  invitations Invitation[]
+
+  @@map("organizations")
+}
+
+/// A global user identity (login). Belongs to orgs through memberships.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships Membership[]
+
+  @@map("users")
+}
+
+/// Join between a user and an organization, carrying the role.
+model Membership {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  role           Role     @default(MEMBER)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+/// A pending invitation to join an organization with a given role.
+model Invitation {
+  id             String   @id @default(cuid())
+  organizationId String
+  email          String
+  role           Role     @default(MEMBER)
+  tokenHash      String   @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("invitations")
+}
