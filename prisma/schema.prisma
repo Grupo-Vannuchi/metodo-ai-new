@@ -346,3 +346,84 @@ model ExtractedLead {
   @@index([organizationId, extractionJobId])
   @@map("extracted_leads")
 }
+
+// ---------------------------------------------------------------------------
+// Dispatch / Campaigns (P6)
+// ---------------------------------------------------------------------------
+
+enum Channel {
+  WHATSAPP_EVOLUTION
+  WHATSAPP_CLOUD
+  EMAIL
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  PAUSED
+  DONE
+  CANCELED
+}
+
+enum RecipientStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+/// A reusable message template. `body` may contain {{nome}} / {{empresa}}.
+model MessageTemplate {
+  id             String   @id @default(cuid())
+  organizationId String
+  channel        Channel
+  name           String
+  subject        String? // for EMAIL
+  body           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, channel])
+  @@map("message_templates")
+}
+
+/// A dispatch campaign over a channel.
+model Campaign {
+  id             String         @id @default(cuid())
+  organizationId String
+  name           String
+  channel        Channel
+  templateId     String?
+  status         CampaignStatus @default(DRAFT)
+  startAt        DateTime?
+  createdById    String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  recipients CampaignRecipient[]
+
+  @@index([organizationId, status])
+  @@map("campaigns")
+}
+
+/// One contact's slot in a campaign. Unique per (campaign, contact) so retries
+/// never double-send.
+model CampaignRecipient {
+  id                String          @id @default(cuid())
+  organizationId    String
+  campaignId        String
+  contactId         String
+  status            RecipientStatus @default(PENDING)
+  providerMessageId String?
+  error             String?
+  sentAt            DateTime?
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, contactId])
+  @@index([organizationId, status])
+  @@index([campaignId, status])
+  @@map("campaign_recipients")
+}

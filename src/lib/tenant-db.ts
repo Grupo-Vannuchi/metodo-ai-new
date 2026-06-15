@@ -25,6 +25,9 @@ const TENANT_MODELS = new Set<string>([
   "WebhookEndpoint",
   "ExtractionJob",
   "ExtractedLead",
+  "MessageTemplate",
+  "Campaign",
+  "CampaignRecipient",
 ]);
 
 const WHERE_OPS = new Set<string>([

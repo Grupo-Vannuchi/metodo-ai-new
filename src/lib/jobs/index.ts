@@ -1,5 +1,6 @@
 import "server-only";
 import { runExtractionBatch } from "@/lib/extraction";
+import { dispatchCampaignBatch } from "@/lib/dispatch";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
 
 /**
@@ -26,6 +27,20 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
     const { done } = await runExtractionBatch(jobId);
     if (!done && isQueueConfigured()) {
       await enqueue("extraction-run", { jobId });
+    }
+  },
+
+  /** Send one batch of a campaign, then re-enqueue until complete. */
+  "dispatch-campaign": async (payload) => {
+    const campaignId = String((payload as { campaignId?: string })?.campaignId ?? "");
+    if (!campaignId) return;
+    const { done, retryAfter } = await dispatchCampaignBatch(campaignId);
+    if (!done && isQueueConfigured()) {
+      await enqueue(
+        "dispatch-campaign",
+        { campaignId },
+        retryAfter ? { delaySeconds: retryAfter } : {},
+      );
     }
   },
 };
