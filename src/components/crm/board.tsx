@@ -67,7 +67,7 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
   }
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
+    <div className="grid gap-4 pb-4 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]">
       {cols.map((col) => {
         const total = col.cards.reduce((sum, c) => sum + c.value, 0);
         return (
@@ -80,7 +80,7 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
             onDragLeave={() => setOverCol((c) => (c === col.id ? null : c))}
             onDrop={() => onDrop(col.id)}
             className={cn(
-              "flex w-72 shrink-0 flex-col rounded-xl border bg-muted/30 p-3",
+              "flex min-w-0 flex-col rounded-xl border bg-muted/30 p-3",
               overCol === col.id ? "border-brand" : "border-border",
             )}
           >
