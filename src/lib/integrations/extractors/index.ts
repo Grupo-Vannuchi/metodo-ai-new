@@ -2,14 +2,12 @@ import "server-only";
 import type { ExtractorAdapter } from "./types";
 import type { ExtractorProviderKey } from "./meta";
 import cnpj from "./cnpj";
-import googleCse from "./google-cse";
-import googleMaps from "./google-maps";
+import google from "./google";
 
-/** Server-side adapter registry. Unimplemented providers are absent. */
-export const EXTRACTORS: Partial<Record<ExtractorProviderKey, ExtractorAdapter>> = {
+/** Server-side adapter registry. */
+export const EXTRACTORS: Record<ExtractorProviderKey, ExtractorAdapter> = {
+  GOOGLE: google,
   CNPJ: cnpj,
-  GOOGLE_CSE: googleCse,
-  GOOGLE_MAPS: googleMaps,
 };
 
 export function getExtractor(provider: ExtractorProviderKey): ExtractorAdapter | null {

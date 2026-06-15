@@ -2,7 +2,6 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getExtractor } from "@/lib/integrations/extractors";
-import { resolveCredentials } from "@/lib/integrations/credentials";
 import type { ExtractorProviderKey } from "@/lib/integrations/extractors/meta";
 import type { Cursor } from "@/lib/integrations/extractors/types";
 
@@ -28,20 +27,6 @@ export async function runExtractionBatch(
     return { done: true };
   }
 
-  let credentials: Record<string, string> | null = null;
-  if (adapter.requiresConnection === "GOOGLE") {
-    // Tenant's own Google connection, or the platform-managed key as fallback.
-    const resolved = await resolveCredentials(job.organizationId, "GOOGLE");
-    if (!resolved) {
-      await fail(
-        jobId,
-        "Conecte o Google em Conexões (ou aguarde a credencial padrão da plataforma).",
-      );
-      return { done: true };
-    }
-    credentials = resolved.credentials;
-  }
-
   await prisma.extractionJob.update({
     where: { id: jobId },
     data: { status: "RUNNING" },
@@ -50,7 +35,8 @@ export async function runExtractionBatch(
   try {
     const params = (job.params ?? {}) as Record<string, unknown>;
     const cursor = (job.cursor ?? null) as Cursor;
-    const result = await adapter.run(params, cursor, { credentials });
+    // Adapters no longer need credentials (the Google extractor scrapes).
+    const result = await adapter.run(params, cursor, { credentials: null });
 
     if (result.leads.length) {
       await prisma.extractedLead.createMany({
@@ -61,6 +47,8 @@ export async function runExtractionBatch(
           cnpj: l.cnpj ?? null,
           email: l.email ?? null,
           phone: l.phone ?? null,
+          website: l.website ?? null,
+          socials: (l.socials ?? []) as Prisma.InputJsonValue,
           raw: l.raw as Prisma.InputJsonValue,
         })),
       });

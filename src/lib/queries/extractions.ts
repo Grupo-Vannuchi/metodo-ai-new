@@ -12,7 +12,7 @@ export function countGoogleExtractionsSince(
   const db = tenantDb(organizationId);
   return db.extractionJob.count({
     where: {
-      provider: { in: ["GOOGLE_MAPS", "GOOGLE_CSE"] },
+      provider: { in: ["GOOGLE", "GOOGLE_MAPS", "GOOGLE_CSE"] },
       createdAt: { gte: since },
     },
   });
@@ -58,6 +58,8 @@ export async function getExtraction(organizationId: string, id: string) {
       cnpj: true,
       email: true,
       phone: true,
+      website: true,
+      socials: true,
       importedCompanyId: true,
       importedAt: true,
     },

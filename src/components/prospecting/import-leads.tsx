@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Check, Download } from "lucide-react";
+import { Check, Download, ExternalLink, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "@/i18n/navigation";
 import { importLeads } from "@/app/actions/extractions";
@@ -13,8 +13,14 @@ export type LeadRow = {
   cnpj: string | null;
   email: string | null;
   phone: string | null;
+  website: string | null;
+  socials: unknown;
   importedAt: Date | null;
 };
+
+function socialCount(socials: unknown): number {
+  return Array.isArray(socials) ? socials.length : 0;
+}
 
 export function ImportLeads({
   jobId,
@@ -76,8 +82,8 @@ export function ImportLeads({
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
-        <table className="w-full text-left text-sm">
+      <div className="overflow-x-auto rounded-xl border border-border bg-card">
+        <table className="w-full min-w-[44rem] text-left text-sm">
           <thead className="border-b border-border text-muted-foreground">
             <tr>
               <th className="px-4 py-3">
@@ -90,9 +96,10 @@ export function ImportLeads({
                 />
               </th>
               <th className="px-4 py-3 font-medium">{t("colName")}</th>
-              <th className="px-4 py-3 font-medium">{t("colCnpj")}</th>
+              <th className="px-4 py-3 font-medium">{t("colSite")}</th>
               <th className="px-4 py-3 font-medium">{t("colPhone")}</th>
               <th className="px-4 py-3 font-medium">{t("colEmail")}</th>
+              <th className="px-4 py-3 font-medium">{t("colSocials")}</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -109,10 +116,34 @@ export function ImportLeads({
                     aria-label={l.name ?? l.id}
                   />
                 </td>
-                <td className="px-4 py-3 font-medium">{l.name ?? "—"}</td>
-                <td className="px-4 py-3 text-muted-foreground">{l.cnpj ?? "—"}</td>
+                <td className="max-w-[16rem] truncate px-4 py-3 font-medium">{l.name ?? "—"}</td>
+                <td className="px-4 py-3 text-muted-foreground">
+                  {l.website ? (
+                    <a
+                      href={l.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-brand hover:underline"
+                    >
+                      <ExternalLink className="size-3.5" />
+                      {t("visit")}
+                    </a>
+                  ) : (
+                    (l.cnpj ?? "—")
+                  )}
+                </td>
                 <td className="px-4 py-3 text-muted-foreground">{l.phone ?? "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground">{l.email ?? "—"}</td>
+                <td className="px-4 py-3 text-muted-foreground">
+                  {socialCount(l.socials) > 0 ? (
+                    <span className="inline-flex items-center gap-1">
+                      <Share2 className="size-3.5" />
+                      {socialCount(l.socials)}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   {l.importedAt ? (
                     <span className="inline-flex items-center gap-1 text-xs text-green-600">

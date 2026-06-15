@@ -10,6 +10,7 @@ export type CompanyFormValues = {
   cnpj: string;
   email: string;
   phone: string;
+  website: string;
   street: string;
   city: string;
   uf: string;
@@ -23,6 +24,7 @@ export function emptyCompanyForm(): CompanyFormValues {
     cnpj: "",
     email: "",
     phone: "",
+    website: "",
     street: "",
     city: "",
     uf: "",
@@ -38,6 +40,7 @@ export type CompanyRow = {
   cnpj: string | null;
   email: string | null;
   phone: string | null;
+  website: string | null;
   address: unknown;
   notes: string | null;
 };
@@ -49,6 +52,7 @@ export function companyToForm(row: CompanyRow): CompanyFormValues {
     cnpj: row.cnpj ?? "",
     email: row.email ?? "",
     phone: row.phone ?? "",
+    website: row.website ?? "",
     street: addr.street ?? "",
     city: addr.city ?? "",
     uf: addr.uf ?? "",
@@ -63,6 +67,7 @@ export function formToCompanyInput(values: CompanyFormValues): CompanyInput {
     cnpj: values.cnpj.trim(),
     email: values.email.trim(),
     phone: values.phone.trim(),
+    website: values.website.trim(),
     street: values.street.trim(),
     city: values.city.trim(),
     uf: values.uf.trim(),

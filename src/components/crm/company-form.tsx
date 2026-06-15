@@ -74,6 +74,11 @@ export function CompanyForm({
             <Label htmlFor="phone">{t("phone")}</Label>
             <Input id="phone" {...register("phone")} />
           </div>
+          <div className="sm:col-span-2">
+            <Label htmlFor="website">{t("website")}</Label>
+            <Input id="website" type="url" placeholder="https://…" aria-invalid={Boolean(errors.website)} {...register("website")} />
+            <FieldError>{errors.website?.message}</FieldError>
+          </div>
         </div>
       </fieldset>
 

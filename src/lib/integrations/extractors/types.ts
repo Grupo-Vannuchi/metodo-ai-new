@@ -11,6 +11,9 @@ export type LeadData = {
   cnpj?: string;
   email?: string;
   phone?: string;
+  website?: string;
+  /** Social profile URLs found on the page. */
+  socials?: string[];
   raw: Record<string, unknown>;
 };
 

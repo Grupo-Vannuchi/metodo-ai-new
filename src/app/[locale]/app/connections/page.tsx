@@ -34,7 +34,6 @@ export default async function ConnectionsPage({
   // Platform-managed integrations that work with no setup (within plan quota).
   const managed = [
     { key: "cnpj", ready: true },
-    { key: "google", ready: isPlatformConfigured("GOOGLE") },
     { key: "email", ready: isPlatformConfigured("RESEND") },
   ].filter((m) => m.ready);
 

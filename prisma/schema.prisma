@@ -116,6 +116,7 @@ model Company {
   cnpj           String?
   email          String?
   phone          String?
+  website        String?
   /// Address broken down: { street, number, district, city, uf, zip, country }.
   address        Json     @default("{}")
   notes          String?
@@ -297,6 +298,7 @@ enum ExtractorProvider {
   CNPJ
   INSTAGRAM
   LINKEDIN
+  GOOGLE // Google scraper (search → site contact scraping)
 }
 
 enum JobStatus {
@@ -338,6 +340,9 @@ model ExtractedLead {
   cnpj              String?
   email             String?
   phone             String?
+  website           String?
+  /// Array of social profile URLs (instagram, facebook, linkedin…).
+  socials           Json     @default("[]")
   raw               Json     @default("{}")
   importedCompanyId String?
   importedAt        DateTime?

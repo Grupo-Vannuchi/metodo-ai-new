@@ -38,8 +38,6 @@ const serverSchema = z.object({
   // provider works out-of-the-box for every tenant (within plan quota) without
   // them connecting their own account. Identity-bound providers (WhatsApp) are
   // never platform-managed. See src/lib/integrations/platform.ts.
-  PLATFORM_GOOGLE_API_KEY: z.string().optional(),
-  PLATFORM_GOOGLE_CSE_CX: z.string().optional(),
   PLATFORM_RESEND_API_KEY: z.string().optional(),
   PLATFORM_RESEND_FROM: z.string().optional(),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),

@@ -37,6 +37,7 @@ export async function getCompany(organizationId: string, id: string) {
       cnpj: true,
       email: true,
       phone: true,
+      website: true,
       address: true,
       notes: true,
     },

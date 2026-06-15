@@ -8,7 +8,6 @@
 export type IntegrationProviderKey =
   | "EVOLUTION"
   | "META_CLOUD"
-  | "GOOGLE"
   | "RESEND"
   | "SMTP"
   | "N8N";
@@ -48,15 +47,6 @@ export const PROVIDERS: Record<IntegrationProviderKey, ProviderSpec> = {
       { key: "phoneNumberId", label: "Phone Number ID", type: "text", required: true },
       { key: "accessToken", label: "Access Token", type: "password", required: true },
       { key: "wabaId", label: "WABA ID", type: "text" },
-    ],
-  },
-  GOOGLE: {
-    provider: "GOOGLE",
-    label: "Google (Maps / Custom Search)",
-    description: "Extração de empresas via Google.",
-    fields: [
-      { key: "apiKey", label: "API Key", type: "password", required: true },
-      { key: "cseCx", label: "Custom Search CX", type: "text" },
     ],
   },
   RESEND: {

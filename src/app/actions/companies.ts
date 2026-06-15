@@ -15,6 +15,7 @@ function toData(input: CompanyInput) {
     cnpj: input.cnpj || null,
     email: input.email || null,
     phone: input.phone || null,
+    website: input.website || null,
     notes: input.notes || null,
     address: {
       street: input.street || "",
