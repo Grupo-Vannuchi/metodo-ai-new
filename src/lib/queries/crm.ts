@@ -34,10 +34,17 @@ async function defaultPipeline(organizationId: string) {
   );
 }
 
-/** The full Kanban board: ordered stages, each with its ordered cards. */
-export async function getBoard(organizationId: string): Promise<Board | null> {
+/** The full Kanban board: ordered stages, each with its ordered cards. When
+ * `pipelineId` is given (and belongs to the org) that pipeline is shown;
+ * otherwise the default. */
+export async function getBoard(
+  organizationId: string,
+  pipelineId?: string,
+): Promise<Board | null> {
   const db = tenantDb(organizationId);
-  const pipeline = await defaultPipeline(organizationId);
+  const pipeline = pipelineId
+    ? await db.pipeline.findFirst({ where: { id: pipelineId } })
+    : await defaultPipeline(organizationId);
   if (!pipeline) return null;
 
   const [stages, opportunities] = await Promise.all([
@@ -99,11 +106,14 @@ export async function getOpportunity(organizationId: string, id: string) {
   return { ...opp, value: Number(opp.value) };
 }
 
-/** Stage options of the default pipeline (for the create form). */
-export async function stageOptions(organizationId: string) {
-  const pipeline = await defaultPipeline(organizationId);
-  if (!pipeline) return { pipelineId: null as string | null, stages: [] };
+/** Stage options of a pipeline (for the create form). Defaults to the org's
+ * default pipeline when `pipelineId` isn't given. */
+export async function stageOptions(organizationId: string, pipelineId?: string) {
   const db = tenantDb(organizationId);
+  const pipeline = pipelineId
+    ? await db.pipeline.findFirst({ where: { id: pipelineId } })
+    : await defaultPipeline(organizationId);
+  if (!pipeline) return { pipelineId: null as string | null, stages: [] };
   const stages = await db.stage.findMany({
     where: { pipelineId: pipeline.id },
     orderBy: { order: "asc" },

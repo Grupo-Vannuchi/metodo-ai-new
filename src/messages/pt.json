@@ -190,6 +190,8 @@
       "emptyColumn": "Arraste cards para cá",
       "columnTotal": "Total: {total}",
       "open": "Abrir",
+      "createFunnel": "Criar funil",
+      "managePipelines": "Gerenciar funis",
       "error": {
         "invalid": "Dados inválidos.",
         "unauthorized": "Sessão expirada.",
@@ -217,6 +219,38 @@
       "error": {
         "unauthorized": "Sessão expirada.",
         "invalid": "Dados inválidos.",
+        "unknown": "Algo deu errado."
+      }
+    },
+    "pipelines": {
+      "title": "Funis",
+      "subtitle": "Crie e configure seus funis e estágios",
+      "empty": "Nenhum funil ainda. Crie o primeiro acima.",
+      "backBoard": "Voltar ao funil",
+      "back": "Voltar aos funis",
+      "name": "Nome do funil",
+      "create": "Criar funil",
+      "creating": "Criando…",
+      "isDefault": "Padrão",
+      "makeDefault": "Tornar padrão",
+      "stageCount": "{n} estágios",
+      "save": "Salvar",
+      "deletePipeline": "Excluir funil",
+      "confirmDeletePipeline": "Excluir este funil apaga seus estágios e oportunidades. Continuar?",
+      "stagesTitle": "Estágios",
+      "stageName": "Nome do estágio",
+      "probability": "Prob. (%)",
+      "addStage": "Adicionar estágio",
+      "moveUp": "Mover para cima",
+      "moveDown": "Mover para baixo",
+      "deleteStage": "Excluir estágio",
+      "confirmDeleteStage": "Excluir este estágio?",
+      "stageInUse": "{n} oportunidade(s) neste estágio",
+      "error": {
+        "unauthorized": "Sessão expirada.",
+        "invalid": "Dados inválidos.",
+        "last_pipeline": "Você precisa de ao menos um funil.",
+        "stage_in_use": "Mova as oportunidades antes de excluir este estágio.",
         "unknown": "Algo deu errado."
       }
     }

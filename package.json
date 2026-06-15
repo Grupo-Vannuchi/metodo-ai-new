@@ -18,6 +18,7 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "check:isolation": "tsx --env-file=.env scripts/check-isolation.ts",
+    "backfill:pipelines": "tsx --env-file=.env scripts/backfill-pipelines.ts",
     "db:dump": "docker exec metodoai-db pg_dump -U metodoai -d metodoai --clean --if-exists --no-owner --no-privileges > prisma/backups/snapshot.sql",
     "db:restore": "docker exec -i metodoai-db psql -U metodoai -d metodoai < prisma/backups/snapshot.sql"
   },

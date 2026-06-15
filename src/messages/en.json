@@ -190,6 +190,8 @@
       "emptyColumn": "Drag cards here",
       "columnTotal": "Total: {total}",
       "open": "Open",
+      "createFunnel": "Create funnel",
+      "managePipelines": "Manage funnels",
       "error": {
         "invalid": "Invalid data.",
         "unauthorized": "Session expired.",
@@ -217,6 +219,38 @@
       "error": {
         "unauthorized": "Session expired.",
         "invalid": "Invalid data.",
+        "unknown": "Something went wrong."
+      }
+    },
+    "pipelines": {
+      "title": "Funnels",
+      "subtitle": "Create and configure your funnels and stages",
+      "empty": "No funnels yet. Create the first one above.",
+      "backBoard": "Back to funnel",
+      "back": "Back to funnels",
+      "name": "Funnel name",
+      "create": "Create funnel",
+      "creating": "Creating…",
+      "isDefault": "Default",
+      "makeDefault": "Make default",
+      "stageCount": "{n} stages",
+      "save": "Save",
+      "deletePipeline": "Delete funnel",
+      "confirmDeletePipeline": "Deleting this funnel removes its stages and opportunities. Continue?",
+      "stagesTitle": "Stages",
+      "stageName": "Stage name",
+      "probability": "Prob. (%)",
+      "addStage": "Add stage",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "deleteStage": "Delete stage",
+      "confirmDeleteStage": "Delete this stage?",
+      "stageInUse": "{n} opportunity(ies) in this stage",
+      "error": {
+        "unauthorized": "Session expired.",
+        "invalid": "Invalid data.",
+        "last_pipeline": "You need at least one funnel.",
+        "stage_in_use": "Move the opportunities before deleting this stage.",
         "unknown": "Something went wrong."
       }
     }
