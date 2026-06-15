@@ -65,6 +65,7 @@
       "crm": "Pipeline",
       "companies": "Companies",
       "contacts": "Contacts",
+      "connections": "Connections",
       "team": "Team",
       "signOut": "Sign out"
     },
@@ -181,6 +182,37 @@
         "unauthorized": "Session expired.",
         "unknown": "Something went wrong."
       }
+    }
+  },
+  "connections": {
+    "title": "Connections",
+    "subtitle": "Integrations with WhatsApp, email, Google and webhooks",
+    "new": "New connection",
+    "newTitle": "New connection",
+    "empty": "No connections yet. Connect an integration.",
+    "sectionProvider": "Provider",
+    "provider": "Provider",
+    "label": "Label",
+    "sectionCredentials": "Credentials",
+    "credentialsHint": "Credentials are encrypted (AES-256-GCM) and never shown again.",
+    "create": "Create connection",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "test": "Test",
+    "testing": "Testing…",
+    "colLabel": "Label",
+    "colProvider": "Provider",
+    "colStatus": "Status",
+    "status": {
+      "ACTIVE": "Active",
+      "INACTIVE": "Inactive",
+      "ERROR": "Error"
+    },
+    "error": {
+      "unauthorized": "Session expired.",
+      "invalid": "Fill in the required fields.",
+      "limit": "Plan connection limit reached.",
+      "unknown": "Something went wrong."
     }
   }
 }

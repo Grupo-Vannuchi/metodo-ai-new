@@ -21,6 +21,8 @@ const TENANT_MODELS = new Set<string>([
   "Pipeline",
   "Stage",
   "Opportunity",
+  "IntegrationConnection",
+  "WebhookEndpoint",
 ]);
 
 const WHERE_OPS = new Set<string>([

@@ -219,3 +219,68 @@ model Opportunity {
   @@index([organizationId, pipelineId, stageId, order])
   @@map("opportunities")
 }
+
+// ---------------------------------------------------------------------------
+// Connections & Webhooks (P4)
+// ---------------------------------------------------------------------------
+
+enum IntegrationProvider {
+  EVOLUTION // WhatsApp via Evolution API
+  META_CLOUD // WhatsApp Cloud API (Meta)
+  GOOGLE // Maps / Custom Search
+  RESEND // transactional / campaign email
+  SMTP // generic SMTP
+  N8N // workflow automation
+}
+
+enum ConnectionStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+}
+
+/// A stored, per-tenant integration credential set. `credentialsEnc` is an
+/// AES-256-GCM payload (see src/lib/integrations/crypto.ts) — never plaintext.
+model IntegrationConnection {
+  id             String              @id @default(cuid())
+  organizationId String
+  provider       IntegrationProvider
+  label          String
+  credentialsEnc String
+  status         ConnectionStatus    @default(INACTIVE)
+  lastTestAt     DateTime?
+  meta           Json                @default("{}")
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([organizationId, provider])
+  @@map("integration_connections")
+}
+
+/// Inbound webhook endpoint configuration (a provider calls us here).
+model WebhookEndpoint {
+  id             String              @id @default(cuid())
+  organizationId String
+  provider       IntegrationProvider
+  secret         String
+  events         String[]            @default([])
+  createdAt      DateTime            @default(now())
+
+  @@index([organizationId, provider])
+  @@map("webhook_endpoints")
+}
+
+/// Idempotent log of received webhook events (dedupe by `dedupeKey`).
+model WebhookEvent {
+  id             String              @id @default(cuid())
+  organizationId String?
+  provider       IntegrationProvider
+  eventType      String
+  dedupeKey      String              @unique
+  payload        Json
+  processedAt    DateTime?
+  createdAt      DateTime            @default(now())
+
+  @@index([organizationId, provider, eventType])
+  @@map("webhook_events")
+}

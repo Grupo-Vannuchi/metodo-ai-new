@@ -65,6 +65,7 @@
       "crm": "Funil",
       "companies": "Empresas",
       "contacts": "Contatos",
+      "connections": "Conexões",
       "team": "Equipe",
       "signOut": "Sair"
     },
@@ -181,6 +182,37 @@
         "unauthorized": "Sessão expirada.",
         "unknown": "Algo deu errado."
       }
+    }
+  },
+  "connections": {
+    "title": "Conexões",
+    "subtitle": "Integrações com WhatsApp, e-mail, Google e webhooks",
+    "new": "Nova conexão",
+    "newTitle": "Nova conexão",
+    "empty": "Nenhuma conexão ainda. Conecte uma integração.",
+    "sectionProvider": "Provedor",
+    "provider": "Provedor",
+    "label": "Rótulo",
+    "sectionCredentials": "Credenciais",
+    "credentialsHint": "As credenciais são criptografadas (AES-256-GCM) e nunca exibidas novamente.",
+    "create": "Criar conexão",
+    "saving": "Salvando…",
+    "cancel": "Cancelar",
+    "test": "Testar",
+    "testing": "Testando…",
+    "colLabel": "Rótulo",
+    "colProvider": "Provedor",
+    "colStatus": "Status",
+    "status": {
+      "ACTIVE": "Ativa",
+      "INACTIVE": "Inativa",
+      "ERROR": "Erro"
+    },
+    "error": {
+      "unauthorized": "Sessão expirada.",
+      "invalid": "Preencha os campos obrigatórios.",
+      "limit": "Limite de conexões do plano atingido.",
+      "unknown": "Algo deu errado."
     }
   }
 }

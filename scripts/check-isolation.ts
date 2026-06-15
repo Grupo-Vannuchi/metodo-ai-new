@@ -98,10 +98,30 @@ async function main() {
       "deleting org A's company with org B filter affects 0 rows",
     );
 
+    // 5) Integration connections are tenant-scoped too.
+    await prisma.integrationConnection.create({
+      data: {
+        organizationId: orgA.id,
+        provider: "EVOLUTION",
+        label: `ISO-CONN-A-${stamp}`,
+        credentialsEnc: "iv:tag:data",
+      },
+    });
+    const connsB = await prisma.integrationConnection.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(
+      connsB.length === 0,
+      "connection list scoped to org B excludes org A's connection",
+    );
+
     console.log("\n✅ Tenant isolation: all checks passed.");
   } finally {
-    // Cleanup. Companies carry organizationId (no FK cascade from org), so
-    // remove them explicitly before the orgs.
+    // Cleanup. Companies/connections carry organizationId (no FK cascade from
+    // org), so remove them explicitly before the orgs.
+    await prisma.integrationConnection.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
     await prisma.company.deleteMany({
       where: { organizationId: { in: created.orgs } },
     });

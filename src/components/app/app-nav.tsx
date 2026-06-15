@@ -5,13 +5,14 @@ import {
   KanbanSquare,
   Building2,
   Contact,
+  Cable,
   Users,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 
-type NavKey = "dashboard" | "crm" | "companies" | "contacts" | "team";
+type NavKey = "dashboard" | "crm" | "companies" | "contacts" | "connections" | "team";
 type Item = { href: string; key: NavKey; icon: typeof LayoutDashboard };
 
 const items: Item[] = [
@@ -19,6 +20,7 @@ const items: Item[] = [
   { href: "/app/crm", key: "crm", icon: KanbanSquare },
   { href: "/app/companies", key: "companies", icon: Building2 },
   { href: "/app/contacts", key: "contacts", icon: Contact },
+  { href: "/app/connections", key: "connections", icon: Cable },
   { href: "/app/settings/team", key: "team", icon: Users },
 ];
 

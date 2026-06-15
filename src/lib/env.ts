@@ -23,6 +23,17 @@ const serverSchema = z.object({
   SESSION_SECRET: z
     .string()
     .min(32, "SESSION_SECRET must be at least 32 characters for HS256 signing"),
+  // AES-256-GCM key for encrypting integration credentials. 32 bytes as 64 hex.
+  INTEGRATION_ENC_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, "INTEGRATION_ENC_KEY must be 64 hex chars (32 bytes)"),
+  // Background jobs (Upstash QStash) — optional until campaigns/extractors run.
+  QSTASH_TOKEN: z.string().optional(),
+  QSTASH_CURRENT_SIGNING_KEY: z.string().optional(),
+  QSTASH_NEXT_SIGNING_KEY: z.string().optional(),
+  // Cache / rate-limit (Upstash Redis) — optional until dispatch throttling runs.
+  UPSTASH_REDIS_REST_URL: z.string().url().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
 
