@@ -1,6 +1,18 @@
 import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
 
+/** Messages actually sent (SENT/DELIVERED/READ) since `since` — for the monthly
+ * dispatch quota and the usage panel. */
+export function countDispatchedSince(
+  organizationId: string,
+  since: Date,
+): Promise<number> {
+  const db = tenantDb(organizationId);
+  return db.campaignRecipient.count({
+    where: { status: { in: ["SENT", "DELIVERED", "READ"] }, sentAt: { gte: since } },
+  });
+}
+
 export async function listTemplates(organizationId: string) {
   const db = tenantDb(organizationId);
   return db.messageTemplate.findMany({

@@ -68,7 +68,7 @@
       "companies": "Empresas",
       "contacts": "Contatos",
       "connections": "Conexões",
-      "team": "Equipe",
+      "settings": "Configurações",
       "signOut": "Sair"
     },
     "dashboard": {
@@ -332,6 +332,42 @@
       "forbidden": "Seu plano não inclui este canal.",
       "no_connection": "Conecte o canal em Conexões antes de disparar.",
       "unknown": "Algo deu errado."
+    }
+  },
+  "pricing": {
+    "title": "Planos",
+    "subtitle": "Escolha o plano ideal para o tamanho da sua operação. Todos incluem CRM, prospecção, campanhas e conexões.",
+    "recommended": "Recomendado",
+    "seats": "{n} assento(s)",
+    "connections": "{n} conexão(ões)",
+    "dispatch": "{n} disparos/mês",
+    "extractions": "{n} extrações Google/mês",
+    "unlimited": "Ilimitado",
+    "includedCore": "CRM, funil, prospecção, campanhas e conexões",
+    "cta": "Começar agora",
+    "backHome": "Voltar ao início",
+    "plans": {
+      "STANDARD": "Standard",
+      "PLUS": "Plus",
+      "GOLD": "Gold",
+      "ENTERPRISE": "Empresa"
+    }
+  },
+  "settings": {
+    "title": "Configurações",
+    "subtitle": "Organização, plano e uso",
+    "org": "Organização",
+    "plan": "Plano",
+    "yourRole": "Seu papel",
+    "seePlans": "Ver planos",
+    "usageTitle": "Uso e cotas",
+    "usageHint": "Extrações e disparos consideram o uso do mês atual. Cotas valem para a credencial da plataforma; conta própria não conta.",
+    "manageTeam": "Gerenciar equipe",
+    "usage": {
+      "seats": "Assentos",
+      "connections": "Conexões",
+      "extractions": "Extrações Google (mês)",
+      "dispatch": "Disparos (mês)"
     }
   }
 }

@@ -8,7 +8,7 @@ import {
   Building2,
   Contact,
   Cable,
-  Users,
+  Settings,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
@@ -22,7 +22,7 @@ type NavKey =
   | "companies"
   | "contacts"
   | "connections"
-  | "team";
+  | "settings";
 type Item = { href: string; key: NavKey; icon: typeof LayoutDashboard };
 
 const items: Item[] = [
@@ -33,7 +33,7 @@ const items: Item[] = [
   { href: "/app/companies", key: "companies", icon: Building2 },
   { href: "/app/contacts", key: "contacts", icon: Contact },
   { href: "/app/connections", key: "connections", icon: Cable },
-  { href: "/app/settings/team", key: "team", icon: Users },
+  { href: "/app/settings", key: "settings", icon: Settings },
 ];
 
 export function AppNav() {
