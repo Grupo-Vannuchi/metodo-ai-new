@@ -3,6 +3,7 @@
 import {
   LayoutDashboard,
   KanbanSquare,
+  Radar,
   Building2,
   Contact,
   Cable,
@@ -12,12 +13,20 @@ import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 
-type NavKey = "dashboard" | "crm" | "companies" | "contacts" | "connections" | "team";
+type NavKey =
+  | "dashboard"
+  | "crm"
+  | "prospecting"
+  | "companies"
+  | "contacts"
+  | "connections"
+  | "team";
 type Item = { href: string; key: NavKey; icon: typeof LayoutDashboard };
 
 const items: Item[] = [
   { href: "/app", key: "dashboard", icon: LayoutDashboard },
   { href: "/app/crm", key: "crm", icon: KanbanSquare },
+  { href: "/app/prospecting", key: "prospecting", icon: Radar },
   { href: "/app/companies", key: "companies", icon: Building2 },
   { href: "/app/contacts", key: "contacts", icon: Contact },
   { href: "/app/connections", key: "connections", icon: Cable },

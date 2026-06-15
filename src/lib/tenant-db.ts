@@ -23,6 +23,8 @@ const TENANT_MODELS = new Set<string>([
   "Opportunity",
   "IntegrationConnection",
   "WebhookEndpoint",
+  "ExtractionJob",
+  "ExtractedLead",
 ]);
 
 const WHERE_OPS = new Set<string>([

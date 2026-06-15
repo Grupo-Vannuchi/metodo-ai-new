@@ -284,3 +284,65 @@ model WebhookEvent {
   @@index([organizationId, provider, eventType])
   @@map("webhook_events")
 }
+
+// ---------------------------------------------------------------------------
+// Prospecting / Extractors (P5)
+// ---------------------------------------------------------------------------
+
+enum ExtractorProvider {
+  GOOGLE_MAPS
+  GOOGLE_CSE
+  CNPJ
+  INSTAGRAM
+  LINKEDIN
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+  CANCELED
+}
+
+/// An extraction run. Processed asynchronously in batches (chunking) via the
+/// queue; `cursor` holds the provider's pagination state between batches.
+model ExtractionJob {
+  id             String            @id @default(cuid())
+  organizationId String
+  provider       ExtractorProvider
+  params         Json              @default("{}")
+  status         JobStatus         @default(QUEUED)
+  totalFound     Int               @default(0)
+  cursor         Json?
+  error          String?
+  createdById    String
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  results ExtractedLead[]
+
+  @@index([organizationId, status])
+  @@map("extraction_jobs")
+}
+
+/// A single lead produced by an extraction. `raw` keeps the provider payload;
+/// `importedCompanyId` is set once the lead is imported into the CRM.
+model ExtractedLead {
+  id                String   @id @default(cuid())
+  organizationId    String
+  extractionJobId   String
+  name              String?
+  cnpj              String?
+  email             String?
+  phone             String?
+  raw               Json     @default("{}")
+  importedCompanyId String?
+  importedAt        DateTime?
+  createdAt         DateTime @default(now())
+
+  job ExtractionJob @relation(fields: [extractionJobId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, extractionJobId])
+  @@map("extracted_leads")
+}

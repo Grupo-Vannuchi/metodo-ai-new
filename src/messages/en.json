@@ -63,6 +63,7 @@
     "nav": {
       "dashboard": "Dashboard",
       "crm": "Pipeline",
+      "prospecting": "Prospecting",
       "companies": "Companies",
       "contacts": "Contacts",
       "connections": "Connections",
@@ -212,6 +213,44 @@
       "unauthorized": "Session expired.",
       "invalid": "Fill in the required fields.",
       "limit": "Plan connection limit reached.",
+      "unknown": "Something went wrong."
+    }
+  },
+  "prospecting": {
+    "title": "Prospecting",
+    "subtitle": "Find companies with the extractors and import them into the CRM",
+    "empty": "No extractions yet. Run the first one above.",
+    "provider": "Extractor",
+    "running": "Extracting…",
+    "extract": "Extract",
+    "view": "View",
+    "back": "Back",
+    "colProvider": "Extractor",
+    "colStatus": "Status",
+    "colFound": "Found",
+    "foundCount": "{count} result(s) found",
+    "noLeads": "No results in this extraction.",
+    "selectedCount": "{count} selected",
+    "importSelected": "Import selected",
+    "importing": "Importing…",
+    "selectAll": "Select all",
+    "imported": "Imported",
+    "colName": "Name",
+    "colCnpj": "CNPJ",
+    "colPhone": "Phone",
+    "colEmail": "Email",
+    "status": {
+      "QUEUED": "Queued",
+      "RUNNING": "Running",
+      "DONE": "Done",
+      "FAILED": "Failed",
+      "CANCELED": "Canceled"
+    },
+    "error": {
+      "unauthorized": "Session expired.",
+      "invalid": "Invalid data.",
+      "forbidden": "Your plan doesn't include this extractor.",
+      "no_connection": "Connect Google under Connections to use this extractor.",
       "unknown": "Something went wrong."
     }
   }

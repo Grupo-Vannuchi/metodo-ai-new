@@ -63,6 +63,7 @@
     "nav": {
       "dashboard": "Painel",
       "crm": "Funil",
+      "prospecting": "Prospecção",
       "companies": "Empresas",
       "contacts": "Contatos",
       "connections": "Conexões",
@@ -212,6 +213,44 @@
       "unauthorized": "Sessão expirada.",
       "invalid": "Preencha os campos obrigatórios.",
       "limit": "Limite de conexões do plano atingido.",
+      "unknown": "Algo deu errado."
+    }
+  },
+  "prospecting": {
+    "title": "Prospecção",
+    "subtitle": "Encontre empresas com os extratores e importe para o CRM",
+    "empty": "Nenhuma extração ainda. Faça a primeira acima.",
+    "provider": "Extrator",
+    "running": "Extraindo…",
+    "extract": "Extrair",
+    "view": "Ver",
+    "back": "Voltar",
+    "colProvider": "Extrator",
+    "colStatus": "Status",
+    "colFound": "Encontrados",
+    "foundCount": "{count} resultado(s) encontrado(s)",
+    "noLeads": "Nenhum resultado nesta extração.",
+    "selectedCount": "{count} selecionado(s)",
+    "importSelected": "Importar selecionados",
+    "importing": "Importando…",
+    "selectAll": "Selecionar todos",
+    "imported": "Importado",
+    "colName": "Nome",
+    "colCnpj": "CNPJ",
+    "colPhone": "Telefone",
+    "colEmail": "E-mail",
+    "status": {
+      "QUEUED": "Na fila",
+      "RUNNING": "Executando",
+      "DONE": "Concluído",
+      "FAILED": "Falhou",
+      "CANCELED": "Cancelado"
+    },
+    "error": {
+      "unauthorized": "Sessão expirada.",
+      "invalid": "Dados inválidos.",
+      "forbidden": "Seu plano não inclui este extrator.",
+      "no_connection": "Conecte o Google em Conexões para usar este extrator.",
       "unknown": "Algo deu errado."
     }
   }
