@@ -192,6 +192,8 @@
       "open": "Open",
       "createFunnel": "Create funnel",
       "managePipelines": "Manage funnels",
+      "back": "Back to funnel",
+      "noStages": "This funnel has no stages.",
       "error": {
         "invalid": "Invalid data.",
         "unauthorized": "Session expired.",

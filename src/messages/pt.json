@@ -192,6 +192,8 @@
       "open": "Abrir",
       "createFunnel": "Criar funil",
       "managePipelines": "Gerenciar funis",
+      "back": "Voltar ao funil",
+      "noStages": "Este funil não tem estágios.",
       "error": {
         "invalid": "Dados inválidos.",
         "unauthorized": "Sessão expirada.",

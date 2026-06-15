@@ -1,12 +1,9 @@
 import { getTranslations } from "next-intl/server";
-import { Settings2 } from "lucide-react";
+import { Settings2, Plus } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
-import { getBoard, stageOptions } from "@/lib/queries/crm";
+import { getBoard } from "@/lib/queries/crm";
 import { pipelineOptions } from "@/lib/queries/pipelines";
-import { companyOptions } from "@/lib/queries/companies";
-import { contactOptions } from "@/lib/queries/contacts";
 import { Board } from "@/components/crm/board";
-import { NewOpportunity } from "@/components/crm/new-opportunity";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -45,12 +42,6 @@ export default async function CrmPage({
     );
   }
 
-  const [stages, companies, contacts] = await Promise.all([
-    stageOptions(ctx.organizationId, board.pipelineId),
-    companyOptions(ctx.organizationId),
-    contactOptions(ctx.organizationId),
-  ]);
-
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -63,7 +54,10 @@ export default async function CrmPage({
             <Settings2 className="size-4" />
             {t("managePipelines")}
           </Link>
-          <NewOpportunity stages={stages.stages} companies={companies} contacts={contacts} />
+          <Link href={`/app/crm/new?pipeline=${board.pipelineId}`} className={buttonVariants()}>
+            <Plus className="size-4" />
+            {t("newOpportunity")}
+          </Link>
         </div>
       </div>
 
