@@ -189,9 +189,34 @@
       "cancel": "Cancelar",
       "emptyColumn": "Arraste cards para cá",
       "columnTotal": "Total: {total}",
+      "open": "Abrir",
       "error": {
         "invalid": "Dados inválidos.",
         "unauthorized": "Sessão expirada.",
+        "unknown": "Algo deu errado."
+      }
+    },
+    "opportunity": {
+      "back": "Voltar",
+      "editTitle": "Editar oportunidade",
+      "title": "Título",
+      "value": "Valor",
+      "stage": "Estágio",
+      "status": "Situação",
+      "statusOPEN": "Aberta",
+      "statusWON": "Ganha",
+      "statusLOST": "Perdida",
+      "company": "Empresa",
+      "contact": "Contato",
+      "none": "—",
+      "save": "Salvar",
+      "saving": "Salvando…",
+      "cancel": "Cancelar",
+      "delete": "Excluir",
+      "confirmDelete": "Tem certeza que deseja excluir esta oportunidade?",
+      "error": {
+        "unauthorized": "Sessão expirada.",
+        "invalid": "Dados inválidos.",
         "unknown": "Algo deu errado."
       }
     }

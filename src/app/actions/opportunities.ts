@@ -6,8 +6,10 @@ import { tenantDb } from "@/lib/tenant-db";
 import {
   opportunitySchema,
   moveOpportunitySchema,
+  updateOpportunitySchema,
   type OpportunityInput,
   type MoveOpportunityInput,
+  type UpdateOpportunityInput,
 } from "@/lib/validations/opportunity";
 
 export type OpportunityActionResult =
@@ -107,6 +109,52 @@ export async function moveOpportunity(
   } catch (error) {
     console.error("Failed to move opportunity", error);
     return { ok: false };
+  }
+}
+
+/** Edit an opportunity (title, value, stage, status, links). */
+export async function updateOpportunity(
+  id: string,
+  input: UpdateOpportunityInput,
+): Promise<OpportunityActionResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+
+  const parsed = updateOpportunitySchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+
+  try {
+    const db = tenantDb(ctx.organizationId);
+    const stage = await db.stage.findFirst({
+      where: { id: parsed.data.stageId },
+      select: { id: true, pipelineId: true },
+    });
+    if (!stage) return { ok: false, error: "invalid" };
+
+    const [companyId, contactId] = await Promise.all([
+      existsInOrg(ctx.organizationId, "company", parsed.data.companyId),
+      existsInOrg(ctx.organizationId, "contact", parsed.data.contactId),
+    ]);
+
+    const res = await db.opportunity.updateMany({
+      where: { id },
+      data: {
+        title: parsed.data.title,
+        value: parsed.data.value,
+        stageId: stage.id,
+        pipelineId: stage.pipelineId,
+        status: parsed.data.status,
+        companyId,
+        contactId,
+      },
+    });
+    if (res.count === 0) return { ok: false, error: "unknown" };
+
+    revalidatePath("/app/crm");
+    return { ok: true, id };
+  } catch (error) {
+    console.error("Failed to update opportunity", error);
+    return { ok: false, error: "unknown" };
   }
 }
 

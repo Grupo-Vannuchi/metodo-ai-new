@@ -189,9 +189,34 @@
       "cancel": "Cancel",
       "emptyColumn": "Drag cards here",
       "columnTotal": "Total: {total}",
+      "open": "Open",
       "error": {
         "invalid": "Invalid data.",
         "unauthorized": "Session expired.",
+        "unknown": "Something went wrong."
+      }
+    },
+    "opportunity": {
+      "back": "Back",
+      "editTitle": "Edit opportunity",
+      "title": "Title",
+      "value": "Value",
+      "stage": "Stage",
+      "status": "Status",
+      "statusOPEN": "Open",
+      "statusWON": "Won",
+      "statusLOST": "Lost",
+      "company": "Company",
+      "contact": "Contact",
+      "none": "—",
+      "save": "Save",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "confirmDelete": "Are you sure you want to delete this opportunity?",
+      "error": {
+        "unauthorized": "Session expired.",
+        "invalid": "Invalid data.",
         "unknown": "Something went wrong."
       }
     }

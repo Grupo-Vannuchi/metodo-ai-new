@@ -47,7 +47,7 @@ export async function getBoard(organizationId: string): Promise<Board | null> {
       select: { id: true, name: true, probability: true },
     }),
     db.opportunity.findMany({
-      where: { pipelineId: pipeline.id },
+      where: { pipelineId: pipeline.id, status: "OPEN" },
       orderBy: { order: "asc" },
       select: {
         id: true,
@@ -78,6 +78,25 @@ export async function getBoard(organizationId: string): Promise<Board | null> {
   }));
 
   return { pipelineId: pipeline.id, pipelineName: pipeline.name, columns };
+}
+
+/** A single opportunity for the edit page. Scoped to the org. */
+export async function getOpportunity(organizationId: string, id: string) {
+  const db = tenantDb(organizationId);
+  const opp = await db.opportunity.findFirst({
+    where: { id },
+    select: {
+      id: true,
+      title: true,
+      value: true,
+      stageId: true,
+      status: true,
+      companyId: true,
+      contactId: true,
+    },
+  });
+  if (!opp) return null;
+  return { ...opp, value: Number(opp.value) };
 }
 
 /** Stage options of the default pipeline (for the create form). */

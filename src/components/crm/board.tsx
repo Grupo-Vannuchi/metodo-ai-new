@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter } from "@/i18n/navigation";
+import { Pencil } from "lucide-react";
+import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { moveOpportunity } from "@/app/actions/opportunities";
 import type { BoardColumn } from "@/lib/queries/crm";
@@ -99,7 +100,17 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
                   onDragEnd={() => setDragId(null)}
                   className="cursor-grab rounded-lg border border-border bg-card p-3 shadow-sm active:cursor-grabbing"
                 >
-                  <p className="text-sm font-medium">{card.title}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium">{card.title}</p>
+                    <Link
+                      href={`/app/crm/${card.id}`}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                      aria-label={t("open")}
+                    >
+                      <Pencil className="size-3.5" />
+                    </Link>
+                  </div>
                   {card.companyName ? (
                     <p className="mt-0.5 text-xs text-muted-foreground">{card.companyName}</p>
                   ) : null}
