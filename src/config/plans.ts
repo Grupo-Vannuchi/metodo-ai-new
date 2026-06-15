@@ -27,6 +27,12 @@ export type PlanConfig = {
   seatLimit: number;
   /** Max messages dispatched per calendar month. */
   dispatchQuotaPerMonth: number;
+  /**
+   * Max extractions per calendar month that use the PLATFORM's paid credentials
+   * (e.g. the shared Google key). Tenants using their OWN connection are not
+   * limited by this — they pay their own usage.
+   */
+  extractionQuotaPerMonth: number;
   /** Max active integration connections. `null` = unlimited. */
   connectionsLimit: number | null;
   /** Features unlocked by this plan. */
@@ -58,24 +64,28 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
   STANDARD: {
     seatLimit: 3,
     dispatchQuotaPerMonth: 1_000,
+    extractionQuotaPerMonth: 50,
     connectionsLimit: 1,
     features: STANDARD_FEATURES,
   },
   PLUS: {
     seatLimit: 10,
     dispatchQuotaPerMonth: 10_000,
+    extractionQuotaPerMonth: 500,
     connectionsLimit: 3,
     features: PLUS_FEATURES,
   },
   GOLD: {
     seatLimit: 25,
     dispatchQuotaPerMonth: 50_000,
+    extractionQuotaPerMonth: 5_000,
     connectionsLimit: null,
     features: GOLD_FEATURES,
   },
   ENTERPRISE: {
     seatLimit: 1_000,
     dispatchQuotaPerMonth: 1_000_000,
+    extractionQuotaPerMonth: 1_000_000,
     connectionsLimit: null,
     features: ENTERPRISE_FEATURES,
   },

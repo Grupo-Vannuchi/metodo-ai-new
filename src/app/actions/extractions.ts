@@ -3,9 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
-import { assertFeature, type PlanKey } from "@/config/plans";
+import { assertFeature, planConfig, type PlanKey } from "@/config/plans";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
 import { runExtractionToCompletion } from "@/lib/extraction";
+import { hasOwnConnection } from "@/lib/integrations/credentials";
+import { isPlatformConfigured } from "@/lib/integrations/platform";
+import { countGoogleExtractionsSince } from "@/lib/queries/extractions";
 import {
   EXTRACTOR_META,
   type ExtractorProviderKey,
@@ -16,7 +19,13 @@ export type ExtractionActionResult =
   | { ok: true; id: string }
   | {
       ok: false;
-      error: "unauthorized" | "invalid" | "forbidden" | "no_connection" | "unknown";
+      error:
+        | "unauthorized"
+        | "invalid"
+        | "forbidden"
+        | "no_connection"
+        | "quota"
+        | "unknown";
     };
 
 export async function startExtraction(
@@ -38,13 +47,24 @@ export async function startExtraction(
     return { ok: false, error: "forbidden" };
   }
 
+  const plan = ctx.organization.plan as PlanKey;
   const db = tenantDb(ctx.organizationId);
 
   if (meta.needsGoogle) {
-    const googleConn = await db.integrationConnection.count({
-      where: { provider: "GOOGLE" },
-    });
-    if (googleConn === 0) return { ok: false, error: "no_connection" };
+    const own = await hasOwnConnection(ctx.organizationId, "GOOGLE");
+    if (!own) {
+      // No tenant connection: only proceed if the platform provides Google,
+      // and only within the plan's monthly platform-extraction quota.
+      if (!isPlatformConfigured("GOOGLE")) {
+        return { ok: false, error: "no_connection" };
+      }
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const used = await countGoogleExtractionsSince(ctx.organizationId, monthStart);
+      if (used >= planConfig(plan).extractionQuotaPerMonth) {
+        return { ok: false, error: "quota" };
+      }
+    }
   }
 
   try {

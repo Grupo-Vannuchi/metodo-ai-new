@@ -2,7 +2,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getExtractor } from "@/lib/integrations/extractors";
-import { decryptCredentials } from "@/lib/integrations/crypto";
+import { resolveCredentials } from "@/lib/integrations/credentials";
 import type { ExtractorProviderKey } from "@/lib/integrations/extractors/meta";
 import type { Cursor } from "@/lib/integrations/extractors/types";
 
@@ -30,20 +30,16 @@ export async function runExtractionBatch(
 
   let credentials: Record<string, string> | null = null;
   if (adapter.requiresConnection === "GOOGLE") {
-    const conn = await prisma.integrationConnection.findFirst({
-      where: { organizationId: job.organizationId, provider: "GOOGLE" },
-      orderBy: { createdAt: "desc" },
-    });
-    if (!conn) {
-      await fail(jobId, "Conecte o Google em Conexões para usar este extrator.");
+    // Tenant's own Google connection, or the platform-managed key as fallback.
+    const resolved = await resolveCredentials(job.organizationId, "GOOGLE");
+    if (!resolved) {
+      await fail(
+        jobId,
+        "Conecte o Google em Conexões (ou aguarde a credencial padrão da plataforma).",
+      );
       return { done: true };
     }
-    try {
-      credentials = decryptCredentials(conn.credentialsEnc);
-    } catch {
-      await fail(jobId, "Falha ao ler as credenciais do Google.");
-      return { done: true };
-    }
+    credentials = resolved.credentials;
   }
 
   await prisma.extractionJob.update({

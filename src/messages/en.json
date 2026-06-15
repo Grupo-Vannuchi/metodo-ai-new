@@ -188,6 +188,14 @@
   "connections": {
     "title": "Connections",
     "subtitle": "Integrations with WhatsApp, email, Google and webhooks",
+    "managedTitle": "Ready integrations (managed by MétodoAI)",
+    "managedHint": "Work with no setup, within your plan quota. Connect your own account for higher limits.",
+    "managed": {
+      "cnpj": "CNPJ (prospecting)",
+      "google": "Google (Maps/Search)",
+      "email": "Email"
+    },
+    "ownTitle": "Your connections (your account)",
     "new": "New connection",
     "newTitle": "New connection",
     "empty": "No connections yet. Connect an integration.",
@@ -251,6 +259,7 @@
       "invalid": "Invalid data.",
       "forbidden": "Your plan doesn't include this extractor.",
       "no_connection": "Connect Google under Connections to use this extractor.",
+      "quota": "Plan extraction quota reached this month. Connect your own Google account or upgrade.",
       "unknown": "Something went wrong."
     }
   }

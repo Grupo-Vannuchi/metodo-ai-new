@@ -188,6 +188,14 @@
   "connections": {
     "title": "Conexões",
     "subtitle": "Integrações com WhatsApp, e-mail, Google e webhooks",
+    "managedTitle": "Integrações prontas (gerenciadas pelo MétodoAI)",
+    "managedHint": "Funcionam sem configuração, dentro da cota do seu plano. Conecte a sua própria conta para limites maiores.",
+    "managed": {
+      "cnpj": "CNPJ (prospecção)",
+      "google": "Google (Maps/Busca)",
+      "email": "E-mail"
+    },
+    "ownTitle": "Suas conexões (sua conta)",
     "new": "Nova conexão",
     "newTitle": "Nova conexão",
     "empty": "Nenhuma conexão ainda. Conecte uma integração.",
@@ -251,6 +259,7 @@
       "invalid": "Dados inválidos.",
       "forbidden": "Seu plano não inclui este extrator.",
       "no_connection": "Conecte o Google em Conexões para usar este extrator.",
+      "quota": "Cota de extrações do plano atingida neste mês. Conecte sua própria conta Google ou faça upgrade.",
       "unknown": "Algo deu errado."
     }
   }

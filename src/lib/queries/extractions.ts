@@ -1,6 +1,23 @@
 import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
 
+/**
+ * Count Google extractions this org ran since `since` — the proxy for
+ * platform-paid usage when enforcing the monthly extraction quota.
+ */
+export function countGoogleExtractionsSince(
+  organizationId: string,
+  since: Date,
+): Promise<number> {
+  const db = tenantDb(organizationId);
+  return db.extractionJob.count({
+    where: {
+      provider: { in: ["GOOGLE_MAPS", "GOOGLE_CSE"] },
+      createdAt: { gte: since },
+    },
+  });
+}
+
 export async function listExtractions(organizationId: string) {
   const db = tenantDb(organizationId);
   return db.extractionJob.findMany({
