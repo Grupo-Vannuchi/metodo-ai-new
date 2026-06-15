@@ -11,6 +11,7 @@ import {
   dispatchCampaignToCompletion,
 } from "@/lib/dispatch";
 import { CHANNEL_META, type ChannelKey } from "@/lib/integrations/channels/meta";
+import { audit } from "@/lib/audit";
 import {
   templateSchema,
   campaignSchema,
@@ -112,6 +113,8 @@ export async function createCampaign(
     const where: Prisma.ContactWhereInput =
       targetField === "phone" ? { phone: { not: null } } : { email: { not: null } };
     if (parsed.data.tag) where.tags = { has: parsed.data.tag };
+    // LGPD: never include opted-out contacts.
+    where.optedOut = false;
 
     const contacts = await db.contact.findMany({ where, select: { id: true } });
 
@@ -137,6 +140,12 @@ export async function createCampaign(
       });
     }
 
+    await audit(ctx, {
+      action: "campaign.created",
+      entity: "Campaign",
+      entityId: campaign.id,
+      meta: { channel, recipients: contacts.length },
+    });
     revalidatePath("/app/campaigns");
     return { ok: true, id: campaign.id };
   } catch (error) {
@@ -163,6 +172,8 @@ export async function startCampaign(id: string): Promise<{ ok: boolean; error?: 
     if (!creds) return { ok: false, error: "no_connection" };
 
     await db.campaign.updateMany({ where: { id }, data: { status: "RUNNING" } });
+
+    await audit(ctx, { action: "campaign.started", entity: "Campaign", entityId: id });
 
     if (isQueueConfigured()) {
       await enqueue("dispatch-campaign", { campaignId: id });

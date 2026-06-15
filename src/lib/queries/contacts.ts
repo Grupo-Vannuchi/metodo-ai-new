@@ -39,6 +39,7 @@ export async function getContact(organizationId: string, id: string) {
       role: true,
       companyId: true,
       tags: true,
+      optedOut: true,
     },
   });
 }

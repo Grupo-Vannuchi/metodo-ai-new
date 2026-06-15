@@ -56,6 +56,7 @@
       "email_taken": "This email is already in use.",
       "expired": "This invitation has expired.",
       "seat_limit": "The organization has reached its seat limit.",
+      "rate_limited": "Too many attempts. Wait a minute and try again.",
       "generic": "Something went wrong. Please try again."
     }
   },
@@ -154,6 +155,7 @@
       "noCompany": "— No company —",
       "tags": "Tags",
       "tagsHint": "Separate with commas.",
+      "optedOut": "Unsubscribed (exclude from campaigns)",
       "create": "Create",
       "save": "Save",
       "saving": "Saving…",
@@ -363,11 +365,31 @@
     "usageTitle": "Usage & quotas",
     "usageHint": "Extractions and dispatch reflect the current month. Quotas apply to the platform credential; your own account isn't counted.",
     "manageTeam": "Manage team",
+    "auditLog": "Audit log",
     "usage": {
       "seats": "Seats",
       "connections": "Connections",
       "extractions": "Google extractions (month)",
       "dispatch": "Dispatch (month)"
     }
+  },
+  "audit": {
+    "title": "Audit log",
+    "subtitle": "Meaningful actions in your organization",
+    "back": "Back",
+    "empty": "No events yet.",
+    "when": "When",
+    "who": "Who",
+    "action": "Action",
+    "entity": "Entity"
+  },
+  "unsubscribe": {
+    "title": "Unsubscribe",
+    "body": "Confirm to stop receiving our messages.",
+    "confirm": "Confirm unsubscribe",
+    "processing": "Processing…",
+    "done": "Done! You won't receive messages anymore.",
+    "invalidTitle": "Invalid link",
+    "invalidBody": "This unsubscribe link is invalid or has expired."
   }
 }

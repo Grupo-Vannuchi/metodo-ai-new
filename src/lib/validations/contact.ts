@@ -10,6 +10,8 @@ export const contactSchema = z.object({
   companyId: z.string().trim().max(40).optional().or(z.literal("")),
   /** Comma-separated in the form; normalized to an array before persisting. */
   tags: z.string().trim().max(300).optional().or(z.literal("")),
+  /** LGPD opt-out (excluded from campaigns). */
+  optedOut: z.boolean().optional(),
 });
 
 export type ContactInput = z.infer<typeof contactSchema>;

@@ -7,10 +7,11 @@ export type ContactFormValues = {
   role: string;
   companyId: string;
   tags: string;
+  optedOut: boolean;
 };
 
 export function emptyContactForm(): ContactFormValues {
-  return { name: "", email: "", phone: "", role: "", companyId: "", tags: "" };
+  return { name: "", email: "", phone: "", role: "", companyId: "", tags: "", optedOut: false };
 }
 
 export type ContactRow = {
@@ -20,6 +21,7 @@ export type ContactRow = {
   role: string | null;
   companyId: string | null;
   tags: string[];
+  optedOut: boolean;
 };
 
 export function contactToForm(row: ContactRow): ContactFormValues {
@@ -30,6 +32,7 @@ export function contactToForm(row: ContactRow): ContactFormValues {
     role: row.role ?? "",
     companyId: row.companyId ?? "",
     tags: row.tags.join(", "),
+    optedOut: row.optedOut,
   };
 }
 
@@ -41,6 +44,7 @@ export function formToContactInput(values: ContactFormValues): ContactInput {
     role: values.role.trim(),
     companyId: values.companyId.trim(),
     tags: values.tags.trim(),
+    optedOut: values.optedOut,
   };
 }
 

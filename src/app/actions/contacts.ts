@@ -48,6 +48,7 @@ export async function createContact(
         role: parsed.data.role || null,
         companyId,
         tags: parseTags(parsed.data.tags ?? ""),
+        optedOut: parsed.data.optedOut ?? false,
         source: "manual",
       },
     });
@@ -81,6 +82,7 @@ export async function updateContact(
         role: parsed.data.role || null,
         companyId,
         tags: parseTags(parsed.data.tags ?? ""),
+        optedOut: parsed.data.optedOut ?? false,
       },
     });
     if (res.count === 0) return { ok: false, error: "unknown" };

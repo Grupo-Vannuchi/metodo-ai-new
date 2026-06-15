@@ -14,6 +14,7 @@ import {
   type ExtractorProviderKey,
 } from "@/lib/integrations/extractors/meta";
 import { extractionSchema, type ExtractionInput } from "@/lib/validations/extraction";
+import { audit } from "@/lib/audit";
 
 export type ExtractionActionResult =
   | { ok: true; id: string }
@@ -85,6 +86,12 @@ export async function startExtraction(
       await runExtractionToCompletion(job.id);
     }
 
+    await audit(ctx, {
+      action: "extraction.started",
+      entity: "ExtractionJob",
+      entityId: job.id,
+      meta: { provider },
+    });
     revalidatePath("/app/prospecting");
     return { ok: true, id: job.id };
   } catch (error) {

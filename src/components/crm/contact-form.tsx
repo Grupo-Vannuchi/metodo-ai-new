@@ -96,6 +96,10 @@ export function ContactForm({
             <Input id="tags" placeholder="lead, quente, sp" {...register("tags")} />
             <p className="mt-1 text-xs text-muted-foreground">{t("tagsHint")}</p>
           </div>
+          <label className="flex items-center gap-3 text-sm sm:col-span-2">
+            <input type="checkbox" className="size-4 accent-brand" {...register("optedOut")} />
+            {t("optedOut")}
+          </label>
         </div>
       </fieldset>
 

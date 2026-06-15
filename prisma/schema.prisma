@@ -143,6 +143,8 @@ model Contact {
   role           String?
   tags           String[] @default([])
   source         String?
+  /// LGPD: when true, the contact is excluded from campaigns (unsubscribed).
+  optedOut       Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -426,4 +428,23 @@ model CampaignRecipient {
   @@index([organizationId, status])
   @@index([campaignId, status])
   @@map("campaign_recipients")
+}
+
+// ---------------------------------------------------------------------------
+// Audit log (P8)
+// ---------------------------------------------------------------------------
+
+/// Immutable trail of meaningful actions, per organization.
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         String // e.g. "campaign.started"
+  entity         String // e.g. "Campaign"
+  entityId       String?
+  meta           Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
 }

@@ -56,6 +56,7 @@
       "email_taken": "Este e-mail já está em uso.",
       "expired": "Este convite expirou.",
       "seat_limit": "A organização atingiu o limite de assentos.",
+      "rate_limited": "Muitas tentativas. Aguarde um minuto e tente de novo.",
       "generic": "Algo deu errado. Tente novamente."
     }
   },
@@ -154,6 +155,7 @@
       "noCompany": "— Sem empresa —",
       "tags": "Tags",
       "tagsHint": "Separe por vírgula.",
+      "optedOut": "Descadastrado (não receber campanhas)",
       "create": "Criar",
       "save": "Salvar",
       "saving": "Salvando…",
@@ -363,11 +365,31 @@
     "usageTitle": "Uso e cotas",
     "usageHint": "Extrações e disparos consideram o uso do mês atual. Cotas valem para a credencial da plataforma; conta própria não conta.",
     "manageTeam": "Gerenciar equipe",
+    "auditLog": "Registro de auditoria",
     "usage": {
       "seats": "Assentos",
       "connections": "Conexões",
       "extractions": "Extrações Google (mês)",
       "dispatch": "Disparos (mês)"
     }
+  },
+  "audit": {
+    "title": "Registro de auditoria",
+    "subtitle": "Ações relevantes na sua organização",
+    "back": "Voltar",
+    "empty": "Nenhum evento ainda.",
+    "when": "Quando",
+    "who": "Quem",
+    "action": "Ação",
+    "entity": "Entidade"
+  },
+  "unsubscribe": {
+    "title": "Descadastrar",
+    "body": "Confirme para parar de receber nossas mensagens.",
+    "confirm": "Confirmar descadastro",
+    "processing": "Processando…",
+    "done": "Pronto! Você não receberá mais mensagens.",
+    "invalidTitle": "Link inválido",
+    "invalidBody": "Este link de descadastro é inválido ou expirou."
   }
 }

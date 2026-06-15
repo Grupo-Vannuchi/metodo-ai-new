@@ -4,6 +4,7 @@ import { hasLocale } from "next-intl";
 import { prisma } from "@/lib/prisma";
 import { createSession, getSession } from "@/lib/session";
 import { getOrgContext, assertRole } from "@/lib/tenant";
+import { audit } from "@/lib/audit";
 import { hashPassword } from "@/lib/password";
 import {
   generateInvitationToken,
@@ -116,6 +117,11 @@ export async function inviteMember(
     return { error: "generic" };
   }
 
+  await audit(ctx, {
+    action: "member.invited",
+    entity: "Invitation",
+    meta: { email: parsed.data.email, role: parsed.data.role },
+  });
   revalidatePath("/app/settings/team");
   return { error: null, token };
 }

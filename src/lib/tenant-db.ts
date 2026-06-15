@@ -28,6 +28,7 @@ const TENANT_MODELS = new Set<string>([
   "MessageTemplate",
   "Campaign",
   "CampaignRecipient",
+  "AuditLog",
 ]);
 
 const WHERE_OPS = new Set<string>([

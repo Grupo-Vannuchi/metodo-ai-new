@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
-import { Users, CreditCard } from "lucide-react";
-import { requireOrgContext } from "@/lib/tenant";
+import { Users, CreditCard, ScrollText } from "lucide-react";
+import { requireOrgContext, hasRole } from "@/lib/tenant";
 import { getUsageSummary, type UsageMetric } from "@/lib/queries/usage";
 import { type PlanKey } from "@/config/plans";
 import { buttonVariants } from "@/components/ui/button";
@@ -95,6 +95,12 @@ export default async function SettingsPage({
           <CreditCard className="size-4" />
           {t("seePlans")}
         </Link>
+        {hasRole(ctx.role, "ADMIN") ? (
+          <Link href="/app/settings/audit" className={buttonVariants({ variant: "outline" })}>
+            <ScrollText className="size-4" />
+            {t("auditLog")}
+          </Link>
+        ) : null}
       </section>
     </div>
   );

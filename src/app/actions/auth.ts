@@ -7,13 +7,16 @@ import { createSession, deleteSession } from "@/lib/session";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { slugify } from "@/lib/slug";
 import { createDefaultPipeline } from "@/lib/default-pipeline";
+import { makeRateLimiter } from "@/lib/ratelimit";
 import { PLANS } from "@/config/plans";
 import { loginSchema, signupSchema } from "@/lib/validations/auth";
 import { redirect } from "@/i18n/navigation";
 import { defaultLocale, routing, type Locale } from "@/i18n/routing";
 
 /** Error codes returned to the form; the client maps them to translated copy. */
-export type AuthState = { error: "invalid" | "email_taken" | "generic" | null };
+export type AuthState = {
+  error: "invalid" | "email_taken" | "generic" | "rate_limited" | null;
+};
 
 function localeFrom(formData: FormData): Locale {
   const value = String(formData.get("locale") ?? "");
@@ -47,6 +50,14 @@ export async function login(
     password: formData.get("password"),
   });
   if (!parsed.success) return { error: "invalid" };
+
+  // Throttle login attempts per email (5/min). Degrades to allow when Redis
+  // isn't configured (local dev).
+  const limiter = makeRateLimiter("login", 5, 60);
+  if (limiter) {
+    const { success } = await limiter.limit(parsed.data.email.toLowerCase());
+    if (!success) return { error: "rate_limited" };
+  }
 
   const user = await prisma.user.findUnique({
     where: { email: parsed.data.email },

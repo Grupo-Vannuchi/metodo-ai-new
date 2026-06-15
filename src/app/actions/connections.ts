@@ -6,6 +6,7 @@ import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { encryptCredentials, decryptCredentials } from "@/lib/integrations/crypto";
 import { connectionState } from "@/lib/integrations/evolution-client";
+import { audit } from "@/lib/audit";
 import { providerSpec, type IntegrationProviderKey } from "@/lib/integrations/registry";
 import { planConfig, type PlanKey } from "@/config/plans";
 import { countConnections } from "@/lib/queries/connections";
@@ -56,6 +57,12 @@ export async function createConnection(
         credentialsEnc: encryptCredentials(credentials),
         status: "INACTIVE",
       },
+    });
+    await audit(ctx, {
+      action: "connection.created",
+      entity: "IntegrationConnection",
+      entityId: conn.id,
+      meta: { provider },
     });
     revalidatePath("/app/connections");
     return { ok: true, id: conn.id };
@@ -116,6 +123,11 @@ export async function deleteConnection(id: string): Promise<{ ok: boolean }> {
   try {
     const db = tenantDb(ctx.organizationId);
     await db.integrationConnection.deleteMany({ where: { id } });
+    await audit(ctx, {
+      action: "connection.deleted",
+      entity: "IntegrationConnection",
+      entityId: id,
+    });
     revalidatePath("/app/connections");
     return { ok: true };
   } catch (error) {

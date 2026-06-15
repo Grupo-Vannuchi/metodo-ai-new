@@ -6,6 +6,7 @@ import type { ChannelCredentials } from "@/lib/integrations/channels/types";
 import { resolveCredentials } from "@/lib/integrations/credentials";
 import { decryptCredentials } from "@/lib/integrations/crypto";
 import { makeRateLimiter } from "@/lib/ratelimit";
+import { unsubscribeUrl } from "@/lib/unsubscribe";
 import { planConfig, type PlanKey } from "@/config/plans";
 
 const BATCH = 25;
@@ -155,9 +156,15 @@ export async function dispatchCampaignBatch(
       nome: contact?.name ?? "",
       empresa: contact?.company?.name ?? "",
     });
+    // LGPD: every marketing email carries an unsubscribe link.
+    const messageBody =
+      channel === "EMAIL"
+        ? `${text}<hr style="margin-top:24px"/><p style="font-size:12px;color:#888">Não quer mais receber? <a href="${unsubscribeUrl(r.contactId)}">Descadastre-se aqui</a>.</p>`
+        : text;
+
     const result = await adapter.send(creds.credentials, {
       to,
-      body: text,
+      body: messageBody,
       subject,
       from: creds.from,
     });
