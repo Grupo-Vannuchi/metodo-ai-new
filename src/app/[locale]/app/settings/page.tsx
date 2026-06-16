@@ -80,7 +80,6 @@ export default async function SettingsPage({
         <div className="grid gap-3 sm:grid-cols-2">
           <UsageRow label={t("usage.seats")} metric={usage.seats} />
           <UsageRow label={t("usage.connections")} metric={usage.connections} />
-          <UsageRow label={t("usage.extractions")} metric={usage.extractions} />
           <UsageRow label={t("usage.dispatch")} metric={usage.dispatch} />
         </div>
         <p className="mt-2 text-xs text-muted-foreground">{t("usageHint")}</p>

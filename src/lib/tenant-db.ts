@@ -23,8 +23,6 @@ const TENANT_MODELS = new Set<string>([
   "Opportunity",
   "IntegrationConnection",
   "WebhookEndpoint",
-  "ExtractionJob",
-  "ExtractedLead",
   "MessageTemplate",
   "Campaign",
   "CampaignRecipient",

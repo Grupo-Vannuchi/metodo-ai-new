@@ -64,7 +64,6 @@
     "nav": {
       "dashboard": "Dashboard",
       "crm": "Pipeline",
-      "prospecting": "Prospecting",
       "campaigns": "Campaigns",
       "companies": "Companies",
       "contacts": "Contacts",
@@ -85,8 +84,7 @@
       "emptyFunnel": "No opportunities in the funnel yet.",
       "companies": "Companies",
       "contacts": "Contacts",
-      "dispatchMonth": "Dispatch (month)",
-      "leadsMonth": "Leads extracted (month)"
+      "dispatchMonth": "Dispatch (month)"
     },
     "team": {
       "title": "Team",
@@ -309,48 +307,6 @@
       "unknown": "Something went wrong."
     }
   },
-  "prospecting": {
-    "title": "Prospecting",
-    "subtitle": "Find companies with the extractors and import them into the CRM",
-    "empty": "No extractions yet. Run the first one above.",
-    "provider": "Extractor",
-    "running": "Extracting…",
-    "extract": "Extract",
-    "view": "View",
-    "back": "Back",
-    "colProvider": "Extractor",
-    "colStatus": "Status",
-    "colFound": "Found",
-    "foundCount": "{count} result(s) found",
-    "noLeads": "No results in this extraction.",
-    "selectedCount": "{count} selected",
-    "importSelected": "Import selected",
-    "importing": "Importing…",
-    "selectAll": "Select all",
-    "imported": "Imported",
-    "colName": "Name",
-    "colCnpj": "CNPJ",
-    "colSite": "Site",
-    "colSocials": "Socials",
-    "colPhone": "Phone",
-    "colEmail": "Email",
-    "visit": "Open",
-    "status": {
-      "QUEUED": "Queued",
-      "RUNNING": "Running",
-      "DONE": "Done",
-      "FAILED": "Failed",
-      "CANCELED": "Canceled"
-    },
-    "error": {
-      "unauthorized": "Session expired.",
-      "invalid": "Invalid data.",
-      "forbidden": "Your plan doesn't include this extractor.",
-      "no_connection": "Connect Google under Connections to use this extractor.",
-      "quota": "Plan extraction quota reached this month. Connect your own Google account or upgrade.",
-      "unknown": "Something went wrong."
-    }
-  },
   "campaigns": {
     "title": "Campaigns",
     "subtitle": "Dispatch WhatsApp and email at scale to your contacts",
@@ -416,7 +372,6 @@
     "seats": "{n} seat(s)",
     "connections": "{n} connection(s)",
     "dispatch": "{n} messages/month",
-    "extractions": "{n} Google extractions/month",
     "unlimited": "Unlimited",
     "includedCore": "CRM, pipeline, prospecting, campaigns and connections",
     "cta": "Get started",
@@ -442,7 +397,6 @@
     "usage": {
       "seats": "Seats",
       "connections": "Connections",
-      "extractions": "Google extractions (month)",
       "dispatch": "Dispatch (month)"
     }
   },

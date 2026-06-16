@@ -15,7 +15,7 @@ export type ResolvedCredentials = {
  * Resolve credentials for a shareable provider: the tenant's own connection
  * takes precedence; otherwise fall back to the platform-managed credentials;
  * otherwise null. Uses raw prisma (with explicit `organizationId`) so it works
- * in system contexts such as the extraction runner.
+ * in system contexts such as the dispatch runner (email via Resend).
  */
 export async function resolveCredentials(
   organizationId: string,
@@ -35,15 +35,4 @@ export async function resolveCredentials(
   const platform = getPlatformCredentials(provider);
   if (platform) return { source: "platform", credentials: platform };
   return null;
-}
-
-/** Whether the org has its OWN connection for a provider (ignores platform). */
-export async function hasOwnConnection(
-  organizationId: string,
-  provider: PlatformProvider,
-): Promise<boolean> {
-  const count = await prisma.integrationConnection.count({
-    where: { organizationId, provider },
-  });
-  return count > 0;
 }

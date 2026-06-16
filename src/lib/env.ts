@@ -27,7 +27,7 @@ const serverSchema = z.object({
   INTEGRATION_ENC_KEY: z
     .string()
     .regex(/^[0-9a-fA-F]{64}$/, "INTEGRATION_ENC_KEY must be 64 hex chars (32 bytes)"),
-  // Background jobs (Upstash QStash) — optional until campaigns/extractors run.
+  // Background jobs (Upstash QStash) — optional until campaign dispatch runs.
   QSTASH_TOKEN: z.string().optional(),
   QSTASH_CURRENT_SIGNING_KEY: z.string().optional(),
   QSTASH_NEXT_SIGNING_KEY: z.string().optional(),

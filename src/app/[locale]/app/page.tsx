@@ -7,7 +7,6 @@ import {
   Building2,
   Contact,
   Send,
-  Radar,
   ArrowRight,
 } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
@@ -51,7 +50,6 @@ export default async function DashboardPage({
     { icon: Building2, label: t("companies"), value: ins.crm.companies, href: "/app/companies" },
     { icon: Contact, label: t("contacts"), value: ins.crm.contacts, href: "/app/contacts" },
     { icon: Send, label: t("dispatchMonth"), value: ins.campaigns.sentMonth, href: "/app/campaigns" },
-    { icon: Radar, label: t("leadsMonth"), value: ins.prospecting.leadsMonth, href: "/app/prospecting" },
   ];
 
   return (

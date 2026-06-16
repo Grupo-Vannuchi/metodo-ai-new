@@ -64,7 +64,6 @@
     "nav": {
       "dashboard": "Painel",
       "crm": "Funil",
-      "prospecting": "Prospecção",
       "campaigns": "Campanhas",
       "companies": "Empresas",
       "contacts": "Contatos",
@@ -85,8 +84,7 @@
       "emptyFunnel": "Sem oportunidades no funil ainda.",
       "companies": "Empresas",
       "contacts": "Contatos",
-      "dispatchMonth": "Disparos (mês)",
-      "leadsMonth": "Leads extraídos (mês)"
+      "dispatchMonth": "Disparos (mês)"
     },
     "team": {
       "title": "Equipe",
@@ -309,48 +307,6 @@
       "unknown": "Algo deu errado."
     }
   },
-  "prospecting": {
-    "title": "Prospecção",
-    "subtitle": "Encontre empresas com os extratores e importe para o CRM",
-    "empty": "Nenhuma extração ainda. Faça a primeira acima.",
-    "provider": "Extrator",
-    "running": "Extraindo…",
-    "extract": "Extrair",
-    "view": "Ver",
-    "back": "Voltar",
-    "colProvider": "Extrator",
-    "colStatus": "Status",
-    "colFound": "Encontrados",
-    "foundCount": "{count} resultado(s) encontrado(s)",
-    "noLeads": "Nenhum resultado nesta extração.",
-    "selectedCount": "{count} selecionado(s)",
-    "importSelected": "Importar selecionados",
-    "importing": "Importando…",
-    "selectAll": "Selecionar todos",
-    "imported": "Importado",
-    "colName": "Nome",
-    "colCnpj": "CNPJ",
-    "colSite": "Site",
-    "colSocials": "Redes",
-    "colPhone": "Telefone",
-    "colEmail": "E-mail",
-    "visit": "Abrir",
-    "status": {
-      "QUEUED": "Na fila",
-      "RUNNING": "Executando",
-      "DONE": "Concluído",
-      "FAILED": "Falhou",
-      "CANCELED": "Cancelado"
-    },
-    "error": {
-      "unauthorized": "Sessão expirada.",
-      "invalid": "Dados inválidos.",
-      "forbidden": "Seu plano não inclui este extrator.",
-      "no_connection": "Conecte o Google em Conexões para usar este extrator.",
-      "quota": "Cota de extrações do plano atingida neste mês. Conecte sua própria conta Google ou faça upgrade.",
-      "unknown": "Algo deu errado."
-    }
-  },
   "campaigns": {
     "title": "Campanhas",
     "subtitle": "Dispare WhatsApp e e-mail em escala para seus contatos",
@@ -416,7 +372,6 @@
     "seats": "{n} assento(s)",
     "connections": "{n} conexão(ões)",
     "dispatch": "{n} disparos/mês",
-    "extractions": "{n} extrações Google/mês",
     "unlimited": "Ilimitado",
     "includedCore": "CRM, funil, prospecção, campanhas e conexões",
     "cta": "Começar agora",
@@ -442,7 +397,6 @@
     "usage": {
       "seats": "Assentos",
       "connections": "Conexões",
-      "extractions": "Extrações Google (mês)",
       "dispatch": "Disparos (mês)"
     }
   },

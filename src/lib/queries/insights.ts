@@ -22,7 +22,6 @@ export type DashboardInsights = {
   stages: StageInsight[];
   crm: { companies: number; contacts: number };
   campaigns: { sentMonth: number };
-  prospecting: { extractionsMonth: number; leadsMonth: number };
 };
 
 function startOfMonth(): Date {
@@ -70,22 +69,19 @@ export async function getDashboardInsights(
   const openValue = stageRows.reduce((a, s) => a + s.value, 0);
   const weightedValue = stageRows.reduce((a, s) => a + s.value * (s.probability / 100), 0);
 
-  const [wonAgg, lostCount, companies, contacts, sentMonth, extractionsMonth, leadsMonth] =
-    await Promise.all([
-      db.opportunity.aggregate({
-        where: { status: "WON", updatedAt: { gte: monthStart } },
-        _count: { _all: true },
-        _sum: { value: true },
-      }),
-      db.opportunity.count({ where: { status: "LOST", updatedAt: { gte: monthStart } } }),
-      db.company.count(),
-      db.contact.count(),
-      db.campaignRecipient.count({
-        where: { status: { in: ["SENT", "DELIVERED", "READ"] }, sentAt: { gte: monthStart } },
-      }),
-      db.extractionJob.count({ where: { createdAt: { gte: monthStart } } }),
-      db.extractedLead.count({ where: { createdAt: { gte: monthStart } } }),
-    ]);
+  const [wonAgg, lostCount, companies, contacts, sentMonth] = await Promise.all([
+    db.opportunity.aggregate({
+      where: { status: "WON", updatedAt: { gte: monthStart } },
+      _count: { _all: true },
+      _sum: { value: true },
+    }),
+    db.opportunity.count({ where: { status: "LOST", updatedAt: { gte: monthStart } } }),
+    db.company.count(),
+    db.contact.count(),
+    db.campaignRecipient.count({
+      where: { status: { in: ["SENT", "DELIVERED", "READ"] }, sentAt: { gte: monthStart } },
+    }),
+  ]);
 
   return {
     pipeline: {
@@ -99,6 +95,5 @@ export async function getDashboardInsights(
     stages: stageRows,
     crm: { companies, contacts },
     campaigns: { sentMonth },
-    prospecting: { extractionsMonth, leadsMonth },
   };
 }

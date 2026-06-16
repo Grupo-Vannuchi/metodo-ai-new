@@ -6,7 +6,7 @@ import type { Credentials } from "@/lib/integrations/crypto";
  * Platform-managed credentials. When configured (via PLATFORM_* env vars), the
  * provider works for every tenant out-of-the-box — used as the fallback by the
  * credential resolver. Only shareable providers appear here (email). WhatsApp is
- * identity-bound, and Google prospecting now uses a scraper (no API key).
+ * identity-bound and never platform-managed.
  */
 export type PlatformProvider = "RESEND";
 

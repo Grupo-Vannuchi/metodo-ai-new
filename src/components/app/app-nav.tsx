@@ -3,7 +3,6 @@
 import {
   LayoutDashboard,
   KanbanSquare,
-  Radar,
   Send,
   Building2,
   Contact,
@@ -17,7 +16,6 @@ import { cn } from "@/lib/utils";
 type NavKey =
   | "dashboard"
   | "crm"
-  | "prospecting"
   | "campaigns"
   | "companies"
   | "contacts"
@@ -28,7 +26,6 @@ type Item = { href: string; key: NavKey; icon: typeof LayoutDashboard };
 const items: Item[] = [
   { href: "/app", key: "dashboard", icon: LayoutDashboard },
   { href: "/app/crm", key: "crm", icon: KanbanSquare },
-  { href: "/app/prospecting", key: "prospecting", icon: Radar },
   { href: "/app/campaigns", key: "campaigns", icon: Send },
   { href: "/app/companies", key: "companies", icon: Building2 },
   { href: "/app/contacts", key: "contacts", icon: Contact },
