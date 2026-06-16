@@ -132,10 +132,25 @@ async function main() {
       "campaign list scoped to org B excludes org A's campaign",
     );
 
+    // 7) Extraction (prospecting) jobs are tenant-scoped too.
+    await prisma.extractionJob.create({
+      data: { organizationId: orgA.id, createdById: userA.id },
+    });
+    const jobsB = await prisma.extractionJob.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(
+      jobsB.length === 0,
+      "extraction list scoped to org B excludes org A's job",
+    );
+
     console.log("\n✅ Tenant isolation: all checks passed.");
   } finally {
     // Cleanup. Companies/connections carry organizationId (no FK cascade from
     // org), so remove them explicitly before the orgs.
+    await prisma.extractionJob.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
     await prisma.campaign.deleteMany({
       where: { organizationId: { in: created.orgs } },
     });

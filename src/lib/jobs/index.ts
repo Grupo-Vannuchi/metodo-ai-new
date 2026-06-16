@@ -1,5 +1,6 @@
 import "server-only";
 import { dispatchCampaignBatch } from "@/lib/dispatch";
+import { runExtractionBatch } from "@/lib/prospecting/runner";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
 
 /**
@@ -27,6 +28,16 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
         { campaignId },
         retryAfter ? { delaySeconds: retryAfter } : {},
       );
+    }
+  },
+
+  /** Run one prospecting batch (one Places page), then re-enqueue until done. */
+  "extraction-run": async (payload) => {
+    const jobId = String((payload as { jobId?: string })?.jobId ?? "");
+    if (!jobId) return;
+    const { done } = await runExtractionBatch(jobId);
+    if (!done && isQueueConfigured()) {
+      await enqueue("extraction-run", { jobId });
     }
   },
 };

@@ -6,6 +6,7 @@ import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { encryptCredentials, decryptCredentials } from "@/lib/integrations/crypto";
 import { connectionState } from "@/lib/integrations/evolution-client";
+import { searchPlacesPage } from "@/lib/prospecting/places";
 import { audit } from "@/lib/audit";
 import { providerSpec, type IntegrationProviderKey } from "@/lib/integrations/registry";
 import { planConfig, type PlanKey } from "@/config/plans";
@@ -167,6 +168,15 @@ export async function testConnection(id: string): Promise<{ ok: boolean }> {
           instance: c.instance,
         });
         status = r.ok && r.state === "open" ? "ACTIVE" : "INACTIVE";
+      } catch {
+        status = "ERROR";
+      }
+    } else if (conn.provider === "GOOGLE") {
+      try {
+        const c = decryptCredentials(conn.credentialsEnc);
+        const r = await searchPlacesPage(c.apiKey ?? "", "teste Brasil", undefined, 1);
+        // Auth/billing failures are real errors; an empty result still means OK.
+        status = r.ok || r.error.tag === "INVALID" ? "ACTIVE" : "ERROR";
       } catch {
         status = "ERROR";
       }

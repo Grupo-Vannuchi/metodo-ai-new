@@ -16,6 +16,7 @@ export type Feature =
   | "campaigns.whatsapp" // WhatsApp dispatch (Evolution / Meta Cloud)
   | "campaigns.email" // E-mail dispatch
   | "campaigns.scheduling.advanced" // recurrence, time windows, weekdays
+  | "prospecting" // Google Places lead extraction (tenant's own key)
   | "webhooks.outbound" // outbound webhooks to the customer's systems
   | "sso"; // single sign-on
 
@@ -24,13 +25,20 @@ export type PlanConfig = {
   seatLimit: number;
   /** Max messages dispatched per calendar month. */
   dispatchQuotaPerMonth: number;
+  /** Max leads extracted per calendar month. Bounds our scraping/compute; the
+   * Google API cost itself is billed on the tenant's own key. */
+  prospectingQuotaPerMonth: number;
   /** Max active integration connections. `null` = unlimited. */
   connectionsLimit: number | null;
   /** Features unlocked by this plan. */
   features: Feature[];
 };
 
-const STANDARD_FEATURES: Feature[] = ["campaigns.whatsapp", "campaigns.email"];
+const STANDARD_FEATURES: Feature[] = [
+  "campaigns.whatsapp",
+  "campaigns.email",
+  "prospecting",
+];
 
 const PLUS_FEATURES: Feature[] = [
   ...STANDARD_FEATURES,
@@ -49,24 +57,28 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
   STANDARD: {
     seatLimit: 3,
     dispatchQuotaPerMonth: 1_000,
+    prospectingQuotaPerMonth: 200,
     connectionsLimit: 1,
     features: STANDARD_FEATURES,
   },
   PLUS: {
     seatLimit: 10,
     dispatchQuotaPerMonth: 10_000,
+    prospectingQuotaPerMonth: 2_000,
     connectionsLimit: 3,
     features: PLUS_FEATURES,
   },
   GOLD: {
     seatLimit: 25,
     dispatchQuotaPerMonth: 50_000,
+    prospectingQuotaPerMonth: 10_000,
     connectionsLimit: null,
     features: GOLD_FEATURES,
   },
   ENTERPRISE: {
     seatLimit: 1_000,
     dispatchQuotaPerMonth: 1_000_000,
+    prospectingQuotaPerMonth: 100_000,
     connectionsLimit: null,
     features: ENTERPRISE_FEATURES,
   },

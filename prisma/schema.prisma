@@ -409,3 +409,75 @@ model AuditLog {
   @@index([organizationId, createdAt])
   @@map("audit_logs")
 }
+
+// ---------------------------------------------------------------------------
+// Prospecting / lead extraction
+// ---------------------------------------------------------------------------
+// Discovery uses the official Google Places API (the tenant's own key); each
+// result's website is then scraped for public contact info. Google Places data
+// is treated as EPHEMERAL per Google's ToS (no long-term storage) — a scheduled
+// job prunes finished extractions after a retention window. The durable record
+// is what the user explicitly imports into the CRM.
+
+enum ExtractionStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+  CANCELED
+}
+
+/// A prospecting run: a Google Places text query enriched by website scraping.
+model ExtractionJob {
+  id             String           @id @default(cuid())
+  organizationId String
+  /// Search params: { segmento, localidade, nome, cnpj }.
+  query          Json             @default("{}")
+  status         ExtractionStatus @default(QUEUED)
+  /// How many leads to collect (null = provider default, capped server-side).
+  target         Int?
+  /// Leads found so far.
+  total          Int              @default(0)
+  /// Google Places pagination cursor for the next batch.
+  pageToken      String?
+  error          String?
+  createdById    String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  leads ExtractedLead[]
+
+  @@index([organizationId, status])
+  @@index([status, createdAt])
+  @@map("extraction_jobs")
+}
+
+/// One discovered business. Discovery fields (name/address/phone/website) come
+/// from Google Places; enrichment fields (email/socials) come from the
+/// business's own public website.
+model ExtractedLead {
+  id             String  @id @default(cuid())
+  organizationId String
+  jobId          String
+  placeId        String?
+  name           String?
+  segment        String?
+  address        String?
+  phone          String?
+  whatsapp       String?
+  email          String?
+  website        String?
+  instagram      String?
+  facebook       String?
+  linkedin       String?
+  rating         Float?
+  /// Set once the user imports this lead into the CRM (idempotent).
+  importedCompanyId String?
+  importedAt        DateTime?
+  createdAt         DateTime @default(now())
+
+  job ExtractionJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, jobId])
+  @@map("extracted_leads")
+}
