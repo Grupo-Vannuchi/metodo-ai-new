@@ -2,7 +2,18 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Pencil, Trash2, FolderPlus, Check, X } from "lucide-react";
+import {
+  Pencil,
+  Trash2,
+  FolderPlus,
+  Folder,
+  FolderOpen,
+  ChevronRight,
+  ChevronDown,
+  Check,
+  X,
+  Inbox,
+} from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -14,7 +25,7 @@ import {
   moveContactToFolder,
 } from "@/app/actions/contact-folders";
 import { deleteContact } from "@/app/actions/contacts";
-import type { ContactColumn } from "@/lib/queries/contact-folders";
+import type { ContactCard, ContactColumn } from "@/lib/queries/contact-folders";
 
 export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
   const t = useTranslations("crm.contacts");
@@ -23,6 +34,7 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
   const [cols, setCols] = useState(columns);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
+  const [open, setOpen] = useState<Set<string>>(new Set()); // folders are closed by default
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -36,7 +48,18 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
     setCols(columns);
   }
 
-  const keyOf = (id: string | null) => id ?? "__unfiled__";
+  const keyOf = (id: string | null) => id ?? "__root__";
+  const root = cols.find((c) => c.id === null) ?? { id: null, name: "", contacts: [] };
+  const folders = cols.filter((c) => c.id !== null);
+
+  function toggle(id: string) {
+    setOpen((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function onDrop(toColumnId: string | null) {
     setOverCol(null);
@@ -45,7 +68,7 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
     if (!id) return;
 
     let from: string | null | undefined;
-    let card;
+    let card: ContactCard | undefined;
     for (const c of cols) {
       const found = c.contacts.find((x) => x.id === id);
       if (found) {
@@ -110,6 +133,51 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
     });
   }
 
+  function Card({ card }: { card: ContactCard }) {
+    return (
+      <div
+        draggable
+        onDragStart={() => setDragId(card.id)}
+        onDragEnd={() => setDragId(null)}
+        className="cursor-grab rounded-lg border border-border bg-card p-3 shadow-sm active:cursor-grabbing"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{card.name}</p>
+            {card.companyName ? (
+              <p className="truncate text-xs text-muted-foreground">{card.companyName}</p>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 items-center" onPointerDown={(e) => e.stopPropagation()}>
+            <Link
+              href={`/app/contacts/${card.id}`}
+              className="rounded-lg px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label={tc("edit")}
+            >
+              <Pencil className="size-3.5" />
+            </Link>
+            <button
+              type="button"
+              onClick={() => onDeleteContact(card.id)}
+              className="rounded-lg px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-red-600"
+              aria-label={tc("delete")}
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </div>
+        </div>
+        {card.phone || card.email ? (
+          <p className="mt-2 truncate text-xs text-muted-foreground">
+            {card.phone ?? card.email}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  const gridCls =
+    "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(14rem,1fr))]";
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
@@ -145,126 +213,134 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
         )}
       </div>
 
-      <div className="grid gap-4 pb-4 [grid-template-columns:repeat(auto-fill,minmax(16rem,1fr))]">
-        {cols.map((col) => (
-          <div
-            key={keyOf(col.id)}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setOverCol(keyOf(col.id));
-            }}
-            onDragLeave={() => setOverCol((c) => (c === keyOf(col.id) ? null : c))}
-            onDrop={() => onDrop(col.id)}
-            className={cn(
-              "flex min-w-0 flex-col rounded-xl border bg-muted/30 p-3",
-              overCol === keyOf(col.id) ? "border-brand" : "border-border",
-            )}
-          >
-            <div className="mb-3 flex items-center justify-between gap-2 px-1">
-              {renaming === col.id && col.id ? (
-                <form
-                  className="flex flex-1 items-center gap-1"
-                  onSubmit={(e) => { e.preventDefault(); onRename(col.id!); }}
-                >
-                  <Input
-                    autoFocus
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    className="h-8"
-                  />
-                  <button type="submit" className="text-muted-foreground hover:text-foreground" aria-label={t("save")}>
-                    <Check className="size-4" />
-                  </button>
-                  <button type="button" onClick={() => setRenaming(null)} className="text-muted-foreground hover:text-foreground" aria-label={t("cancel")}>
-                    <X className="size-4" />
-                  </button>
-                </form>
-              ) : (
-                <>
-                  <span className="truncate text-sm font-semibold">
-                    {col.id === null ? t("unfiled") : col.name}
-                  </span>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <span className="rounded-full bg-card px-2 py-0.5 text-xs text-muted-foreground">
-                      {col.contacts.length}
-                    </span>
-                    {col.id ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => { setRenaming(col.id); setRenameValue(col.name); }}
-                          className="text-muted-foreground transition-colors hover:text-foreground"
-                          aria-label={t("renameFolder")}
-                        >
-                          <Pencil className="size-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeleteFolder(col.id!)}
-                          className="text-muted-foreground transition-colors hover:text-red-600"
-                          aria-label={t("deleteFolder")}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      </>
-                    ) : null}
-                  </div>
-                </>
-              )}
-            </div>
+      {/* Root (unfiled) — always open, a drop target back to the top level. */}
+      <section
+        onDragOver={(e) => { e.preventDefault(); setOverCol(keyOf(null)); }}
+        onDragLeave={() => setOverCol((c) => (c === keyOf(null) ? null : c))}
+        onDrop={() => onDrop(null)}
+        className={cn(
+          "rounded-xl border bg-muted/20 p-3",
+          overCol === keyOf(null) ? "border-brand" : "border-border",
+        )}
+      >
+        <div className="mb-2 flex items-center gap-2 px-1 text-sm font-semibold">
+          <Inbox className="size-4 text-muted-foreground" />
+          {t("unfiled")}
+          <span className="rounded-full bg-card px-2 py-0.5 text-xs font-normal text-muted-foreground">
+            {root.contacts.length}
+          </span>
+        </div>
+        {root.contacts.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border px-3 py-5 text-center text-xs text-muted-foreground">
+            {t("dropHere")}
+          </p>
+        ) : (
+          <div className={gridCls}>
+            {root.contacts.map((card) => (
+              <Card key={card.id} card={card} />
+            ))}
+          </div>
+        )}
+      </section>
 
-            <div className="flex flex-1 flex-col gap-2">
-              {col.contacts.map((card) => (
-                <div
-                  key={card.id}
-                  draggable
-                  onDragStart={() => setDragId(card.id)}
-                  onDragEnd={() => setDragId(null)}
-                  className="cursor-grab rounded-lg border border-border bg-card p-3 shadow-sm active:cursor-grabbing"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{card.name}</p>
-                      {card.companyName ? (
-                        <p className="truncate text-xs text-muted-foreground">{card.companyName}</p>
-                      ) : null}
-                    </div>
-                    <div
-                      className="flex shrink-0 items-center"
-                      onPointerDown={(e) => e.stopPropagation()}
+      {/* Folders — closed by default, expand to reveal contacts. */}
+      <div className="flex flex-col gap-2">
+        {folders.map((col) => {
+          const id = col.id!;
+          const isOpen = open.has(id);
+          const isOver = overCol === keyOf(id);
+          return (
+            <div
+              key={id}
+              onDragOver={(e) => { e.preventDefault(); setOverCol(keyOf(id)); }}
+              onDragLeave={() => setOverCol((c) => (c === keyOf(id) ? null : c))}
+              onDrop={() => onDrop(id)}
+              className={cn(
+                "rounded-xl border bg-card",
+                isOver ? "border-brand ring-1 ring-brand" : "border-border",
+              )}
+            >
+              <div className="flex items-center gap-2 px-3 py-2.5">
+                {renaming === id ? (
+                  <form
+                    className="flex flex-1 items-center gap-1"
+                    onSubmit={(e) => { e.preventDefault(); onRename(id); }}
+                  >
+                    <Input
+                      autoFocus
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      className="h-8"
+                    />
+                    <button type="submit" className="text-muted-foreground hover:text-foreground" aria-label={t("save")}>
+                      <Check className="size-4" />
+                    </button>
+                    <button type="button" onClick={() => setRenaming(null)} className="text-muted-foreground hover:text-foreground" aria-label={t("cancel")}>
+                      <X className="size-4" />
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => toggle(id)}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
                     >
-                      <Link
-                        href={`/app/contacts/${card.id}`}
-                        className="rounded-lg px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                        aria-label={tc("edit")}
-                      >
-                        <Pencil className="size-3.5" />
-                      </Link>
+                      {isOpen ? (
+                        <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                      )}
+                      {isOpen ? (
+                        <FolderOpen className="size-4 shrink-0 text-brand" />
+                      ) : (
+                        <Folder className="size-4 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="truncate text-sm font-semibold">{col.name}</span>
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">
+                        {col.contacts.length}
+                      </span>
+                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => onDeleteContact(card.id)}
-                        className="rounded-lg px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-red-600"
-                        aria-label={tc("delete")}
+                        onClick={() => { setRenaming(id); setRenameValue(col.name); }}
+                        className="text-muted-foreground transition-colors hover:text-foreground"
+                        aria-label={t("renameFolder")}
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteFolder(id)}
+                        className="text-muted-foreground transition-colors hover:text-red-600"
+                        aria-label={t("deleteFolder")}
                       >
                         <Trash2 className="size-3.5" />
                       </button>
                     </div>
-                  </div>
-                  {card.phone || card.email ? (
-                    <p className="mt-2 truncate text-xs text-muted-foreground">
-                      {card.phone ?? card.email}
+                  </>
+                )}
+              </div>
+
+              {isOpen ? (
+                <div className="border-t border-border p-3">
+                  {col.contacts.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-border px-3 py-5 text-center text-xs text-muted-foreground">
+                      {t("dropHere")}
                     </p>
-                  ) : null}
+                  ) : (
+                    <div className={gridCls}>
+                      {col.contacts.map((card) => (
+                        <Card key={card.id} card={card} />
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))}
-              {col.contacts.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
-                  {t("dropHere")}
-                </p>
               ) : null}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
