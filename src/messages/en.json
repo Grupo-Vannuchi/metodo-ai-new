@@ -110,7 +110,8 @@
     }
   },
   "validation": {
-    "required": "This field is required."
+    "required": "This field is required.",
+    "phone": "Invalid phone. Use area code + number."
   },
   "crm": {
     "common": {

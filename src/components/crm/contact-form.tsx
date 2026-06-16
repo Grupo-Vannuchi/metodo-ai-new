@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, FieldError } from "@/components/ui/field";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
+import { formatBrPhone, isValidBrPhone } from "@/lib/phone";
 import {
   formToContactInput,
   type ContactFormValues,
@@ -37,7 +38,14 @@ export function ContactForm({
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<ContactFormValues>({ defaultValues });
+  } = useForm<ContactFormValues>({
+    defaultValues: { ...defaultValues, phone: formatBrPhone(defaultValues.phone) },
+  });
+
+  // Mask the phone field as the user types and keep RHF's value in sync.
+  const phoneField = register("phone", {
+    validate: (v) => isValidBrPhone(v) || tv("phone"),
+  });
 
   async function onSubmit(values: ContactFormValues) {
     setServerError(null);
@@ -76,7 +84,19 @@ export function ContactForm({
           </div>
           <div>
             <Label htmlFor="phone">{t("phone")}</Label>
-            <Input id="phone" {...register("phone")} />
+            <Input
+              id="phone"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="(11) 91234-5678"
+              aria-invalid={Boolean(errors.phone)}
+              {...phoneField}
+              onChange={(e) => {
+                e.target.value = formatBrPhone(e.target.value);
+                phoneField.onChange(e);
+              }}
+            />
+            <FieldError>{errors.phone?.message}</FieldError>
           </div>
           <div>
             <Label htmlFor="role">{t("role")}</Label>

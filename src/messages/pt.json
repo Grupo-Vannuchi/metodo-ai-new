@@ -110,7 +110,8 @@
     }
   },
   "validation": {
-    "required": "Campo obrigatório."
+    "required": "Campo obrigatório.",
+    "phone": "Telefone inválido. Use DDD + número."
   },
   "crm": {
     "common": {
