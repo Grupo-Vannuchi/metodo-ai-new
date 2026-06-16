@@ -10,7 +10,8 @@ const adapter: ChannelAdapter = {
     if (!creds.baseUrl || !creds.apiKey || !creds.instance) {
       return { ok: false, error: "Conexão Evolution incompleta." };
     }
-    const url = `${creds.baseUrl.replace(/\/$/, "")}/message/sendText/${creds.instance}`;
+    // Instance names may contain spaces (e.g. "METODO AI") — encode the segment.
+    const url = `${creds.baseUrl.replace(/\/$/, "")}/message/sendText/${encodeURIComponent(creds.instance)}`;
     try {
       const res = await fetch(url, {
         method: "POST",
