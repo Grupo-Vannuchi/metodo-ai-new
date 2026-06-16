@@ -149,8 +149,9 @@ model Contact {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  company       Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  opportunities Opportunity[]
+  company           Company?            @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  opportunities     Opportunity[]
+  campaignRecipients CampaignRecipient[]
 
   @@index([organizationId, companyId])
   @@index([organizationId, name])
@@ -362,6 +363,8 @@ model CampaignRecipient {
   sentAt            DateTime?
 
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  // Deleting a contact removes its slots from every campaign (no orphan rows).
+  contact  Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
   @@unique([campaignId, contactId])
   @@index([organizationId, status])
