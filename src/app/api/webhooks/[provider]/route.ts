@@ -3,13 +3,52 @@ import { createHash } from "crypto";
 import { Prisma, type IntegrationProvider } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { PROVIDER_KEYS } from "@/lib/integrations/registry";
+import {
+  parseDeliveryUpdates,
+  resolveTransition,
+  type DeliveryUpdate,
+  type RecipientStatusName,
+} from "@/lib/integrations/webhooks/delivery";
 
 export const runtime = "nodejs";
 
 /**
+ * Apply provider delivery acks to campaign recipients. Matches by the
+ * provider's message id (stored on send) and only moves status forward. Runs as
+ * system — the recipient row already carries its organizationId — and returns
+ * the matched org (to stamp on the webhook event) or null if nothing matched.
+ */
+async function applyDeliveryUpdates(
+  updates: DeliveryUpdate[],
+): Promise<string | null> {
+  let orgId: string | null = null;
+  for (const u of updates) {
+    const recipients = await prisma.campaignRecipient.findMany({
+      where: { providerMessageId: u.providerMessageId },
+      select: { id: true, status: true, organizationId: true },
+    });
+    for (const r of recipients) {
+      orgId ??= r.organizationId;
+      const next = resolveTransition(r.status as RecipientStatusName, u.status);
+      if (!next) continue;
+      await prisma.campaignRecipient.update({
+        where: { id: r.id },
+        data: {
+          status: next,
+          ...(next === "FAILED"
+            ? { error: u.error || "Falha relatada pelo provedor." }
+            : {}),
+        },
+      });
+    }
+  }
+  return orgId;
+}
+
+/**
  * Inbound webhook sink. Stores each event idempotently (dedupe by a hash of the
- * provider + raw body) so retries don't double-process. Provider signature
- * verification and routing to campaign-recipient status updates land in P6.
+ * provider + raw body) so retries don't double-process, then routes provider
+ * delivery acks (Evolution / Meta Cloud) to the matching campaign recipients.
  */
 export async function POST(
   req: NextRequest,
@@ -23,7 +62,8 @@ export async function POST(
 
   const body = await req.text();
 
-  // TODO(P6): verify provider signature (e.g. Meta X-Hub-Signature-256) before trusting.
+  // TODO(P9): verify provider signature (e.g. Meta X-Hub-Signature-256) once the
+  // app secret is configured per-connection, before trusting the payload.
   let payload: Record<string, unknown> = {};
   try {
     payload = body ? (JSON.parse(body) as Record<string, unknown>) : {};
@@ -53,6 +93,21 @@ export async function POST(
     }
     console.error("[webhook] failed to store event", error);
     return new Response("error", { status: 500 });
+  }
+
+  // Route delivery acks to campaign recipients. Best-effort: a failure here must
+  // not make us 500 (the provider would retry and re-store a duplicate).
+  const updates = parseDeliveryUpdates(up as IntegrationProvider, payload);
+  if (updates.length > 0) {
+    try {
+      const orgId = await applyDeliveryUpdates(updates);
+      await prisma.webhookEvent.update({
+        where: { dedupeKey },
+        data: { processedAt: new Date(), organizationId: orgId ?? undefined },
+      });
+    } catch (error) {
+      console.error("[webhook] failed to apply delivery updates", error);
+    }
   }
 
   return Response.json({ ok: true });
