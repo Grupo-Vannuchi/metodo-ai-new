@@ -171,6 +171,24 @@ export async function startCampaign(id: string): Promise<{ ok: boolean; error?: 
     const creds = await resolveChannelCredentials(ctx.organizationId, channel);
     if (!creds) return { ok: false, error: "no_connection" };
 
+    // Re-dispatch: when every recipient was already processed (a finished
+    // campaign), reset them all to PENDING so the whole campaign sends again.
+    // A campaign still mid-flight (some PENDING left) just resumes the rest.
+    const pending = await db.campaignRecipient.count({
+      where: { campaignId: id, status: "PENDING" },
+    });
+    if (pending === 0) {
+      await db.campaignRecipient.updateMany({
+        where: { campaignId: id },
+        data: {
+          status: "PENDING",
+          error: null,
+          providerMessageId: null,
+          sentAt: null,
+        },
+      });
+    }
+
     await db.campaign.updateMany({ where: { id }, data: { status: "RUNNING" } });
 
     await audit(ctx, { action: "campaign.started", entity: "Campaign", entityId: id });

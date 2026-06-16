@@ -43,7 +43,6 @@ export default async function CampaignDetailPage({
   const data = await getCampaign(ctx.organizationId, id);
   if (!data) notFound();
   const { campaign, counts, recipients } = data;
-  const canStart = campaign.status === "DRAFT" || campaign.status === "PAUSED";
 
   return (
     <div className="flex flex-col gap-6">
@@ -66,7 +65,7 @@ export default async function CampaignDetailPage({
             {CHANNEL_META[campaign.channel as ChannelKey]?.label ?? campaign.channel}
           </p>
         </div>
-        {canStart ? <StartButton id={campaign.id} /> : null}
+        <StartButton id={campaign.id} status={campaign.status} />
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
