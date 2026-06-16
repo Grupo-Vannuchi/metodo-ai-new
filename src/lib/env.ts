@@ -34,12 +34,6 @@ const serverSchema = z.object({
   // Cache / rate-limit (Upstash Redis) — optional until dispatch throttling runs.
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
-  // Platform-managed integration credentials. When present, the matching
-  // provider works out-of-the-box for every tenant (within plan quota) without
-  // them connecting their own account. Identity-bound providers (WhatsApp) are
-  // never platform-managed. See src/lib/integrations/platform.ts.
-  PLATFORM_RESEND_API_KEY: z.string().optional(),
-  PLATFORM_RESEND_FROM: z.string().optional(),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
 

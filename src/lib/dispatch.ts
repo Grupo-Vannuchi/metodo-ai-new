@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { getChannelAdapter } from "@/lib/integrations/channels";
 import { CHANNEL_META, type ChannelKey } from "@/lib/integrations/channels/meta";
 import type { ChannelCredentials } from "@/lib/integrations/channels/types";
-import { resolveCredentials } from "@/lib/integrations/credentials";
 import { decryptCredentials } from "@/lib/integrations/crypto";
 import { makeRateLimiter } from "@/lib/ratelimit";
 import { unsubscribeUrl } from "@/lib/unsubscribe";
@@ -21,8 +20,9 @@ const RATE: Record<ChannelKey, { limit: number; windowSec: number }> = {
 export type ChannelCreds = { credentials: ChannelCredentials; from?: string };
 
 /**
- * Resolve the credentials a channel sends with. EMAIL falls back to the
- * platform Resend key; WhatsApp channels require the tenant's own connection.
+ * Resolve the credentials a channel sends with — always the tenant's own
+ * connection. There are no platform-managed defaults: every organization
+ * connects its own accounts (email, WhatsApp, etc.).
  */
 export async function resolveChannelCredentials(
   organizationId: string,
@@ -30,20 +30,14 @@ export async function resolveChannelCredentials(
 ): Promise<ChannelCreds | null> {
   const provider = CHANNEL_META[channel].connectionProvider;
 
-  if (provider === "RESEND") {
-    const resolved = await resolveCredentials(organizationId, "RESEND");
-    if (!resolved) return null;
-    return { credentials: resolved.credentials, from: resolved.credentials.fromEmail };
-  }
-
-  // EVOLUTION / META_CLOUD — tenant connection only.
   const conn = await prisma.integrationConnection.findFirst({
     where: { organizationId, provider },
     orderBy: { createdAt: "desc" },
   });
   if (!conn) return null;
   try {
-    return { credentials: decryptCredentials(conn.credentialsEnc) };
+    const credentials = decryptCredentials(conn.credentialsEnc);
+    return { credentials, from: credentials.fromEmail };
   } catch {
     return null;
   }

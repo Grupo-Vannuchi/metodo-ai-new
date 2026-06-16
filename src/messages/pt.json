@@ -258,15 +258,7 @@
   },
   "connections": {
     "title": "Conexões",
-    "subtitle": "Integrações com WhatsApp, e-mail, Google e webhooks",
-    "managedTitle": "Integrações prontas (gerenciadas pelo MétodoAI)",
-    "managedHint": "Funcionam sem configuração, dentro da cota do seu plano. Conecte a sua própria conta para limites maiores.",
-    "managed": {
-      "cnpj": "CNPJ (prospecção)",
-      "google": "Google (Maps/Busca)",
-      "email": "E-mail"
-    },
-    "ownTitle": "Suas conexões (sua conta)",
+    "subtitle": "Integrações com WhatsApp, e-mail e webhooks",
     "new": "Nova conexão",
     "newTitle": "Nova conexão",
     "empty": "Nenhuma conexão ainda. Conecte uma integração.",
@@ -392,7 +384,7 @@
     "yourRole": "Seu papel",
     "seePlans": "Ver planos",
     "usageTitle": "Uso e cotas",
-    "usageHint": "Extrações e disparos consideram o uso do mês atual. Cotas valem para a credencial da plataforma; conta própria não conta.",
+    "usageHint": "Os disparos consideram o uso do mês atual, conforme a cota do seu plano.",
     "manageTeam": "Gerenciar equipe",
     "auditLog": "Registro de auditoria",
     "usage": {
