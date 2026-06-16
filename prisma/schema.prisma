@@ -138,6 +138,7 @@ model Contact {
   id             String   @id @default(cuid())
   organizationId String
   companyId      String?
+  folderId       String?
   name           String
   email          String?
   phone          String?
@@ -149,13 +150,30 @@ model Contact {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  company           Company?            @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  opportunities     Opportunity[]
+  company            Company?            @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  folder             ContactFolder?      @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  opportunities      Opportunity[]
   campaignRecipients CampaignRecipient[]
 
   @@index([organizationId, companyId])
+  @@index([organizationId, folderId])
   @@index([organizationId, name])
   @@map("contacts")
+}
+
+/// A user-defined folder to organize contacts (drag-and-drop on the grid view).
+model ContactFolder {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  contacts Contact[]
+
+  @@index([organizationId, order])
+  @@map("contact_folders")
 }
 
 /// A sales pipeline (a board). Each org gets a default one.
