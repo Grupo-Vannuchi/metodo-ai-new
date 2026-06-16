@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { LogOut } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { AppNav } from "@/components/app/app-nav";
 import { OrgSwitcher } from "@/components/app/org-switcher";
 import { logout } from "@/app/actions/auth";
@@ -40,9 +41,12 @@ export async function AppShell({
         </div>
 
         <div className="flex flex-col gap-2 border-t border-border pt-3">
-          <div className="px-3 py-1">
-            <p className="truncate text-sm font-medium">{ctx.user.name}</p>
-            <p className="truncate text-xs text-muted-foreground">{ctx.user.email}</p>
+          <div className="flex items-center justify-between gap-2 px-3 py-1">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{ctx.user.name}</p>
+              <p className="truncate text-xs text-muted-foreground">{ctx.user.email}</p>
+            </div>
+            <ThemeToggle className="shrink-0" />
           </div>
           <form action={logout.bind(null, locale)}>
             <button
@@ -59,11 +63,14 @@ export async function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3 md:hidden">
           <Logo className="text-lg" />
-          <form action={logout.bind(null, locale)}>
-            <button type="submit" aria-label={t("signOut")} className="text-muted-foreground">
-              <LogOut className="size-5" />
-            </button>
-          </form>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <form action={logout.bind(null, locale)}>
+              <button type="submit" aria-label={t("signOut")} className="text-muted-foreground">
+                <LogOut className="size-5" />
+              </button>
+            </form>
+          </div>
         </header>
         <main className="flex-1 p-6 sm:p-8">{children}</main>
       </div>

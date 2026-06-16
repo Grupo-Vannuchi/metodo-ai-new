@@ -22,7 +22,7 @@ export default function GlobalNotFound() {
       >
         <h1 style={{ fontSize: "2rem", fontWeight: 700 }}>404 — Não encontrado</h1>
         <p style={{ color: "#666" }}>Esta página não pôde ser encontrada.</p>
-        <Link href="/" style={{ color: "#4f46e5", fontWeight: 600 }}>
+        <Link href="/" style={{ color: "#18375d", fontWeight: 600 }}>
           Voltar ao início
         </Link>
       </body>

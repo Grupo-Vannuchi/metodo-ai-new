@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Manual (class-based) dark mode: `dark:` utilities follow a `.dark` class on
+ * <html>, toggled by the theme switch — not the OS `prefers-color-scheme`. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /*
  * Design tokens.
  *
@@ -41,14 +45,12 @@
   --border: #e4e4e7;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --card: #111113;
-    --card-foreground: #ededed;
-    --muted: #1c1c1f;
-    --muted-foreground: #a1a1aa;
-    --border: #27272a;
-  }
+.dark {
+  --card: #111113;
+  --card-foreground: #ededed;
+  --muted: #1c1c1f;
+  --muted-foreground: #a1a1aa;
+  --border: #27272a;
 }
 
 @layer base {

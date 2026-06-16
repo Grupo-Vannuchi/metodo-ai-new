@@ -11,12 +11,12 @@ function paletteVars(palette: ThemePalette): string {
 }
 
 /**
- * Injects the brand palette from `siteConfig.theme` as CSS custom properties on
- * `:root`, with a `prefers-color-scheme` override for dark mode. Rendered in the
- * document <head> so the values are present before first paint (no flash).
+ * Injects the brand palette from `siteConfig.theme` as CSS custom properties:
+ * the light palette on `:root`, the dark one under the `.dark` class toggled by
+ * the theme switch. Rendered in <head> so values exist before first paint.
  */
 export function ThemeStyle() {
   const { light, dark } = siteConfig.theme;
-  const css = `:root{${paletteVars(light)}}@media (prefers-color-scheme:dark){:root{${paletteVars(dark)}}}`;
+  const css = `:root{${paletteVars(light)}}.dark{${paletteVars(dark)}}`;
   return <style dangerouslySetInnerHTML={{ __html: css }} />;
 }

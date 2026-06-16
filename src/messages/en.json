@@ -113,6 +113,9 @@
     "required": "This field is required.",
     "phone": "Invalid phone. Use area code + number."
   },
+  "theme": {
+    "toggle": "Toggle light/dark theme"
+  },
   "crm": {
     "common": {
       "edit": "Edit",

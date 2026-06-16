@@ -69,6 +69,14 @@ export default async function LocaleLayout({
     >
       <head>
         <ThemeStyle />
+        <script
+          // No-flash theme init: apply the saved preference (or the OS default)
+          // before first paint, before React hydrates.
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':matchMedia('(prefers-color-scheme:dark)').matches;document.documentElement.classList.toggle('dark',d);}catch(e){}})();",
+          }}
+        />
       </head>
       <body className="flex min-h-full flex-col">
         <NextIntlClientProvider>{children}</NextIntlClientProvider>

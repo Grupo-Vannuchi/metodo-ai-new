@@ -91,17 +91,18 @@ export const siteConfig: SiteConfig = {
   ],
 
   theme: {
+    // Brand identity assimilated from the MÉTODO logo: navy blue + green accent.
     light: {
-      brand: "#4f46e5",
+      brand: "#18375d",
       brandForeground: "#ffffff",
-      accent: "#0ea5e9",
+      accent: "#2ecc71",
       background: "#ffffff",
       foreground: "#0a0a0a",
     },
     dark: {
-      brand: "#6366f1",
-      brandForeground: "#0a0a0a",
-      accent: "#38bdf8",
+      brand: "#5b8fc7",
+      brandForeground: "#0a1018",
+      accent: "#2ecc71",
       background: "#0a0a0a",
       foreground: "#ededed",
     },

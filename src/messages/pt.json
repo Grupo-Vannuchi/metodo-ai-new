@@ -113,6 +113,9 @@
     "required": "Campo obrigatório.",
     "phone": "Telefone inválido. Use DDD + número."
   },
+  "theme": {
+    "toggle": "Alternar tema claro/escuro"
+  },
   "crm": {
     "common": {
       "edit": "Editar",
