@@ -21,6 +21,15 @@ export async function listTemplates(organizationId: string) {
   });
 }
 
+/** A single template for the edit form. */
+export async function getTemplate(organizationId: string, id: string) {
+  const db = tenantDb(organizationId);
+  return db.messageTemplate.findFirst({
+    where: { id },
+    select: { id: true, channel: true, name: true, subject: true, body: true },
+  });
+}
+
 /** Minimal template options for the campaign form (filtered client-side by channel). */
 export async function templateOptions(organizationId: string) {
   const db = tenantDb(organizationId);

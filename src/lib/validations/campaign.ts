@@ -23,3 +23,12 @@ export const campaignSchema = z.object({
 });
 
 export type CampaignInput = z.infer<typeof campaignSchema>;
+
+/** Editing a campaign keeps its channel and audience fixed; only the name and
+ * the message template change. */
+export const campaignUpdateSchema = z.object({
+  name: z.string().trim().min(1, "Informe um nome.").max(120),
+  templateId: z.string().trim().min(1, "Selecione um template."),
+});
+
+export type CampaignUpdateInput = z.infer<typeof campaignUpdateSchema>;

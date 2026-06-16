@@ -1,10 +1,11 @@
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getCampaign } from "@/lib/queries/campaigns";
 import { StartButton } from "@/components/campaigns/start-button";
 import { CHANNEL_META, type ChannelKey } from "@/lib/integrations/channels/meta";
+import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
@@ -65,7 +66,16 @@ export default async function CampaignDetailPage({
             {CHANNEL_META[campaign.channel as ChannelKey]?.label ?? campaign.channel}
           </p>
         </div>
-        <StartButton id={campaign.id} status={campaign.status} />
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/app/campaigns/${campaign.id}/edit`}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            <Pencil className="size-4" />
+            {t("edit")}
+          </Link>
+          <StartButton id={campaign.id} status={campaign.status} />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">

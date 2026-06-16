@@ -1,10 +1,11 @@
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getConnection } from "@/lib/queries/connections";
 import { EvolutionConnect } from "@/components/integrations/evolution-connect";
 import { PROVIDERS, type IntegrationProviderKey } from "@/lib/integrations/registry";
+import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
@@ -40,11 +41,17 @@ export default async function ConnectionDetailPage({
           <ArrowLeft className="size-4" />
           {t("back")}
         </Link>
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-tight">{conn.label}</h1>
-          <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", statusStyles[conn.status])}>
-            {t(`status.${conn.status}`)}
-          </span>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold tracking-tight">{conn.label}</h1>
+            <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", statusStyles[conn.status])}>
+              {t(`status.${conn.status}`)}
+            </span>
+          </div>
+          <Link href={`/app/connections/${conn.id}/edit`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <Pencil className="size-4" />
+            {t("edit")}
+          </Link>
         </div>
         <p className="mt-1 text-muted-foreground">
           {PROVIDERS[conn.provider as IntegrationProviderKey]?.label ?? conn.provider}

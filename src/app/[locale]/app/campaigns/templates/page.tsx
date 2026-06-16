@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { Plus, ArrowLeft } from "lucide-react";
+import { Plus, ArrowLeft, Pencil } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { listTemplates } from "@/lib/queries/campaigns";
 import { deleteTemplate } from "@/app/actions/campaigns";
@@ -62,8 +62,17 @@ export default async function TemplatesPage({
                   <td className="px-5 py-3 text-muted-foreground">
                     {CHANNEL_META[tpl.channel as ChannelKey]?.label ?? tpl.channel}
                   </td>
-                  <td className="px-5 py-3 text-right">
-                    <DeleteButton action={deleteTemplate.bind(null, tpl.id)} />
+                  <td className="px-5 py-3">
+                    <div className="flex items-center justify-end gap-1">
+                      <Link
+                        href={`/app/campaigns/templates/${tpl.id}`}
+                        className={buttonVariants({ variant: "ghost", size: "sm" })}
+                        aria-label={t("edit")}
+                      >
+                        <Pencil className="size-4" />
+                      </Link>
+                      <DeleteButton action={deleteTemplate.bind(null, tpl.id)} />
+                    </div>
                   </td>
                 </tr>
               ))}

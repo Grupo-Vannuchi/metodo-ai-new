@@ -10,7 +10,12 @@ import { audit } from "@/lib/audit";
 import { providerSpec, type IntegrationProviderKey } from "@/lib/integrations/registry";
 import { planConfig, type PlanKey } from "@/config/plans";
 import { countConnections } from "@/lib/queries/connections";
-import { connectionSchema, type ConnectionInput } from "@/lib/validations/connection";
+import {
+  connectionSchema,
+  connectionUpdateSchema,
+  type ConnectionInput,
+  type ConnectionUpdateInput,
+} from "@/lib/validations/connection";
 
 export type ConnectionActionResult =
   | { ok: true; id: string }
@@ -68,6 +73,69 @@ export async function createConnection(
     return { ok: true, id: conn.id };
   } catch (error) {
     console.error("Failed to create connection", error);
+    return { ok: false, error: "unknown" };
+  }
+}
+
+/**
+ * Update a connection's label and credentials. The provider is fixed. Blank
+ * credential fields keep their current value (so secrets need not be re-typed),
+ * which is why we decrypt the existing credentials and merge.
+ */
+export async function updateConnection(
+  id: string,
+  input: ConnectionUpdateInput,
+): Promise<ConnectionActionResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+
+  const parsed = connectionUpdateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+
+  try {
+    const db = tenantDb(ctx.organizationId);
+    const conn = await db.integrationConnection.findFirst({
+      where: { id },
+      select: { id: true, provider: true, credentialsEnc: true },
+    });
+    if (!conn) return { ok: false, error: "invalid" };
+
+    const provider = conn.provider as IntegrationProviderKey;
+    const spec = providerSpec(provider);
+
+    let existing: Record<string, string> = {};
+    try {
+      existing = decryptCredentials(conn.credentialsEnc);
+    } catch {
+      existing = {};
+    }
+
+    // Merge: only overwrite a field when the user typed a new value.
+    const merged = { ...existing };
+    for (const f of spec.fields) {
+      const value = parsed.data.credentials[f.key]?.trim();
+      if (value) merged[f.key] = value;
+    }
+
+    // Required fields must end up present (either kept or newly provided).
+    const missing = spec.fields.some((f) => f.required && !merged[f.key]?.trim());
+    if (missing) return { ok: false, error: "invalid" };
+
+    await db.integrationConnection.updateMany({
+      where: { id },
+      data: { label: parsed.data.label, credentialsEnc: encryptCredentials(merged) },
+    });
+    await audit(ctx, {
+      action: "connection.updated",
+      entity: "IntegrationConnection",
+      entityId: id,
+      meta: { provider },
+    });
+    revalidatePath("/app/connections");
+    revalidatePath(`/app/connections/${id}`);
+    return { ok: true, id };
+  } catch (error) {
+    console.error("Failed to update connection", error);
     return { ok: false, error: "unknown" };
   }
 }

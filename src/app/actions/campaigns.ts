@@ -15,8 +15,10 @@ import { audit } from "@/lib/audit";
 import {
   templateSchema,
   campaignSchema,
+  campaignUpdateSchema,
   type TemplateInput,
   type CampaignInput,
+  type CampaignUpdateInput,
 } from "@/lib/validations/campaign";
 
 export type CampaignActionResult =
@@ -66,6 +68,46 @@ export async function createTemplate(
     return { ok: true, id: tpl.id };
   } catch (error) {
     console.error("Failed to create template", error);
+    return { ok: false, error: "unknown" };
+  }
+}
+
+export async function updateTemplate(
+  id: string,
+  input: TemplateInput,
+): Promise<CampaignActionResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+
+  const parsed = templateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+
+  const channel = parsed.data.channel as ChannelKey;
+  if (!assertChannel(ctx.organization.plan as PlanKey, channel)) {
+    return { ok: false, error: "forbidden" };
+  }
+
+  try {
+    const db = tenantDb(ctx.organizationId);
+    const existing = await db.messageTemplate.findFirst({
+      where: { id },
+      select: { id: true },
+    });
+    if (!existing) return { ok: false, error: "invalid" };
+
+    await db.messageTemplate.updateMany({
+      where: { id },
+      data: {
+        channel,
+        name: parsed.data.name,
+        subject: parsed.data.subject || null,
+        body: parsed.data.body,
+      },
+    });
+    revalidatePath("/app/campaigns/templates");
+    return { ok: true, id };
+  } catch (error) {
+    console.error("Failed to update template", error);
     return { ok: false, error: "unknown" };
   }
 }
@@ -204,6 +246,46 @@ export async function startCampaign(id: string): Promise<{ ok: boolean; error?: 
     return { ok: true };
   } catch (error) {
     console.error("Failed to start campaign", error);
+    return { ok: false, error: "unknown" };
+  }
+}
+
+/** Edit a campaign's name and message template (channel/audience stay fixed). */
+export async function updateCampaign(
+  id: string,
+  input: CampaignUpdateInput,
+): Promise<CampaignActionResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+
+  const parsed = campaignUpdateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+
+  try {
+    const db = tenantDb(ctx.organizationId);
+    const campaign = await db.campaign.findFirst({
+      where: { id },
+      select: { id: true, channel: true },
+    });
+    if (!campaign) return { ok: false, error: "invalid" };
+
+    // The new template must exist and match the campaign's channel.
+    const template = await db.messageTemplate.findFirst({
+      where: { id: parsed.data.templateId, channel: campaign.channel },
+      select: { id: true },
+    });
+    if (!template) return { ok: false, error: "invalid" };
+
+    await db.campaign.updateMany({
+      where: { id },
+      data: { name: parsed.data.name, templateId: template.id },
+    });
+    await audit(ctx, { action: "campaign.updated", entity: "Campaign", entityId: id });
+    revalidatePath(`/app/campaigns/${id}`);
+    revalidatePath("/app/campaigns");
+    return { ok: true, id };
+  } catch (error) {
+    console.error("Failed to update campaign", error);
     return { ok: false, error: "unknown" };
   }
 }
