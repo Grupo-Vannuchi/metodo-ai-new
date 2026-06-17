@@ -170,7 +170,9 @@
       "contacts": "Contacts",
       "connections": "Connections",
       "settings": "Settings",
-      "signOut": "Sign out"
+      "signOut": "Sign out",
+      "menu": "Open menu",
+      "close": "Close menu"
     },
     "dashboard": {
       "title": "Dashboard",

@@ -40,7 +40,7 @@ export default async function PipelinesPage({
           {t("empty")}
         </p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="overflow-x-auto rounded-xl border border-border bg-card">
           {pipelines.map((p) => (
             <Link
               key={p.id}

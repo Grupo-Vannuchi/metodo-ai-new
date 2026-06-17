@@ -56,7 +56,7 @@ export default async function TeamPage({
           currentRole={ctx.role}
         />
       ) : (
-        <section className="overflow-hidden rounded-xl border border-border bg-card">
+        <section className="overflow-x-auto rounded-xl border border-border bg-card">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-border text-muted-foreground">
               <tr>

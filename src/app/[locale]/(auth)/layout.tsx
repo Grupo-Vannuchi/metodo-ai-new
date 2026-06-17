@@ -12,7 +12,7 @@ export default function AuthLayout({
       <div className="absolute right-4 top-4">
         <ThemeToggle />
       </div>
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-sm">
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-sm animate-fade-in-up">
         {children}
       </div>
     </div>

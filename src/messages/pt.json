@@ -170,7 +170,9 @@
       "contacts": "Contatos",
       "connections": "Conexões",
       "settings": "Configurações",
-      "signOut": "Sair"
+      "signOut": "Sair",
+      "menu": "Abrir menu",
+      "close": "Fechar menu"
     },
     "dashboard": {
       "title": "Painel",

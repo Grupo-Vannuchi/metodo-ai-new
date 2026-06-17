@@ -45,7 +45,7 @@ export default async function HomePage({
 
       <main className="flex-1">
         {/* Hero */}
-        <section className="mx-auto flex w-full max-w-5xl flex-col items-center gap-6 px-6 py-20 text-center sm:py-28">
+        <section className="mx-auto flex w-full max-w-5xl flex-col items-center gap-6 px-6 py-20 text-center sm:py-28 animate-fade-in-up">
           <span className="rounded-full border border-border bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
             {t("hero.badge")}
           </span>
