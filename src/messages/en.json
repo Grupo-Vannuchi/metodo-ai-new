@@ -377,6 +377,9 @@
     "foundCount": "{count} result(s)",
     "noLeads": "No results in this search.",
     "selectAll": "Select all",
+    "quotaUsage": "{used}/{limit} leads this month",
+    "quotaReached": "Your plan's lead quota has been reached this month.",
+    "seePlan": "See plan",
     "importSelected": "Import selected ({count})",
     "importing": "Importing…",
     "imported": "Imported",
@@ -477,6 +480,7 @@
     "seats": "{n} seat(s)",
     "connections": "{n} connection(s)",
     "dispatch": "{n} messages/month",
+    "prospecting": "{n} prospecting leads/month",
     "unlimited": "Unlimited",
     "includedCore": "CRM, pipeline, prospecting, campaigns and connections",
     "cta": "Get started",
@@ -502,7 +506,8 @@
     "usage": {
       "seats": "Seats",
       "connections": "Connections",
-      "dispatch": "Dispatch (month)"
+      "dispatch": "Dispatch (month)",
+      "prospecting": "Prospecting (leads/month)"
     }
   },
   "audit": {

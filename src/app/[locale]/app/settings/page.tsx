@@ -81,6 +81,7 @@ export default async function SettingsPage({
           <UsageRow label={t("usage.seats")} metric={usage.seats} />
           <UsageRow label={t("usage.connections")} metric={usage.connections} />
           <UsageRow label={t("usage.dispatch")} metric={usage.dispatch} />
+          <UsageRow label={t("usage.prospecting")} metric={usage.prospecting} />
         </div>
         <p className="mt-2 text-xs text-muted-foreground">{t("usageHint")}</p>
       </section>

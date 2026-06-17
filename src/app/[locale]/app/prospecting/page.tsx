@@ -3,6 +3,8 @@ import { ShieldCheck } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { listExtractionJobs } from "@/lib/queries/extractions";
 import { listConnections } from "@/lib/queries/connections";
+import { getUsageSummary } from "@/lib/queries/usage";
+import { type PlanKey } from "@/config/plans";
 import { NewExtraction } from "@/components/prospecting/new-extraction";
 import { deleteExtraction } from "@/app/actions/extractions";
 import { DeleteButton } from "@/components/crm/delete-button";
@@ -35,17 +37,32 @@ export default async function ProspectingPage({
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("prospecting");
 
-  const [jobs, connections] = await Promise.all([
+  const [jobs, connections, usage] = await Promise.all([
     listExtractionJobs(ctx.organizationId),
     listConnections(ctx.organizationId),
+    getUsageSummary(ctx.organizationId, ctx.organization.plan as PlanKey),
   ]);
   const hasGoogle = connections.some((c) => c.provider === "GOOGLE");
+  const { used, limit } = usage.prospecting;
+  const reachedQuota = limit !== null && used >= limit;
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
-        <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
+          <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
+        </div>
+        <span
+          className={cn(
+            "rounded-full border px-3 py-1 text-xs font-medium",
+            reachedQuota
+              ? "border-red-300 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300"
+              : "border-border bg-card text-muted-foreground",
+          )}
+        >
+          {t("quotaUsage", { used, limit: limit ?? "∞" })}
+        </span>
       </div>
 
       {!hasGoogle ? (
@@ -53,6 +70,13 @@ export default async function ProspectingPage({
           {t("needConnection")}{" "}
           <Link href="/app/connections/new" className="font-medium underline underline-offset-2">
             {t("connectGoogle")}
+          </Link>
+        </div>
+      ) : reachedQuota ? (
+        <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300">
+          {t("quotaReached")}{" "}
+          <Link href="/app/settings" className="font-medium underline underline-offset-2">
+            {t("seePlan")}
           </Link>
         </div>
       ) : (

@@ -377,6 +377,9 @@
     "foundCount": "{count} resultado(s)",
     "noLeads": "Nenhum resultado nesta busca.",
     "selectAll": "Selecionar todos",
+    "quotaUsage": "{used}/{limit} leads este mês",
+    "quotaReached": "Cota de leads do seu plano atingida neste mês.",
+    "seePlan": "Ver plano",
     "importSelected": "Importar selecionados ({count})",
     "importing": "Importando…",
     "imported": "Importado",
@@ -477,6 +480,7 @@
     "seats": "{n} assento(s)",
     "connections": "{n} conexão(ões)",
     "dispatch": "{n} disparos/mês",
+    "prospecting": "{n} leads de prospecção/mês",
     "unlimited": "Ilimitado",
     "includedCore": "CRM, funil, prospecção, campanhas e conexões",
     "cta": "Começar agora",
@@ -502,7 +506,8 @@
     "usage": {
       "seats": "Assentos",
       "connections": "Conexões",
-      "dispatch": "Disparos (mês)"
+      "dispatch": "Disparos (mês)",
+      "prospecting": "Prospecção (leads/mês)"
     }
   },
   "audit": {
