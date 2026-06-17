@@ -11,6 +11,7 @@ export const GATEABLE_SCREENS = [
   "crm",
   "prospecting",
   "campaigns",
+  "inbox",
   "companies",
   "contacts",
   "connections",

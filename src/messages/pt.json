@@ -166,6 +166,7 @@
       "crm": "Funil",
       "prospecting": "Prospecção",
       "campaigns": "Campanhas",
+      "inbox": "Conversas",
       "companies": "Empresas",
       "contacts": "Contatos",
       "connections": "Conexões",
@@ -237,6 +238,14 @@
   },
   "theme": {
     "toggle": "Alternar tema claro/escuro"
+  },
+  "inbox": {
+    "title": "Conversas",
+    "empty": "Nenhuma conversa ainda. As mensagens recebidas no WhatsApp aparecem aqui.",
+    "selectConversation": "Selecione uma conversa para ver as mensagens.",
+    "noMessages": "Sem mensagens nesta conversa.",
+    "readOnly": "Visualização (o envio pela interface chega na próxima etapa).",
+    "back": "Voltar"
   },
   "access": {
     "title": "Templates de acesso",

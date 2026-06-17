@@ -166,6 +166,7 @@
       "crm": "Pipeline",
       "prospecting": "Prospecting",
       "campaigns": "Campaigns",
+      "inbox": "Inbox",
       "companies": "Companies",
       "contacts": "Contacts",
       "connections": "Connections",
@@ -237,6 +238,14 @@
   },
   "theme": {
     "toggle": "Toggle light/dark theme"
+  },
+  "inbox": {
+    "title": "Inbox",
+    "empty": "No conversations yet. Incoming WhatsApp messages show up here.",
+    "selectConversation": "Select a conversation to see the messages.",
+    "noMessages": "No messages in this conversation.",
+    "readOnly": "Read-only (sending from the interface arrives next).",
+    "back": "Back"
   },
   "access": {
     "title": "Access templates",

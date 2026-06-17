@@ -31,6 +31,8 @@ const TENANT_MODELS = new Set<string>([
   "AuditLog",
   "ExtractionJob",
   "ExtractedLead",
+  "Conversation",
+  "Message",
 ]);
 
 const WHERE_OPS = new Set<string>([

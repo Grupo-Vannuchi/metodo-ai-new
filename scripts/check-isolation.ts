@@ -144,10 +144,25 @@ async function main() {
       "extraction list scoped to org B excludes org A's job",
     );
 
+    // 8) Inbox conversations are tenant-scoped too.
+    await prisma.conversation.create({
+      data: { organizationId: orgA.id, connectionId: `iso-conn-${stamp}`, remoteJid: `iso-${stamp}@s.whatsapp.net` },
+    });
+    const convosB = await prisma.conversation.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(
+      convosB.length === 0,
+      "conversation list scoped to org B excludes org A's conversation",
+    );
+
     console.log("\n✅ Tenant isolation: all checks passed.");
   } finally {
     // Cleanup. Companies/connections carry organizationId (no FK cascade from
     // org), so remove them explicitly before the orgs.
+    await prisma.conversation.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
     await prisma.extractionJob.deleteMany({
       where: { organizationId: { in: created.orgs } },
     });

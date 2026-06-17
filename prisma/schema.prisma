@@ -503,3 +503,81 @@ model ExtractedLead {
   @@index([organizationId, jobId])
   @@map("extracted_leads")
 }
+
+// ---------------------------------------------------------------------------
+// WhatsApp inbox (chat)
+// ---------------------------------------------------------------------------
+// Conversations and messages mirrored from the tenant's Evolution instance via
+// the inbound webhook. The durable record of the chat lives here.
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  AUDIO
+  VIDEO
+  DOCUMENT
+  STICKER
+  LOCATION
+  UNKNOWN
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+/// A WhatsApp chat with one remote party (a contact's number), tied to the
+/// Evolution connection it flows through.
+model Conversation {
+  id                 String    @id @default(cuid())
+  organizationId     String
+  connectionId       String
+  /// WhatsApp JID, e.g. "5511999999999@s.whatsapp.net".
+  remoteJid          String
+  name               String?
+  /// Optional link to a CRM contact (set in a later phase).
+  contactId          String?
+  lastMessageAt      DateTime?
+  lastMessagePreview String?
+  unreadCount        Int       @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  messages Message[]
+
+  @@unique([connectionId, remoteJid])
+  @@index([organizationId, lastMessageAt])
+  @@map("conversations")
+}
+
+/// A single message within a conversation (inbound or outbound).
+model Message {
+  id                String           @id @default(cuid())
+  organizationId    String
+  conversationId    String
+  direction         MessageDirection
+  type              MessageType      @default(TEXT)
+  body              String?
+  mediaUrl          String?
+  mediaMime         String?
+  /// Provider message id (Baileys key id) — idempotency + status mapping.
+  providerMessageId String?
+  status            MessageStatus?
+  fromMe            Boolean          @default(false)
+  timestamp         DateTime
+  createdAt         DateTime         @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, timestamp])
+  @@index([providerMessageId])
+  @@map("messages")
+}

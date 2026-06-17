@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { randomBytes } from "crypto";
+import { prisma } from "@/lib/prisma";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { decryptCredentials } from "@/lib/integrations/crypto";
@@ -15,8 +17,30 @@ import {
 } from "@/lib/integrations/evolution-client";
 import { env } from "@/lib/env";
 
-function webhookUrl(): string {
-  return `${env.NEXT_PUBLIC_SITE_URL}/api/webhooks/evolution`;
+function webhookUrl(connectionId: string, token: string): string {
+  return `${env.NEXT_PUBLIC_SITE_URL}/api/webhooks/evolution/${connectionId}/${token}`;
+}
+
+/**
+ * Ensure the connection has a stable per-connection webhook token (stored in
+ * `meta.webhookToken`) so the inbound webhook can authenticate and resolve the
+ * tenant. Returns the token.
+ */
+async function ensureWebhookToken(connectionId: string): Promise<string> {
+  const conn = await prisma.integrationConnection.findUnique({
+    where: { id: connectionId },
+    select: { meta: true },
+  });
+  const existing = (conn?.meta as { webhookToken?: string } | null)?.webhookToken;
+  if (existing) return existing;
+
+  const token = randomBytes(24).toString("hex");
+  const meta = { ...((conn?.meta as Record<string, unknown> | null) ?? {}), webhookToken: token };
+  await prisma.integrationConnection.update({
+    where: { id: connectionId },
+    data: { meta },
+  });
+  return token;
 }
 
 /** Load + decrypt an EVOLUTION connection's credentials, scoped to the org. */
@@ -56,11 +80,14 @@ export async function connectEvolution(
   const creds = await loadEvoCreds(ctx.organizationId, id);
   if (!creds) return { ok: false, error: "not_found" };
 
-  const created = await createInstance(creds, webhookUrl());
+  const token = await ensureWebhookToken(id);
+  const url = webhookUrl(id, token);
+
+  const created = await createInstance(creds, url);
   if (!created.ok) return { ok: false, error: created.error };
 
   // Best-effort (re)set of the webhook; ignore failures here.
-  await setWebhook(creds, webhookUrl());
+  await setWebhook(creds, url);
 
   const result = await connect(creds);
   if (!result.ok) return { ok: false, error: result.error };

@@ -5,6 +5,7 @@ import {
   KanbanSquare,
   Radar,
   Send,
+  MessageCircle,
   Building2,
   Contact,
   Cable,
@@ -19,6 +20,7 @@ type NavKey =
   | "crm"
   | "prospecting"
   | "campaigns"
+  | "inbox"
   | "companies"
   | "contacts"
   | "connections"
@@ -30,6 +32,7 @@ const items: Item[] = [
   { href: "/app/crm", key: "crm", icon: KanbanSquare },
   { href: "/app/prospecting", key: "prospecting", icon: Radar },
   { href: "/app/campaigns", key: "campaigns", icon: Send },
+  { href: "/app/inbox", key: "inbox", icon: MessageCircle },
   { href: "/app/companies", key: "companies", icon: Building2 },
   { href: "/app/contacts", key: "contacts", icon: Contact },
   { href: "/app/connections", key: "connections", icon: Cable },
