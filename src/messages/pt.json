@@ -157,6 +157,7 @@
       "expired": "Este convite expirou.",
       "seat_limit": "A organização atingiu o limite de assentos.",
       "rate_limited": "Muitas tentativas. Aguarde um minuto e tente de novo.",
+      "already_in_team": "Você já faz parte de uma equipe. Saia dela (em Configurações) antes de aceitar este convite.",
       "generic": "Algo deu errado. Tente novamente."
     }
   },
@@ -228,6 +229,7 @@
         "invalid": "Dados inválidos.",
         "seat_limit": "Limite de assentos atingido.",
         "already_member": "Esse e-mail já é membro da organização.",
+        "already_in_team": "Esse usuário já faz parte de outra equipe. Ele precisa sair dela antes de aceitar o convite.",
         "generic": "Algo deu errado. Tente novamente."
       }
     }
@@ -618,6 +620,8 @@
     "usageHint": "Os disparos consideram o uso do mês atual, conforme a cota do seu plano.",
     "manageTeam": "Gerenciar equipe",
     "auditLog": "Registro de auditoria",
+    "leaveTeam": "Sair da equipe",
+    "leaveTeamConfirm": "Tem certeza que deseja sair desta equipe? Você perderá o acesso e será desconectado.",
     "usage": {
       "seats": "Assentos",
       "connections": "Conexões",

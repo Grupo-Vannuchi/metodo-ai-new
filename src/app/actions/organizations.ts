@@ -2,7 +2,7 @@
 
 import { hasLocale } from "next-intl";
 import { prisma } from "@/lib/prisma";
-import { createSession, getSession } from "@/lib/session";
+import { createSession, deleteSession } from "@/lib/session";
 import { getOrgContext, assertRole } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
 import { hashPassword } from "@/lib/password";
@@ -24,39 +24,40 @@ function localeFrom(formData: FormData): Locale {
 }
 
 /**
- * Switch the active organization. Re-issues the session bound to the chosen org
- * (only if the user actually belongs to it — the security check).
+ * Leave the current team. A user belongs to exactly one team; leaving removes
+ * their membership and signs them out (they can then accept another invite).
+ * The OWNER can't leave their own organization.
  */
-export async function switchOrganization(formData: FormData): Promise<void> {
+export async function leaveTeam(formData: FormData): Promise<void> {
   const locale = localeFrom(formData);
-  const organizationId = String(formData.get("organizationId") ?? "");
-
-  const session = await getSession();
-  if (!session) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     redirect({ href: "/login", locale });
     return;
   }
-
-  const membership = await prisma.membership.findUnique({
-    where: {
-      organizationId_userId: { organizationId, userId: session.userId },
-    },
-    select: { role: true },
-  });
-  // Silently ignore a switch to an org the user isn't a member of.
-  if (membership) {
-    await createSession({
-      userId: session.userId,
-      organizationId,
-      role: membership.role,
-    });
+  if (ctx.role === "OWNER") {
+    // Owners can't abandon their own org here.
+    redirect({ href: "/app/settings", locale });
+    return;
   }
-  revalidatePath("/app");
-  redirect({ href: "/app", locale });
+
+  await prisma.membership.deleteMany({
+    where: { organizationId: ctx.organizationId, userId: ctx.userId },
+  });
+  await audit(ctx, { action: "member.left", entity: "Membership", meta: { userId: ctx.userId } });
+  await deleteSession();
+  redirect({ href: "/login", locale });
 }
 
 export type InviteState = {
-  error: "forbidden" | "invalid" | "seat_limit" | "already_member" | "generic" | null;
+  error:
+    | "forbidden"
+    | "invalid"
+    | "seat_limit"
+    | "already_member"
+    | "already_in_team"
+    | "generic"
+    | null;
   token?: string;
 };
 
@@ -91,15 +92,19 @@ export async function inviteMember(
   });
   if (org && members >= org.seatLimit) return { error: "seat_limit" };
 
-  // Already a member?
-  const existingMember = await prisma.membership.findFirst({
-    where: {
-      organizationId: ctx.organizationId,
-      user: { email: parsed.data.email },
-    },
-    select: { id: true },
+  // One team per user: refuse if the invitee already belongs to a team.
+  const target = await prisma.user.findUnique({
+    where: { email: parsed.data.email },
+    select: { memberships: { select: { organizationId: true }, take: 1 } },
   });
-  if (existingMember) return { error: "already_member" };
+  if (target && target.memberships.length > 0) {
+    return {
+      error:
+        target.memberships[0].organizationId === ctx.organizationId
+          ? "already_member"
+          : "already_in_team",
+    };
+  }
 
   const { token, tokenHash } = generateInvitationToken();
   try {
@@ -127,7 +132,7 @@ export async function inviteMember(
 }
 
 export type AcceptState = {
-  error: "invalid" | "expired" | "seat_limit" | "generic" | null;
+  error: "invalid" | "expired" | "seat_limit" | "already_in_team" | "generic" | null;
   /** Set when an existing user joined — they must log in to continue. */
   joinedExisting?: boolean;
 };
@@ -160,7 +165,17 @@ export async function acceptInvitation(
 
   const existingUser = await prisma.user.findUnique({
     where: { email: invitation.email },
+    include: { memberships: { select: { organizationId: true } } },
   });
+
+  // One team per user: an existing user already in another team must leave it
+  // before joining. Being already in THIS org is fine (idempotent re-accept).
+  if (
+    existingUser &&
+    existingUser.memberships.some((m) => m.organizationId !== invitation.organizationId)
+  ) {
+    return { error: "already_in_team" };
+  }
 
   // Existing account → just add membership (idempotent) and ask them to log in.
   if (existingUser) {

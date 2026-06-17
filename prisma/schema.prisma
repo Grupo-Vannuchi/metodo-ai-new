@@ -83,8 +83,9 @@ model Membership {
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessTemplate AccessTemplate? @relation(fields: [accessTemplateId], references: [id], onDelete: SetNull)
 
+  // One team per user: a user has at most one membership.
   @@unique([organizationId, userId])
-  @@index([userId])
+  @@unique([userId])
   @@index([accessTemplateId])
   @@map("memberships")
 }

@@ -157,6 +157,7 @@
       "expired": "This invitation has expired.",
       "seat_limit": "The organization has reached its seat limit.",
       "rate_limited": "Too many attempts. Wait a minute and try again.",
+      "already_in_team": "You already belong to a team. Leave it (in Settings) before accepting this invite.",
       "generic": "Something went wrong. Please try again."
     }
   },
@@ -228,6 +229,7 @@
         "invalid": "Invalid data.",
         "seat_limit": "Seat limit reached.",
         "already_member": "That email is already a member of the organization.",
+        "already_in_team": "That user already belongs to another team. They must leave it before accepting the invite.",
         "generic": "Something went wrong. Please try again."
       }
     }
@@ -618,6 +620,8 @@
     "usageHint": "Dispatch reflects the current month, within your plan quota.",
     "manageTeam": "Manage team",
     "auditLog": "Audit log",
+    "leaveTeam": "Leave team",
+    "leaveTeamConfirm": "Are you sure you want to leave this team? You'll lose access and be signed out.",
     "usage": {
       "seats": "Seats",
       "connections": "Connections",

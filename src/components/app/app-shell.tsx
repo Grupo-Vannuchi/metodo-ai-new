@@ -5,9 +5,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { AppNav } from "@/components/app/app-nav";
 import { MobileNav } from "@/components/app/mobile-nav";
 import { PageTransition } from "@/components/app/page-transition";
-import { OrgSwitcher } from "@/components/app/org-switcher";
 import { logout } from "@/app/actions/auth";
-import { listOrganizationsForUser } from "@/lib/queries/organizations";
 import type { OrgContext } from "@/lib/tenant";
 import type { Locale } from "@/i18n/routing";
 
@@ -21,7 +19,6 @@ export async function AppShell({
   children: React.ReactNode;
 }) {
   const t = await getTranslations("app.nav");
-  const organizations = await listOrganizationsForUser(ctx.userId);
 
   return (
     <div className="flex min-h-screen bg-muted/20">
@@ -30,12 +27,9 @@ export async function AppShell({
           <Logo className="text-xl" />
         </div>
 
-        <div className="mt-4">
-          <OrgSwitcher
-            organizations={organizations}
-            currentOrganizationId={ctx.organizationId}
-            locale={locale}
-          />
+        <div className="mt-4 rounded-lg border border-border bg-muted/40 px-3 py-2">
+          <p className="truncate text-sm font-medium">{ctx.organization.name}</p>
+          <p className="text-xs text-muted-foreground">{ctx.organization.plan}</p>
         </div>
 
         <div className="mt-6 flex-1">

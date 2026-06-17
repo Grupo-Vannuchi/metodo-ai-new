@@ -4,6 +4,7 @@ import { requireOrgContext, hasRole } from "@/lib/tenant";
 import { getUsageSummary, type UsageMetric } from "@/lib/queries/usage";
 import { type PlanKey } from "@/config/plans";
 import { buttonVariants } from "@/components/ui/button";
+import { LeaveTeamButton } from "@/components/app/leave-team-button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
@@ -102,6 +103,7 @@ export default async function SettingsPage({
             {t("auditLog")}
           </Link>
         ) : null}
+        {ctx.role !== "OWNER" ? <LeaveTeamButton /> : null}
       </section>
     </div>
   );
