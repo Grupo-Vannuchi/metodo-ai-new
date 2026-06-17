@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
@@ -69,16 +70,14 @@ export default async function LocaleLayout({
     >
       <head>
         <ThemeStyle />
-        <script
-          // No-flash theme init: apply the saved preference (or the OS default)
-          // before first paint, before React hydrates.
-          dangerouslySetInnerHTML={{
-            __html:
-              "(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':matchMedia('(prefers-color-scheme:dark)').matches;document.documentElement.classList.toggle('dark',d);}catch(e){}})();",
-          }}
-        />
       </head>
       <body className="flex min-h-full flex-col">
+        {/* No-flash theme init: apply the saved preference (or the OS default)
+            before hydration. `beforeInteractive` injects it into the initial
+            HTML so it runs before first paint. */}
+        <Script id="theme-init" strategy="beforeInteractive">
+          {`(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':matchMedia('(prefers-color-scheme:dark)').matches;document.documentElement.classList.toggle('dark',d);}catch(e){}})();`}
+        </Script>
         <NextIntlClientProvider>{children}</NextIntlClientProvider>
       </body>
     </html>
