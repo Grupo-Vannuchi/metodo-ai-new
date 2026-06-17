@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { Input, Label } from "@/components/ui/field";
 import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
@@ -85,7 +86,7 @@ export function NewExtraction() {
 
       <div className="mt-4">
         <Button type="submit" disabled={pending}>
-          <Search className="size-4" />
+          {pending ? <Spinner className="size-4" /> : <Search className="size-4" />}
           {pending ? t("running") : t("extract")}
         </Button>
       </div>
