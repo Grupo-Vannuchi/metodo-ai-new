@@ -74,14 +74,36 @@ model Membership {
   organizationId String
   userId         String
   role           Role     @default(MEMBER)
-  createdAt      DateTime @default(now())
+  /// Access template restricting which screens a MEMBER can reach. Null = full
+  /// access. OWNER/ADMIN ignore this (they always have full access).
+  accessTemplateId String?
+  createdAt        DateTime @default(now())
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessTemplate AccessTemplate? @relation(fields: [accessTemplateId], references: [id], onDelete: SetNull)
 
   @@unique([organizationId, userId])
   @@index([userId])
+  @@index([accessTemplateId])
   @@map("memberships")
+}
+
+/// A named, reusable access profile (e.g. "Comercial", "Jurídico") that grants
+/// MEMBERs access to a specific set of screens. Org-scoped.
+model AccessTemplate {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  /// Allowed screen keys (see src/config/screens.ts).
+  screens        String[] @default([])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  memberships Membership[]
+
+  @@index([organizationId])
+  @@map("access_templates")
 }
 
 /// A pending invitation to join an organization with a given role.

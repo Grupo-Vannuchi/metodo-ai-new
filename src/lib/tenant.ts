@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { getSession, type SessionRole } from "@/lib/session";
+import { resolveAllowedScreens } from "@/lib/access";
 import { redirect } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 
@@ -19,6 +20,10 @@ export type OrgContext = {
   role: SessionRole;
   user: { id: string; name: string; email: string };
   organization: { id: string; name: string; slug: string; plan: string };
+  /** Access template assigned to this membership (null = full access). */
+  accessTemplateId: string | null;
+  /** Screen keys this member can reach (see src/lib/access.ts). */
+  allowedScreens: string[];
 };
 
 /**
@@ -40,6 +45,8 @@ export const getOrgContext = cache(async (): Promise<OrgContext | null> => {
     },
     select: {
       role: true,
+      accessTemplateId: true,
+      accessTemplate: { select: { screens: true } },
       user: { select: { id: true, name: true, email: true } },
       organization: {
         select: { id: true, name: true, slug: true, plan: true },
@@ -49,12 +56,16 @@ export const getOrgContext = cache(async (): Promise<OrgContext | null> => {
 
   if (!membership) return null;
 
+  const templateScreens = membership.accessTemplate?.screens ?? null;
+
   return {
     userId: membership.user.id,
     organizationId: membership.organization.id,
     role: membership.role,
     user: membership.user,
     organization: membership.organization,
+    accessTemplateId: membership.accessTemplateId,
+    allowedScreens: resolveAllowedScreens(membership.role, templateScreens),
   };
 });
 

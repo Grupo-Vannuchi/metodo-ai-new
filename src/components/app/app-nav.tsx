@@ -36,13 +36,20 @@ const items: Item[] = [
   { href: "/app/settings", key: "settings", icon: Settings },
 ];
 
-export function AppNav() {
+/** Screens that are never gated by access templates. */
+const ALWAYS_SHOWN: NavKey[] = ["dashboard", "settings"];
+
+export function AppNav({ allowedScreens }: { allowedScreens: string[] }) {
   const t = useTranslations("app.nav");
   const pathname = usePathname();
 
+  const visible = items.filter(
+    (i) => ALWAYS_SHOWN.includes(i.key) || allowedScreens.includes(i.key),
+  );
+
   return (
     <nav className="flex flex-col gap-1">
-      {items.map(({ href, key, icon: Icon }) => {
+      {visible.map(({ href, key, icon: Icon }) => {
         const active = href === "/app" ? pathname === "/app" : pathname.startsWith(href);
         return (
           <Link

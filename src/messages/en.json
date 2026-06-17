@@ -101,6 +101,25 @@
       "colName": "Name",
       "colEmail": "Email",
       "colRole": "Role",
+      "colTemplate": "Access (template)",
+      "fullAccess": "Full access",
+      "you": "you",
+      "manageTemplates": "Access templates",
+      "remove": "Remove",
+      "confirmRemove": "Remove {name} from the team?",
+      "role": {
+        "OWNER": "Owner",
+        "ADMIN": "Admin",
+        "MEMBER": "Member"
+      },
+      "error": {
+        "forbidden": "Not allowed to do this.",
+        "not_found": "Member not found.",
+        "invalid": "Invalid data.",
+        "self": "You can't change yourself.",
+        "owner": "The organization owner can't be changed.",
+        "unknown": "Something went wrong."
+      },
       "errors": {
         "forbidden": "You don't have permission to invite.",
         "invalid": "Invalid data.",
@@ -116,6 +135,24 @@
   },
   "theme": {
     "toggle": "Toggle light/dark theme"
+  },
+  "access": {
+    "title": "Access templates",
+    "subtitle": "Create profiles (e.g. Sales, Legal) and choose which screens each one unlocks. Assign them to members on the Team page.",
+    "back": "Back to team",
+    "create": "Create template",
+    "namePlaceholder": "Template name (e.g. Sales)",
+    "empty": "No templates yet. Create the first one above.",
+    "save": "Save",
+    "delete": "Delete template",
+    "confirmDelete": "Delete this template? Members using it revert to full access.",
+    "memberCount": "{count} member(s)",
+    "error": {
+      "forbidden": "Not allowed to do this.",
+      "invalid": "Invalid data.",
+      "not_found": "Template not found.",
+      "unknown": "Something went wrong."
+    }
   },
   "crm": {
     "common": {

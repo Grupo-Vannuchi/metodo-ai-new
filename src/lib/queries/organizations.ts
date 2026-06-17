@@ -50,6 +50,8 @@ export type OrgMember = {
   name: string;
   email: string;
   role: SessionRole;
+  accessTemplateId: string | null;
+  accessTemplateName: string | null;
   joinedAt: Date;
 };
 
@@ -66,6 +68,8 @@ export async function listMembers(
       id: true,
       role: true,
       createdAt: true,
+      accessTemplateId: true,
+      accessTemplate: { select: { name: true } },
       user: { select: { id: true, name: true, email: true } },
     },
     orderBy: { createdAt: "asc" },
@@ -77,6 +81,8 @@ export async function listMembers(
     name: m.user.name,
     email: m.user.email,
     role: m.role,
+    accessTemplateId: m.accessTemplateId,
+    accessTemplateName: m.accessTemplate?.name ?? null,
     joinedAt: m.createdAt,
   }));
 }

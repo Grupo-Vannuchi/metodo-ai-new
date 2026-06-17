@@ -16,6 +16,7 @@ import { prisma } from "@/lib/prisma";
  * not a replacement for the DAL passing `organizationId` — defence in depth.
  */
 const TENANT_MODELS = new Set<string>([
+  "AccessTemplate",
   "Company",
   "Contact",
   "ContactFolder",

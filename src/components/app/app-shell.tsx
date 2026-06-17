@@ -37,7 +37,7 @@ export async function AppShell({
         </div>
 
         <div className="mt-6 flex-1">
-          <AppNav />
+          <AppNav allowedScreens={ctx.allowedScreens} />
         </div>
 
         <div className="flex flex-col gap-2 border-t border-border pt-3">

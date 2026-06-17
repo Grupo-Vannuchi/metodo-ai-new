@@ -236,3 +236,88 @@ export async function acceptInvitation(
   redirect({ href: "/app", locale });
   throw new Error("unreachable: redirect halts execution");
 }
+
+export type MemberActionResult =
+  | { ok: true }
+  | { ok: false; error: "forbidden" | "not_found" | "invalid" | "self" | "owner" | "unknown" };
+
+/** Remove a member from the org (ADMIN+). Cannot remove yourself or an OWNER. */
+export async function removeMember(membershipId: string): Promise<MemberActionResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "forbidden" };
+  try {
+    assertRole(ctx, "ADMIN");
+  } catch {
+    return { ok: false, error: "forbidden" };
+  }
+
+  const member = await prisma.membership.findFirst({
+    where: { id: membershipId, organizationId: ctx.organizationId },
+    select: { id: true, role: true, userId: true },
+  });
+  if (!member) return { ok: false, error: "not_found" };
+  if (member.userId === ctx.userId) return { ok: false, error: "self" };
+  if (member.role === "OWNER") return { ok: false, error: "owner" };
+
+  try {
+    await prisma.membership.deleteMany({
+      where: { id: membershipId, organizationId: ctx.organizationId },
+    });
+    await audit(ctx, {
+      action: "member.removed",
+      entity: "Membership",
+      entityId: membershipId,
+      meta: { userId: member.userId },
+    });
+    revalidatePath("/app/settings/team");
+    return { ok: true };
+  } catch (e) {
+    console.error("Remove member failed", e);
+    return { ok: false, error: "unknown" };
+  }
+}
+
+/** Change a member's role (ADMIN+). Cannot touch yourself or an OWNER; only an
+ * OWNER may grant or revoke ADMIN. */
+export async function changeMemberRole(
+  membershipId: string,
+  role: string,
+): Promise<MemberActionResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "forbidden" };
+  try {
+    assertRole(ctx, "ADMIN");
+  } catch {
+    return { ok: false, error: "forbidden" };
+  }
+  if (role !== "ADMIN" && role !== "MEMBER") return { ok: false, error: "invalid" };
+
+  const member = await prisma.membership.findFirst({
+    where: { id: membershipId, organizationId: ctx.organizationId },
+    select: { id: true, role: true, userId: true },
+  });
+  if (!member) return { ok: false, error: "not_found" };
+  if (member.userId === ctx.userId) return { ok: false, error: "self" };
+  if (member.role === "OWNER") return { ok: false, error: "owner" };
+  if ((role === "ADMIN" || member.role === "ADMIN") && ctx.role !== "OWNER") {
+    return { ok: false, error: "forbidden" };
+  }
+
+  try {
+    await prisma.membership.updateMany({
+      where: { id: membershipId, organizationId: ctx.organizationId },
+      data: { role },
+    });
+    await audit(ctx, {
+      action: "member.role_changed",
+      entity: "Membership",
+      entityId: membershipId,
+      meta: { role },
+    });
+    revalidatePath("/app/settings/team");
+    return { ok: true };
+  } catch (e) {
+    console.error("Change role failed", e);
+    return { ok: false, error: "unknown" };
+  }
+}

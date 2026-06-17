@@ -101,6 +101,25 @@
       "colName": "Nome",
       "colEmail": "E-mail",
       "colRole": "Papel",
+      "colTemplate": "Acesso (template)",
+      "fullAccess": "Acesso total",
+      "you": "você",
+      "manageTemplates": "Templates de acesso",
+      "remove": "Remover",
+      "confirmRemove": "Remover {name} da equipe?",
+      "role": {
+        "OWNER": "Dono",
+        "ADMIN": "Administrador",
+        "MEMBER": "Membro"
+      },
+      "error": {
+        "forbidden": "Sem permissão para esta ação.",
+        "not_found": "Membro não encontrado.",
+        "invalid": "Dados inválidos.",
+        "self": "Você não pode alterar a si mesmo.",
+        "owner": "O dono da organização não pode ser alterado.",
+        "unknown": "Algo deu errado."
+      },
       "errors": {
         "forbidden": "Você não tem permissão para convidar.",
         "invalid": "Dados inválidos.",
@@ -116,6 +135,24 @@
   },
   "theme": {
     "toggle": "Alternar tema claro/escuro"
+  },
+  "access": {
+    "title": "Templates de acesso",
+    "subtitle": "Crie perfis (ex.: Comercial, Jurídico) e escolha a quais telas cada um dá acesso. Atribua-os aos membros na página de Equipe.",
+    "back": "Voltar à equipe",
+    "create": "Criar template",
+    "namePlaceholder": "Nome do template (ex.: Comercial)",
+    "empty": "Nenhum template ainda. Crie o primeiro acima.",
+    "save": "Salvar",
+    "delete": "Excluir template",
+    "confirmDelete": "Excluir este template? Os membros que o usam voltam a ter acesso total.",
+    "memberCount": "{count} membro(s)",
+    "error": {
+      "forbidden": "Sem permissão para esta ação.",
+      "invalid": "Dados inválidos.",
+      "not_found": "Template não encontrado.",
+      "unknown": "Algo deu errado."
+    }
   },
   "crm": {
     "common": {
