@@ -378,7 +378,9 @@
     "noLeads": "No results in this search.",
     "selectAll": "Select all",
     "quotaUsage": "{used}/{limit} leads this month",
+    "searchUsage": "{used}/{limit} searches this month",
     "quotaReached": "Your plan's lead quota has been reached this month.",
+    "searchQuotaReached": "Your plan's search quota has been reached this month.",
     "seePlan": "See plan",
     "importSelected": "Import selected ({count})",
     "importing": "Importing…",
@@ -400,6 +402,7 @@
       "forbidden": "Your plan doesn't include prospecting.",
       "no_connection": "Connect your Google Places key under Connections.",
       "quota": "Plan lead quota reached this month.",
+      "search_quota": "Plan search quota reached this month.",
       "unknown": "Something went wrong.",
       "BILLING_DISABLED": "Billing is disabled on your Google project. Enable it in the Google Cloud Console.",
       "API_KEY_DENIED": "The Google key isn't authorized for the Places API. Check the key restrictions.",
@@ -480,6 +483,7 @@
     "seats": "{n} seat(s)",
     "connections": "{n} connection(s)",
     "dispatch": "{n} messages/month",
+    "searches": "{n} prospecting searches/month",
     "prospecting": "{n} prospecting leads/month",
     "unlimited": "Unlimited",
     "includedCore": "CRM, pipeline, prospecting, campaigns and connections",
@@ -507,6 +511,7 @@
       "seats": "Seats",
       "connections": "Connections",
       "dispatch": "Dispatch (month)",
+      "searches": "Searches (month)",
       "prospecting": "Prospecting (leads/month)"
     }
   },

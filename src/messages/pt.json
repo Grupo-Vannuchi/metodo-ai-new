@@ -378,7 +378,9 @@
     "noLeads": "Nenhum resultado nesta busca.",
     "selectAll": "Selecionar todos",
     "quotaUsage": "{used}/{limit} leads este mês",
+    "searchUsage": "{used}/{limit} buscas este mês",
     "quotaReached": "Cota de leads do seu plano atingida neste mês.",
+    "searchQuotaReached": "Cota de buscas do seu plano atingida neste mês.",
     "seePlan": "Ver plano",
     "importSelected": "Importar selecionados ({count})",
     "importing": "Importando…",
@@ -400,6 +402,7 @@
       "forbidden": "Seu plano não inclui prospecção.",
       "no_connection": "Conecte sua chave do Google Places em Conexões.",
       "quota": "Cota de leads do plano atingida neste mês.",
+      "search_quota": "Cota de buscas do plano atingida neste mês.",
       "unknown": "Algo deu errado.",
       "BILLING_DISABLED": "O faturamento do seu projeto Google está desativado. Ative no Google Cloud Console.",
       "API_KEY_DENIED": "A chave do Google não está autorizada para a Places API. Verifique as restrições da chave.",
@@ -480,6 +483,7 @@
     "seats": "{n} assento(s)",
     "connections": "{n} conexão(ões)",
     "dispatch": "{n} disparos/mês",
+    "searches": "{n} buscas de prospecção/mês",
     "prospecting": "{n} leads de prospecção/mês",
     "unlimited": "Ilimitado",
     "includedCore": "CRM, funil, prospecção, campanhas e conexões",
@@ -507,6 +511,7 @@
       "seats": "Assentos",
       "connections": "Conexões",
       "dispatch": "Disparos (mês)",
+      "searches": "Buscas (mês)",
       "prospecting": "Prospecção (leads/mês)"
     }
   },

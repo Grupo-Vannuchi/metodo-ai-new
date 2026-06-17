@@ -7,7 +7,7 @@ import { audit } from "@/lib/audit";
 import { planConfig, assertFeature, type PlanKey } from "@/config/plans";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
 import { runExtractionToCompletion, MAX_TOTAL } from "@/lib/prospecting/runner";
-import { countLeadsSince } from "@/lib/queries/extractions";
+import { countLeadsSince, countJobsSince } from "@/lib/queries/extractions";
 import { formatBrPhone } from "@/lib/phone";
 import { extractionSchema, type ExtractionInput } from "@/lib/validations/extraction";
 
@@ -15,7 +15,14 @@ export type ExtractionResult =
   | { ok: true; id: string }
   | {
       ok: false;
-      error: "unauthorized" | "invalid" | "forbidden" | "no_connection" | "quota" | "unknown";
+      error:
+        | "unauthorized"
+        | "invalid"
+        | "forbidden"
+        | "no_connection"
+        | "quota"
+        | "search_quota"
+        | "unknown";
     };
 
 const DEFAULT_TARGET = 50;
@@ -51,9 +58,16 @@ export async function startExtraction(input: ExtractionInput): Promise<Extractio
     });
     if (!conn) return { ok: false, error: "no_connection" };
 
-    // Monthly quota bounds our scraping compute.
-    const quota = planConfig(plan).prospectingQuotaPerMonth;
-    const used = await countLeadsSince(ctx.organizationId, startOfMonth());
+    const cfg = planConfig(plan);
+    const monthStart = startOfMonth();
+
+    // Per-plan limit on the number of searches (extraction runs) this month.
+    const searches = await countJobsSince(ctx.organizationId, monthStart);
+    if (searches >= cfg.extractionsPerMonth) return { ok: false, error: "search_quota" };
+
+    // Per-plan limit on the number of leads extracted this month.
+    const quota = cfg.prospectingQuotaPerMonth;
+    const used = await countLeadsSince(ctx.organizationId, monthStart);
     const remaining = quota - used;
     if (remaining <= 0) return { ok: false, error: "quota" };
 

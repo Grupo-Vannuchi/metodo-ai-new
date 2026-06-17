@@ -56,3 +56,12 @@ export function countLeadsSince(organizationId: string, since: Date): Promise<nu
   const db = tenantDb(organizationId);
   return db.extractedLead.count({ where: { createdAt: { gte: since } } });
 }
+
+/** Searches (extraction runs) since `since`. Failed/canceled runs don't count
+ * against the quota. */
+export function countJobsSince(organizationId: string, since: Date): Promise<number> {
+  const db = tenantDb(organizationId);
+  return db.extractionJob.count({
+    where: { createdAt: { gte: since }, status: { notIn: ["FAILED", "CANCELED"] } },
+  });
+}

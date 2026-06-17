@@ -40,6 +40,7 @@ export default async function PricingPage({
             t("seats", { n: fmt(cfg.seatLimit) }),
             t("connections", { n: fmt(cfg.connectionsLimit) }),
             t("dispatch", { n: fmt(cfg.dispatchQuotaPerMonth) }),
+            t("searches", { n: fmt(cfg.extractionsPerMonth) }),
             t("prospecting", { n: fmt(cfg.prospectingQuotaPerMonth) }),
           ];
           return (

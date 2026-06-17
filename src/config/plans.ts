@@ -28,6 +28,8 @@ export type PlanConfig = {
   /** Max leads extracted per calendar month. Bounds our scraping/compute; the
    * Google API cost itself is billed on the tenant's own key. */
   prospectingQuotaPerMonth: number;
+  /** Max prospecting searches (extraction runs) per calendar month. */
+  extractionsPerMonth: number;
   /** Max active integration connections. `null` = unlimited. */
   connectionsLimit: number | null;
   /** Features unlocked by this plan. */
@@ -58,6 +60,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     seatLimit: 3,
     dispatchQuotaPerMonth: 1_000,
     prospectingQuotaPerMonth: 200,
+    extractionsPerMonth: 20,
     connectionsLimit: 1,
     features: STANDARD_FEATURES,
   },
@@ -65,6 +68,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     seatLimit: 10,
     dispatchQuotaPerMonth: 10_000,
     prospectingQuotaPerMonth: 2_000,
+    extractionsPerMonth: 100,
     connectionsLimit: 3,
     features: PLUS_FEATURES,
   },
@@ -72,6 +76,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     seatLimit: 25,
     dispatchQuotaPerMonth: 50_000,
     prospectingQuotaPerMonth: 10_000,
+    extractionsPerMonth: 500,
     connectionsLimit: null,
     features: GOLD_FEATURES,
   },
@@ -79,6 +84,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     seatLimit: 1_000,
     dispatchQuotaPerMonth: 1_000_000,
     prospectingQuotaPerMonth: 100_000,
+    extractionsPerMonth: 5_000,
     connectionsLimit: null,
     features: ENTERPRISE_FEATURES,
   },

@@ -3,7 +3,7 @@ import { planConfig, type PlanKey } from "@/config/plans";
 import { countMembers } from "@/lib/queries/organizations";
 import { countConnections } from "@/lib/queries/connections";
 import { countDispatchedSince } from "@/lib/queries/campaigns";
-import { countLeadsSince } from "@/lib/queries/extractions";
+import { countLeadsSince, countJobsSince } from "@/lib/queries/extractions";
 
 export type UsageMetric = { used: number; limit: number | null };
 
@@ -12,6 +12,7 @@ export type UsageSummary = {
   connections: UsageMetric;
   dispatch: UsageMetric;
   prospecting: UsageMetric;
+  searches: UsageMetric;
 };
 
 function startOfMonth(): Date {
@@ -27,11 +28,12 @@ export async function getUsageSummary(
   const cfg = planConfig(plan);
   const monthStart = startOfMonth();
 
-  const [seats, connections, dispatch, prospecting] = await Promise.all([
+  const [seats, connections, dispatch, prospecting, searches] = await Promise.all([
     countMembers(organizationId),
     countConnections(organizationId),
     countDispatchedSince(organizationId, monthStart),
     countLeadsSince(organizationId, monthStart),
+    countJobsSince(organizationId, monthStart),
   ]);
 
   return {
@@ -39,5 +41,6 @@ export async function getUsageSummary(
     connections: { used: connections, limit: cfg.connectionsLimit },
     dispatch: { used: dispatch, limit: cfg.dispatchQuotaPerMonth },
     prospecting: { used: prospecting, limit: cfg.prospectingQuotaPerMonth },
+    searches: { used: searches, limit: cfg.extractionsPerMonth },
   };
 }

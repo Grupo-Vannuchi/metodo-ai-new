@@ -43,8 +43,18 @@ export default async function ProspectingPage({
     getUsageSummary(ctx.organizationId, ctx.organization.plan as PlanKey),
   ]);
   const hasGoogle = connections.some((c) => c.provider === "GOOGLE");
-  const { used, limit } = usage.prospecting;
-  const reachedQuota = limit !== null && used >= limit;
+  const { prospecting: leads, searches } = usage;
+  const leadsReached = leads.limit !== null && leads.used >= leads.limit;
+  const searchesReached = searches.limit !== null && searches.used >= searches.limit;
+  const reachedQuota = leadsReached || searchesReached;
+
+  const badge = (reached: boolean) =>
+    cn(
+      "rounded-full border px-3 py-1 text-xs font-medium",
+      reached
+        ? "border-red-300 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300"
+        : "border-border bg-card text-muted-foreground",
+    );
 
   return (
     <div className="flex flex-col gap-6">
@@ -53,16 +63,14 @@ export default async function ProspectingPage({
           <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
           <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
         </div>
-        <span
-          className={cn(
-            "rounded-full border px-3 py-1 text-xs font-medium",
-            reachedQuota
-              ? "border-red-300 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300"
-              : "border-border bg-card text-muted-foreground",
-          )}
-        >
-          {t("quotaUsage", { used, limit: limit ?? "∞" })}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={badge(searchesReached)}>
+            {t("searchUsage", { used: searches.used, limit: searches.limit ?? "∞" })}
+          </span>
+          <span className={badge(leadsReached)}>
+            {t("quotaUsage", { used: leads.used, limit: leads.limit ?? "∞" })}
+          </span>
+        </div>
       </div>
 
       {!hasGoogle ? (
@@ -74,7 +82,7 @@ export default async function ProspectingPage({
         </div>
       ) : reachedQuota ? (
         <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300">
-          {t("quotaReached")}{" "}
+          {searchesReached ? t("searchQuotaReached") : t("quotaReached")}{" "}
           <Link href="/app/settings" className="font-medium underline underline-offset-2">
             {t("seePlan")}
           </Link>
