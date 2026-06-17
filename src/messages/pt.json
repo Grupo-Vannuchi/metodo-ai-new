@@ -17,10 +17,110 @@
   },
   "home": {
     "hero": {
+      "badge": "CRM + IA para vendas",
       "title": "Da prospecção ao fechamento, num fluxo só",
-      "subtitle": "Encontre empresas com os extratores, qualifique no funil e dispare contato em escala — WhatsApp e e-mail — com integrações e webhooks.",
-      "ctaPrimary": "Começar agora",
-      "ctaSecondary": "Ver planos"
+      "subtitle": "Encontre empresas no Google, qualifique no funil e dispare contato em escala — WhatsApp e e-mail — com integrações, automações e controle de acesso por equipe.",
+      "ctaPrimary": "Criar conta grátis",
+      "ctaSecondary": "Ver planos",
+      "note": "Sem cartão de crédito para começar."
+    },
+    "features": {
+      "title": "Tudo que sua operação de vendas precisa",
+      "subtitle": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Um só lugar para prospectar, organizar e converter.",
+      "items": {
+        "crm": {
+          "title": "CRM e Funil Kanban",
+          "desc": "Organize empresas, contatos e oportunidades em funis configuráveis com arrastar-e-soltar."
+        },
+        "prospecting": {
+          "title": "Prospecção no Google",
+          "desc": "Encontre empresas pela Places API e enriqueça com contatos do site delas, prontos para importar."
+        },
+        "campaigns": {
+          "title": "Campanhas em escala",
+          "desc": "Dispare WhatsApp e e-mail para listas segmentadas, com templates e acompanhamento de entrega."
+        },
+        "connections": {
+          "title": "Integrações e webhooks",
+          "desc": "Conecte WhatsApp (Evolution/Meta), e-mail e automações via webhooks com poucos cliques."
+        },
+        "access": {
+          "title": "Controle de acesso",
+          "desc": "Defina perfis (Comercial, Jurídico…) e libere telas específicas para cada membro da equipe."
+        },
+        "insights": {
+          "title": "Painel e insights",
+          "desc": "Acompanhe funil, conversão e uso do plano em um painel claro e em tempo real."
+        }
+      }
+    },
+    "how": {
+      "title": "Comece em minutos",
+      "subtitle": "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+      "steps": {
+        "1": { "title": "Crie sua conta", "desc": "Cadastre sua organização e convide a equipe em segundos." },
+        "2": { "title": "Conecte seus canais", "desc": "Plugue WhatsApp, e-mail e sua chave do Google para prospecção." },
+        "3": { "title": "Prospecte e dispare", "desc": "Encontre clientes, organize no funil e converse em escala." }
+      }
+    },
+    "plans": {
+      "title": "Planos para cada estágio",
+      "subtitle": "Escolha o plano ideal e mude quando quiser. Todos incluem o núcleo do MétodoAI.",
+      "seeAll": "Ver comparação completa de planos"
+    },
+    "testimonials": {
+      "title": "Quem usa, recomenda",
+      "items": {
+        "t1": {
+          "quote": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore.",
+          "author": "Ana Martins",
+          "role": "Head de Vendas, Empresa Lorem"
+        },
+        "t2": {
+          "quote": "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo.",
+          "author": "Carlos Souza",
+          "role": "CEO, Ipsum Tech"
+        },
+        "t3": {
+          "quote": "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla.",
+          "author": "Marina Lopes",
+          "role": "Gerente Comercial, Dolor SA"
+        }
+      }
+    },
+    "faq": {
+      "title": "Perguntas frequentes",
+      "items": {
+        "q1": {
+          "q": "Preciso de cartão de crédito para começar?",
+          "a": "Não. Você cria sua conta e começa a usar o núcleo do MétodoAI. Lorem ipsum dolor sit amet."
+        },
+        "q2": {
+          "q": "Como funciona a prospecção no Google?",
+          "a": "Você conecta sua própria chave da Google Places API; o MétodoAI busca empresas e enriquece com contatos públicos do site delas."
+        },
+        "q3": {
+          "q": "Posso trocar de plano depois?",
+          "a": "Sim, a qualquer momento. Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+        },
+        "q4": {
+          "q": "Meus dados ficam seguros?",
+          "a": "Cada organização é isolada e os dados sensíveis são criptografados. Lorem ipsum dolor sit amet."
+        }
+      }
+    },
+    "cta": {
+      "title": "Pronto para vender com método?",
+      "subtitle": "Crie sua conta agora e leve sua operação de vendas para o próximo nível.",
+      "button": "Criar conta grátis",
+      "perk1": "Comece sem cartão",
+      "perk2": "Cancele quando quiser"
+    },
+    "footer": {
+      "tagline": "CRM com IA para prospectar, organizar e fechar mais negócios.",
+      "product": "Produto",
+      "contactTitle": "Contato",
+      "rights": "Todos os direitos reservados."
     }
   },
   "auth": {

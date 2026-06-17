@@ -17,10 +17,110 @@
   },
   "home": {
     "hero": {
+      "badge": "CRM + AI for sales",
       "title": "From prospecting to closing, in a single flow",
-      "subtitle": "Find companies with the extractors, qualify them in the pipeline and reach out at scale — WhatsApp and email — with integrations and webhooks.",
-      "ctaPrimary": "Get started",
-      "ctaSecondary": "See pricing"
+      "subtitle": "Find companies on Google, qualify them in the pipeline and reach out at scale — WhatsApp and email — with integrations, automation and per-team access control.",
+      "ctaPrimary": "Start for free",
+      "ctaSecondary": "See pricing",
+      "note": "No credit card to get started."
+    },
+    "features": {
+      "title": "Everything your sales operation needs",
+      "subtitle": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. One place to prospect, organize and convert.",
+      "items": {
+        "crm": {
+          "title": "CRM & Kanban pipeline",
+          "desc": "Organize companies, contacts and deals in configurable drag-and-drop pipelines."
+        },
+        "prospecting": {
+          "title": "Google prospecting",
+          "desc": "Find companies via the Places API and enrich them with contacts from their own websites, ready to import."
+        },
+        "campaigns": {
+          "title": "Campaigns at scale",
+          "desc": "Send WhatsApp and email to segmented lists, with templates and delivery tracking."
+        },
+        "connections": {
+          "title": "Integrations & webhooks",
+          "desc": "Connect WhatsApp (Evolution/Meta), email and automations via webhooks in a few clicks."
+        },
+        "access": {
+          "title": "Access control",
+          "desc": "Define profiles (Sales, Legal…) and unlock specific screens for each team member."
+        },
+        "insights": {
+          "title": "Dashboard & insights",
+          "desc": "Track pipeline, conversion and plan usage in a clear, real-time dashboard."
+        }
+      }
+    },
+    "how": {
+      "title": "Get started in minutes",
+      "subtitle": "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+      "steps": {
+        "1": { "title": "Create your account", "desc": "Register your organization and invite your team in seconds." },
+        "2": { "title": "Connect your channels", "desc": "Plug in WhatsApp, email and your Google key for prospecting." },
+        "3": { "title": "Prospect and reach out", "desc": "Find customers, organize the pipeline and engage at scale." }
+      }
+    },
+    "plans": {
+      "title": "Plans for every stage",
+      "subtitle": "Pick the right plan and change anytime. All include the MétodoAI core.",
+      "seeAll": "See full plan comparison"
+    },
+    "testimonials": {
+      "title": "Loved by teams",
+      "items": {
+        "t1": {
+          "quote": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore.",
+          "author": "Ana Martins",
+          "role": "Head of Sales, Lorem Inc."
+        },
+        "t2": {
+          "quote": "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo.",
+          "author": "Carlos Souza",
+          "role": "CEO, Ipsum Tech"
+        },
+        "t3": {
+          "quote": "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla.",
+          "author": "Marina Lopes",
+          "role": "Sales Manager, Dolor SA"
+        }
+      }
+    },
+    "faq": {
+      "title": "Frequently asked questions",
+      "items": {
+        "q1": {
+          "q": "Do I need a credit card to start?",
+          "a": "No. Create your account and start using the MétodoAI core. Lorem ipsum dolor sit amet."
+        },
+        "q2": {
+          "q": "How does Google prospecting work?",
+          "a": "You connect your own Google Places API key; MétodoAI finds companies and enriches them with public contacts from their websites."
+        },
+        "q3": {
+          "q": "Can I change plans later?",
+          "a": "Yes, anytime. Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+        },
+        "q4": {
+          "q": "Is my data safe?",
+          "a": "Each organization is isolated and sensitive data is encrypted. Lorem ipsum dolor sit amet."
+        }
+      }
+    },
+    "cta": {
+      "title": "Ready to sell with method?",
+      "subtitle": "Create your account now and take your sales operation to the next level.",
+      "button": "Start for free",
+      "perk1": "Start without a card",
+      "perk2": "Cancel anytime"
+    },
+    "footer": {
+      "tagline": "AI-powered CRM to prospect, organize and close more deals.",
+      "product": "Product",
+      "contactTitle": "Contact",
+      "rights": "All rights reserved."
     }
   },
   "auth": {
