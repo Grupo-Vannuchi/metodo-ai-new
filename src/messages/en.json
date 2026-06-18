@@ -170,6 +170,7 @@
       "inbox": "Inbox",
       "companies": "Companies",
       "contacts": "Contacts",
+      "finance": "Finance",
       "connections": "Connections",
       "settings": "Settings",
       "signOut": "Sign out",
@@ -681,6 +682,95 @@
       "unauthorized": "Session expired.",
       "invalid": "Check the highlighted fields.",
       "unknown": "Couldn't save. Please try again."
+    }
+  },
+  "finance": {
+    "title": "Finance",
+    "subtitle": "Entries, cash flow and income statement",
+    "nav": {
+      "overview": "Overview",
+      "entries": "Entries",
+      "cashflow": "Cash flow",
+      "dre": "Income statement",
+      "income": "Revenue",
+      "expense": "Expenses"
+    },
+    "type": { "INCOME": "Revenue", "EXPENSE": "Expense" },
+    "status": {
+      "PENDING": { "INCOME": "Receivable", "EXPENSE": "Payable" },
+      "SETTLED": { "INCOME": "Received", "EXPENSE": "Paid" }
+    },
+    "method": {
+      "PIX": "Pix",
+      "BOLETO": "Boleto",
+      "CARD": "Card",
+      "CASH": "Cash",
+      "TRANSFER": "Transfer",
+      "OTHER": "Other"
+    },
+    "field": {
+      "description": "Description",
+      "amount": "Amount",
+      "dueDate": "Due date",
+      "status": "Status",
+      "settledAt": "Settled on",
+      "category": "Category",
+      "method": "Payment method",
+      "contact": "Contact",
+      "company": "Company",
+      "opportunity": "Opportunity",
+      "notes": "Notes"
+    },
+    "kpi": {
+      "receivable": "Receivable",
+      "payable": "Payable",
+      "balance": "Realized balance",
+      "monthResult": "Month result"
+    },
+    "thisMonth": "This month",
+    "newEntry": "New entry",
+    "newCategory": "New category",
+    "categoryName": "Category name",
+    "uncategorized": "Uncategorized",
+    "noMethod": "—",
+    "save": "Save",
+    "saving": "Saving…",
+    "empty": "No entries yet.",
+    "filter": {
+      "all": "All",
+      "allStatus": "Any status",
+      "pending": "Open",
+      "settled": "Settled"
+    },
+    "col": {
+      "dueDate": "Due date",
+      "description": "Description",
+      "amount": "Amount",
+      "status": "Status"
+    },
+    "settle": "Mark as settled",
+    "reopen": "Reopen",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteConfirm": "Delete the entry \"{d}\"?",
+    "cashflow": {
+      "month": "Month",
+      "in": "Inflow",
+      "out": "Outflow",
+      "result": "Result",
+      "balance": "Running balance",
+      "projected": "Projected (open)"
+    },
+    "dre": {
+      "noIncome": "No revenue in the period.",
+      "noExpense": "No expenses in the period.",
+      "result": "Period result"
+    },
+    "error": {
+      "unauthorized": "Session expired.",
+      "forbidden": "No access to finance.",
+      "invalid": "Check the fields.",
+      "unknown": "Couldn't save."
     }
   },
   "settings": {

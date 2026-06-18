@@ -17,6 +17,7 @@ export type Feature =
   | "campaigns.email" // E-mail dispatch
   | "campaigns.scheduling.advanced" // recurrence, time windows, weekdays
   | "prospecting" // Google Places lead extraction (tenant's own key)
+  | "finance" // Financeiro: lançamentos, fluxo de caixa, DRE
   | "webhooks.outbound" // outbound webhooks to the customer's systems
   | "sso"; // single sign-on
 
@@ -45,6 +46,7 @@ const STANDARD_FEATURES: Feature[] = [
 const PLUS_FEATURES: Feature[] = [
   ...STANDARD_FEATURES,
   "campaigns.scheduling.advanced",
+  "finance",
 ];
 
 const GOLD_FEATURES: Feature[] = [...PLUS_FEATURES];

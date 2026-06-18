@@ -10,6 +10,7 @@ import {
   Building2,
   Contact,
   Cable,
+  Wallet,
   Settings,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -25,6 +26,7 @@ type NavKey =
   | "companies"
   | "contacts"
   | "connections"
+  | "finance"
   | "settings";
 type Item = { href: string; key: NavKey; icon: typeof LayoutDashboard };
 
@@ -36,6 +38,7 @@ const items: Item[] = [
   { href: "/app/inbox", key: "inbox", icon: MessageCircle },
   { href: "/app/companies", key: "companies", icon: Building2 },
   { href: "/app/contacts", key: "contacts", icon: Contact },
+  { href: "/app/finance", key: "finance", icon: Wallet },
   { href: "/app/connections", key: "connections", icon: Cable },
   { href: "/app/settings", key: "settings", icon: Settings },
 ];

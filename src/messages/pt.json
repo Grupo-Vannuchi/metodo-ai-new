@@ -170,6 +170,7 @@
       "inbox": "Conversas",
       "companies": "Empresas",
       "contacts": "Contatos",
+      "finance": "Financeiro",
       "connections": "Conexões",
       "settings": "Configurações",
       "signOut": "Sair",
@@ -681,6 +682,95 @@
       "unauthorized": "Sessão expirada.",
       "invalid": "Verifique os campos destacados.",
       "unknown": "Não foi possível salvar. Tente novamente."
+    }
+  },
+  "finance": {
+    "title": "Financeiro",
+    "subtitle": "Lançamentos, fluxo de caixa e DRE",
+    "nav": {
+      "overview": "Visão geral",
+      "entries": "Lançamentos",
+      "cashflow": "Fluxo de caixa",
+      "dre": "DRE",
+      "income": "Receitas",
+      "expense": "Despesas"
+    },
+    "type": { "INCOME": "Receita", "EXPENSE": "Despesa" },
+    "status": {
+      "PENDING": { "INCOME": "A receber", "EXPENSE": "A pagar" },
+      "SETTLED": { "INCOME": "Recebido", "EXPENSE": "Pago" }
+    },
+    "method": {
+      "PIX": "Pix",
+      "BOLETO": "Boleto",
+      "CARD": "Cartão",
+      "CASH": "Dinheiro",
+      "TRANSFER": "Transferência",
+      "OTHER": "Outro"
+    },
+    "field": {
+      "description": "Descrição",
+      "amount": "Valor",
+      "dueDate": "Vencimento",
+      "status": "Situação",
+      "settledAt": "Data de liquidação",
+      "category": "Categoria",
+      "method": "Forma de pagamento",
+      "contact": "Contato",
+      "company": "Empresa",
+      "opportunity": "Oportunidade",
+      "notes": "Observações"
+    },
+    "kpi": {
+      "receivable": "A receber",
+      "payable": "A pagar",
+      "balance": "Saldo realizado",
+      "monthResult": "Resultado do mês"
+    },
+    "thisMonth": "Este mês",
+    "newEntry": "Novo lançamento",
+    "newCategory": "Nova categoria",
+    "categoryName": "Nome da categoria",
+    "uncategorized": "Sem categoria",
+    "noMethod": "—",
+    "save": "Salvar",
+    "saving": "Salvando…",
+    "empty": "Nenhum lançamento ainda.",
+    "filter": {
+      "all": "Todos",
+      "allStatus": "Toda situação",
+      "pending": "Em aberto",
+      "settled": "Liquidados"
+    },
+    "col": {
+      "dueDate": "Vencimento",
+      "description": "Descrição",
+      "amount": "Valor",
+      "status": "Situação"
+    },
+    "settle": "Marcar como liquidado",
+    "reopen": "Reabrir",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "deleteConfirm": "Excluir o lançamento \"{d}\"?",
+    "cashflow": {
+      "month": "Mês",
+      "in": "Entradas",
+      "out": "Saídas",
+      "result": "Resultado",
+      "balance": "Saldo acumulado",
+      "projected": "Projetado (em aberto)"
+    },
+    "dre": {
+      "noIncome": "Sem receitas no período.",
+      "noExpense": "Sem despesas no período.",
+      "result": "Resultado do período"
+    },
+    "error": {
+      "unauthorized": "Sessão expirada.",
+      "forbidden": "Sem acesso ao financeiro.",
+      "invalid": "Verifique os campos.",
+      "unknown": "Não foi possível salvar."
     }
   },
   "settings": {

@@ -7,6 +7,7 @@ import { MobileNav } from "@/components/app/mobile-nav";
 import { BackBar } from "@/components/app/back-bar";
 import { PageTransition } from "@/components/app/page-transition";
 import { logout } from "@/app/actions/auth";
+import { hasFeature, type PlanKey } from "@/config/plans";
 import type { OrgContext } from "@/lib/tenant";
 import type { Locale } from "@/i18n/routing";
 
@@ -21,6 +22,12 @@ export async function AppShell({
 }) {
   const t = await getTranslations("app.nav");
 
+  // Hide plan-gated screens the org can't use (finance = PLUS+). Access-template
+  // gating still applies on top of this.
+  const navScreens = ctx.allowedScreens.filter(
+    (s) => s !== "finance" || hasFeature(ctx.organization.plan as PlanKey, "finance"),
+  );
+
   return (
     <div className="flex min-h-screen bg-muted/20">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card p-4 md:flex">
@@ -34,7 +41,7 @@ export async function AppShell({
         </div>
 
         <div className="mt-6 flex-1">
-          <AppNav allowedScreens={ctx.allowedScreens} />
+          <AppNav allowedScreens={navScreens} />
         </div>
 
         <div className="flex flex-col gap-2 border-t border-border pt-3">
@@ -60,7 +67,7 @@ export async function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3 md:hidden">
           <div className="flex items-center gap-3">
-            <MobileNav allowedScreens={ctx.allowedScreens} />
+            <MobileNav allowedScreens={navScreens} />
             <Logo className="text-lg" />
           </div>
           <div className="flex items-center gap-2">

@@ -641,3 +641,79 @@ model Message {
   @@index([providerMessageId])
   @@map("messages")
 }
+
+// ---------------------------------------------------------------------------
+// Finance (Financeiro) — DRE, cash flow, entries (receitas/despesas)
+// ---------------------------------------------------------------------------
+
+/// Whether an entry is money in (receita) or money out (despesa).
+enum FinanceType {
+  INCOME
+  EXPENSE
+}
+
+/// PENDING = a receber / a pagar; SETTLED = recebido / pago (realizado).
+enum FinanceStatus {
+  PENDING
+  SETTLED
+}
+
+/// Payment method for an entry (optional).
+enum FinanceMethod {
+  PIX
+  BOLETO
+  CARD
+  CASH
+  TRANSFER
+  OTHER
+}
+
+/// A DRE/report category, scoped to the org and to a type (receita/despesa).
+model FinanceCategory {
+  id             String      @id @default(cuid())
+  organizationId String
+  name           String
+  type           FinanceType
+  order          Int         @default(0)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  entries FinanceEntry[]
+
+  @@unique([organizationId, type, name])
+  @@index([organizationId, type])
+  @@map("finance_categories")
+}
+
+/// A financial entry (lançamento): a single receita or despesa. The ledger that
+/// feeds Receitas, Despesas, Fluxo de Caixa and DRE. CRM links are stored as ids
+/// (no PII duplicated); names are resolved at read time.
+model FinanceEntry {
+  id             String         @id @default(cuid())
+  organizationId String
+  type           FinanceType
+  description    String
+  amount         Decimal        @db.Decimal(12, 2)
+  status         FinanceStatus  @default(PENDING)
+  /// Competência/vencimento (accrual basis — drives DRE).
+  dueDate        DateTime
+  /// When it was actually paid/received (cash basis — drives Fluxo de Caixa).
+  settledAt      DateTime?
+  method         FinanceMethod?
+  notes          String?
+  categoryId     String?
+  /// Optional CRM links (ids only).
+  contactId      String?
+  companyId      String?
+  opportunityId  String?
+  createdById    String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  category FinanceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, dueDate])
+  @@index([organizationId, type, status])
+  @@index([organizationId, settledAt])
+  @@map("finance_entries")
+}
