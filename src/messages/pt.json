@@ -251,12 +251,22 @@
     "noResults": "Nenhuma conversa encontrada.",
     "composerPlaceholder": "Escreva uma mensagem…",
     "send": "Enviar",
+    "viewContact": "Ver contato",
+    "assignTo": "Atribuir a um membro",
+    "unassigned": "Não atribuída",
+    "chatOnWhatsapp": "Conversar no WhatsApp",
     "sendError": {
       "unauthorized": "Sessão expirada.",
       "empty": "Escreva uma mensagem.",
       "not_found": "Conversa não encontrada.",
       "no_connection": "Conexão do WhatsApp indisponível.",
       "send_failed": "Não foi possível enviar. Tente novamente."
+    },
+    "startError": {
+      "unauthorized": "Sessão expirada.",
+      "invalid": "Telefone inválido.",
+      "no_connection": "Conecte o WhatsApp (Evolution) em Conexões.",
+      "unknown": "Não foi possível abrir a conversa."
     }
   },
   "access": {

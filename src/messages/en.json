@@ -251,12 +251,22 @@
     "noResults": "No conversations found.",
     "composerPlaceholder": "Type a message…",
     "send": "Send",
+    "viewContact": "View contact",
+    "assignTo": "Assign to a member",
+    "unassigned": "Unassigned",
+    "chatOnWhatsapp": "Chat on WhatsApp",
     "sendError": {
       "unauthorized": "Session expired.",
       "empty": "Type a message.",
       "not_found": "Conversation not found.",
       "no_connection": "WhatsApp connection unavailable.",
       "send_failed": "Couldn't send. Please try again."
+    },
+    "startError": {
+      "unauthorized": "Session expired.",
+      "invalid": "Invalid phone.",
+      "no_connection": "Connect WhatsApp (Evolution) under Connections.",
+      "unknown": "Couldn't open the conversation."
     }
   },
   "access": {

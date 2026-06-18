@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   KanbanSquare,
@@ -45,10 +46,31 @@ const ALWAYS_SHOWN: NavKey[] = ["dashboard", "settings"];
 export function AppNav({ allowedScreens }: { allowedScreens: string[] }) {
   const t = useTranslations("app.nav");
   const pathname = usePathname();
+  const [unread, setUnread] = useState(0);
 
   const visible = items.filter(
     (i) => ALWAYS_SHOWN.includes(i.key) || allowedScreens.includes(i.key),
   );
+
+  // Live unread badge for the inbox item (polled).
+  useEffect(() => {
+    if (!allowedScreens.includes("inbox")) return;
+    let active = true;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/inbox/unread", { cache: "no-store" });
+        if (active && r.ok) setUnread((await r.json()).count ?? 0);
+      } catch {
+        /* ignore */
+      }
+    };
+    void load();
+    const i = setInterval(() => void load(), 10000);
+    return () => {
+      active = false;
+      clearInterval(i);
+    };
+  }, [allowedScreens]);
 
   return (
     <nav className="flex flex-col gap-1">
@@ -66,7 +88,12 @@ export function AppNav({ allowedScreens }: { allowedScreens: string[] }) {
             )}
           >
             <Icon className="size-4" />
-            {t(key)}
+            <span className="flex-1">{t(key)}</span>
+            {key === "inbox" && unread > 0 ? (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-xs font-medium text-brand-foreground">
+                {unread > 99 ? "99+" : unread}
+              </span>
+            ) : null}
           </Link>
         );
       })}

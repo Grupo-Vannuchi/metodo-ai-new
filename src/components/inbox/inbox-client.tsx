@@ -1,14 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCheck, MessageCircle, Search, SendHorizontal, AlertCircle } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, MessageCircle, Search, SendHorizontal, AlertCircle, User } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { formatBrPhone } from "@/lib/phone";
+import { Link } from "@/i18n/navigation";
 import { Spinner } from "@/components/ui/spinner";
-import { markConversationRead, sendMessage } from "@/app/actions/inbox";
+import { markConversationRead, sendMessage, assignConversation } from "@/app/actions/inbox";
 
 type Dateish = string | Date | null;
+
+type Member = { userId: string; name: string };
 
 type Conversation = {
   id: string;
@@ -17,6 +20,10 @@ type Conversation = {
   lastMessagePreview: string | null;
   lastMessageAt: Dateish;
   unreadCount: number;
+  contactId: string | null;
+  contactName: string | null;
+  assignedToId: string | null;
+  assignedToName: string | null;
 };
 
 type Message = {
@@ -33,7 +40,8 @@ let tempSeq = 0;
 const CONVERSATIONS_POLL_MS = 5000;
 const MESSAGES_POLL_MS = 4000;
 
-function displayName(c: Pick<Conversation, "name" | "remoteJid">): string {
+function displayName(c: Pick<Conversation, "name" | "remoteJid" | "contactName">): string {
+  if (c.contactName) return c.contactName;
   if (c.name) return c.name;
   const digits = c.remoteJid.split("@")[0] ?? "";
   return formatBrPhone(digits) || digits;
@@ -44,10 +52,18 @@ function fmtTime(value: string | Date | null): string {
   return new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-export function InboxClient({ initial }: { initial: Conversation[] }) {
+export function InboxClient({
+  initial,
+  members,
+  initialSelectedId,
+}: {
+  initial: Conversation[];
+  members: Member[];
+  initialSelectedId?: string | null;
+}) {
   const t = useTranslations("inbox");
   const [conversations, setConversations] = useState<Conversation[]>(initial);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
@@ -212,17 +228,44 @@ export function InboxClient({ initial }: { initial: Conversation[] }) {
       >
         {selected ? (
           <>
-            <header className="flex items-center gap-3 border-b border-border px-4 py-3">
-              <button
-                type="button"
-                onClick={() => select(null)}
-                className="text-muted-foreground hover:text-foreground md:hidden"
-                aria-label={t("back")}
-              >
-                <ArrowLeft className="size-5" />
-              </button>
-              <div className="min-w-0">
-                <p className="truncate font-medium">{displayName(selected)}</p>
+            <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => select(null)}
+                  className="text-muted-foreground hover:text-foreground md:hidden"
+                  aria-label={t("back")}
+                >
+                  <ArrowLeft className="size-5" />
+                </button>
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{displayName(selected)}</p>
+                  {selected.contactId ? (
+                    <Link
+                      href={`/app/contacts/${selected.contactId}`}
+                      className="text-xs text-brand hover:underline"
+                    >
+                      {t("viewContact")}
+                    </Link>
+                  ) : null}
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <User className="size-4 shrink-0" />
+                <select
+                  value={selected.assignedToId ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value || null;
+                    void assignConversation(selected.id, v).then(() => loadConversations());
+                  }}
+                  title={t("assignTo")}
+                  className="max-w-[10rem] rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground focus-visible:border-brand focus-visible:outline-none"
+                >
+                  <option value="">{t("unassigned")}</option>
+                  {members.map((m) => (
+                    <option key={m.userId} value={m.userId}>{m.name}</option>
+                  ))}
+                </select>
               </div>
             </header>
 

@@ -33,3 +33,11 @@ export function isValidBrPhone(raw: string): boolean {
   const d = (raw ?? "").replace(/\D/g, "");
   return d.length === 0 || d.length === 10 || d.length === 11;
 }
+
+/** Comparable key for matching phones across formats: the local digits without
+ * the BR country code (last 11), so "(13) 99188-6920" and "5513991886920" match. */
+export function brPhoneKey(raw: string): string {
+  let d = (raw ?? "").replace(/\D/g, "");
+  if (d.length > 11 && d.startsWith("55")) d = d.slice(2);
+  return d.slice(-11);
+}

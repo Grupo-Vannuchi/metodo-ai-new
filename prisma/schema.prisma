@@ -544,8 +544,10 @@ model Conversation {
   /// WhatsApp JID, e.g. "5511999999999@s.whatsapp.net".
   remoteJid          String
   name               String?
-  /// Optional link to a CRM contact (set in a later phase).
+  /// Optional link to a CRM contact (identified/created from the number).
   contactId          String?
+  /// Team member this conversation is assigned to (a User id), if any.
+  assignedToId       String?
   lastMessageAt      DateTime?
   lastMessagePreview String?
   unreadCount        Int       @default(0)
