@@ -32,6 +32,7 @@ const TENANT_MODELS = new Set<string>([
   "ExtractionJob",
   "ExtractedLead",
   "Conversation",
+  "ConversationFolder",
   "Message",
 ]);
 

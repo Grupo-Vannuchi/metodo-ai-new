@@ -134,3 +134,118 @@ export async function startConversation(input: {
     return { ok: false, error: "unknown" };
   }
 }
+
+type Ok = { ok: boolean };
+
+/** Pin / unpin a conversation (sorts to the top of its list). */
+export async function pinConversation(id: string, pinned: boolean): Promise<Ok> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+  try {
+    await tenantDb(ctx.organizationId).conversation.updateMany({ where: { id }, data: { pinned } });
+    revalidatePath("/app/inbox");
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to pin conversation", error);
+    return { ok: false };
+  }
+}
+
+/** Set a custom display name (empty string clears it, reverting to push name). */
+export async function renameConversation(id: string, name: string | null): Promise<Ok> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+  const customName = name && name.trim() ? name.trim().slice(0, 80) : null;
+  try {
+    await tenantDb(ctx.organizationId).conversation.updateMany({ where: { id }, data: { customName } });
+    revalidatePath("/app/inbox");
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to rename conversation", error);
+    return { ok: false };
+  }
+}
+
+/** Permanently delete a conversation and its messages (FK cascade). */
+export async function deleteConversation(id: string): Promise<Ok> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+  try {
+    await tenantDb(ctx.organizationId).conversation.deleteMany({ where: { id } });
+    revalidatePath("/app/inbox");
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to delete conversation", error);
+    return { ok: false };
+  }
+}
+
+/** Move a conversation into a folder (null = no folder). Validates ownership. */
+export async function moveConversation(id: string, folderId: string | null): Promise<Ok> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+  const db = tenantDb(ctx.organizationId);
+  try {
+    if (folderId) {
+      const folder = await db.conversationFolder.findFirst({ where: { id: folderId }, select: { id: true } });
+      if (!folder) return { ok: false };
+    }
+    await db.conversation.updateMany({ where: { id }, data: { folderId } });
+    revalidatePath("/app/inbox");
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to move conversation", error);
+    return { ok: false };
+  }
+}
+
+type FolderResult = { ok: true; id?: string } | { ok: false };
+
+/** Create an inbox folder. Returns its id. */
+export async function createConversationFolder(name: string): Promise<FolderResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+  const clean = name.trim().slice(0, 60);
+  if (!clean) return { ok: false };
+  try {
+    const folder = await tenantDb(ctx.organizationId).conversationFolder.create({
+      data: { organizationId: ctx.organizationId, name: clean },
+      select: { id: true },
+    });
+    revalidatePath("/app/inbox");
+    return { ok: true, id: folder.id };
+  } catch (error) {
+    console.error("Failed to create folder", error);
+    return { ok: false };
+  }
+}
+
+/** Rename an inbox folder. */
+export async function renameConversationFolder(id: string, name: string): Promise<Ok> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+  const clean = name.trim().slice(0, 60);
+  if (!clean) return { ok: false };
+  try {
+    await tenantDb(ctx.organizationId).conversationFolder.updateMany({ where: { id }, data: { name: clean } });
+    revalidatePath("/app/inbox");
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to rename folder", error);
+    return { ok: false };
+  }
+}
+
+/** Delete an inbox folder. Its conversations fall back to "no folder" (FK SetNull). */
+export async function deleteConversationFolder(id: string): Promise<Ok> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+  try {
+    await tenantDb(ctx.organizationId).conversationFolder.deleteMany({ where: { id } });
+    revalidatePath("/app/inbox");
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to delete folder", error);
+    return { ok: false };
+  }
+}

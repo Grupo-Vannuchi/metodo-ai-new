@@ -578,10 +578,16 @@ model Conversation {
   /// WhatsApp JID, e.g. "5511999999999@s.whatsapp.net".
   remoteJid          String
   name               String?
+  /// User-set label that overrides the WhatsApp push name in the list. Never
+  /// touched by inbound ingestion, so a rename sticks.
+  customName         String?
   /// Optional link to a CRM contact (identified/created from the number).
   contactId          String?
   /// Team member this conversation is assigned to (a User id), if any.
   assignedToId       String?
+  /// Inbox organization: pin to top and optional folder.
+  pinned             Boolean   @default(false)
+  folderId           String?
   lastMessageAt      DateTime?
   lastMessagePreview String?
   unreadCount        Int       @default(0)
@@ -589,10 +595,27 @@ model Conversation {
   updatedAt          DateTime  @updatedAt
 
   messages Message[]
+  folder   ConversationFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   @@unique([connectionId, remoteJid])
   @@index([organizationId, lastMessageAt])
   @@map("conversations")
+}
+
+/// A folder to organize the WhatsApp inbox (org-scoped). Inbox-specific —
+/// independent of the CRM's ContactFolder.
+model ConversationFolder {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  conversations Conversation[]
+
+  @@index([organizationId, order])
+  @@map("conversation_folders")
 }
 
 /// A single message within a conversation (inbound or outbound).

@@ -1,13 +1,48 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCheck, MessageCircle, Search, SendHorizontal, AlertCircle, Info, Building2, Mail, Phone } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  CheckCheck,
+  MessageCircle,
+  Search,
+  SendHorizontal,
+  AlertCircle,
+  Info,
+  Building2,
+  Mail,
+  Phone,
+  Pin,
+  PinOff,
+  Pencil,
+  Trash2,
+  FolderPlus,
+  Folder,
+  FolderInput,
+  ChevronRight,
+  ChevronDown,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { formatBrPhone } from "@/lib/phone";
 import { Link } from "@/i18n/navigation";
 import { Spinner } from "@/components/ui/spinner";
-import { markConversationRead, sendMessage } from "@/app/actions/inbox";
+import { useConfirm } from "@/components/ui/confirm";
+import { usePrompt } from "@/components/ui/prompt";
+import {
+  markConversationRead,
+  sendMessage,
+  pinConversation,
+  renameConversation,
+  deleteConversation,
+  moveConversation,
+  createConversationFolder,
+  renameConversationFolder,
+  deleteConversationFolder,
+} from "@/app/actions/inbox";
+
+type Folder = { id: string; name: string };
 
 type Dateish = string | Date | null;
 
@@ -25,12 +60,17 @@ type Conversation = {
   id: string;
   remoteJid: string;
   name: string | null;
+  customName: string | null;
   lastMessagePreview: string | null;
   lastMessageAt: Dateish;
   unreadCount: number;
   contactId: string | null;
   contactName: string | null;
+  pinned: boolean;
+  folderId: string | null;
 };
+
+type Menu = { x: number; y: number; conversationId: string };
 
 type Message = {
   id: string;
@@ -46,7 +86,13 @@ let tempSeq = 0;
 const CONVERSATIONS_POLL_MS = 5000;
 const MESSAGES_POLL_MS = 4000;
 
-function displayName(c: Pick<Conversation, "name" | "remoteJid" | "contactName">): string {
+const MENU_ITEM =
+  "flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-muted";
+
+function displayName(
+  c: Pick<Conversation, "name" | "customName" | "remoteJid" | "contactName">,
+): string {
+  if (c.customName) return c.customName;
   if (c.contactName) return c.contactName;
   if (c.name) return c.name;
   const digits = c.remoteJid.split("@")[0] ?? "";
@@ -60,13 +106,18 @@ function fmtTime(value: string | Date | null): string {
 
 export function InboxClient({
   initial,
+  initialFolders,
   initialSelectedId,
 }: {
   initial: Conversation[];
+  initialFolders: Folder[];
   initialSelectedId?: string | null;
 }) {
   const t = useTranslations("inbox");
+  const confirm = useConfirm();
+  const prompt = usePrompt();
   const [conversations, setConversations] = useState<Conversation[]>(initial);
+  const [folders, setFolders] = useState<Folder[]>(initialFolders);
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [search, setSearch] = useState("");
@@ -75,12 +126,23 @@ export function InboxClient({
   const [sendError, setSendError] = useState<string | null>(null);
   const [showContact, setShowContact] = useState(false);
   const [contactInfo, setContactInfo] = useState<ContactInfo | null>(null);
+  const [menu, setMenu] = useState<Menu | null>(null);
+  const [closedFolders, setClosedFolders] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const loadConversations = useCallback(async () => {
     try {
       const r = await fetch("/api/inbox/conversations", { cache: "no-store" });
       if (r.ok) setConversations(await r.json());
+    } catch {
+      /* keep current on transient failure */
+    }
+  }, []);
+
+  const loadFolders = useCallback(async () => {
+    try {
+      const r = await fetch("/api/inbox/folders", { cache: "no-store" });
+      if (r.ok) setFolders(await r.json());
     } catch {
       /* keep current on transient failure */
     }
@@ -158,6 +220,137 @@ export function InboxClient({
       })
     : conversations;
 
+  const searching = search.trim().length > 0;
+  const menuConvo = menu ? conversations.find((c) => c.id === menu.conversationId) ?? null : null;
+
+  function openMenu(e: React.MouseEvent, id: string) {
+    e.preventDefault();
+    const x = Math.min(e.clientX, window.innerWidth - 244);
+    const y = Math.min(e.clientY, window.innerHeight - 360);
+    setMenu({ x, y, conversationId: id });
+  }
+
+  function toggleFolder(id: string) {
+    setClosedFolders((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+
+  async function onPin(c: Conversation) {
+    setMenu(null);
+    await pinConversation(c.id, !c.pinned);
+    void loadConversations();
+  }
+
+  async function onRename(c: Conversation) {
+    setMenu(null);
+    const name = await prompt({
+      title: t("renameTitle"),
+      defaultValue: c.customName ?? "",
+      placeholder: displayName(c),
+    });
+    if (name === null) return;
+    await renameConversation(c.id, name);
+    void loadConversations();
+  }
+
+  async function onDelete(c: Conversation) {
+    setMenu(null);
+    const ok = await confirm({
+      description: t("deleteConfirm", { name: displayName(c) }),
+      confirmLabel: t("delete"),
+      variant: "danger",
+    });
+    if (!ok) return;
+    await deleteConversation(c.id);
+    if (selectedId === c.id) select(null);
+    void loadConversations();
+  }
+
+  async function onMove(c: Conversation, folderId: string | null) {
+    setMenu(null);
+    await moveConversation(c.id, folderId);
+    void loadConversations();
+  }
+
+  async function onMoveToNew(c: Conversation) {
+    setMenu(null);
+    const name = await prompt({ title: t("newFolderTitle"), placeholder: t("folderNamePlaceholder") });
+    if (!name) return;
+    const res = await createConversationFolder(name);
+    if (res.ok && res.id) {
+      await moveConversation(c.id, res.id);
+      void loadFolders();
+      void loadConversations();
+    }
+  }
+
+  async function onNewFolder() {
+    const name = await prompt({ title: t("newFolderTitle"), placeholder: t("folderNamePlaceholder") });
+    if (!name) return;
+    await createConversationFolder(name);
+    void loadFolders();
+  }
+
+  async function onRenameFolder(f: Folder) {
+    const name = await prompt({ title: t("renameFolderTitle"), defaultValue: f.name });
+    if (!name) return;
+    await renameConversationFolder(f.id, name);
+    void loadFolders();
+  }
+
+  async function onDeleteFolder(f: Folder) {
+    const ok = await confirm({
+      description: t("deleteFolderConfirm", { name: f.name }),
+      confirmLabel: t("delete"),
+      variant: "danger",
+    });
+    if (!ok) return;
+    await deleteConversationFolder(f.id);
+    void loadFolders();
+    void loadConversations();
+  }
+
+  /** A single conversation row in the list (called as a function, not a JSX component). */
+  function convItem(c: Conversation) {
+    return (
+      <button
+        key={c.id}
+        type="button"
+        onClick={() => select(c.id)}
+        onContextMenu={(e) => openMenu(e, c.id)}
+        className={cn(
+          "flex w-full items-start gap-3 border-b border-border px-4 py-3 text-left transition-colors hover:bg-muted",
+          selectedId === c.id ? "bg-muted" : "",
+        )}
+      >
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
+          <MessageCircle className="size-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">
+              {c.pinned ? <Pin className="size-3 shrink-0 text-brand" /> : null}
+              <span className="truncate">{displayName(c)}</span>
+            </p>
+            <span className="shrink-0 text-xs text-muted-foreground">{fmtTime(c.lastMessageAt)}</span>
+          </div>
+          <div className="mt-0.5 flex items-center justify-between gap-2">
+            <p className="truncate text-xs text-muted-foreground">{c.lastMessagePreview ?? ""}</p>
+            {c.unreadCount > 0 ? (
+              <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-xs font-medium text-brand-foreground">
+                {c.unreadCount}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </button>
+    );
+  }
+
   async function onSend(e?: React.FormEvent) {
     e?.preventDefault();
     const body = draft.trim();
@@ -195,7 +388,18 @@ export function InboxClient({
         )}
       >
         <div className="flex flex-col gap-2 border-b border-border px-4 py-3">
-          <h1 className="font-semibold">{t("title")}</h1>
+          <div className="flex items-center justify-between gap-2">
+            <h1 className="font-semibold">{t("title")}</h1>
+            <button
+              type="button"
+              onClick={onNewFolder}
+              title={t("newFolder")}
+              aria-label={t("newFolder")}
+              className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <FolderPlus className="size-4" />
+            </button>
+          </div>
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -209,38 +413,65 @@ export function InboxClient({
         <div className="flex-1 overflow-y-auto">
           {conversations.length === 0 ? (
             <p className="p-6 text-center text-sm text-muted-foreground">{t("empty")}</p>
-          ) : filtered.length === 0 ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">{t("noResults")}</p>
+          ) : searching ? (
+            filtered.length === 0 ? (
+              <p className="p-6 text-center text-sm text-muted-foreground">{t("noResults")}</p>
+            ) : (
+              filtered.map(convItem)
+            )
           ) : (
-            filtered.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => select(c.id)}
-                className={cn(
-                  "flex w-full items-start gap-3 border-b border-border px-4 py-3 text-left transition-colors hover:bg-muted",
-                  selectedId === c.id ? "bg-muted" : "",
-                )}
-              >
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
-                  <MessageCircle className="size-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-medium">{displayName(c)}</p>
-                    <span className="shrink-0 text-xs text-muted-foreground">{fmtTime(c.lastMessageAt)}</span>
+            <>
+              {filtered.filter((c) => !c.folderId).map(convItem)}
+              {folders.map((f) => {
+                const items = filtered.filter((c) => c.folderId === f.id);
+                const isClosed = closedFolders.has(f.id);
+                return (
+                  <div key={f.id}>
+                    <div
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        void onRenameFolder(f);
+                      }}
+                      className="flex items-center gap-1.5 border-b border-border bg-muted/30 px-3 py-2"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleFolder(f.id)}
+                        className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs font-semibold text-muted-foreground"
+                      >
+                        {isClosed ? (
+                          <ChevronRight className="size-3.5 shrink-0" />
+                        ) : (
+                          <ChevronDown className="size-3.5 shrink-0" />
+                        )}
+                        <Folder className="size-3.5 shrink-0" />
+                        <span className="truncate">{f.name}</span>
+                        <span className="text-muted-foreground/70">({items.length})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void onRenameFolder(f)}
+                        title={t("renameFolder")}
+                        aria-label={t("renameFolder")}
+                        className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void onDeleteFolder(f)}
+                        title={t("deleteFolder")}
+                        aria-label={t("deleteFolder")}
+                        className="rounded p-0.5 text-muted-foreground hover:text-red-600"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                    {!isClosed ? items.map(convItem) : null}
                   </div>
-                  <div className="mt-0.5 flex items-center justify-between gap-2">
-                    <p className="truncate text-xs text-muted-foreground">{c.lastMessagePreview ?? ""}</p>
-                    {c.unreadCount > 0 ? (
-                      <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-xs font-medium text-brand-foreground">
-                        {c.unreadCount}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              </button>
-            ))
+                );
+              })}
+            </>
           )}
         </div>
       </aside>
@@ -404,6 +635,74 @@ export function InboxClient({
           </div>
         )}
       </section>
+
+      {/* Right-click context menu for a conversation */}
+      {menu && menuConvo ? (
+        <>
+          <button
+            type="button"
+            aria-hidden
+            tabIndex={-1}
+            onClick={() => setMenu(null)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setMenu(null);
+            }}
+            className="fixed inset-0 z-40 cursor-default"
+          />
+          <div
+            style={{ left: menu.x, top: menu.y }}
+            className="fixed z-50 w-60 overflow-hidden rounded-xl border border-border bg-card py-1 text-sm shadow-xl motion-safe:animate-dialog-in"
+          >
+            <button type="button" onClick={() => void onPin(menuConvo)} className={MENU_ITEM}>
+              {menuConvo.pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+              {menuConvo.pinned ? t("unpin") : t("pin")}
+            </button>
+            <button type="button" onClick={() => void onRename(menuConvo)} className={MENU_ITEM}>
+              <Pencil className="size-4" />
+              {t("rename")}
+            </button>
+
+            <div className="my-1 border-t border-border" />
+            <p className="px-3 py-1 text-xs font-medium text-muted-foreground">{t("moveTo")}</p>
+            <div className="max-h-40 overflow-y-auto">
+              {menuConvo.folderId ? (
+                <button type="button" onClick={() => void onMove(menuConvo, null)} className={MENU_ITEM}>
+                  <FolderInput className="size-4" />
+                  {t("noFolder")}
+                </button>
+              ) : null}
+              {folders
+                .filter((f) => f.id !== menuConvo.folderId)
+                .map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => void onMove(menuConvo, f.id)}
+                    className={MENU_ITEM}
+                  >
+                    <Folder className="size-4 shrink-0" />
+                    <span className="truncate">{f.name}</span>
+                  </button>
+                ))}
+              <button type="button" onClick={() => void onMoveToNew(menuConvo)} className={MENU_ITEM}>
+                <FolderPlus className="size-4" />
+                {t("newFolderMove")}
+              </button>
+            </div>
+
+            <div className="my-1 border-t border-border" />
+            <button
+              type="button"
+              onClick={() => void onDelete(menuConvo)}
+              className={cn(MENU_ITEM, "text-red-600")}
+            >
+              <Trash2 className="size-4" />
+              {t("delete")}
+            </button>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

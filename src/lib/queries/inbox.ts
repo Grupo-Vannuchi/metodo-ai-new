@@ -6,16 +6,19 @@ import { tenantDb } from "@/lib/tenant-db";
 export async function listConversations(organizationId: string) {
   const db = tenantDb(organizationId);
   const convos = await db.conversation.findMany({
-    orderBy: { lastMessageAt: "desc" },
-    take: 100,
+    orderBy: [{ pinned: "desc" }, { lastMessageAt: "desc" }],
+    take: 200,
     select: {
       id: true,
       remoteJid: true,
       name: true,
+      customName: true,
       lastMessagePreview: true,
       lastMessageAt: true,
       unreadCount: true,
       contactId: true,
+      pinned: true,
+      folderId: true,
     },
   });
 
@@ -29,12 +32,24 @@ export async function listConversations(organizationId: string) {
     id: c.id,
     remoteJid: c.remoteJid,
     name: c.name,
+    customName: c.customName,
     lastMessagePreview: c.lastMessagePreview,
     lastMessageAt: c.lastMessageAt,
     unreadCount: c.unreadCount,
     contactId: c.contactId,
     contactName: c.contactId ? cMap.get(c.contactId) ?? null : null,
+    pinned: c.pinned,
+    folderId: c.folderId,
   }));
+}
+
+/** Inbox folders for the org, ordered. */
+export async function listConversationFolders(organizationId: string) {
+  const db = tenantDb(organizationId);
+  return db.conversationFolder.findMany({
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+    select: { id: true, name: true },
+  });
 }
 
 /** Messages of a conversation, oldest first (scoped via organizationId). */
