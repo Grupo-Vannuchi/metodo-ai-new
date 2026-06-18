@@ -255,8 +255,6 @@
     "contactInfo": "Dados do contato",
     "conversationTitle": "Conversa no WhatsApp",
     "openConversation": "Abrir conversa",
-    "assignTo": "Atribuir a um membro",
-    "unassigned": "Não atribuída",
     "chatOnWhatsapp": "Conversar no WhatsApp",
     "sendError": {
       "unauthorized": "Sessão expirada.",

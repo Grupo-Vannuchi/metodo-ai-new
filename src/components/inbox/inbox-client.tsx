@@ -1,17 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCheck, MessageCircle, Search, SendHorizontal, AlertCircle, User, Info, Building2, Mail, Phone } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, MessageCircle, Search, SendHorizontal, AlertCircle, Info, Building2, Mail, Phone } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { formatBrPhone } from "@/lib/phone";
 import { Link } from "@/i18n/navigation";
 import { Spinner } from "@/components/ui/spinner";
-import { markConversationRead, sendMessage, assignConversation } from "@/app/actions/inbox";
+import { markConversationRead, sendMessage } from "@/app/actions/inbox";
 
 type Dateish = string | Date | null;
-
-type Member = { userId: string; name: string };
 
 type ContactInfo = {
   id: string;
@@ -32,8 +30,6 @@ type Conversation = {
   unreadCount: number;
   contactId: string | null;
   contactName: string | null;
-  assignedToId: string | null;
-  assignedToName: string | null;
 };
 
 type Message = {
@@ -64,11 +60,9 @@ function fmtTime(value: string | Date | null): string {
 
 export function InboxClient({
   initial,
-  members,
   initialSelectedId,
 }: {
   initial: Conversation[];
-  members: Member[];
   initialSelectedId?: string | null;
 }) {
   const t = useTranslations("inbox");
@@ -283,21 +277,6 @@ export function InboxClient({
                 </div>
               </div>
               <div className="flex items-center gap-1.5 text-muted-foreground">
-                <User className="size-4 shrink-0" />
-                <select
-                  value={selected.assignedToId ?? ""}
-                  onChange={(e) => {
-                    const v = e.target.value || null;
-                    void assignConversation(selected.id, v).then(() => loadConversations());
-                  }}
-                  title={t("assignTo")}
-                  className="max-w-[10rem] rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground focus-visible:border-brand focus-visible:outline-none"
-                >
-                  <option value="">{t("unassigned")}</option>
-                  {members.map((m) => (
-                    <option key={m.userId} value={m.userId}>{m.name}</option>
-                  ))}
-                </select>
                 {selected.contactId ? (
                   <button
                     type="button"

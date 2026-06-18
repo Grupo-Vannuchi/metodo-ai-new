@@ -255,8 +255,6 @@
     "contactInfo": "Contact details",
     "conversationTitle": "WhatsApp conversation",
     "openConversation": "Open conversation",
-    "assignTo": "Assign to a member",
-    "unassigned": "Unassigned",
     "chatOnWhatsapp": "Chat on WhatsApp",
     "sendError": {
       "unauthorized": "Session expired.",

@@ -1,7 +1,6 @@
 import { requireOrgContext } from "@/lib/tenant";
 import { requireScreen } from "@/lib/access";
 import { listConversations } from "@/lib/queries/inbox";
-import { listMembers } from "@/lib/queries/organizations";
 import { InboxClient } from "@/components/inbox/inbox-client";
 import { resolveLocale } from "@/i18n/routing";
 
@@ -18,17 +17,8 @@ export default async function InboxPage({
   const ctx = await requireOrgContext(locale);
   await requireScreen(ctx, "inbox", locale);
 
-  const [conversations, members] = await Promise.all([
-    listConversations(ctx.organizationId),
-    listMembers(ctx.organizationId),
-  ]);
+  const conversations = await listConversations(ctx.organizationId);
   const { c } = await searchParams;
 
-  return (
-    <InboxClient
-      initial={conversations}
-      members={members.map((m) => ({ userId: m.userId, name: m.name }))}
-      initialSelectedId={c ?? null}
-    />
-  );
+  return <InboxClient initial={conversations} initialSelectedId={c ?? null} />;
 }

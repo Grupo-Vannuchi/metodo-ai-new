@@ -1,9 +1,8 @@
 import "server-only";
-import { prisma } from "@/lib/prisma";
 import { tenantDb } from "@/lib/tenant-db";
 
 /** Conversations for the inbox list (most-recent first), enriched with the
- * linked contact and the assigned member's names. */
+ * linked contact's name. */
 export async function listConversations(organizationId: string) {
   const db = tenantDb(organizationId);
   const convos = await db.conversation.findMany({
@@ -17,23 +16,14 @@ export async function listConversations(organizationId: string) {
       lastMessageAt: true,
       unreadCount: true,
       contactId: true,
-      assignedToId: true,
     },
   });
 
   const contactIds = [...new Set(convos.map((c) => c.contactId).filter(Boolean))] as string[];
-  const userIds = [...new Set(convos.map((c) => c.assignedToId).filter(Boolean))] as string[];
-
-  const [contacts, users] = await Promise.all([
-    contactIds.length
-      ? db.contact.findMany({ where: { id: { in: contactIds } }, select: { id: true, name: true } })
-      : Promise.resolve([]),
-    userIds.length
-      ? prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
-      : Promise.resolve([]),
-  ]);
+  const contacts = contactIds.length
+    ? await db.contact.findMany({ where: { id: { in: contactIds } }, select: { id: true, name: true } })
+    : [];
   const cMap = new Map(contacts.map((c) => [c.id, c.name]));
-  const uMap = new Map(users.map((u) => [u.id, u.name]));
 
   return convos.map((c) => ({
     id: c.id,
@@ -44,8 +34,6 @@ export async function listConversations(organizationId: string) {
     unreadCount: c.unreadCount,
     contactId: c.contactId,
     contactName: c.contactId ? cMap.get(c.contactId) ?? null : null,
-    assignedToId: c.assignedToId,
-    assignedToName: c.assignedToId ? uMap.get(c.assignedToId) ?? null : null,
   }));
 }
 

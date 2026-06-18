@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { decryptCredentials } from "@/lib/integrations/crypto";
@@ -133,33 +132,5 @@ export async function startConversation(input: {
   } catch (error) {
     console.error("Failed to start conversation", error);
     return { ok: false, error: "unknown" };
-  }
-}
-
-/** Assign (or unassign with null) a conversation to a team member. */
-export async function assignConversation(
-  conversationId: string,
-  userId: string | null,
-): Promise<{ ok: boolean }> {
-  const ctx = await getOrgContext();
-  if (!ctx) return { ok: false };
-  try {
-    if (userId) {
-      const member = await prisma.membership.findFirst({
-        where: { organizationId: ctx.organizationId, userId },
-        select: { id: true },
-      });
-      if (!member) return { ok: false };
-    }
-    const db = tenantDb(ctx.organizationId);
-    await db.conversation.updateMany({
-      where: { id: conversationId },
-      data: { assignedToId: userId },
-    });
-    revalidatePath("/app/inbox");
-    return { ok: true };
-  } catch (error) {
-    console.error("Failed to assign conversation", error);
-    return { ok: false };
   }
 }
