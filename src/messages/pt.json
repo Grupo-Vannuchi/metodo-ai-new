@@ -174,7 +174,8 @@
       "settings": "Configurações",
       "signOut": "Sair",
       "menu": "Abrir menu",
-      "close": "Fechar menu"
+      "close": "Fechar menu",
+      "back": "Voltar"
     },
     "dashboard": {
       "title": "Painel",

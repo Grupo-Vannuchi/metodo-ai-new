@@ -4,6 +4,7 @@ import { Logo } from "@/components/layout/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AppNav } from "@/components/app/app-nav";
 import { MobileNav } from "@/components/app/mobile-nav";
+import { BackBar } from "@/components/app/back-bar";
 import { PageTransition } from "@/components/app/page-transition";
 import { logout } from "@/app/actions/auth";
 import type { OrgContext } from "@/lib/tenant";
@@ -72,6 +73,7 @@ export async function AppShell({
           </div>
         </header>
         <main className="flex-1 p-6 sm:p-8">
+          <BackBar />
           <PageTransition>{children}</PageTransition>
         </main>
       </div>

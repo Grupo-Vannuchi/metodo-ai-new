@@ -174,7 +174,8 @@
       "settings": "Settings",
       "signOut": "Sign out",
       "menu": "Open menu",
-      "close": "Close menu"
+      "close": "Close menu",
+      "back": "Back"
     },
     "dashboard": {
       "title": "Dashboard",

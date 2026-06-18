@@ -41,6 +41,8 @@
   /* Modal/dialog entrance. */
   --animate-overlay-in: fade-in 0.12s ease-out both;
   --animate-dialog-in: dialog-in 0.16s ease-out both;
+  /* Screen-to-screen transition (in-app navigation). */
+  --animate-page-in: page-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
   /* Loading indicators. */
   --animate-progress: progress 1.1s ease-in-out infinite;
   --animate-shimmer: shimmer 1.6s infinite;
@@ -73,6 +75,17 @@
     to {
       opacity: 1;
       transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes page-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
     }
   }
 
