@@ -6,6 +6,7 @@ import { Plus, ChevronUp, ChevronDown, Trash2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
 import { useRouter } from "@/i18n/navigation";
+import { useConfirm } from "@/components/ui/confirm";
 import {
   createStage,
   updateStage,
@@ -31,6 +32,7 @@ function StageRow({
 }) {
   const t = useTranslations("crm.pipelines");
   const router = useRouter();
+  const confirm = useConfirm();
   const [name, setName] = useState(stage.name);
   const [prob, setProb] = useState(String(stage.probability));
   const [pending, start] = useTransition();
@@ -99,8 +101,8 @@ function StageRow({
         type="button"
         disabled={pending || stage.oppCount > 0}
         title={stage.oppCount > 0 ? t("stageInUse", { n: stage.oppCount }) : undefined}
-        onClick={() => {
-          if (!window.confirm(t("confirmDeleteStage"))) return;
+        onClick={async () => {
+          if (!(await confirm({ description: t("confirmDeleteStage"), confirmLabel: t("deleteStage"), variant: "danger" }))) return;
           act(() => deleteStage(stage.id));
         }}
         className="rounded-lg px-2 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-red-600 disabled:opacity-30"

@@ -5,6 +5,7 @@ import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { ThemeStyle } from "@/components/theme-style";
+import { ConfirmProvider } from "@/components/ui/confirm";
 import { siteConfig } from "@/config/site";
 import { env } from "@/lib/env";
 import { locales, routing, resolveLocale } from "@/i18n/routing";
@@ -78,7 +79,9 @@ export default async function LocaleLayout({
         <Script id="theme-init" strategy="beforeInteractive">
           {`(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':matchMedia('(prefers-color-scheme:dark)').matches;document.documentElement.classList.toggle('dark',d);}catch(e){}})();`}
         </Script>
-        <NextIntlClientProvider>{children}</NextIntlClientProvider>
+        <NextIntlClientProvider>
+          <ConfirmProvider>{children}</ConfirmProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

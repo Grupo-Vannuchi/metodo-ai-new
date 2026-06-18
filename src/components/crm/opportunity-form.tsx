@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, FieldError } from "@/components/ui/field";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/ui/confirm";
 import { updateOpportunity, deleteOpportunity } from "@/app/actions/opportunities";
 
 type Option = { id: string; name: string };
@@ -36,6 +37,7 @@ export function OpportunityForm({
   const t = useTranslations("crm.opportunity");
   const tv = useTranslations("validation");
   const router = useRouter();
+  const confirm = useConfirm();
   const [serverError, setServerError] = useState<string | null>(null);
   const [deleting, startDelete] = useTransition();
 
@@ -135,8 +137,8 @@ export function OpportunityForm({
         <button
           type="button"
           disabled={deleting}
-          onClick={() => {
-            if (!window.confirm(t("confirmDelete"))) return;
+          onClick={async () => {
+            if (!(await confirm({ description: t("confirmDelete"), confirmLabel: t("delete"), variant: "danger" }))) return;
             startDelete(async () => {
               await deleteOpportunity(id);
               router.push("/app/crm");

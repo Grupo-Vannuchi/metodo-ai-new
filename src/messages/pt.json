@@ -633,6 +633,10 @@
       "ENTERPRISE": "Empresa"
     }
   },
+  "dialog": {
+    "confirm": "Confirmar",
+    "cancel": "Cancelar"
+  },
   "profile": {
     "title": "Meu perfil",
     "subtitle": "Seus dados pessoais e de contato",

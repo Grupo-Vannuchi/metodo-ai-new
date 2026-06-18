@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
+import { useConfirm } from "@/components/ui/confirm";
 import { cn } from "@/lib/utils";
 import {
   createAccessTemplate,
@@ -91,6 +92,7 @@ function TemplateCard({
 }) {
   const t = useTranslations("access");
   const nav = useTranslations("app.nav");
+  const confirm = useConfirm();
   const [name, setName] = useState(tpl.name);
   const [selected, setSelected] = useState<Set<string>>(new Set(tpl.screens));
 
@@ -110,8 +112,10 @@ function TemplateCard({
         <button
           type="button"
           disabled={pending}
-          onClick={() => {
-            if (window.confirm(t("confirmDelete"))) run(() => deleteAccessTemplate(tpl.id));
+          onClick={async () => {
+            if (await confirm({ description: t("confirmDelete"), confirmLabel: t("delete"), variant: "danger" })) {
+              run(() => deleteAccessTemplate(tpl.id));
+            }
           }}
           aria-label={t("delete")}
           className="shrink-0 rounded-lg px-2 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-red-600 disabled:opacity-50"

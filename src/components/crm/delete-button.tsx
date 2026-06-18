@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
+import { useConfirm } from "@/components/ui/confirm";
 
 /**
  * Generic delete control. Receives a server action already bound to the target
@@ -18,6 +19,7 @@ export function DeleteButton({
 }) {
   const t = useTranslations("crm.common");
   const router = useRouter();
+  const confirm = useConfirm();
   const [pending, start] = useTransition();
 
   return (
@@ -25,8 +27,8 @@ export function DeleteButton({
       type="button"
       disabled={pending}
       aria-label={label ?? t("delete")}
-      onClick={() => {
-        if (!window.confirm(t("confirmDelete"))) return;
+      onClick={async () => {
+        if (!(await confirm({ description: t("confirmDelete"), confirmLabel: t("delete"), variant: "danger" }))) return;
         start(async () => {
           await action();
           router.refresh();

@@ -27,6 +27,7 @@ import {
   moveContactToFolder,
 } from "@/app/actions/contact-folders";
 import { deleteContact } from "@/app/actions/contacts";
+import { useConfirm } from "@/components/ui/confirm";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import type { ContactCard, ContactColumn } from "@/lib/queries/contact-folders";
 
@@ -137,6 +138,7 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
   const t = useTranslations("crm.contacts");
   const tc = useTranslations("crm.common");
   const router = useRouter();
+  const confirm = useConfirm();
   const [cols, setCols] = useState(columns);
   const [view, setView] = useState<"grid" | "list">("grid");
   const [dragId, setDragId] = useState<string | null>(null);
@@ -245,16 +247,16 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
     });
   }
 
-  function onDeleteFolder(id: string) {
-    if (!window.confirm(t("confirmDeleteFolder"))) return;
+  async function onDeleteFolder(id: string) {
+    if (!(await confirm({ description: t("confirmDeleteFolder"), confirmLabel: t("deleteFolder"), variant: "danger" }))) return;
     start(async () => {
       await deleteFolder(id);
       router.refresh();
     });
   }
 
-  function onDeleteContact(id: string) {
-    if (!window.confirm(tc("confirmDelete"))) return;
+  async function onDeleteContact(id: string) {
+    if (!(await confirm({ description: tc("confirmDelete"), confirmLabel: tc("delete"), variant: "danger" }))) return;
     setCols((prevCols) =>
       prevCols.map((c) => ({ ...c, contacts: c.contacts.filter((x) => x.id !== id) })),
     );

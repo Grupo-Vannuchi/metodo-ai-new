@@ -6,6 +6,7 @@ import { Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { useRouter } from "@/i18n/navigation";
+import { useConfirm } from "@/components/ui/confirm";
 import {
   renamePipeline,
   setDefaultPipeline,
@@ -23,6 +24,7 @@ export function PipelineSettings({
 }) {
   const t = useTranslations("crm.pipelines");
   const router = useRouter();
+  const confirm = useConfirm();
   const [value, setValue] = useState(name);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -74,8 +76,8 @@ export function PipelineSettings({
             type="button"
             variant="danger"
             disabled={pending}
-            onClick={() => {
-              if (!window.confirm(t("confirmDeletePipeline"))) return;
+            onClick={async () => {
+              if (!(await confirm({ description: t("confirmDeletePipeline"), confirmLabel: t("deletePipeline"), variant: "danger" }))) return;
               run(() => deletePipeline(id), () => router.push("/app/crm/pipelines"));
             }}
           >

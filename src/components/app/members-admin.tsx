@@ -5,6 +5,7 @@ import { Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/ui/confirm";
 import { Avatar } from "@/components/app/avatar";
 import { formatBrPhone } from "@/lib/phone";
 import { formatDocument } from "@/lib/document";
@@ -95,6 +96,7 @@ export function MembersAdmin({
 }) {
   const t = useTranslations("app.team");
   const router = useRouter();
+  const confirm = useConfirm();
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pending, start] = useTransition();
@@ -206,8 +208,14 @@ export function MembersAdmin({
                         <button
                           type="button"
                           disabled={pending}
-                          onClick={() => {
-                            if (window.confirm(t("confirmRemove", { name: m.name }))) {
+                          onClick={async () => {
+                            if (
+                              await confirm({
+                                description: t("confirmRemove", { name: m.name }),
+                                confirmLabel: t("remove"),
+                                variant: "danger",
+                              })
+                            ) {
                               run(() => removeMember(m.membershipId));
                             }
                           }}
