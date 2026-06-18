@@ -7,6 +7,7 @@ import { createSession, deleteSession } from "@/lib/session";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { slugify } from "@/lib/slug";
 import { createDefaultPipeline } from "@/lib/default-pipeline";
+import { coreProfileData } from "@/lib/profile";
 import { makeRateLimiter } from "@/lib/ratelimit";
 import { PLANS } from "@/config/plans";
 import { loginSchema, signupSchema } from "@/lib/validations/auth";
@@ -97,6 +98,9 @@ export async function signup(
     email: formData.get("email"),
     password: formData.get("password"),
     organizationName: formData.get("organizationName"),
+    phone: formData.get("phone"),
+    documentType: formData.get("documentType"),
+    document: formData.get("document"),
   });
   if (!parsed.success) return { error: "invalid" };
 
@@ -120,7 +124,12 @@ export async function signup(
         },
       });
       const user = await tx.user.create({
-        data: { name, email, passwordHash },
+        data: {
+          name,
+          email,
+          passwordHash,
+          profile: { create: coreProfileData(parsed.data) },
+        },
       });
       await tx.membership.create({
         data: { organizationId: org.id, userId: user.id, role: "OWNER" },

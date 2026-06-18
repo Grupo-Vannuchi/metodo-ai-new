@@ -64,8 +64,42 @@ model User {
   updatedAt    DateTime @updatedAt
 
   memberships Membership[]
+  profile     UserProfile?
 
   @@map("users")
+}
+
+/// Document kind for a user profile. Brazilian individuals use CPF; companies
+/// (or self-employed) use CNPJ.
+enum DocumentType {
+  CPF
+  CNPJ
+}
+
+/// Rich profile for a user account, created from the data filled when the
+/// account is created (signup or invite acceptance). Identity-level (tied to
+/// the User, not an org) — an admin reads a member's profile through their
+/// Membership (org-scoped). 1:1 with User.
+model UserProfile {
+  id            String        @id @default(cuid())
+  userId        String        @unique
+  phone         String?
+  documentType  DocumentType?
+  document      String? // digits only (normalized); validated as CPF/CNPJ
+  position      String? // cargo/função na organização
+  birthDate     DateTime?
+  avatarUrl     String?
+  addressZip    String?
+  addressStreet String?
+  addressNumber String?
+  addressCity   String?
+  addressState  String? // UF
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
 }
 
 /// Join between a user and an organization, carrying the role.

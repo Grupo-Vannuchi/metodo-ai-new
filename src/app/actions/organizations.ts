@@ -6,6 +6,7 @@ import { createSession, deleteSession } from "@/lib/session";
 import { getOrgContext, assertRole } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
 import { hashPassword } from "@/lib/password";
+import { coreProfileData } from "@/lib/profile";
 import {
   generateInvitationToken,
   hashInvitationToken,
@@ -207,10 +208,13 @@ export async function acceptInvitation(
     return { error: null, joinedExisting: true };
   }
 
-  // New account → require name + password, create user + membership, sign in.
+  // New account → require name + password + profile, create user + membership, sign in.
   const parsed = acceptInviteSchema.safeParse({
     name: formData.get("name"),
     password: formData.get("password"),
+    phone: formData.get("phone"),
+    documentType: formData.get("documentType"),
+    document: formData.get("document"),
   });
   if (!parsed.success) return { error: "invalid" };
 
@@ -223,6 +227,7 @@ export async function acceptInvitation(
           name: parsed.data.name,
           email: invitation.email,
           passwordHash,
+          profile: { create: coreProfileData(parsed.data) },
         },
       });
       await tx.membership.create({

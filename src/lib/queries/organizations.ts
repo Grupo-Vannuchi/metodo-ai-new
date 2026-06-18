@@ -44,6 +44,20 @@ export function countMembers(organizationId: string): Promise<number> {
   return prisma.membership.count({ where: { organizationId } });
 }
 
+export type MemberProfile = {
+  phone: string | null;
+  documentType: "CPF" | "CNPJ" | null;
+  document: string | null;
+  position: string | null;
+  birthDate: Date | null;
+  avatarUrl: string | null;
+  addressZip: string | null;
+  addressStreet: string | null;
+  addressNumber: string | null;
+  addressCity: string | null;
+  addressState: string | null;
+};
+
 export type OrgMember = {
   membershipId: string;
   userId: string;
@@ -53,6 +67,7 @@ export type OrgMember = {
   accessTemplateId: string | null;
   accessTemplateName: string | null;
   joinedAt: Date;
+  profile: MemberProfile | null;
 };
 
 /**
@@ -70,7 +85,28 @@ export async function listMembers(
       createdAt: true,
       accessTemplateId: true,
       accessTemplate: { select: { name: true } },
-      user: { select: { id: true, name: true, email: true } },
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          profile: {
+            select: {
+              phone: true,
+              documentType: true,
+              document: true,
+              position: true,
+              birthDate: true,
+              avatarUrl: true,
+              addressZip: true,
+              addressStreet: true,
+              addressNumber: true,
+              addressCity: true,
+              addressState: true,
+            },
+          },
+        },
+      },
     },
     orderBy: { createdAt: "asc" },
   });
@@ -84,5 +120,6 @@ export async function listMembers(
     accessTemplateId: m.accessTemplateId,
     accessTemplateName: m.accessTemplate?.name ?? null,
     joinedAt: m.createdAt,
+    profile: m.user.profile ?? null,
   }));
 }

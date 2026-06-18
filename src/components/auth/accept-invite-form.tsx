@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
+import { ProfileCoreFields } from "@/components/auth/profile-core-fields";
 import { Link } from "@/i18n/navigation";
 import { acceptInvitation, type AcceptState } from "@/app/actions/organizations";
 
@@ -48,6 +49,7 @@ export function AcceptInviteForm({
             <Label htmlFor="name">{t("name")}</Label>
             <Input id="name" name="name" type="text" autoComplete="name" required />
           </div>
+          <ProfileCoreFields />
           <div>
             <Label htmlFor="password">{t("password")}</Label>
             <Input

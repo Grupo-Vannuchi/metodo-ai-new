@@ -207,6 +207,7 @@
       "colRole": "Papel",
       "colTemplate": "Acesso (template)",
       "fullAccess": "Acesso total",
+      "viewProfile": "Ver perfil",
       "you": "você",
       "manageTemplates": "Templates de acesso",
       "remove": "Remover",
@@ -632,6 +633,35 @@
       "ENTERPRISE": "Empresa"
     }
   },
+  "profile": {
+    "title": "Meu perfil",
+    "subtitle": "Seus dados pessoais e de contato",
+    "notFound": "Perfil não encontrado.",
+    "name": "Nome completo",
+    "phone": "Telefone",
+    "documentType": "Tipo",
+    "cpf": "CPF",
+    "cnpj": "CNPJ",
+    "document": "Documento",
+    "position": "Cargo / função",
+    "birthDate": "Data de nascimento",
+    "avatarUrl": "Foto (URL)",
+    "avatarHint": "Cole o link de uma imagem. Upload de arquivo entra em breve.",
+    "address": "Endereço",
+    "addressZip": "CEP",
+    "addressStreet": "Logradouro",
+    "addressNumber": "Número",
+    "addressCity": "Cidade",
+    "addressState": "UF",
+    "save": "Salvar perfil",
+    "saving": "Salvando…",
+    "saved": "Perfil atualizado.",
+    "error": {
+      "unauthorized": "Sessão expirada.",
+      "invalid": "Verifique os campos destacados.",
+      "unknown": "Não foi possível salvar. Tente novamente."
+    }
+  },
   "settings": {
     "title": "Configurações",
     "subtitle": "Organização, plano e uso",
@@ -641,6 +671,7 @@
     "seePlans": "Ver planos",
     "usageTitle": "Uso e cotas",
     "usageHint": "Os disparos consideram o uso do mês atual, conforme a cota do seu plano.",
+    "myProfile": "Meu perfil",
     "manageTeam": "Gerenciar equipe",
     "auditLog": "Registro de auditoria",
     "leaveTeam": "Sair da equipe",

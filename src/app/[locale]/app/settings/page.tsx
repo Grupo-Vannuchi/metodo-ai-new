@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { Users, CreditCard, ScrollText } from "lucide-react";
+import { Users, CreditCard, ScrollText, UserRound } from "lucide-react";
 import { requireOrgContext, hasRole } from "@/lib/tenant";
 import { getUsageSummary, type UsageMetric } from "@/lib/queries/usage";
 import { type PlanKey } from "@/config/plans";
@@ -89,6 +89,10 @@ export default async function SettingsPage({
       </section>
 
       <section className="flex flex-wrap gap-3">
+        <Link href="/app/settings/profile" className={buttonVariants({ variant: "outline" })}>
+          <UserRound className="size-4" />
+          {t("myProfile")}
+        </Link>
         <Link href="/app/settings/team" className={buttonVariants({ variant: "outline" })}>
           <Users className="size-4" />
           {t("manageTeam")}

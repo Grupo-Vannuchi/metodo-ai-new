@@ -207,6 +207,7 @@
       "colRole": "Role",
       "colTemplate": "Access (template)",
       "fullAccess": "Full access",
+      "viewProfile": "View profile",
       "you": "you",
       "manageTemplates": "Access templates",
       "remove": "Remove",
@@ -632,6 +633,35 @@
       "ENTERPRISE": "Enterprise"
     }
   },
+  "profile": {
+    "title": "My profile",
+    "subtitle": "Your personal and contact details",
+    "notFound": "Profile not found.",
+    "name": "Full name",
+    "phone": "Phone",
+    "documentType": "Type",
+    "cpf": "CPF",
+    "cnpj": "CNPJ",
+    "document": "Document",
+    "position": "Role / position",
+    "birthDate": "Date of birth",
+    "avatarUrl": "Photo (URL)",
+    "avatarHint": "Paste an image link. File upload coming soon.",
+    "address": "Address",
+    "addressZip": "ZIP",
+    "addressStreet": "Street",
+    "addressNumber": "Number",
+    "addressCity": "City",
+    "addressState": "State",
+    "save": "Save profile",
+    "saving": "Saving…",
+    "saved": "Profile updated.",
+    "error": {
+      "unauthorized": "Session expired.",
+      "invalid": "Check the highlighted fields.",
+      "unknown": "Couldn't save. Please try again."
+    }
+  },
   "settings": {
     "title": "Settings",
     "subtitle": "Organization, plan and usage",
@@ -641,6 +671,7 @@
     "seePlans": "See plans",
     "usageTitle": "Usage & quotas",
     "usageHint": "Dispatch reflects the current month, within your plan quota.",
+    "myProfile": "My profile",
     "manageTeam": "Manage team",
     "auditLog": "Audit log",
     "leaveTeam": "Leave team",

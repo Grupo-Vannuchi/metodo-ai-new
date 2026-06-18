@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
+import { ProfileCoreFields } from "@/components/auth/profile-core-fields";
 import { signup, type AuthState } from "@/app/actions/auth";
 
 const initialState: AuthState = { error: null };
@@ -37,6 +38,8 @@ export function SignupForm() {
         <Label htmlFor="email">{t("email")}</Label>
         <Input id="email" name="email" type="email" autoComplete="email" required />
       </div>
+
+      <ProfileCoreFields />
 
       <div>
         <Label htmlFor="password">{t("password")}</Label>
