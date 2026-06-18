@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import {
   Pencil,
@@ -31,6 +31,7 @@ import { StartChatButton } from "@/components/inbox/start-chat-button";
 import type { ContactCard, ContactColumn } from "@/lib/queries/contact-folders";
 
 const GRID_CLS = "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(14rem,1fr))]";
+const ROOT_OPEN_KEY = "contacts:rootOpen"; // persists the "unfiled" collapse state
 
 type ContactItemProps = {
   contacts: ContactCard[];
@@ -166,6 +167,29 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
       else next.add(id);
       return next;
     });
+  }
+
+  // Restore the persisted "unfiled" collapse state on mount.
+  useEffect(() => {
+    const restore = async () => {
+      try {
+        const stored = window.localStorage.getItem(ROOT_OPEN_KEY);
+        if (stored !== null) setRootOpen(stored === "1");
+      } catch {
+        /* ignore */
+      }
+    };
+    void restore();
+  }, []);
+
+  function toggleRoot() {
+    const next = !rootOpen;
+    setRootOpen(next);
+    try {
+      window.localStorage.setItem(ROOT_OPEN_KEY, next ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
   }
 
   function onDrop(toColumnId: string | null) {
@@ -318,7 +342,7 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
       >
         <button
           type="button"
-          onClick={() => setRootOpen((v) => !v)}
+          onClick={toggleRoot}
           className={cn(
             "flex w-full min-w-0 items-center gap-2 px-1 text-left text-sm font-semibold",
             rootOpen ? "mb-2" : "",
