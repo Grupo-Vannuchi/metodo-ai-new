@@ -7,6 +7,8 @@ export type BoardCard = {
   value: number;
   companyName: string | null;
   contactName: string | null;
+  contactId: string | null;
+  contactPhone: string | null;
   order: number;
 };
 
@@ -63,7 +65,7 @@ export async function getBoard(
         order: true,
         stageId: true,
         company: { select: { name: true } },
-        contact: { select: { name: true } },
+        contact: { select: { id: true, name: true, phone: true } },
       },
     }),
   ]);
@@ -80,6 +82,8 @@ export async function getBoard(
         value: Number(o.value),
         companyName: o.company?.name ?? null,
         contactName: o.contact?.name ?? null,
+        contactId: o.contact?.id ?? null,
+        contactPhone: o.contact?.phone ?? null,
         order: o.order,
       })),
   }));

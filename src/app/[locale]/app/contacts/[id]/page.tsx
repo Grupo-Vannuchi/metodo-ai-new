@@ -1,11 +1,14 @@
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
+import { MessageCircle, ArrowRight } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getContact } from "@/lib/queries/contacts";
 import { companyOptions as companiesList } from "@/lib/queries/companies";
+import { getConversationByContact } from "@/lib/queries/inbox";
 import { ContactForm } from "@/components/crm/contact-form";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { contactToForm } from "@/lib/contact-form";
+import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
@@ -19,10 +22,12 @@ export default async function EditContactPage({
   const locale = resolveLocale(rawLocale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("crm.contacts");
+  const ti = await getTranslations("inbox");
 
-  const [contact, companies] = await Promise.all([
+  const [contact, companies, conversation] = await Promise.all([
     getContact(ctx.organizationId, id),
     companiesList(ctx.organizationId),
+    getConversationByContact(ctx.organizationId, id),
   ]);
   if (!contact) notFound();
 
@@ -34,6 +39,28 @@ export default async function EditContactPage({
           <StartChatButton phone={contact.phone} name={contact.name} contactId={contact.id} />
         ) : null}
       </div>
+
+      {conversation ? (
+        <Link
+          href={`/app/inbox?c=${conversation.id}`}
+          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-brand/40"
+        >
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
+            <MessageCircle className="size-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">{ti("conversationTitle")}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {conversation.lastMessagePreview ?? ti("noMessages")}
+            </p>
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1 text-sm text-brand">
+            {ti("openConversation")}
+            <ArrowRight className="size-4" />
+          </span>
+        </Link>
+      ) : null}
+
       <ContactForm
         mode="edit"
         contactId={contact.id}

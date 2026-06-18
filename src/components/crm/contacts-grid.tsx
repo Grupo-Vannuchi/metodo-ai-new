@@ -25,6 +25,7 @@ import {
   moveContactToFolder,
 } from "@/app/actions/contact-folders";
 import { deleteContact } from "@/app/actions/contacts";
+import { StartChatButton } from "@/components/inbox/start-chat-button";
 import type { ContactCard, ContactColumn } from "@/lib/queries/contact-folders";
 
 export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
@@ -149,6 +150,9 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
             ) : null}
           </div>
           <div className="flex shrink-0 items-center" onPointerDown={(e) => e.stopPropagation()}>
+            {card.phone ? (
+              <StartChatButton phone={card.phone} name={card.name} contactId={card.id} iconOnly />
+            ) : null}
             <Link
               href={`/app/contacts/${card.id}`}
               className="rounded-lg px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"

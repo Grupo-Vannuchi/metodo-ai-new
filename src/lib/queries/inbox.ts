@@ -67,6 +67,33 @@ export async function listMessages(organizationId: string, conversationId: strin
   });
 }
 
+/** Contact details for the inbox side panel. */
+export async function getContactPanel(organizationId: string, contactId: string) {
+  const db = tenantDb(organizationId);
+  return db.contact.findFirst({
+    where: { id: contactId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      tags: true,
+      company: { select: { name: true } },
+    },
+  });
+}
+
+/** The conversation linked to a CRM contact, if any (for the contact page). */
+export async function getConversationByContact(organizationId: string, contactId: string) {
+  const db = tenantDb(organizationId);
+  return db.conversation.findFirst({
+    where: { contactId },
+    orderBy: { lastMessageAt: "desc" },
+    select: { id: true, lastMessagePreview: true, lastMessageAt: true },
+  });
+}
+
 /** Total unread messages across the org's conversations (for the nav badge). */
 export async function countUnread(organizationId: string): Promise<number> {
   const db = tenantDb(organizationId);

@@ -6,6 +6,7 @@ import { Pencil } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { moveOpportunity } from "@/app/actions/opportunities";
+import { StartChatButton } from "@/components/inbox/start-chat-button";
 import type { BoardColumn } from "@/lib/queries/crm";
 
 const brl = new Intl.NumberFormat("pt-BR", {
@@ -102,14 +103,23 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-sm font-medium">{card.title}</p>
-                    <Link
-                      href={`/app/crm/${card.id}`}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
-                      aria-label={t("open")}
-                    >
-                      <Pencil className="size-3.5" />
-                    </Link>
+                    <div className="flex shrink-0 items-center" onPointerDown={(e) => e.stopPropagation()}>
+                      {card.contactPhone ? (
+                        <StartChatButton
+                          phone={card.contactPhone}
+                          name={card.contactName ?? undefined}
+                          contactId={card.contactId ?? undefined}
+                          iconOnly
+                        />
+                      ) : null}
+                      <Link
+                        href={`/app/crm/${card.id}`}
+                        className="text-muted-foreground transition-colors hover:text-foreground"
+                        aria-label={t("open")}
+                      >
+                        <Pencil className="size-3.5" />
+                      </Link>
+                    </div>
                   </div>
                   {card.companyName ? (
                     <p className="mt-0.5 text-xs text-muted-foreground">{card.companyName}</p>

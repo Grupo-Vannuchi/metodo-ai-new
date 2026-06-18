@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCheck, MessageCircle, Search, SendHorizontal, AlertCircle, User } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, MessageCircle, Search, SendHorizontal, AlertCircle, User, Info, Building2, Mail, Phone } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { formatBrPhone } from "@/lib/phone";
@@ -12,6 +12,16 @@ import { markConversationRead, sendMessage, assignConversation } from "@/app/act
 type Dateish = string | Date | null;
 
 type Member = { userId: string; name: string };
+
+type ContactInfo = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  role: string | null;
+  tags: string[];
+  company: { name: string } | null;
+};
 
 type Conversation = {
   id: string;
@@ -69,6 +79,8 @@ export function InboxClient({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [showContact, setShowContact] = useState(false);
+  const [contactInfo, setContactInfo] = useState<ContactInfo | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const loadConversations = useCallback(async () => {
@@ -111,7 +123,27 @@ export function InboxClient({
     setSelectedId(id);
     setDraft("");
     setSendError(null);
+    setShowContact(false);
+    setContactInfo(null);
   }
+
+  // Load the contact side panel when opened.
+  useEffect(() => {
+    const contactId = conversations.find((c) => c.id === selectedId)?.contactId;
+    if (!showContact || !contactId) return;
+    let active = true;
+    (async () => {
+      try {
+        const r = await fetch(`/api/inbox/contact?contactId=${contactId}`, { cache: "no-store" });
+        if (active && r.ok) setContactInfo(await r.json());
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [showContact, selectedId, conversations]);
 
   // Keep the thread scrolled to the latest message.
   useEffect(() => {
@@ -266,8 +298,60 @@ export function InboxClient({
                     <option key={m.userId} value={m.userId}>{m.name}</option>
                   ))}
                 </select>
+                {selected.contactId ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowContact((v) => !v)}
+                    title={t("contactInfo")}
+                    aria-label={t("contactInfo")}
+                    className={cn(
+                      "rounded-lg p-1 transition-colors hover:bg-muted hover:text-foreground",
+                      showContact ? "text-brand" : "",
+                    )}
+                  >
+                    <Info className="size-4" />
+                  </button>
+                ) : null}
               </div>
             </header>
+
+            {showContact && contactInfo ? (
+              <div className="flex flex-col gap-2 border-b border-border bg-muted/20 px-4 py-3 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{contactInfo.name ?? displayName(selected)}</span>
+                  <Link href={`/app/contacts/${contactInfo.id}`} className="text-xs text-brand hover:underline">
+                    {t("viewContact")}
+                  </Link>
+                </div>
+                {contactInfo.company?.name ? (
+                  <p className="flex items-center gap-2 text-muted-foreground">
+                    <Building2 className="size-4 shrink-0" />
+                    {contactInfo.company.name}
+                  </p>
+                ) : null}
+                {contactInfo.phone ? (
+                  <p className="flex items-center gap-2 text-muted-foreground">
+                    <Phone className="size-4 shrink-0" />
+                    {contactInfo.phone}
+                  </p>
+                ) : null}
+                {contactInfo.email ? (
+                  <p className="flex items-center gap-2 text-muted-foreground">
+                    <Mail className="size-4 shrink-0" />
+                    {contactInfo.email}
+                  </p>
+                ) : null}
+                {contactInfo.tags.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {contactInfo.tags.map((tag) => (
+                      <span key={tag} className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <div ref={scrollRef} className="flex flex-1 flex-col gap-2 overflow-y-auto bg-muted/20 p-4">
               {messages.length === 0 ? (
