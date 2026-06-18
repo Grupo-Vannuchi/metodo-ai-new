@@ -345,6 +345,8 @@
       "cancel": "Cancelar",
       "empty": "Nenhum contato ainda. Crie o primeiro.",
       "unfiled": "Sem pasta",
+      "viewGrid": "Grade",
+      "viewList": "Lista",
       "newFolder": "Nova pasta",
       "addFolder": "Criar",
       "folderName": "Nome da pasta",

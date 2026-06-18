@@ -345,6 +345,8 @@
       "cancel": "Cancel",
       "empty": "No contacts yet. Create the first one.",
       "unfiled": "Unfiled",
+      "viewGrid": "Grid",
+      "viewList": "List",
       "newFolder": "New folder",
       "addFolder": "Create",
       "folderName": "Folder name",
