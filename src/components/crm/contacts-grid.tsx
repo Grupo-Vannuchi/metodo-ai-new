@@ -141,6 +141,7 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set()); // folders are closed by default
+  const [rootOpen, setRootOpen] = useState(true); // "unfiled" starts open but can collapse
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -305,7 +306,7 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
         </div>
       </div>
 
-      {/* Root (unfiled) — always open, a drop target back to the top level. */}
+      {/* Root (unfiled) — collapsible like a folder; a drop target back to the top level. */}
       <section
         onDragOver={(e) => { e.preventDefault(); setOverCol(keyOf(null)); }}
         onDragLeave={() => setOverCol((c) => (c === keyOf(null) ? null : c))}
@@ -315,28 +316,42 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
           overCol === keyOf(null) ? "border-brand" : "border-border",
         )}
       >
-        <div className="mb-2 flex items-center gap-2 px-1 text-sm font-semibold">
-          <Inbox className="size-4 text-muted-foreground" />
+        <button
+          type="button"
+          onClick={() => setRootOpen((v) => !v)}
+          className={cn(
+            "flex w-full min-w-0 items-center gap-2 px-1 text-left text-sm font-semibold",
+            rootOpen ? "mb-2" : "",
+          )}
+        >
+          {rootOpen ? (
+            <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+          )}
+          <Inbox className="size-4 shrink-0 text-muted-foreground" />
           {t("unfiled")}
           <span className="rounded-full bg-card px-2 py-0.5 text-xs font-normal text-muted-foreground">
             {root.contacts.length}
           </span>
-        </div>
-        {root.contacts.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border px-3 py-5 text-center text-xs text-muted-foreground">
-            {t("dropHere")}
-          </p>
-        ) : (
-          <ContactList
-            contacts={root.contacts}
-            view={view}
-            onDragStart={setDragId}
-            onDragEnd={() => setDragId(null)}
-            onDelete={onDeleteContact}
-            editLabel={tc("edit")}
-            deleteLabel={tc("delete")}
-          />
-        )}
+        </button>
+        {rootOpen ? (
+          root.contacts.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border px-3 py-5 text-center text-xs text-muted-foreground">
+              {t("dropHere")}
+            </p>
+          ) : (
+            <ContactList
+              contacts={root.contacts}
+              view={view}
+              onDragStart={setDragId}
+              onDragEnd={() => setDragId(null)}
+              onDelete={onDeleteContact}
+              editLabel={tc("edit")}
+              deleteLabel={tc("delete")}
+            />
+          )
+        ) : null}
       </section>
 
       {/* Folders — closed by default, expand to reveal contacts. */}
