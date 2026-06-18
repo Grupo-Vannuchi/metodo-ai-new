@@ -246,8 +246,18 @@
     "empty": "Nenhuma conversa ainda. As mensagens recebidas no WhatsApp aparecem aqui.",
     "selectConversation": "Selecione uma conversa para ver as mensagens.",
     "noMessages": "Sem mensagens nesta conversa.",
-    "readOnly": "Visualização (o envio pela interface chega na próxima etapa).",
-    "back": "Voltar"
+    "back": "Voltar",
+    "search": "Buscar conversa…",
+    "noResults": "Nenhuma conversa encontrada.",
+    "composerPlaceholder": "Escreva uma mensagem…",
+    "send": "Enviar",
+    "sendError": {
+      "unauthorized": "Sessão expirada.",
+      "empty": "Escreva uma mensagem.",
+      "not_found": "Conversa não encontrada.",
+      "no_connection": "Conexão do WhatsApp indisponível.",
+      "send_failed": "Não foi possível enviar. Tente novamente."
+    }
   },
   "access": {
     "title": "Templates de acesso",

@@ -246,8 +246,18 @@
     "empty": "No conversations yet. Incoming WhatsApp messages show up here.",
     "selectConversation": "Select a conversation to see the messages.",
     "noMessages": "No messages in this conversation.",
-    "readOnly": "Read-only (sending from the interface arrives next).",
-    "back": "Back"
+    "back": "Back",
+    "search": "Search conversation…",
+    "noResults": "No conversations found.",
+    "composerPlaceholder": "Type a message…",
+    "send": "Send",
+    "sendError": {
+      "unauthorized": "Session expired.",
+      "empty": "Type a message.",
+      "not_found": "Conversation not found.",
+      "no_connection": "WhatsApp connection unavailable.",
+      "send_failed": "Couldn't send. Please try again."
+    }
   },
   "access": {
     "title": "Access templates",
