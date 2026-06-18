@@ -1,8 +1,7 @@
 import { getTranslations } from "next-intl/server";
-import { ArrowLeft } from "lucide-react";
 import { requireOrgContext, hasRole } from "@/lib/tenant";
 import { listAuditLogs } from "@/lib/queries/audit";
-import { Link, redirect } from "@/i18n/navigation";
+import { redirect } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
@@ -26,13 +25,6 @@ export default async function AuditPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Link
-          href="/app/settings"
-          className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          {t("back")}
-        </Link>
         <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
         <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
       </div>

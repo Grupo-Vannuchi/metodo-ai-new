@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { Plus, ArrowLeft, Pencil } from "lucide-react";
+import { Plus, Pencil } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { listTemplates } from "@/lib/queries/campaigns";
 import { deleteTemplate } from "@/app/actions/campaigns";
@@ -26,13 +26,6 @@ export default async function TemplatesPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <Link
-            href="/app/campaigns"
-            className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="size-4" />
-            {t("back")}
-          </Link>
           <h1 className="text-2xl font-bold tracking-tight">{t("templates")}</h1>
         </div>
         <Link href="/app/campaigns/templates/new" className={buttonVariants()}>

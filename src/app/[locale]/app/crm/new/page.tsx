@@ -1,5 +1,4 @@
 import { getTranslations } from "next-intl/server";
-import { ArrowLeft } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { stageOptions } from "@/lib/queries/crm";
 import { companyOptions } from "@/lib/queries/companies";
@@ -31,13 +30,6 @@ export default async function NewOpportunityPage({
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <div>
-        <Link
-          href="/app/crm"
-          className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          {t("back")}
-        </Link>
         <h1 className="text-2xl font-bold tracking-tight">{t("newOpportunity")}</h1>
       </div>
 

@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getCampaign } from "@/lib/queries/campaigns";
 import { StartButton } from "@/components/campaigns/start-button";
@@ -49,13 +49,6 @@ export default async function CampaignDetailPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between">
         <div>
-          <Link
-            href="/app/campaigns"
-            className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="size-4" />
-            {t("back")}
-          </Link>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight">{campaign.name}</h1>
             <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", campaignStatusStyles[campaign.status])}>

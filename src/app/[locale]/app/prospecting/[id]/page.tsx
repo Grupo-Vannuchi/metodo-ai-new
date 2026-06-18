@@ -1,11 +1,9 @@
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getExtractionJob } from "@/lib/queries/extractions";
 import { ImportLeads } from "@/components/prospecting/import-leads";
 import { ExtractionPoller } from "@/components/prospecting/extraction-poller";
-import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
 
@@ -43,13 +41,6 @@ export default async function ExtractionDetailPage({
     <div className="flex flex-col gap-6">
       <ExtractionPoller active={running} />
       <div>
-        <Link
-          href="/app/prospecting"
-          className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          {t("back")}
-        </Link>
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold tracking-tight">{queryLabel(job.query)}</h1>
           <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", statusStyles[job.status])}>

@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getConnection } from "@/lib/queries/connections";
 import { EvolutionConnect } from "@/components/integrations/evolution-connect";
@@ -34,13 +34,6 @@ export default async function ConnectionDetailPage({
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <div>
-        <Link
-          href="/app/connections"
-          className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          {t("back")}
-        </Link>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight">{conn.label}</h1>

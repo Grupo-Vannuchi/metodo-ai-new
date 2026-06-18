@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { ArrowLeft, Star, ChevronRight } from "lucide-react";
+import { Star, ChevronRight } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { listPipelines } from "@/lib/queries/pipelines";
 import { NewPipelineForm } from "@/components/crm/new-pipeline-form";
@@ -22,13 +22,6 @@ export default async function PipelinesPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Link
-          href="/app/crm"
-          className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          {t("backBoard")}
-        </Link>
         <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
         <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
       </div>
