@@ -12,7 +12,7 @@ const DEFAULT_IMAGES = [
   "/backgrounds/office-6.jpg",
 ];
 
-const INTERVAL_MS = 8000;
+const INTERVAL_MS = 6000;
 
 /**
  * Decorative full-bleed background slideshow: corporate stock photos
@@ -30,9 +30,11 @@ export function BackgroundImage({
 }) {
   const [index, setIndex] = useState(0);
 
+  // Always rotate so the slideshow visibly changes; the cross-fade itself is
+  // suppressed for prefers-reduced-motion users by the global CSS reset (the
+  // swap just becomes instant for them).
   useEffect(() => {
     if (images.length <= 1) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const id = setInterval(() => setIndex((i) => (i + 1) % images.length), INTERVAL_MS);
     return () => clearInterval(id);
   }, [images.length]);
@@ -46,7 +48,7 @@ export function BackgroundImage({
           src={src}
           alt=""
           className={cn(
-            "absolute inset-0 size-full scale-110 object-cover blur-xl transition-opacity duration-[2000ms] ease-in-out",
+            "absolute inset-0 size-full scale-110 object-cover transition-opacity duration-[2000ms] ease-in-out",
             i === index ? "opacity-100" : "opacity-0",
           )}
         />
