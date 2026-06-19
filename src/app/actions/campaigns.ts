@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { assertFeature, type PlanKey } from "@/config/plans";
@@ -10,7 +9,8 @@ import {
   resolveChannelCredentials,
   dispatchCampaignToCompletion,
 } from "@/lib/dispatch";
-import { CHANNEL_META, type ChannelKey } from "@/lib/integrations/channels/meta";
+import { CHANNEL_META, CHANNEL_KEYS, type ChannelKey } from "@/lib/integrations/channels/meta";
+import { audienceWhere, type AudienceFilter } from "@/lib/queries/campaigns";
 import { audit } from "@/lib/audit";
 import {
   templateSchema,
@@ -150,15 +150,20 @@ export async function createCampaign(
     });
     if (!template) return { ok: false, error: "invalid" };
 
-    // Audience: contacts that have the channel's destination field, optional tag.
-    const targetField = CHANNEL_META[channel].target;
-    const where: Prisma.ContactWhereInput =
-      targetField === "phone" ? { phone: { not: null } } : { email: { not: null } };
-    if (parsed.data.tag) where.tags = { has: parsed.data.tag };
-    // LGPD: never include opted-out contacts.
-    where.optedOut = false;
-
-    const contacts = await db.contact.findMany({ where, select: { id: true } });
+    // Audience: reachable, non-opted-out contacts narrowed by the segmentation
+    // filters (audienceWhere also enforces the LGPD opt-out exclusion).
+    const filter: AudienceFilter = {
+      tags: parsed.data.tags,
+      folderId: parsed.data.folderId || undefined,
+      source: parsed.data.source || undefined,
+      stageId: parsed.data.stageId || undefined,
+      oppStatus: parsed.data.oppStatus || undefined,
+      ownerId: parsed.data.ownerId || undefined,
+    };
+    const contacts = await db.contact.findMany({
+      where: audienceWhere(channel, filter),
+      select: { id: true },
+    });
 
     const campaign = await db.campaign.create({
       data: {
@@ -193,6 +198,22 @@ export async function createCampaign(
   } catch (error) {
     console.error("Failed to create campaign", error);
     return { ok: false, error: "unknown" };
+  }
+}
+
+/** Live recipient count for the audience filters — drives the create form. */
+export async function countAudience(
+  channel: string,
+  filter: AudienceFilter,
+): Promise<number> {
+  const ctx = await getOrgContext();
+  if (!ctx || !CHANNEL_KEYS.includes(channel as ChannelKey)) return 0;
+  try {
+    const db = tenantDb(ctx.organizationId);
+    return await db.contact.count({ where: audienceWhere(channel as ChannelKey, filter) });
+  } catch (error) {
+    console.error("Failed to count audience", error);
+    return 0;
   }
 }
 

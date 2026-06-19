@@ -1,5 +1,48 @@
 import "server-only";
+import { Prisma } from "@prisma/client";
 import { tenantDb } from "@/lib/tenant-db";
+import { CHANNEL_META, type ChannelKey } from "@/lib/integrations/channels/meta";
+
+export type AudienceFilter = {
+  tags?: string[];
+  folderId?: string;
+  source?: string;
+  stageId?: string;
+  oppStatus?: "OPEN" | "WON" | "LOST" | "CANCELED" | "";
+  ownerId?: string;
+};
+
+/** Build the contact `where` for a campaign's audience: reachable on the
+ * channel, never opted out (LGPD), narrowed by the optional segmentation
+ * filters (AND). Stage/status/owner match via a linked opportunity. */
+export function audienceWhere(channel: ChannelKey, f: AudienceFilter): Prisma.ContactWhereInput {
+  const where: Prisma.ContactWhereInput =
+    CHANNEL_META[channel].target === "phone" ? { phone: { not: null } } : { email: { not: null } };
+  where.optedOut = false;
+  if (f.tags && f.tags.length > 0) where.tags = { hasSome: f.tags };
+  if (f.folderId) where.folderId = f.folderId;
+  if (f.source) where.source = f.source;
+  const opp: Prisma.OpportunityWhereInput = {};
+  if (f.stageId) opp.stageId = f.stageId;
+  if (f.oppStatus) opp.status = f.oppStatus;
+  if (f.ownerId) opp.ownerId = f.ownerId;
+  if (Object.keys(opp).length > 0) where.opportunities = { some: opp };
+  return where;
+}
+
+/** Distinct tags and sources across the org's contacts, for the audience
+ * filters. */
+export async function audienceFacets(organizationId: string) {
+  const db = tenantDb(organizationId);
+  const rows = await db.contact.findMany({ select: { tags: true, source: true } });
+  const tags = new Set<string>();
+  const sources = new Set<string>();
+  for (const r of rows) {
+    for (const tag of r.tags) tags.add(tag);
+    if (r.source) sources.add(r.source);
+  }
+  return { tags: [...tags].sort(), sources: [...sources].sort() };
+}
 
 /** Messages actually sent (SENT/DELIVERED/READ) since `since` — for the monthly
  * dispatch quota and the usage panel. */

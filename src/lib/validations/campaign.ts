@@ -14,12 +14,19 @@ export const templateSchema = z.object({
 
 export type TemplateInput = z.infer<typeof templateSchema>;
 
+const optId = z.string().trim().optional().or(z.literal(""));
+
 export const campaignSchema = z.object({
   name: z.string().trim().min(1, "Informe um nome.").max(120),
   channel,
   templateId: z.string().trim().min(1, "Selecione um template."),
-  /** Optional tag filter for the target audience. */
-  tag: z.string().trim().max(60).optional().or(z.literal("")),
+  /** Audience segmentation — all optional, combined with AND. */
+  tags: z.array(z.string().trim().min(1)).max(20).optional(),
+  folderId: optId,
+  source: z.string().trim().max(60).optional().or(z.literal("")),
+  stageId: optId,
+  oppStatus: z.enum(["OPEN", "WON", "LOST", "CANCELED"]).optional().or(z.literal("")),
+  ownerId: optId,
 });
 
 export type CampaignInput = z.infer<typeof campaignSchema>;

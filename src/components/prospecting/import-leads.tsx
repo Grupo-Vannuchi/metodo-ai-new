@@ -5,7 +5,7 @@ import { Check, ExternalLink, Instagram, Facebook, Linkedin } from "lucide-react
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "@/i18n/navigation";
-import { importLeads } from "@/app/actions/extractions";
+import { importLeads, sendLeadsToFunnel } from "@/app/actions/extractions";
 
 export type LeadRow = {
   id: string;
@@ -20,10 +20,19 @@ export type LeadRow = {
   importedAt: Date | null;
 };
 
-export function ImportLeads({ jobId, leads }: { jobId: string; leads: LeadRow[] }) {
+export function ImportLeads({
+  jobId,
+  leads,
+  stages,
+}: {
+  jobId: string;
+  leads: LeadRow[];
+  stages: { id: string; name: string }[];
+}) {
   const t = useTranslations("prospecting");
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [stageId, setStageId] = useState(stages[0]?.id ?? "");
   const [pending, start] = useTransition();
 
   const importable = leads.filter((l) => !l.importedAt);
@@ -52,16 +61,45 @@ export function ImportLeads({ jobId, leads }: { jobId: string; leads: LeadRow[] 
     });
   }
 
+  function onFunnel() {
+    if (selected.size === 0 || !stageId) return;
+    const ids = [...selected];
+    start(async () => {
+      await sendLeadsToFunnel(jobId, ids, stageId);
+      setSelected(new Set());
+      router.refresh();
+    });
+  }
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <input type="checkbox" className="size-4 accent-brand" checked={allSelected} onChange={toggleAll} disabled={importable.length === 0} />
           {t("selectAll")}
         </label>
-        <Button type="button" size="sm" onClick={onImport} disabled={pending || selected.size === 0}>
-          {pending ? t("importing") : t("importSelected", { count: selected.size })}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={onImport} disabled={pending || selected.size === 0}>
+            {pending ? t("importing") : t("importSelected", { count: selected.size })}
+          </Button>
+          {stages.length > 0 ? (
+            <div className="flex items-center gap-2">
+              <select
+                value={stageId}
+                onChange={(e) => setStageId(e.target.value)}
+                aria-label={t("funnelStage")}
+                className="h-9 max-w-40 rounded-lg border border-border bg-card px-2.5 text-sm focus-visible:border-brand focus-visible:outline-none"
+              >
+                {stages.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <Button type="button" size="sm" onClick={onFunnel} disabled={pending || selected.size === 0}>
+                {pending ? t("sending") : t("sendToFunnel", { count: selected.size })}
+              </Button>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-border bg-card">

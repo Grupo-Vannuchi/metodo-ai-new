@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { requireOrgContext } from "@/lib/tenant";
 import { getExtractionJob } from "@/lib/queries/extractions";
+import { stageOptions } from "@/lib/queries/crm";
 import { ImportLeads } from "@/components/prospecting/import-leads";
 import { ExtractionPoller } from "@/components/prospecting/extraction-poller";
 import { resolveLocale } from "@/i18n/routing";
@@ -32,7 +33,10 @@ export default async function ExtractionDetailPage({
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("prospecting");
 
-  const data = await getExtractionJob(ctx.organizationId, id);
+  const [data, { stages }] = await Promise.all([
+    getExtractionJob(ctx.organizationId, id),
+    stageOptions(ctx.organizationId),
+  ]);
   if (!data) notFound();
   const { job, leads } = data;
   const running = job.status === "QUEUED" || job.status === "RUNNING";
@@ -61,7 +65,7 @@ export default async function ExtractionDetailPage({
           {running ? t("running") : t("noLeads")}
         </p>
       ) : (
-        <ImportLeads jobId={job.id} leads={leads} />
+        <ImportLeads jobId={job.id} leads={leads} stages={stages} />
       )}
     </div>
   );
