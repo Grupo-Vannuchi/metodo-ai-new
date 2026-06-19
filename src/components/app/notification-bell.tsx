@@ -19,7 +19,15 @@ const POLL_MS = 30000;
 
 /** Notification bell with derived alerts (polled). Each row links to the
  * relevant screen. A lightweight "command center" — no persisted table yet. */
-export function NotificationBell({ className }: { className?: string }) {
+export function NotificationBell({
+  className,
+  align = "right",
+}: {
+  className?: string;
+  /** Which edge the dropdown anchors to. "left" opens toward the right (use in
+   * the narrow sidebar); "right" opens toward the left (use in the mobile bar). */
+  align?: "left" | "right";
+}) {
   const t = useTranslations("notifications");
   const [a, setA] = useState<Alerts | null>(null);
   const [open, setOpen] = useState(false);
@@ -74,7 +82,12 @@ export function NotificationBell({ className }: { className?: string }) {
       {open ? (
         <>
           <button type="button" aria-hidden tabIndex={-1} onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
-          <div className="absolute right-0 z-50 mt-2 w-72 overflow-hidden rounded-xl border border-border bg-card shadow-xl motion-safe:animate-dialog-in">
+          <div
+            className={cn(
+              "absolute z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border bg-card shadow-xl motion-safe:animate-dialog-in",
+              align === "left" ? "left-0" : "right-0",
+            )}
+          >
             <div className="border-b border-border px-4 py-2.5 text-sm font-semibold">{t("title")}</div>
             {rows.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-muted-foreground">{t("empty")}</p>

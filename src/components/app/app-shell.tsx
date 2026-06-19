@@ -34,7 +34,7 @@ export async function AppShell({
       <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card p-4 md:flex">
         <div className="flex items-center justify-between gap-2 px-1 py-2">
           <Logo className="text-xl" />
-          <NotificationBell />
+          <NotificationBell align="left" />
         </div>
 
         <div className="mt-4 rounded-lg border border-border bg-muted/40 px-3 py-2">
