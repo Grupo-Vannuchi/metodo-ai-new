@@ -764,8 +764,15 @@
       "contact": "Contact",
       "company": "Company",
       "opportunity": "Opportunity",
-      "notes": "Notes"
+      "notes": "Notes",
+      "installments": "Installments"
     },
+    "installmentsHint": "Split the total into N monthly installments (one per month).",
+    "clientFinanceTitle": "Client finance",
+    "linkedEntries": "Sale entries",
+    "allClients": "All clients",
+    "companiesGroup": "Companies",
+    "contactsGroup": "Contacts",
     "kpi": {
       "receivable": "Receivable",
       "payable": "Payable",

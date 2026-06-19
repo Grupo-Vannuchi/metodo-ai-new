@@ -57,6 +57,7 @@ function parse(formData: FormData) {
     companyId: formData.get("companyId"),
     opportunityId: formData.get("opportunityId"),
     notes: formData.get("notes"),
+    installments: formData.get("installments"),
   });
 }
 
@@ -68,9 +69,49 @@ export async function createEntry(formData: FormData): Promise<FinanceResult> {
   const parsed = parse(formData);
   if (!parsed.success) return { ok: false, error: "invalid" };
 
+  const n = parsed.data.installments ?? 1;
+
   try {
+    const base = entryData(parsed.data);
+
+    // Installments: split the total into N monthly pending entries.
+    if (n > 1) {
+      const cents = Math.round(parsed.data.amount * 100);
+      const per = Math.floor(cents / n);
+      const remainder = cents - per * n;
+      const groupId = crypto.randomUUID();
+      const due = new Date(parsed.data.dueDate);
+      const rows = Array.from({ length: n }, (_, i) => ({
+        organizationId: ctx.organizationId,
+        createdById: ctx.userId,
+        type: base.type,
+        description: `${base.description} (${i + 1}/${n})`,
+        amount: (per + (i === n - 1 ? remainder : 0)) / 100,
+        status: "PENDING" as const,
+        dueDate: new Date(due.getFullYear(), due.getMonth() + i, due.getDate()),
+        settledAt: null,
+        method: base.method,
+        categoryId: base.categoryId,
+        contactId: base.contactId,
+        companyId: base.companyId,
+        opportunityId: base.opportunityId,
+        notes: base.notes,
+        installmentGroupId: groupId,
+        installmentNo: i + 1,
+        installmentTotal: n,
+      }));
+      await tenantDb(ctx.organizationId).financeEntry.createMany({ data: rows });
+      await audit(ctx, {
+        action: "finance.entry.created",
+        entity: "FinanceEntry",
+        meta: { type: parsed.data.type, amount: parsed.data.amount, installments: n },
+      });
+      revalidatePath("/app/finance");
+      return { ok: true };
+    }
+
     const e = await tenantDb(ctx.organizationId).financeEntry.create({
-      data: { organizationId: ctx.organizationId, createdById: ctx.userId, ...entryData(parsed.data) },
+      data: { organizationId: ctx.organizationId, createdById: ctx.userId, ...base },
       select: { id: true },
     });
     await audit(ctx, {

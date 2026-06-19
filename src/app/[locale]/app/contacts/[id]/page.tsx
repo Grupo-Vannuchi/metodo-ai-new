@@ -6,8 +6,11 @@ import { getContact } from "@/lib/queries/contacts";
 import { getConversationByContact } from "@/lib/queries/inbox";
 import { listTasks } from "@/lib/queries/tasks";
 import { listMembers } from "@/lib/queries/organizations";
+import { getEntityFinance } from "@/lib/queries/finance";
+import { hasFeature, type PlanKey } from "@/config/plans";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { TasksManager } from "@/components/tasks/tasks-manager";
+import { EntityFinanceCard } from "@/components/finance/entity-finance-card";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -25,11 +28,13 @@ export default async function ContactViewPage({
   const t = await getTranslations("crm.contacts");
   const ti = await getTranslations("inbox");
 
-  const [contact, conversation, tasks, members] = await Promise.all([
+  const canFinance = hasFeature(ctx.organization.plan as PlanKey, "finance");
+  const [contact, conversation, tasks, members, finance] = await Promise.all([
     getContact(ctx.organizationId, id),
     getConversationByContact(ctx.organizationId, id),
     listTasks(ctx.organizationId, { contactId: id }),
     listMembers(ctx.organizationId),
+    canFinance ? getEntityFinance(ctx.organizationId, { contactId: id }) : Promise.resolve(null),
   ]);
   if (!contact) notFound();
 
@@ -95,6 +100,8 @@ export default async function ContactViewPage({
           </div>
         ))}
       </dl>
+
+      {finance ? <EntityFinanceCard data={finance} /> : null}
 
       <section className="rounded-xl border border-border bg-card p-5">
         <TasksManager

@@ -157,6 +157,14 @@ export function EntryForm({
         )}
       </div>
 
+      {mode === "create" && status === "PENDING" ? (
+        <div>
+          <Label htmlFor="installments">{t("field.installments")}</Label>
+          <Input id="installments" name="installments" type="number" min="1" max="120" defaultValue="1" className="sm:max-w-40" />
+          <p className="mt-1 text-xs text-muted-foreground">{t("installmentsHint")}</p>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <div className="flex items-center justify-between">

@@ -5,6 +5,7 @@ import { requireOrgContext } from "@/lib/tenant";
 import { getOpportunity } from "@/lib/queries/crm";
 import { listMembers } from "@/lib/queries/organizations";
 import { listTasks } from "@/lib/queries/tasks";
+import { entriesForOpportunity } from "@/lib/queries/finance";
 import { hasFeature, type PlanKey } from "@/config/plans";
 import { TasksManager } from "@/components/tasks/tasks-manager";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
@@ -32,16 +33,18 @@ export default async function OpportunityViewPage({
   const locale = resolveLocale(rawLocale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("crm.opportunity");
+  const tf = await getTranslations("finance");
+  const canFinance = hasFeature(ctx.organization.plan as PlanKey, "finance");
 
-  const [opp, members, tasks] = await Promise.all([
+  const [opp, members, tasks, entries] = await Promise.all([
     getOpportunity(ctx.organizationId, id),
     listMembers(ctx.organizationId),
     listTasks(ctx.organizationId, { opportunityId: id }),
+    canFinance ? entriesForOpportunity(ctx.organizationId, id) : Promise.resolve([]),
   ]);
   if (!opp) notFound();
 
   const fmtDate = (d: Date | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
-  const canFinance = hasFeature(ctx.organization.plan as PlanKey, "finance");
 
   const fields: { label: string; value: string }[] = [
     { label: t("value"), value: formatBRL(opp.value) },
@@ -102,6 +105,47 @@ export default async function OpportunityViewPage({
             {t("generateEntry")}
           </Link>
         </div>
+      ) : null}
+
+      {canFinance && entries.length > 0 ? (
+        <section className="rounded-xl border border-border bg-card p-5">
+          <h2 className="mb-3 text-sm font-semibold">{tf("linkedEntries")}</h2>
+          <ul className="divide-y divide-border">
+            {entries.map((e) => {
+              const overdue = e.overdue;
+              return (
+                <li key={e.id}>
+                  <Link
+                    href={`/app/finance/entries/${e.id}`}
+                    className="-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted"
+                  >
+                    <span className="min-w-0 truncate">
+                      {e.description}
+                      <span className="ml-2 text-xs text-muted-foreground">{fmtDate(e.dueDate)}</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className={cn("tabular-nums", e.type === "INCOME" ? "text-green-600" : "text-red-600")}>
+                        {formatBRL(e.amount)}
+                      </span>
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-xs",
+                          e.status === "SETTLED"
+                            ? "bg-green-500/10 text-green-600"
+                            : overdue
+                              ? "bg-red-500/10 text-red-600"
+                              : "bg-amber-500/10 text-amber-600",
+                        )}
+                      >
+                        {tf(`status.${e.status}.${e.type}`)}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       ) : null}
 
       <dl className="grid gap-x-6 gap-y-4 rounded-xl border border-border bg-card p-5 sm:grid-cols-2">

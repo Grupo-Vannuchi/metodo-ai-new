@@ -764,8 +764,15 @@
       "contact": "Contato",
       "company": "Empresa",
       "opportunity": "Oportunidade",
-      "notes": "Observações"
+      "notes": "Observações",
+      "installments": "Parcelas"
     },
+    "installmentsHint": "Divide o valor total em N parcelas mensais (uma por mês).",
+    "clientFinanceTitle": "Financeiro do cliente",
+    "linkedEntries": "Lançamentos da venda",
+    "allClients": "Todos os clientes",
+    "companiesGroup": "Empresas",
+    "contactsGroup": "Contatos",
     "kpi": {
       "receivable": "A receber",
       "payable": "A pagar",

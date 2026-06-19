@@ -21,6 +21,8 @@ export const entrySchema = z.object({
   companyId: optionalId,
   opportunityId: optionalId,
   notes: z.string().trim().max(2000).optional().or(z.literal("")),
+  /** Number of installments to generate (1 = single entry). */
+  installments: z.coerce.number().int().min(1).max(120).optional(),
 });
 
 export const categorySchema = z.object({

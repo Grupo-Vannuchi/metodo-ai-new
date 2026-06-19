@@ -13,6 +13,14 @@ function monthRange(date = new Date()) {
   return { start, end };
 }
 
+/** Optional CRM-client filter for the reports (by contact or company). */
+export type FinanceFilter = { contactId?: string; companyId?: string };
+function clientWhere(f: FinanceFilter): Prisma.FinanceEntryWhereInput {
+  if (f.contactId) return { contactId: f.contactId };
+  if (f.companyId) return { companyId: f.companyId };
+  return {};
+}
+
 // ── Overview KPIs ──────────────────────────────────────────────────────────
 
 export type FinanceSummary = {
@@ -187,8 +195,13 @@ export type CashflowMonth = {
   pendingExpense: number; // a pagar com vencimento no mês
 };
 
-export async function getCashflow(organizationId: string, months = 6): Promise<CashflowMonth[]> {
+export async function getCashflow(
+  organizationId: string,
+  months = 6,
+  filter: FinanceFilter = {},
+): Promise<CashflowMonth[]> {
   const db = tenantDb(organizationId);
+  const f = clientWhere(filter);
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -197,15 +210,15 @@ export async function getCashflow(organizationId: string, months = 6): Promise<C
     // realized balance before the window → opening cumulative
     db.financeEntry.groupBy({
       by: ["type"],
-      where: { status: "SETTLED", settledAt: { lt: start } },
+      where: { status: "SETTLED", settledAt: { lt: start }, ...f },
       _sum: { amount: true },
     }),
     db.financeEntry.findMany({
-      where: { status: "SETTLED", settledAt: { gte: start, lt: end } },
+      where: { status: "SETTLED", settledAt: { gte: start, lt: end }, ...f },
       select: { type: true, amount: true, settledAt: true },
     }),
     db.financeEntry.findMany({
-      where: { status: "PENDING", dueDate: { gte: start, lt: end } },
+      where: { status: "PENDING", dueDate: { gte: start, lt: end }, ...f },
       select: { type: true, amount: true, dueDate: true },
     }),
   ]);
@@ -261,11 +274,16 @@ export type Dre = {
   result: number;
 };
 
-export async function getDre(organizationId: string, from: Date, to: Date): Promise<Dre> {
+export async function getDre(
+  organizationId: string,
+  from: Date,
+  to: Date,
+  filter: FinanceFilter = {},
+): Promise<Dre> {
   const db = tenantDb(organizationId);
   const grouped = await db.financeEntry.groupBy({
     by: ["type", "categoryId"],
-    where: { dueDate: { gte: from, lt: to } },
+    where: { dueDate: { gte: from, lt: to }, ...clientWhere(filter) },
     _sum: { amount: true },
   });
 
@@ -287,4 +305,64 @@ export async function getDre(organizationId: string, from: Date, to: Date): Prom
   const totalIncome = income.reduce((s, l) => s + l.total, 0);
   const totalExpense = expense.reduce((s, l) => s + l.total, 0);
   return { income, expense, totalIncome, totalExpense, result: totalIncome - totalExpense };
+}
+
+// ── Per-client finance (contact/company view) ────────────────────────────────
+
+export type EntityFinance = {
+  received: number; // receita realizada
+  receivable: number; // a receber
+  payable: number; // a pagar
+  recent: { id: string; description: string; amount: number; type: EntryType; status: EntryStatus; dueDate: Date }[];
+};
+
+export async function getEntityFinance(
+  organizationId: string,
+  link: FinanceFilter,
+): Promise<EntityFinance> {
+  const where = clientWhere(link);
+  if (!link.contactId && !link.companyId) return { received: 0, receivable: 0, payable: 0, recent: [] };
+  const db = tenantDb(organizationId);
+  const [received, receivable, payable, recent] = await Promise.all([
+    db.financeEntry.aggregate({ _sum: { amount: true }, where: { ...where, type: "INCOME", status: "SETTLED" } }),
+    db.financeEntry.aggregate({ _sum: { amount: true }, where: { ...where, type: "INCOME", status: "PENDING" } }),
+    db.financeEntry.aggregate({ _sum: { amount: true }, where: { ...where, type: "EXPENSE", status: "PENDING" } }),
+    db.financeEntry.findMany({
+      where,
+      orderBy: { dueDate: "desc" },
+      take: 5,
+      select: { id: true, description: true, amount: true, type: true, status: true, dueDate: true },
+    }),
+  ]);
+  return {
+    received: dec(received._sum.amount),
+    receivable: dec(receivable._sum.amount),
+    payable: dec(payable._sum.amount),
+    recent: recent.map((e) => ({ ...e, amount: Number(e.amount) })),
+  };
+}
+
+/** Finance entries linked to an opportunity (for the deal view). */
+export async function entriesForOpportunity(organizationId: string, opportunityId: string) {
+  const db = tenantDb(organizationId);
+  const entries = await db.financeEntry.findMany({
+    where: { opportunityId },
+    orderBy: [{ dueDate: "asc" }],
+    select: {
+      id: true,
+      description: true,
+      amount: true,
+      type: true,
+      status: true,
+      dueDate: true,
+      installmentNo: true,
+      installmentTotal: true,
+    },
+  });
+  const now = Date.now();
+  return entries.map((e) => ({
+    ...e,
+    amount: Number(e.amount),
+    overdue: e.status === "PENDING" && e.dueDate.getTime() < now,
+  }));
 }

@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getCompany } from "@/lib/queries/companies";
+import { getEntityFinance } from "@/lib/queries/finance";
+import { hasFeature, type PlanKey } from "@/config/plans";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
+import { EntityFinanceCard } from "@/components/finance/entity-finance-card";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -22,7 +25,11 @@ export default async function CompanyViewPage({
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("crm.companies");
 
-  const company = await getCompany(ctx.organizationId, id);
+  const canFinance = hasFeature(ctx.organization.plan as PlanKey, "finance");
+  const [company, finance] = await Promise.all([
+    getCompany(ctx.organizationId, id),
+    canFinance ? getEntityFinance(ctx.organizationId, { companyId: id }) : Promise.resolve(null),
+  ]);
   if (!company) notFound();
 
   const fmtDate = (d: Date | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
@@ -86,6 +93,8 @@ export default async function CompanyViewPage({
           </div>
         ) : null}
       </dl>
+
+      {finance ? <EntityFinanceCard data={finance} /> : null}
     </div>
   );
 }

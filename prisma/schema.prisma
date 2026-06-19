@@ -742,6 +742,11 @@ model FinanceEntry {
   contactId      String?
   companyId      String?
   opportunityId  String?
+  /// Installments: entries of the same sale share a group id (NNNN.../uuid),
+  /// with their position (installmentNo) out of installmentTotal.
+  installmentGroupId String?
+  installmentNo      Int?
+  installmentTotal   Int?
   createdById    String?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
@@ -751,6 +756,8 @@ model FinanceEntry {
   @@index([organizationId, dueDate])
   @@index([organizationId, type, status])
   @@index([organizationId, settledAt])
+  @@index([organizationId, opportunityId])
+  @@index([organizationId, contactId])
   @@map("finance_entries")
 }
 
