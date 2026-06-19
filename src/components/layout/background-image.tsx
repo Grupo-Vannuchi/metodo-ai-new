@@ -48,7 +48,7 @@ export function BackgroundImage({
           src={src}
           alt=""
           className={cn(
-            "absolute inset-0 size-full scale-110 object-cover transition-opacity duration-[2000ms] ease-in-out",
+            "bg-crossfade absolute inset-0 size-full scale-110 object-cover",
             i === index ? "opacity-100" : "opacity-0",
           )}
         />
