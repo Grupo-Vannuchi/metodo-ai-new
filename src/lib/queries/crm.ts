@@ -44,6 +44,7 @@ async function defaultPipeline(organizationId: string) {
 export async function getBoard(
   organizationId: string,
   pipelineId?: string,
+  ownerId?: string,
 ): Promise<Board | null> {
   const db = tenantDb(organizationId);
   const pipeline = pipelineId
@@ -58,7 +59,7 @@ export async function getBoard(
       select: { id: true, name: true, probability: true },
     }),
     db.opportunity.findMany({
-      where: { pipelineId: pipeline.id, status: "OPEN" },
+      where: { pipelineId: pipeline.id, status: "OPEN", ...(ownerId ? { ownerId } : {}) },
       orderBy: { order: "asc" },
       select: {
         id: true,
@@ -137,6 +138,24 @@ export async function getOpportunity(organizationId: string, id: string) {
     productServiceName: opp.productService?.name ?? null,
     ownerName: owner?.name ?? null,
   };
+}
+
+/** Open opportunities owned by a user (for the "My items" view). */
+export async function listMyOpportunities(organizationId: string, userId: string) {
+  const db = tenantDb(organizationId);
+  const opps = await db.opportunity.findMany({
+    where: { status: "OPEN", ownerId: userId },
+    orderBy: [{ updatedAt: "desc" }],
+    take: 100,
+    select: { id: true, code: true, title: true, value: true, stage: { select: { name: true } } },
+  });
+  return opps.map((o) => ({
+    id: o.id,
+    code: o.code,
+    title: o.title,
+    value: Number(o.value),
+    stageName: o.stage?.name ?? null,
+  }));
 }
 
 /** Open opportunities (id + label) for linking tasks/finance. */

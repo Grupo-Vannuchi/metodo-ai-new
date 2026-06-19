@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
+  Star,
   KanbanSquare,
   CheckSquare,
   Radar,
@@ -20,6 +21,7 @@ import { cn } from "@/lib/utils";
 
 type NavKey =
   | "dashboard"
+  | "my"
   | "crm"
   | "tasks"
   | "prospecting"
@@ -34,6 +36,7 @@ type Item = { href: string; key: NavKey; icon: typeof LayoutDashboard };
 
 const items: Item[] = [
   { href: "/app", key: "dashboard", icon: LayoutDashboard },
+  { href: "/app/my", key: "my", icon: Star },
   { href: "/app/crm", key: "crm", icon: KanbanSquare },
   { href: "/app/tasks", key: "tasks", icon: CheckSquare },
   { href: "/app/prospecting", key: "prospecting", icon: Radar },
@@ -47,7 +50,7 @@ const items: Item[] = [
 ];
 
 /** Screens that are never gated by access templates. */
-const ALWAYS_SHOWN: NavKey[] = ["dashboard", "settings"];
+const ALWAYS_SHOWN: NavKey[] = ["dashboard", "my", "settings"];
 
 export function AppNav({ allowedScreens }: { allowedScreens: string[] }) {
   const t = useTranslations("app.nav");

@@ -164,6 +164,7 @@
   "app": {
     "nav": {
       "dashboard": "Painel",
+      "my": "Meus itens",
       "crm": "Funil",
       "tasks": "Tarefas",
       "prospecting": "Prospecção",
@@ -392,6 +393,8 @@
       "title": "Funil de Vendas",
       "noPipeline": "Nenhum funil configurado.",
       "newOpportunity": "Nova oportunidade",
+      "allDeals": "Todas",
+      "myDeals": "Minhas",
       "oppTitle": "Título",
       "value": "Valor",
       "stage": "Estágio",
@@ -923,5 +926,25 @@
     "done": "Pronto! Você não receberá mais mensagens.",
     "invalidTitle": "Link inválido",
     "invalidBody": "Este link de descadastro é inválido ou expirou."
+  },
+  "search": {
+    "placeholder": "Buscar…",
+    "hint": "Busque contatos, empresas, oportunidades, conversas…",
+    "searching": "Buscando…",
+    "noResults": "Nenhum resultado.",
+    "type": {
+      "contact": "Contato",
+      "company": "Empresa",
+      "opportunity": "Oportunidade",
+      "conversation": "Conversa",
+      "finance": "Financeiro"
+    }
+  },
+  "my": {
+    "title": "Meus itens",
+    "subtitle": "Suas oportunidades e tarefas em um só lugar.",
+    "opportunities": "Minhas oportunidades",
+    "noOpps": "Você não tem oportunidades abertas atribuídas.",
+    "tasks": "Minhas tarefas"
   }
 }

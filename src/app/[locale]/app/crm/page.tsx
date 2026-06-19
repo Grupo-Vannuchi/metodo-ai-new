@@ -16,15 +16,17 @@ export default async function CrmPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ pipeline?: string }>;
+  searchParams: Promise<{ pipeline?: string; owner?: string }>;
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("crm.board");
 
-  const pid = (await searchParams)?.pipeline;
+  const sp = await searchParams;
+  const pid = sp?.pipeline;
+  const mine = sp?.owner === "me";
   const [board, pipelines] = await Promise.all([
-    getBoard(ctx.organizationId, pid),
+    getBoard(ctx.organizationId, pid, mine ? ctx.userId : undefined),
     pipelineOptions(ctx.organizationId),
   ]);
 
@@ -49,7 +51,21 @@ export default async function CrmPage({
           <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
           <p className="mt-1 text-muted-foreground">{board.pipelineName}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center rounded-lg border border-border p-0.5">
+            <Link
+              href={`/app/crm${board.pipelineId ? `?pipeline=${board.pipelineId}` : ""}`}
+              className={cn("rounded-md px-3 py-1 text-sm transition-colors", !mine ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground")}
+            >
+              {t("allDeals")}
+            </Link>
+            <Link
+              href={`/app/crm?owner=me${board.pipelineId ? `&pipeline=${board.pipelineId}` : ""}`}
+              className={cn("rounded-md px-3 py-1 text-sm transition-colors", mine ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground")}
+            >
+              {t("myDeals")}
+            </Link>
+          </div>
           <Link href="/app/crm/products" className={buttonVariants({ variant: "outline" })}>
             <Package className="size-4" />
             {t("productsLink")}

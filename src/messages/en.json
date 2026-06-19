@@ -164,6 +164,7 @@
   "app": {
     "nav": {
       "dashboard": "Dashboard",
+      "my": "My items",
       "crm": "Pipeline",
       "tasks": "Tasks",
       "prospecting": "Prospecting",
@@ -392,6 +393,8 @@
       "title": "Sales Pipeline",
       "noPipeline": "No pipeline configured.",
       "newOpportunity": "New opportunity",
+      "allDeals": "All",
+      "myDeals": "Mine",
       "oppTitle": "Title",
       "value": "Value",
       "stage": "Stage",
@@ -923,5 +926,25 @@
     "done": "Done! You won't receive messages anymore.",
     "invalidTitle": "Invalid link",
     "invalidBody": "This unsubscribe link is invalid or has expired."
+  },
+  "search": {
+    "placeholder": "Search…",
+    "hint": "Search contacts, companies, opportunities, conversations…",
+    "searching": "Searching…",
+    "noResults": "No results.",
+    "type": {
+      "contact": "Contact",
+      "company": "Company",
+      "opportunity": "Opportunity",
+      "conversation": "Conversation",
+      "finance": "Finance"
+    }
+  },
+  "my": {
+    "title": "My items",
+    "subtitle": "Your opportunities and tasks in one place.",
+    "opportunities": "My opportunities",
+    "noOpps": "You have no open opportunities assigned to you.",
+    "tasks": "My tasks"
   }
 }

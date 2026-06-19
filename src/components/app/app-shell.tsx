@@ -5,6 +5,8 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { AppNav } from "@/components/app/app-nav";
 import { MobileNav } from "@/components/app/mobile-nav";
 import { NotificationBell } from "@/components/app/notification-bell";
+import { CommandPalette } from "@/components/app/command-palette";
+import { SearchTrigger } from "@/components/app/search-trigger";
 import { BackBar } from "@/components/app/back-bar";
 import { PageTransition } from "@/components/app/page-transition";
 import { logout } from "@/app/actions/auth";
@@ -31,6 +33,7 @@ export async function AppShell({
 
   return (
     <div className="flex min-h-screen bg-muted/20">
+      <CommandPalette />
       <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card p-4 md:flex">
         <div className="flex items-center justify-between gap-2 px-1 py-2">
           <Logo className="text-xl" />
@@ -42,7 +45,11 @@ export async function AppShell({
           <p className="text-xs text-muted-foreground">{ctx.organization.plan}</p>
         </div>
 
-        <div className="mt-6 flex-1">
+        <div className="mt-4">
+          <SearchTrigger variant="box" />
+        </div>
+
+        <div className="mt-4 flex-1">
           <AppNav allowedScreens={navScreens} />
         </div>
 
@@ -73,6 +80,7 @@ export async function AppShell({
             <Logo className="text-lg" />
           </div>
           <div className="flex items-center gap-2">
+            <SearchTrigger variant="icon" />
             <NotificationBell />
             <ThemeToggle />
             <form action={logout.bind(null, locale)}>
