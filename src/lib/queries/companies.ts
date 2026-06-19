@@ -26,7 +26,7 @@ export async function listCompanies(organizationId: string) {
   }));
 }
 
-/** Full company for the edit page. Scoped: returns null if not in this org. */
+/** Full company for the view/edit pages. Scoped: returns null if not in this org. */
 export async function getCompany(organizationId: string, id: string) {
   const db = tenantDb(organizationId);
   return db.company.findFirst({
@@ -40,6 +40,8 @@ export async function getCompany(organizationId: string, id: string) {
       website: true,
       address: true,
       notes: true,
+      source: true,
+      createdAt: true,
     },
   });
 }

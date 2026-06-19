@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Eye } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { listCompanies } from "@/lib/queries/companies";
 import { deleteCompany } from "@/app/actions/companies";
@@ -63,7 +63,7 @@ export default async function CompaniesPage({
                         href={`/app/companies/${c.id}`}
                         className="inline-flex items-center rounded-lg px-2 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                       >
-                        <Pencil className="size-4" />
+                        <Eye className="size-4" />
                       </Link>
                       <DeleteButton action={deleteCompany.bind(null, c.id)} />
                     </div>

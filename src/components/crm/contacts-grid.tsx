@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import {
   Pencil,
+  Eye,
   Trash2,
   FolderPlus,
   Folder,
@@ -64,7 +65,7 @@ function ContactList({
         className="rounded-lg px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         aria-label={editLabel}
       >
-        <Pencil className="size-3.5" />
+        <Eye className="size-3.5" />
       </Link>
       <button
         type="button"

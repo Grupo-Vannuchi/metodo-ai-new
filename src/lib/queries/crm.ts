@@ -1,4 +1,5 @@
 import "server-only";
+import { prisma } from "@/lib/prisma";
 import { tenantDb } from "@/lib/tenant-db";
 
 export type BoardCard = {
@@ -94,7 +95,8 @@ export async function getBoard(
   return { pipelineId: pipeline.id, pipelineName: pipeline.name, columns };
 }
 
-/** A single opportunity for the edit page. Scoped to the org. */
+/** A single opportunity (edit + view pages). Scoped to the org; resolves the
+ * stage/product/owner names for the read-only view. */
 export async function getOpportunity(organizationId: string, id: string) {
   const db = tenantDb(organizationId);
   const opp = await db.opportunity.findFirst({
@@ -113,16 +115,27 @@ export async function getOpportunity(organizationId: string, id: string) {
       expectedCloseDate: true,
       notes: true,
       outcomeReason: true,
+      closedAt: true,
+      createdAt: true,
       company: { select: { name: true } },
-      contact: { select: { name: true } },
+      contact: { select: { name: true, phone: true } },
+      stage: { select: { name: true } },
+      productService: { select: { name: true } },
     },
   });
   if (!opp) return null;
+  const owner = opp.ownerId
+    ? await prisma.user.findUnique({ where: { id: opp.ownerId }, select: { name: true } })
+    : null;
   return {
     ...opp,
     value: Number(opp.value),
     companyName: opp.company?.name ?? null,
     contactName: opp.contact?.name ?? null,
+    contactPhone: opp.contact?.phone ?? null,
+    stageName: opp.stage?.name ?? null,
+    productServiceName: opp.productService?.name ?? null,
+    ownerName: owner?.name ?? null,
   };
 }
 

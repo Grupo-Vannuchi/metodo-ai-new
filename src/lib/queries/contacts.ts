@@ -26,7 +26,7 @@ export async function listContacts(organizationId: string) {
   }));
 }
 
-/** Full contact for the edit page. Scoped: returns null if not in this org. */
+/** Full contact for the view/edit pages. Scoped: returns null if not in this org. */
 export async function getContact(organizationId: string, id: string) {
   const db = tenantDb(organizationId);
   return db.contact.findFirst({
@@ -40,6 +40,9 @@ export async function getContact(organizationId: string, id: string) {
       companyId: true,
       tags: true,
       optedOut: true,
+      source: true,
+      createdAt: true,
+      company: { select: { name: true } },
     },
   });
 }

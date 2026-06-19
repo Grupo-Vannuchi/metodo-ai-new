@@ -45,7 +45,7 @@ export function CompanyForm({
         : await createCompany(input);
 
     if (result.ok) {
-      router.push("/app/companies");
+      router.push(mode === "edit" && companyId ? `/app/companies/${companyId}` : "/app/companies");
       router.refresh();
     } else {
       setServerError(t(`error.${result.error}`));
@@ -120,7 +120,7 @@ export function CompanyForm({
           {isSubmitting ? t("saving") : mode === "create" ? t("create") : t("save")}
         </Button>
         <Link
-          href="/app/companies"
+          href={mode === "edit" && companyId ? `/app/companies/${companyId}` : "/app/companies"}
           className="inline-flex h-13 items-center px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           {t("cancel")}

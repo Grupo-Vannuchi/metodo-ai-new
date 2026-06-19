@@ -1,22 +1,20 @@
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
-import { MessageCircle, ArrowRight } from "lucide-react";
+import { MessageCircle, ArrowRight, Pencil } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getContact } from "@/lib/queries/contacts";
-import { companyOptions as companiesList } from "@/lib/queries/companies";
 import { getConversationByContact } from "@/lib/queries/inbox";
 import { listTasks } from "@/lib/queries/tasks";
 import { listMembers } from "@/lib/queries/organizations";
-import { ContactForm } from "@/components/crm/contact-form";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { TasksManager } from "@/components/tasks/tasks-manager";
-import { contactToForm } from "@/lib/contact-form";
+import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
 
-export default async function EditContactPage({
+export default async function ContactViewPage({
   params,
 }: {
   params: Promise<{ locale: string; id: string }>;
@@ -27,22 +25,45 @@ export default async function EditContactPage({
   const t = await getTranslations("crm.contacts");
   const ti = await getTranslations("inbox");
 
-  const [contact, companies, conversation, tasks, members] = await Promise.all([
+  const [contact, conversation, tasks, members] = await Promise.all([
     getContact(ctx.organizationId, id),
-    companiesList(ctx.organizationId),
     getConversationByContact(ctx.organizationId, id),
     listTasks(ctx.organizationId, { contactId: id }),
     listMembers(ctx.organizationId),
   ]);
   if (!contact) notFound();
 
+  const fmtDate = (d: Date | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
+
+  const fields: { label: string; value: string }[] = [
+    { label: t("email"), value: contact.email || "—" },
+    { label: t("phone"), value: contact.phone || "—" },
+    { label: t("role"), value: contact.role || "—" },
+    { label: t("company"), value: contact.company?.name ?? "—" },
+    { label: t("tags"), value: contact.tags.length ? contact.tags.join(", ") : "—" },
+    { label: t("optedOut"), value: contact.optedOut ? t("optedOutYes") : t("optedOutNo") },
+    { label: t("source"), value: contact.source || "—" },
+    { label: t("createdAt"), value: fmtDate(contact.createdAt) },
+  ];
+
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight">{t("editTitle")}</h1>
-        {contact.phone ? (
-          <StartChatButton phone={contact.phone} name={contact.name} contactId={contact.id} />
-        ) : null}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight">{contact.name}</h1>
+          {contact.company?.name ? (
+            <p className="mt-1 text-sm text-muted-foreground">{contact.company.name}</p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {contact.phone ? (
+            <StartChatButton phone={contact.phone} name={contact.name} contactId={contact.id} />
+          ) : null}
+          <Link href={`/app/contacts/${contact.id}/edit`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <Pencil className="size-4" />
+            {t("edit")}
+          </Link>
+        </div>
       </div>
 
       {conversation ? (
@@ -66,12 +87,14 @@ export default async function EditContactPage({
         </Link>
       ) : null}
 
-      <ContactForm
-        mode="edit"
-        contactId={contact.id}
-        defaultValues={contactToForm(contact)}
-        companies={companies}
-      />
+      <dl className="grid gap-x-6 gap-y-4 rounded-xl border border-border bg-card p-5 sm:grid-cols-2">
+        {fields.map((f) => (
+          <div key={f.label}>
+            <dt className="text-xs text-muted-foreground">{f.label}</dt>
+            <dd className="mt-0.5 text-sm">{f.value}</dd>
+          </div>
+        ))}
+      </dl>
 
       <section className="rounded-xl border border-border bg-card p-5">
         <TasksManager

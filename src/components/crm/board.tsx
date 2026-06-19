@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Pencil } from "lucide-react";
+import { Eye } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { moveOpportunity } from "@/app/actions/opportunities";
@@ -137,7 +137,7 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
                           className="text-muted-foreground transition-colors hover:text-foreground"
                           aria-label={t("open")}
                         >
-                          <Pencil className="size-3.5" />
+                          <Eye className="size-3.5" />
                         </Link>
                       </div>
                     </div>

@@ -3,8 +3,8 @@
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
-import { Trash2, Wallet } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea, FieldError } from "@/components/ui/field";
 import { MoneyInput } from "@/components/ui/money-input";
 import { Link, useRouter } from "@/i18n/navigation";
@@ -36,24 +36,20 @@ const selectCls = cn(
 
 export function OpportunityForm({
   id,
-  code,
   defaultValues,
   stages,
   companies,
   contacts,
   members,
   productServices,
-  canFinance,
 }: {
   id: string;
-  code: string | null;
   defaultValues: Values;
   stages: Option[];
   companies: Option[];
   contacts: Option[];
   members: Option[];
   productServices: ProductOption[];
-  canFinance: boolean;
 }) {
   const t = useTranslations("crm.opportunity");
   const tv = useTranslations("validation");
@@ -89,45 +85,15 @@ export function OpportunityForm({
       outcomeReason: values.outcomeReason,
     });
     if (result.ok) {
-      // Stay on the deal when it's just been won, so the "generate entry" CTA shows.
-      router.push(values.status === "WON" ? `/app/crm/${id}` : "/app/crm");
+      router.push(`/app/crm/${id}`); // back to the read-only view
       router.refresh();
     } else {
       setServerError(t(`error.${result.error}`));
     }
   }
 
-  // Pre-fill the finance entry from the won deal (review-before-save flow).
-  const financeHref = (() => {
-    const today = new Date().toISOString().slice(0, 10);
-    const desc = `${code ? `${code} - ` : ""}${defaultValues.title}`;
-    const p = new URLSearchParams({
-      type: "INCOME",
-      description: desc,
-      amount: defaultValues.value || "0",
-      opportunityId: id,
-      dueDate: today,
-    });
-    if (defaultValues.contactId) p.set("contactId", defaultValues.contactId);
-    if (defaultValues.companyId) p.set("companyId", defaultValues.companyId);
-    return `/app/finance/entries/new?${p.toString()}`;
-  })();
-
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6" noValidate>
-      {defaultValues.status === "WON" && canFinance ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-green-500/40 bg-green-500/5 p-4">
-          <div>
-            <p className="text-sm font-medium">{t("wonTitle")}</p>
-            <p className="text-xs text-muted-foreground">{t("wonHint")}</p>
-          </div>
-          <Link href={financeHref} className={buttonVariants({ size: "sm" })}>
-            <Wallet className="size-4" />
-            {t("generateEntry")}
-          </Link>
-        </div>
-      ) : null}
-
       <fieldset className="rounded-xl border border-border bg-card p-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
@@ -234,7 +200,7 @@ export function OpportunityForm({
           {isSubmitting ? t("saving") : t("save")}
         </Button>
         <Link
-          href="/app/crm"
+          href={`/app/crm/${id}`}
           className="inline-flex h-13 items-center px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           {t("cancel")}

@@ -56,7 +56,7 @@ export function ContactForm({
         : await createContact(input);
 
     if (result.ok) {
-      router.push("/app/contacts");
+      router.push(mode === "edit" && contactId ? `/app/contacts/${contactId}` : "/app/contacts");
       router.refresh();
     } else {
       setServerError(t(`error.${result.error}`));
@@ -132,7 +132,7 @@ export function ContactForm({
           {isSubmitting ? t("saving") : mode === "create" ? t("create") : t("save")}
         </Button>
         <Link
-          href="/app/contacts"
+          href={mode === "edit" && contactId ? `/app/contacts/${contactId}` : "/app/contacts"}
           className="inline-flex h-13 items-center px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           {t("cancel")}
