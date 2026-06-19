@@ -417,6 +417,9 @@
     "opportunity": {
       "back": "Voltar",
       "editTitle": "Editar oportunidade",
+      "edit": "Editar",
+      "createdAt": "Criada em",
+      "closedAt": "Fechada em",
       "title": "Título",
       "value": "Valor",
       "stage": "Estágio",

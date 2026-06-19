@@ -417,6 +417,9 @@
     "opportunity": {
       "back": "Back",
       "editTitle": "Edit opportunity",
+      "edit": "Edit",
+      "createdAt": "Created",
+      "closedAt": "Closed",
       "title": "Title",
       "value": "Value",
       "stage": "Stage",
