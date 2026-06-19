@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
 import { getFinanceEntry, financeFormOptions } from "@/lib/queries/finance";
 import { EntryForm, type EntryDefaults } from "@/components/finance/entry-form";
@@ -16,6 +17,7 @@ export default async function EditEntryPage({
   const { locale: raw, id } = await params;
   const locale = resolveLocale(raw);
   const ctx = await requireOrgContext(locale);
+  const t = await getTranslations("finance");
 
   const [entry, options] = await Promise.all([
     getFinanceEntry(ctx.organizationId, id),
@@ -38,5 +40,10 @@ export default async function EditEntryPage({
     notes: entry.notes ?? "",
   };
 
-  return <EntryForm mode="edit" entryId={entry.id} defaults={defaults} options={options} />;
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="text-2xl font-bold tracking-tight">{t("editEntry")}</h1>
+      <EntryForm mode="edit" entryId={entry.id} defaults={defaults} options={options} />
+    </div>
+  );
 }

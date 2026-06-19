@@ -16,6 +16,10 @@ export function FinanceNav() {
   const t = useTranslations("finance");
   const pathname = usePathname();
 
+  // Focused form screens (create/edit entry) get their own heading instead of
+  // the tab bar, so they read as a distinct screen.
+  if (pathname.startsWith("/app/finance/entries/")) return null;
+
   return (
     <div>
       <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
