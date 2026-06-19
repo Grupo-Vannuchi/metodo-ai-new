@@ -57,7 +57,8 @@ function parse(formData: FormData) {
     companyId: formData.get("companyId"),
     opportunityId: formData.get("opportunityId"),
     notes: formData.get("notes"),
-    installments: formData.get("installments"),
+    // Absent when editing or for a settled entry; null breaks the numeric coerce.
+    installments: formData.get("installments") ?? undefined,
   });
 }
 

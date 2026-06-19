@@ -43,16 +43,22 @@ async function resolveAssignee(
 const dateOrNull = (s?: string) => (s && s.trim() ? new Date(s) : null);
 
 function parse(formData: FormData) {
+  // Fields the form omits (e.g. company/description) come back as null, which
+  // the optional string schemas reject — normalize missing values to undefined.
+  const str = (key: string) => {
+    const v = formData.get(key);
+    return typeof v === "string" ? v : undefined;
+  };
   return taskSchema.safeParse({
-    title: formData.get("title"),
-    description: formData.get("description"),
-    type: formData.get("type") ?? "OTHER",
-    priority: formData.get("priority") ?? "MEDIUM",
-    dueDate: formData.get("dueDate"),
-    assignedToId: formData.get("assignedToId"),
-    contactId: formData.get("contactId"),
-    companyId: formData.get("companyId"),
-    opportunityId: formData.get("opportunityId"),
+    title: str("title"),
+    description: str("description"),
+    type: str("type") ?? "OTHER",
+    priority: str("priority") ?? "MEDIUM",
+    dueDate: str("dueDate"),
+    assignedToId: str("assignedToId"),
+    contactId: str("contactId"),
+    companyId: str("companyId"),
+    opportunityId: str("opportunityId"),
   });
 }
 
