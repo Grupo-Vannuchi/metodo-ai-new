@@ -130,9 +130,10 @@ export async function taskCounts(
   return { overdue, today: todayCount, open };
 }
 
+/** A single task with resolved names, for the read-only view. */
 export async function getTask(organizationId: string, id: string) {
   const db = tenantDb(organizationId);
-  return db.task.findFirst({
+  const task = await db.task.findFirst({
     where: { id },
     select: {
       id: true,
@@ -141,10 +142,66 @@ export async function getTask(organizationId: string, id: string) {
       type: true,
       priority: true,
       dueDate: true,
+      doneAt: true,
+      createdAt: true,
       assignedToId: true,
+      createdById: true,
       contactId: true,
       companyId: true,
       opportunityId: true,
     },
   });
+  if (!task) return null;
+
+  const userIds = [task.assignedToId, task.createdById].filter(Boolean) as string[];
+  const [users, contact, company, opp] = await Promise.all([
+    userIds.length
+      ? prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
+      : [],
+    task.contactId ? db.contact.findFirst({ where: { id: task.contactId }, select: { name: true } }) : null,
+    task.companyId ? db.company.findFirst({ where: { id: task.companyId }, select: { name: true } }) : null,
+    task.opportunityId
+      ? db.opportunity.findFirst({ where: { id: task.opportunityId }, select: { title: true, code: true } })
+      : null,
+  ]);
+  const uMap = new Map(users.map((u) => [u.id, u.name]));
+  const done = task.doneAt != null;
+
+  return {
+    ...task,
+    done,
+    overdue: !done && task.dueDate != null && task.dueDate.getTime() < Date.now(),
+    assignedToName: task.assignedToId ? uMap.get(task.assignedToId) ?? null : null,
+    createdByName: task.createdById ? uMap.get(task.createdById) ?? null : null,
+    contactName: contact?.name ?? null,
+    companyName: company?.name ?? null,
+    opportunityTitle: opp?.title ?? null,
+    opportunityCode: opp?.code ?? null,
+  };
+}
+
+export type AssignedAlert = { id: string; title: string; byName: string | null };
+
+/** Open tasks assigned to the user by someone else — drives the "X assigned
+ * you a task" notifications. */
+export async function tasksAssignedByOthers(
+  organizationId: string,
+  userId: string,
+): Promise<AssignedAlert[]> {
+  const db = tenantDb(organizationId);
+  const tasks = await db.task.findMany({
+    where: { assignedToId: userId, doneAt: null, createdById: { not: userId } },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: { id: true, title: true, createdById: true },
+  });
+  if (tasks.length === 0) return [];
+  const ids = [...new Set(tasks.map((t) => t.createdById).filter(Boolean))] as string[];
+  const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
+  const uMap = new Map(users.map((u) => [u.id, u.name]));
+  return tasks.map((t) => ({
+    id: t.id,
+    title: t.title,
+    byName: t.createdById ? uMap.get(t.createdById) ?? null : null,
+  }));
 }

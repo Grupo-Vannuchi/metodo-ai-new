@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell, Clock, CheckSquare, AlertTriangle, Wallet, MessageCircle } from "lucide-react";
+import { Bell, Clock, CheckSquare, AlertTriangle, Wallet, MessageCircle, UserPlus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ type Alerts = {
   staleOpps: number;
   financeOverdue: number;
   unread: number;
+  assigned: { id: string; title: string; byName: string | null }[];
 };
 
 const POLL_MS = 30000;
@@ -51,6 +52,7 @@ export function NotificationBell({
   }, []);
 
   const total = a?.total ?? 0;
+  const assigned = a?.assigned ?? [];
   const rows = a
     ? (
         [
@@ -89,10 +91,25 @@ export function NotificationBell({
             )}
           >
             <div className="border-b border-border px-4 py-2.5 text-sm font-semibold">{t("title")}</div>
-            {rows.length === 0 ? (
+            {rows.length === 0 && assigned.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-muted-foreground">{t("empty")}</p>
             ) : (
               <ul className="max-h-80 overflow-y-auto py-1">
+                {assigned.map((task) => (
+                  <li key={`assigned-${task.id}`}>
+                    <Link
+                      href={`/app/tasks/${task.id}`}
+                      onClick={() => setOpen(false)}
+                      className="flex items-start gap-3 px-4 py-2 text-sm transition-colors hover:bg-muted"
+                    >
+                      <UserPlus className="mt-0.5 size-4 shrink-0 text-brand" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block">{t("assigned", { name: task.byName ?? t("someone") })}</span>
+                        <span className="block truncate text-xs text-muted-foreground">{task.title}</span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
                 {rows.map((r) => (
                   <li key={r.key}>
                     <Link

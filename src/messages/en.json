@@ -860,10 +860,14 @@
     "save": "Save",
     "saving": "Saving…",
     "cancel": "Cancel",
+    "view": "View",
     "edit": "Edit",
     "delete": "Delete",
     "complete": "Complete",
     "reopen": "Reopen",
+    "statusDone": "Done",
+    "statusOverdue": "Overdue",
+    "statusOpen": "Open",
     "empty": "No tasks here.",
     "deleteConfirm": "Delete the task \"{title}\"?",
     "tab": {
@@ -879,8 +883,11 @@
       "type": "Type",
       "priority": "Priority",
       "assignee": "Assignee",
+      "createdBy": "Created by",
       "contact": "Contact",
-      "opportunity": "Opportunity"
+      "company": "Company",
+      "opportunity": "Opportunity",
+      "description": "Description"
     },
     "type": {
       "CALL": "Call",
@@ -904,7 +911,9 @@
     "tasksToday": "Tasks due today",
     "staleOpps": "Stale opportunities",
     "financeOverdue": "Overdue finance entries",
-    "unread": "Unread conversations"
+    "unread": "Unread conversations",
+    "assigned": "{name} assigned you a task",
+    "someone": "Someone"
   },
   "settings": {
     "title": "Settings",

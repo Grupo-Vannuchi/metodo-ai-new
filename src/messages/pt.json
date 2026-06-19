@@ -860,10 +860,14 @@
     "save": "Salvar",
     "saving": "Salvando…",
     "cancel": "Cancelar",
+    "view": "Visualizar",
     "edit": "Editar",
     "delete": "Excluir",
     "complete": "Concluir",
     "reopen": "Reabrir",
+    "statusDone": "Concluída",
+    "statusOverdue": "Atrasada",
+    "statusOpen": "Em aberto",
     "empty": "Nenhuma tarefa por aqui.",
     "deleteConfirm": "Excluir a tarefa \"{title}\"?",
     "tab": {
@@ -879,8 +883,11 @@
       "type": "Tipo",
       "priority": "Prioridade",
       "assignee": "Responsável",
+      "createdBy": "Criada por",
       "contact": "Contato",
-      "opportunity": "Oportunidade"
+      "company": "Empresa",
+      "opportunity": "Oportunidade",
+      "description": "Descrição"
     },
     "type": {
       "CALL": "Ligação",
@@ -904,7 +911,9 @@
     "tasksToday": "Tarefas para hoje",
     "staleOpps": "Oportunidades paradas",
     "financeOverdue": "Lançamentos vencidos",
-    "unread": "Conversas não lidas"
+    "unread": "Conversas não lidas",
+    "assigned": "{name} te atribuiu uma tarefa",
+    "someone": "Alguém"
   },
   "settings": {
     "title": "Configurações",

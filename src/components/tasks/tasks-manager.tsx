@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Pencil, Trash2, Plus, X, Link2 } from "lucide-react";
+import { Check, Eye, Pencil, Trash2, Plus, X, Link2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
@@ -279,6 +279,13 @@ export function TasksManager({
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-0.5">
+                  <Link
+                    href={`/app/tasks/${task.id}`}
+                    aria-label={t("view")}
+                    className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <Eye className="size-4" />
+                  </Link>
                   <button
                     type="button"
                     onClick={() => { setEditingId(task.id); setAdding(false); setFormKey((k) => k + 1); }}
