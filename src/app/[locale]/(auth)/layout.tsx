@@ -10,7 +10,7 @@ export default function AuthLayout({
 }) {
   return (
     <div className="relative flex min-h-screen items-center justify-center px-4 py-12">
-      <BackgroundImage src="/backgrounds/office-1.jpg" />
+      <BackgroundImage />
       <div className="absolute right-4 top-4 z-10">
         <ThemeToggle />
       </div>

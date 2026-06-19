@@ -42,7 +42,7 @@ export default async function HomePage({
 
   return (
     <div className="flex min-h-screen flex-col">
-      <BackgroundImage src="/backgrounds/office-2.jpg" />
+      <BackgroundImage />
       <MarketingHeader />
 
       <main className="flex-1">
