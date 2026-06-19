@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   KanbanSquare,
+  CheckSquare,
   Radar,
   Send,
   MessageCircle,
@@ -20,6 +21,7 @@ import { cn } from "@/lib/utils";
 type NavKey =
   | "dashboard"
   | "crm"
+  | "tasks"
   | "prospecting"
   | "campaigns"
   | "inbox"
@@ -33,6 +35,7 @@ type Item = { href: string; key: NavKey; icon: typeof LayoutDashboard };
 const items: Item[] = [
   { href: "/app", key: "dashboard", icon: LayoutDashboard },
   { href: "/app/crm", key: "crm", icon: KanbanSquare },
+  { href: "/app/tasks", key: "tasks", icon: CheckSquare },
   { href: "/app/prospecting", key: "prospecting", icon: Radar },
   { href: "/app/campaigns", key: "campaigns", icon: Send },
   { href: "/app/inbox", key: "inbox", icon: MessageCircle },

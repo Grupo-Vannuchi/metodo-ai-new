@@ -165,6 +165,7 @@
     "nav": {
       "dashboard": "Painel",
       "crm": "Funil",
+      "tasks": "Tarefas",
       "prospecting": "Prospecção",
       "campaigns": "Campanhas",
       "inbox": "Conversas",
@@ -809,6 +810,60 @@
       "invalid": "Verifique os campos.",
       "unknown": "Não foi possível salvar."
     }
+  },
+  "tasks": {
+    "pageTitle": "Tarefas",
+    "pageSubtitle": "Suas atividades e próximos passos",
+    "title": "Tarefas",
+    "newTask": "Nova tarefa",
+    "save": "Salvar",
+    "saving": "Salvando…",
+    "cancel": "Cancelar",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "complete": "Concluir",
+    "reopen": "Reabrir",
+    "empty": "Nenhuma tarefa por aqui.",
+    "deleteConfirm": "Excluir a tarefa \"{title}\"?",
+    "tab": {
+      "open": "Em aberto",
+      "today": "Hoje",
+      "overdue": "Atrasadas",
+      "upcoming": "Próximas",
+      "done": "Concluídas"
+    },
+    "field": {
+      "title": "Título",
+      "dueDate": "Vencimento",
+      "type": "Tipo",
+      "priority": "Prioridade",
+      "assignee": "Responsável",
+      "contact": "Contato",
+      "opportunity": "Oportunidade"
+    },
+    "type": {
+      "CALL": "Ligação",
+      "MEETING": "Reunião",
+      "EMAIL": "E-mail",
+      "WHATSAPP": "WhatsApp",
+      "FOLLOWUP": "Follow-up",
+      "OTHER": "Outro"
+    },
+    "priority": { "LOW": "Baixa", "MEDIUM": "Média", "HIGH": "Alta" },
+    "error": {
+      "unauthorized": "Sessão expirada.",
+      "invalid": "Verifique os campos.",
+      "unknown": "Não foi possível salvar."
+    }
+  },
+  "notifications": {
+    "title": "Notificações",
+    "empty": "Tudo em dia. Sem pendências.",
+    "tasksOverdue": "Tarefas atrasadas",
+    "tasksToday": "Tarefas para hoje",
+    "staleOpps": "Oportunidades paradas",
+    "financeOverdue": "Lançamentos vencidos",
+    "unread": "Conversas não lidas"
   },
   "settings": {
     "title": "Configurações",

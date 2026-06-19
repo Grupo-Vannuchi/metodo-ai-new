@@ -753,3 +753,49 @@ model FinanceEntry {
   @@index([organizationId, settledAt])
   @@map("finance_entries")
 }
+
+// ---------------------------------------------------------------------------
+// Tasks / Activities — the follow-up layer that links CRM, inbox and finance.
+// ---------------------------------------------------------------------------
+
+enum TaskType {
+  CALL
+  MEETING
+  EMAIL
+  WHATSAPP
+  FOLLOWUP
+  OTHER
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+/// A task / next action (org-scoped). Optionally tied to a contact, company or
+/// opportunity (ids only, like Conversation/FinanceEntry — names resolved on
+/// read). `doneAt` marks completion.
+model Task {
+  id             String       @id @default(cuid())
+  organizationId String
+  title          String
+  description    String?
+  type           TaskType     @default(OTHER)
+  priority       TaskPriority @default(MEDIUM)
+  dueDate        DateTime?
+  doneAt         DateTime?
+  assignedToId   String? // User responsible
+  createdById    String?
+  contactId      String?
+  companyId      String?
+  opportunityId  String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, assignedToId, doneAt])
+  @@index([organizationId, dueDate])
+  @@index([organizationId, opportunityId])
+  @@index([organizationId, contactId])
+  @@map("tasks")
+}

@@ -126,6 +126,18 @@ export async function getOpportunity(organizationId: string, id: string) {
   };
 }
 
+/** Open opportunities (id + label) for linking tasks/finance. */
+export async function opportunityOptions(organizationId: string) {
+  const db = tenantDb(organizationId);
+  const opps = await db.opportunity.findMany({
+    where: { status: "OPEN" },
+    orderBy: { createdAt: "desc" },
+    take: 500,
+    select: { id: true, title: true, code: true },
+  });
+  return opps.map((o) => ({ id: o.id, name: o.code ? `${o.code} · ${o.title}` : o.title }));
+}
+
 /** Active catalog items for the opportunity form (id + label + price). */
 export async function productServiceOptions(organizationId: string) {
   const db = tenantDb(organizationId);

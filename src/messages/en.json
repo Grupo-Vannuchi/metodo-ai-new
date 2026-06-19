@@ -165,6 +165,7 @@
     "nav": {
       "dashboard": "Dashboard",
       "crm": "Pipeline",
+      "tasks": "Tasks",
       "prospecting": "Prospecting",
       "campaigns": "Campaigns",
       "inbox": "Inbox",
@@ -809,6 +810,60 @@
       "invalid": "Check the fields.",
       "unknown": "Couldn't save."
     }
+  },
+  "tasks": {
+    "pageTitle": "Tasks",
+    "pageSubtitle": "Your activities and next steps",
+    "title": "Tasks",
+    "newTask": "New task",
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "complete": "Complete",
+    "reopen": "Reopen",
+    "empty": "No tasks here.",
+    "deleteConfirm": "Delete the task \"{title}\"?",
+    "tab": {
+      "open": "Open",
+      "today": "Today",
+      "overdue": "Overdue",
+      "upcoming": "Upcoming",
+      "done": "Done"
+    },
+    "field": {
+      "title": "Title",
+      "dueDate": "Due date",
+      "type": "Type",
+      "priority": "Priority",
+      "assignee": "Assignee",
+      "contact": "Contact",
+      "opportunity": "Opportunity"
+    },
+    "type": {
+      "CALL": "Call",
+      "MEETING": "Meeting",
+      "EMAIL": "Email",
+      "WHATSAPP": "WhatsApp",
+      "FOLLOWUP": "Follow-up",
+      "OTHER": "Other"
+    },
+    "priority": { "LOW": "Low", "MEDIUM": "Medium", "HIGH": "High" },
+    "error": {
+      "unauthorized": "Session expired.",
+      "invalid": "Check the fields.",
+      "unknown": "Couldn't save."
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "All caught up. Nothing pending.",
+    "tasksOverdue": "Overdue tasks",
+    "tasksToday": "Tasks due today",
+    "staleOpps": "Stale opportunities",
+    "financeOverdue": "Overdue finance entries",
+    "unread": "Unread conversations"
   },
   "settings": {
     "title": "Settings",

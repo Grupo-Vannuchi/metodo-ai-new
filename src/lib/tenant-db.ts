@@ -37,6 +37,7 @@ const TENANT_MODELS = new Set<string>([
   "Message",
   "FinanceCategory",
   "FinanceEntry",
+  "Task",
 ]);
 
 const WHERE_OPS = new Set<string>([

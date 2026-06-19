@@ -5,8 +5,11 @@ import { requireOrgContext } from "@/lib/tenant";
 import { getContact } from "@/lib/queries/contacts";
 import { companyOptions as companiesList } from "@/lib/queries/companies";
 import { getConversationByContact } from "@/lib/queries/inbox";
+import { listTasks } from "@/lib/queries/tasks";
+import { listMembers } from "@/lib/queries/organizations";
 import { ContactForm } from "@/components/crm/contact-form";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
+import { TasksManager } from "@/components/tasks/tasks-manager";
 import { contactToForm } from "@/lib/contact-form";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -24,10 +27,12 @@ export default async function EditContactPage({
   const t = await getTranslations("crm.contacts");
   const ti = await getTranslations("inbox");
 
-  const [contact, companies, conversation] = await Promise.all([
+  const [contact, companies, conversation, tasks, members] = await Promise.all([
     getContact(ctx.organizationId, id),
     companiesList(ctx.organizationId),
     getConversationByContact(ctx.organizationId, id),
+    listTasks(ctx.organizationId, { contactId: id }),
+    listMembers(ctx.organizationId),
   ]);
   if (!contact) notFound();
 
@@ -67,6 +72,15 @@ export default async function EditContactPage({
         defaultValues={contactToForm(contact)}
         companies={companies}
       />
+
+      <section className="rounded-xl border border-border bg-card p-5">
+        <TasksManager
+          tasks={tasks}
+          members={members.map((m) => ({ id: m.userId, name: m.name }))}
+          fixed={{ contactId: contact.id }}
+          currentUserId={ctx.userId}
+        />
+      </section>
     </div>
   );
 }
