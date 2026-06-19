@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, FieldError } from "@/components/ui/field";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/ui/confirm";
@@ -44,6 +45,7 @@ export function OpportunityForm({
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<Values>({ defaultValues });
 
@@ -81,7 +83,12 @@ export function OpportunityForm({
           </div>
           <div>
             <Label htmlFor="value">{t("value")}</Label>
-            <Input id="value" type="number" step="0.01" inputMode="decimal" {...register("value")} />
+            <MoneyInput
+              id="value"
+              defaultValue={Number(defaultValues.value) || 0}
+              onValueChange={(n) => setValue("value", String(n))}
+            />
+            <input type="hidden" {...register("value")} />
           </div>
           <div>
             <Label htmlFor="stageId">{t("stage")}</Label>

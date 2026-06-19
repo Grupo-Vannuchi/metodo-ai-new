@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
+import { MoneyInput } from "@/components/ui/money-input";
 import { usePrompt } from "@/components/ui/prompt";
 import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
@@ -124,16 +125,7 @@ export function EntryForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label htmlFor="amount">{t("field.amount")}</Label>
-          <Input
-            id="amount"
-            name="amount"
-            type="number"
-            step="0.01"
-            min="0.01"
-            inputMode="decimal"
-            defaultValue={defaults.amount || ""}
-            required
-          />
+          <MoneyInput id="amount" name="amount" defaultValue={defaults.amount} required />
         </div>
         <div>
           <Label htmlFor="dueDate">{t("field.dueDate")}</Label>
