@@ -396,6 +396,7 @@
       "open": "Open",
       "createFunnel": "Create funnel",
       "managePipelines": "Manage funnels",
+      "productsLink": "Products & services",
       "back": "Back to funnel",
       "noStages": "This funnel has no stages.",
       "error": {
@@ -414,8 +415,18 @@
       "statusOPEN": "Open",
       "statusWON": "Won",
       "statusLOST": "Lost",
+      "statusCANCELED": "Canceled",
+      "outcomeReason": "Reason",
       "company": "Company",
       "contact": "Contact",
+      "details": "Details",
+      "owner": "Owner",
+      "productService": "Product / service",
+      "expectedCloseDate": "Expected close",
+      "notes": "Notes",
+      "wonTitle": "Opportunity won",
+      "wonHint": "Generate the revenue entry from this sale.",
+      "generateEntry": "Generate entry",
       "none": "—",
       "save": "Save",
       "saving": "Saving…",
@@ -457,6 +468,31 @@
         "invalid": "Invalid data.",
         "last_pipeline": "You need at least one funnel.",
         "stage_in_use": "Move the opportunities before deleting this stage.",
+        "unknown": "Something went wrong."
+      }
+    },
+    "products": {
+      "title": "Products & Services",
+      "subtitle": "Manage the catalog used in opportunities",
+      "name": "Name",
+      "namePlaceholder": "e.g. Monthly consulting",
+      "kind": "Type",
+      "kindProduct": "Product",
+      "kindService": "Service",
+      "price": "Price",
+      "status": "Status",
+      "active": "Active",
+      "inactive": "Inactive",
+      "add": "Add",
+      "save": "Save",
+      "saving": "Saving…",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteConfirm": "Delete \"{name}\" from the catalog?",
+      "empty": "No items yet. Add the first one above.",
+      "error": {
+        "unauthorized": "Session expired.",
+        "invalid": "Invalid data.",
         "unknown": "Something went wrong."
       }
     }

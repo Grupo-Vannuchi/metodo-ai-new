@@ -4,31 +4,47 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { Input, Label, FieldError } from "@/components/ui/field";
+import { Input, Label, Textarea, FieldError } from "@/components/ui/field";
 import { MoneyInput } from "@/components/ui/money-input";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { createOpportunity } from "@/app/actions/opportunities";
 
 type Option = { id: string; name: string };
+type ProductOption = { id: string; name: string; kind: "PRODUCT" | "SERVICE"; price: number | null };
+
 type Values = {
   title: string;
   value: string;
   stageId: string;
   companyId: string;
   contactId: string;
+  productServiceId: string;
+  ownerId: string;
+  expectedCloseDate: string;
+  notes: string;
 };
+
+const selectCls = cn(
+  "w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm",
+  "focus-visible:border-brand focus-visible:outline-none",
+);
 
 export function NewOpportunityForm({
   stages,
   companies,
   contacts,
+  members,
+  productServices,
 }: {
   stages: Option[];
   companies: Option[];
   contacts: Option[];
+  members: Option[];
+  productServices: ProductOption[];
 }) {
   const t = useTranslations("crm.board");
+  const tf = useTranslations("crm.opportunity");
   const tv = useTranslations("validation");
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -45,13 +61,12 @@ export function NewOpportunityForm({
       stageId: stages[0]?.id ?? "",
       companyId: "",
       contactId: "",
+      productServiceId: "",
+      ownerId: "",
+      expectedCloseDate: "",
+      notes: "",
     },
   });
-
-  const selectCls = cn(
-    "w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm",
-    "focus-visible:border-brand focus-visible:outline-none",
-  );
 
   async function onSubmit(values: Values) {
     setServerError(null);
@@ -61,6 +76,10 @@ export function NewOpportunityForm({
       stageId: values.stageId,
       companyId: values.companyId,
       contactId: values.contactId,
+      productServiceId: values.productServiceId,
+      ownerId: values.ownerId,
+      expectedCloseDate: values.expectedCloseDate,
+      notes: values.notes,
     });
     if (result.ok) {
       router.push("/app/crm");
@@ -113,9 +132,39 @@ export function NewOpportunityForm({
         </div>
       </fieldset>
 
-      {serverError ? (
-        <p role="alert" className="text-sm text-red-500">{serverError}</p>
-      ) : null}
+      <fieldset className="rounded-xl border border-border bg-card p-5">
+        <legend className="px-1 text-sm font-medium">{tf("details")}</legend>
+        <div className="mt-2 grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="ownerId">{tf("owner")}</Label>
+            <select id="ownerId" className={selectCls} {...register("ownerId")}>
+              <option value="">{tf("none")}</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="productServiceId">{tf("productService")}</Label>
+            <select id="productServiceId" className={selectCls} {...register("productServiceId")}>
+              <option value="">{tf("none")}</option>
+              {productServices.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="expectedCloseDate">{tf("expectedCloseDate")}</Label>
+            <Input id="expectedCloseDate" type="date" {...register("expectedCloseDate")} />
+          </div>
+          <div className="sm:col-span-2">
+            <Label htmlFor="notes">{tf("notes")}</Label>
+            <Textarea id="notes" rows={3} {...register("notes")} />
+          </div>
+        </div>
+      </fieldset>
+
+      {serverError ? <p role="alert" className="text-sm text-red-500">{serverError}</p> : null}
 
       <div className="flex flex-wrap gap-3">
         <Button type="submit" size="lg" disabled={isSubmitting}>

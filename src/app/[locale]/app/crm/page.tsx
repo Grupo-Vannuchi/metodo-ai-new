@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { Settings2, Plus } from "lucide-react";
+import { Settings2, Plus, Package } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getBoard } from "@/lib/queries/crm";
 import { pipelineOptions } from "@/lib/queries/pipelines";
@@ -50,6 +50,10 @@ export default async function CrmPage({
           <p className="mt-1 text-muted-foreground">{board.pipelineName}</p>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/app/crm/products" className={buttonVariants({ variant: "outline" })}>
+            <Package className="size-4" />
+            {t("productsLink")}
+          </Link>
           <Link href="/app/crm/pipelines" className={buttonVariants({ variant: "outline" })}>
             <Settings2 className="size-4" />
             {t("managePipelines")}

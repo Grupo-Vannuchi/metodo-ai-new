@@ -3,9 +3,9 @@
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
-import { Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input, Label, FieldError } from "@/components/ui/field";
+import { Trash2, Wallet } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input, Label, Textarea, FieldError } from "@/components/ui/field";
 import { MoneyInput } from "@/components/ui/money-input";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
@@ -13,27 +13,47 @@ import { useConfirm } from "@/components/ui/confirm";
 import { updateOpportunity, deleteOpportunity } from "@/app/actions/opportunities";
 
 type Option = { id: string; name: string };
+type ProductOption = { id: string; name: string; kind: "PRODUCT" | "SERVICE"; price: number | null };
+
 type Values = {
   title: string;
   value: string;
   stageId: string;
-  status: "OPEN" | "WON" | "LOST";
+  status: "OPEN" | "WON" | "LOST" | "CANCELED";
   companyId: string;
   contactId: string;
+  productServiceId: string;
+  ownerId: string;
+  expectedCloseDate: string;
+  notes: string;
+  outcomeReason: string;
 };
+
+const selectCls = cn(
+  "w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm",
+  "focus-visible:border-brand focus-visible:outline-none",
+);
 
 export function OpportunityForm({
   id,
+  code,
   defaultValues,
   stages,
   companies,
   contacts,
+  members,
+  productServices,
+  canFinance,
 }: {
   id: string;
+  code: string | null;
   defaultValues: Values;
   stages: Option[];
   companies: Option[];
   contacts: Option[];
+  members: Option[];
+  productServices: ProductOption[];
+  canFinance: boolean;
 }) {
   const t = useTranslations("crm.opportunity");
   const tv = useTranslations("validation");
@@ -46,13 +66,12 @@ export function OpportunityForm({
     register,
     handleSubmit,
     setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<Values>({ defaultValues });
 
-  const selectCls = cn(
-    "w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm",
-    "focus-visible:border-brand focus-visible:outline-none",
-  );
+  const status = watch("status");
+  const needsReason = status === "LOST" || status === "CANCELED";
 
   async function onSubmit(values: Values) {
     setServerError(null);
@@ -63,17 +82,52 @@ export function OpportunityForm({
       status: values.status,
       companyId: values.companyId,
       contactId: values.contactId,
+      productServiceId: values.productServiceId,
+      ownerId: values.ownerId,
+      expectedCloseDate: values.expectedCloseDate,
+      notes: values.notes,
+      outcomeReason: values.outcomeReason,
     });
     if (result.ok) {
-      router.push("/app/crm");
+      // Stay on the deal when it's just been won, so the "generate entry" CTA shows.
+      router.push(values.status === "WON" ? `/app/crm/${id}` : "/app/crm");
       router.refresh();
     } else {
       setServerError(t(`error.${result.error}`));
     }
   }
 
+  // Pre-fill the finance entry from the won deal (review-before-save flow).
+  const financeHref = (() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const desc = `${code ? `${code} - ` : ""}${defaultValues.title}`;
+    const p = new URLSearchParams({
+      type: "INCOME",
+      description: desc,
+      amount: defaultValues.value || "0",
+      opportunityId: id,
+      dueDate: today,
+    });
+    if (defaultValues.contactId) p.set("contactId", defaultValues.contactId);
+    if (defaultValues.companyId) p.set("companyId", defaultValues.companyId);
+    return `/app/finance/entries/new?${p.toString()}`;
+  })();
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6" noValidate>
+      {defaultValues.status === "WON" && canFinance ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-green-500/40 bg-green-500/5 p-4">
+          <div>
+            <p className="text-sm font-medium">{t("wonTitle")}</p>
+            <p className="text-xs text-muted-foreground">{t("wonHint")}</p>
+          </div>
+          <Link href={financeHref} className={buttonVariants({ size: "sm" })}>
+            <Wallet className="size-4" />
+            {t("generateEntry")}
+          </Link>
+        </div>
+      ) : null}
+
       <fieldset className="rounded-xl border border-border bg-card p-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
@@ -104,8 +158,22 @@ export function OpportunityForm({
               <option value="OPEN">{t("statusOPEN")}</option>
               <option value="WON">{t("statusWON")}</option>
               <option value="LOST">{t("statusLOST")}</option>
+              <option value="CANCELED">{t("statusCANCELED")}</option>
             </select>
           </div>
+          {needsReason ? (
+            <div>
+              <Label htmlFor="outcomeReason">{t("outcomeReason")}</Label>
+              <Input
+                id="outcomeReason"
+                aria-invalid={Boolean(errors.outcomeReason)}
+                {...register("outcomeReason", { required: tv("required") })}
+              />
+              <FieldError>{errors.outcomeReason?.message}</FieldError>
+            </div>
+          ) : (
+            <div />
+          )}
           <div>
             <Label htmlFor="companyId">{t("company")}</Label>
             <select id="companyId" className={selectCls} {...register("companyId")}>
@@ -115,7 +183,7 @@ export function OpportunityForm({
               ))}
             </select>
           </div>
-          <div className="sm:col-span-2">
+          <div>
             <Label htmlFor="contactId">{t("contact")}</Label>
             <select id="contactId" className={selectCls} {...register("contactId")}>
               <option value="">{t("none")}</option>
@@ -127,9 +195,39 @@ export function OpportunityForm({
         </div>
       </fieldset>
 
-      {serverError ? (
-        <p role="alert" className="text-sm text-red-500">{serverError}</p>
-      ) : null}
+      <fieldset className="rounded-xl border border-border bg-card p-5">
+        <legend className="px-1 text-sm font-medium">{t("details")}</legend>
+        <div className="mt-2 grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="ownerId">{t("owner")}</Label>
+            <select id="ownerId" className={selectCls} {...register("ownerId")}>
+              <option value="">{t("none")}</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="productServiceId">{t("productService")}</Label>
+            <select id="productServiceId" className={selectCls} {...register("productServiceId")}>
+              <option value="">{t("none")}</option>
+              {productServices.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="expectedCloseDate">{t("expectedCloseDate")}</Label>
+            <Input id="expectedCloseDate" type="date" {...register("expectedCloseDate")} />
+          </div>
+          <div className="sm:col-span-2">
+            <Label htmlFor="notes">{t("notes")}</Label>
+            <Textarea id="notes" rows={3} {...register("notes")} />
+          </div>
+        </div>
+      </fieldset>
+
+      {serverError ? <p role="alert" className="text-sm text-red-500">{serverError}</p> : null}
 
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" size="lg" disabled={isSubmitting}>

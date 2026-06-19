@@ -23,6 +23,7 @@ const TENANT_MODELS = new Set<string>([
   "Pipeline",
   "Stage",
   "Opportunity",
+  "ProductService",
   "IntegrationConnection",
   "WebhookEndpoint",
   "MessageTemplate",

@@ -1,8 +1,9 @@
 import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
-import { stageOptions } from "@/lib/queries/crm";
+import { stageOptions, productServiceOptions } from "@/lib/queries/crm";
 import { companyOptions } from "@/lib/queries/companies";
 import { contactOptions } from "@/lib/queries/contacts";
+import { listMembers } from "@/lib/queries/organizations";
 import { NewOpportunityForm } from "@/components/crm/new-opportunity-form";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -21,10 +22,12 @@ export default async function NewOpportunityPage({
   const t = await getTranslations("crm.board");
 
   const pid = (await searchParams)?.pipeline;
-  const [stages, companies, contacts] = await Promise.all([
+  const [stages, companies, contacts, members, products] = await Promise.all([
     stageOptions(ctx.organizationId, pid),
     companyOptions(ctx.organizationId),
     contactOptions(ctx.organizationId),
+    listMembers(ctx.organizationId),
+    productServiceOptions(ctx.organizationId),
   ]);
 
   return (
@@ -41,7 +44,13 @@ export default async function NewOpportunityPage({
           </Link>
         </p>
       ) : (
-        <NewOpportunityForm stages={stages.stages} companies={companies} contacts={contacts} />
+        <NewOpportunityForm
+          stages={stages.stages}
+          companies={companies}
+          contacts={contacts}
+          members={members.map((m) => ({ id: m.userId, name: m.name }))}
+          productServices={products}
+        />
       )}
     </div>
   );

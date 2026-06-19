@@ -396,6 +396,7 @@
       "open": "Abrir",
       "createFunnel": "Criar funil",
       "managePipelines": "Gerenciar funis",
+      "productsLink": "Produtos e serviços",
       "back": "Voltar ao funil",
       "noStages": "Este funil não tem estágios.",
       "error": {
@@ -414,8 +415,18 @@
       "statusOPEN": "Aberta",
       "statusWON": "Ganha",
       "statusLOST": "Perdida",
+      "statusCANCELED": "Cancelada",
+      "outcomeReason": "Motivo",
       "company": "Empresa",
       "contact": "Contato",
+      "details": "Detalhes",
+      "owner": "Responsável",
+      "productService": "Produto / serviço",
+      "expectedCloseDate": "Previsão de fechamento",
+      "notes": "Observações",
+      "wonTitle": "Oportunidade ganha",
+      "wonHint": "Gere o lançamento de receita a partir desta venda.",
+      "generateEntry": "Gerar lançamento",
       "none": "—",
       "save": "Salvar",
       "saving": "Salvando…",
@@ -457,6 +468,31 @@
         "invalid": "Dados inválidos.",
         "last_pipeline": "Você precisa de ao menos um funil.",
         "stage_in_use": "Mova as oportunidades antes de excluir este estágio.",
+        "unknown": "Algo deu errado."
+      }
+    },
+    "products": {
+      "title": "Produtos e Serviços",
+      "subtitle": "Gerencie o catálogo usado nas oportunidades",
+      "name": "Nome",
+      "namePlaceholder": "Ex.: Consultoria mensal",
+      "kind": "Tipo",
+      "kindProduct": "Produto",
+      "kindService": "Serviço",
+      "price": "Preço",
+      "status": "Situação",
+      "active": "Ativo",
+      "inactive": "Inativo",
+      "add": "Adicionar",
+      "save": "Salvar",
+      "saving": "Salvando…",
+      "edit": "Editar",
+      "delete": "Excluir",
+      "deleteConfirm": "Excluir \"{name}\" do catálogo?",
+      "empty": "Nenhum item ainda. Adicione o primeiro acima.",
+      "error": {
+        "unauthorized": "Sessão expirada.",
+        "invalid": "Dados inválidos.",
         "unknown": "Algo deu errado."
       }
     }

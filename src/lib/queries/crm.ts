@@ -3,6 +3,7 @@ import { tenantDb } from "@/lib/tenant-db";
 
 export type BoardCard = {
   id: string;
+  code: string | null;
   title: string;
   value: number;
   companyName: string | null;
@@ -60,6 +61,7 @@ export async function getBoard(
       orderBy: { order: "asc" },
       select: {
         id: true,
+        code: true,
         title: true,
         value: true,
         order: true,
@@ -78,6 +80,7 @@ export async function getBoard(
       .filter((o) => o.stageId === s.id)
       .map((o) => ({
         id: o.id,
+        code: o.code,
         title: o.title,
         value: Number(o.value),
         companyName: o.company?.name ?? null,
@@ -98,16 +101,67 @@ export async function getOpportunity(organizationId: string, id: string) {
     where: { id },
     select: {
       id: true,
+      code: true,
       title: true,
       value: true,
       stageId: true,
       status: true,
       companyId: true,
       contactId: true,
+      productServiceId: true,
+      ownerId: true,
+      expectedCloseDate: true,
+      notes: true,
+      outcomeReason: true,
+      company: { select: { name: true } },
+      contact: { select: { name: true } },
     },
   });
   if (!opp) return null;
-  return { ...opp, value: Number(opp.value) };
+  return {
+    ...opp,
+    value: Number(opp.value),
+    companyName: opp.company?.name ?? null,
+    contactName: opp.contact?.name ?? null,
+  };
+}
+
+/** Active catalog items for the opportunity form (id + label + price). */
+export async function productServiceOptions(organizationId: string) {
+  const db = tenantDb(organizationId);
+  const items = await db.productService.findMany({
+    where: { active: true },
+    orderBy: [{ kind: "asc" }, { name: "asc" }],
+    select: { id: true, name: true, kind: true, price: true },
+  });
+  return items.map((p) => ({ id: p.id, name: p.name, kind: p.kind, price: p.price ? Number(p.price) : null }));
+}
+
+export type ProductServiceRow = {
+  id: string;
+  name: string;
+  kind: "PRODUCT" | "SERVICE";
+  price: number | null;
+  active: boolean;
+};
+
+/** The full catalog (products + services), including inactive items, so the
+ * manager can show and toggle everything. Ordered by kind then name. */
+export async function listProductServices(
+  organizationId: string,
+): Promise<ProductServiceRow[]> {
+  const db = tenantDb(organizationId);
+  const items = await db.productService.findMany({
+    orderBy: [{ kind: "asc" }, { name: "asc" }],
+    select: { id: true, name: true, kind: true, price: true, active: true },
+  });
+  return items.map((p) => ({
+    id: p.id,
+    name: p.name,
+    kind: p.kind,
+    price: p.price == null ? null : Number(p.price),
+    active: p.active,
+  }));
 }
 
 /** Stage options of a pipeline (for the create form). Defaults to the org's

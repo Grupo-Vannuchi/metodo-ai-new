@@ -272,30 +272,66 @@ enum OpportunityStatus {
   OPEN
   WON
   LOST
+  CANCELED
+}
+
+/// Whether a catalog item is a physical product or a service.
+enum ProductKind {
+  PRODUCT
+  SERVICE
+}
+
+/// Catalog of products/services an opportunity can be tied to (org-scoped).
+model ProductService {
+  id             String      @id @default(cuid())
+  organizationId String
+  name           String
+  kind           ProductKind @default(SERVICE)
+  price          Decimal?    @db.Decimal(14, 2)
+  active         Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  opportunities Opportunity[]
+
+  @@index([organizationId, active])
+  @@map("product_services")
 }
 
 /// A deal / card on the Kanban board.
 model Opportunity {
-  id             String            @id @default(cuid())
-  organizationId String
-  pipelineId     String
-  stageId        String
-  companyId      String?
-  contactId      String?
-  title          String
-  value          Decimal           @default(0) @db.Decimal(14, 2)
-  status         OpportunityStatus @default(OPEN)
-  order          Int               @default(0) // position within the stage column
-  ownerId        String? // membership/user responsible
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  id               String            @id @default(cuid())
+  organizationId   String
+  pipelineId       String
+  stageId          String
+  companyId        String?
+  contactId        String?
+  productServiceId String?
+  title            String
+  /// Sequential per-org-per-year code, e.g. "0001/26".
+  code             String?
+  seqYear          Int?
+  seqNumber        Int?
+  value            Decimal           @default(0) @db.Decimal(14, 2)
+  status           OpportunityStatus @default(OPEN)
+  order            Int               @default(0) // position within the stage column
+  ownerId          String? // membership/user responsible
+  expectedCloseDate DateTime? // data prevista de fechamento
+  notes            String?
+  /// Reason for losing/canceling (required when status is LOST/CANCELED).
+  outcomeReason    String?
+  closedAt         DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
-  pipeline Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  stage    Stage    @relation(fields: [stageId], references: [id], onDelete: Restrict)
-  company  Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  contact  Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  pipeline       Pipeline        @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage          Stage           @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  company        Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contact        Contact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  productService ProductService? @relation(fields: [productServiceId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, pipelineId, stageId, order])
+  @@index([organizationId, seqYear, seqNumber])
   @@map("opportunities")
 }
 

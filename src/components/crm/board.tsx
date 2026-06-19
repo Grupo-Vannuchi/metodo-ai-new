@@ -117,7 +117,12 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
                     className="cursor-grab rounded-lg border border-border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-medium">{card.title}</p>
+                      <div className="min-w-0">
+                        {card.code ? (
+                          <p className="text-[11px] font-medium tabular-nums text-muted-foreground">{card.code}</p>
+                        ) : null}
+                        <p className="text-sm font-medium">{card.title}</p>
+                      </div>
                       <div className="flex shrink-0 items-center" onPointerDown={(e) => e.stopPropagation()}>
                         {card.contactPhone ? (
                           <StartChatButton
