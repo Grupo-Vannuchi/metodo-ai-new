@@ -14,6 +14,7 @@ import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 import { MarketingHeader } from "@/components/marketing/marketing-header";
 import { MarketingFooter } from "@/components/marketing/marketing-footer";
+import { BackgroundImage } from "@/components/layout/background-image";
 import { PlansGrid } from "@/components/marketing/plans-grid";
 import { buttonVariants } from "@/components/ui/button";
 
@@ -41,6 +42,7 @@ export default async function HomePage({
 
   return (
     <div className="flex min-h-screen flex-col">
+      <BackgroundImage src="/backgrounds/office-2.jpg" />
       <MarketingHeader />
 
       <main className="flex-1">
