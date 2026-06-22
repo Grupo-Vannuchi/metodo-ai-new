@@ -36,12 +36,16 @@ export function NewOpportunityForm({
   contacts,
   members,
   productServices,
+  initialContactId,
+  initialCompanyId,
 }: {
   stages: Option[];
   companies: Option[];
   contacts: Option[];
   members: Option[];
   productServices: ProductOption[];
+  initialContactId?: string;
+  initialCompanyId?: string;
 }) {
   const t = useTranslations("crm.board");
   const tf = useTranslations("crm.opportunity");
@@ -59,8 +63,8 @@ export function NewOpportunityForm({
       title: "",
       value: "",
       stageId: stages[0]?.id ?? "",
-      companyId: "",
-      contactId: "",
+      companyId: initialCompanyId ?? "",
+      contactId: initialContactId ?? "",
       productServiceId: "",
       ownerId: "",
       expectedCloseDate: "",

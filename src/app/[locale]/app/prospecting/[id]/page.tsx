@@ -2,7 +2,6 @@ import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { requireOrgContext } from "@/lib/tenant";
 import { getExtractionJob } from "@/lib/queries/extractions";
-import { productServiceOptions } from "@/lib/queries/crm";
 import { listPipelinesWithStages } from "@/lib/queries/pipelines";
 import { ImportLeads } from "@/components/prospecting/import-leads";
 import { ExtractionPoller } from "@/components/prospecting/extraction-poller";
@@ -34,10 +33,9 @@ export default async function ExtractionDetailPage({
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("prospecting");
 
-  const [data, pipelines, productServices] = await Promise.all([
+  const [data, pipelines] = await Promise.all([
     getExtractionJob(ctx.organizationId, id),
     listPipelinesWithStages(ctx.organizationId),
-    productServiceOptions(ctx.organizationId),
   ]);
   if (!data) notFound();
   const { job, leads } = data;
@@ -67,7 +65,7 @@ export default async function ExtractionDetailPage({
           {running ? t("running") : t("noLeads")}
         </p>
       ) : (
-        <ImportLeads jobId={job.id} leads={leads} pipelines={pipelines} productServices={productServices} />
+        <ImportLeads jobId={job.id} leads={leads} pipelines={pipelines} />
       )}
     </div>
   );

@@ -53,7 +53,8 @@ type ContactInfo = {
   phone: string | null;
   role: string | null;
   tags: string[];
-  company: { name: string } | null;
+  company: { id: string; name: string } | null;
+  opportunities?: { id: string; title: string; value: number | null; stage: { name: string } }[];
 };
 
 type Conversation = {
@@ -481,6 +482,7 @@ export function InboxClient({
         className={cn(
           "min-w-0 flex-1 flex-col",
           selectedId ? "flex" : "hidden md:flex",
+          showContact && "hidden lg:flex" // Hide thread on medium screens if contact panel is open
         )}
       >
         {selected ? (
@@ -524,44 +526,6 @@ export function InboxClient({
                 ) : null}
               </div>
             </header>
-
-            {showContact && contactInfo ? (
-              <div className="flex flex-col gap-2 border-b border-border bg-muted/20 px-4 py-3 text-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">{contactInfo.name ?? displayName(selected)}</span>
-                  <Link href={`/app/contacts/${contactInfo.id}`} className="text-xs text-brand hover:underline">
-                    {t("viewContact")}
-                  </Link>
-                </div>
-                {contactInfo.company?.name ? (
-                  <p className="flex items-center gap-2 text-muted-foreground">
-                    <Building2 className="size-4 shrink-0" />
-                    {contactInfo.company.name}
-                  </p>
-                ) : null}
-                {contactInfo.phone ? (
-                  <p className="flex items-center gap-2 text-muted-foreground">
-                    <Phone className="size-4 shrink-0" />
-                    {contactInfo.phone}
-                  </p>
-                ) : null}
-                {contactInfo.email ? (
-                  <p className="flex items-center gap-2 text-muted-foreground">
-                    <Mail className="size-4 shrink-0" />
-                    {contactInfo.email}
-                  </p>
-                ) : null}
-                {contactInfo.tags.length > 0 ? (
-                  <div className="flex flex-wrap gap-1">
-                    {contactInfo.tags.map((tag) => (
-                      <span key={tag} className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
 
             <div ref={scrollRef} className="flex flex-1 flex-col gap-2 overflow-y-auto bg-muted/20 p-4">
               {messages.length === 0 ? (
@@ -635,6 +599,92 @@ export function InboxClient({
           </div>
         )}
       </section>
+
+      {/* CRM Context Right Sidebar */}
+      {showContact && contactInfo ? (
+        <aside className="w-full flex-col border-border md:w-80 md:shrink-0 md:border-l lg:flex">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <h2 className="font-semibold">{t("contactInfo")}</h2>
+            <button
+              type="button"
+              onClick={() => setShowContact(false)}
+              className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
+            >
+              <ArrowLeft className="size-4" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <span className="font-medium text-lg truncate">{contactInfo.name ?? (selected ? displayName(selected) : "")}</span>
+              <Link href={`/app/contacts/${contactInfo.id}`} className="shrink-0 text-xs text-brand hover:underline">
+                {t("viewContact")}
+              </Link>
+            </div>
+            
+            <div className="flex flex-col gap-2 text-sm text-muted-foreground mb-6">
+              {contactInfo.company?.name ? (
+                <p className="flex items-center gap-2">
+                  <Building2 className="size-4 shrink-0" />
+                  <span className="truncate">{contactInfo.company.name}</span>
+                </p>
+              ) : null}
+              {contactInfo.phone ? (
+                <p className="flex items-center gap-2">
+                  <Phone className="size-4 shrink-0" />
+                  {contactInfo.phone}
+                </p>
+              ) : null}
+              {contactInfo.email ? (
+                <p className="flex items-center gap-2">
+                  <Mail className="size-4 shrink-0" />
+                  <span className="truncate">{contactInfo.email}</span>
+                </p>
+              ) : null}
+              {contactInfo.tags.length > 0 ? (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {contactInfo.tags.map((tag) => (
+                    <span key={tag} className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-8">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-sm">Oportunidades Ativas</h3>
+                <Link
+                  href={`/app/crm/new?contactId=${contactInfo.id}${contactInfo.company?.id ? `&companyId=${contactInfo.company.id}` : ""}`}
+                  className="text-xs font-medium text-brand hover:underline"
+                >
+                  + Nova
+                </Link>
+              </div>
+
+              {contactInfo.opportunities && contactInfo.opportunities.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {contactInfo.opportunities.map((opp) => (
+                    <div key={opp.id} className="rounded-lg border border-border bg-muted/20 p-3">
+                      <p className="font-medium text-sm truncate">{opp.title}</p>
+                      <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                        <span className="rounded-full bg-muted px-2 py-0.5">{opp.stage.name}</span>
+                        {opp.value !== null ? (
+                          <span className="font-medium text-foreground">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(opp.value)}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">Nenhuma oportunidade em andamento.</p>
+              )}
+            </div>
+          </div>
+        </aside>
+      ) : null}
 
       {/* Right-click context menu for a conversation */}
       {menu && menuConvo ? (

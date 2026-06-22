@@ -15,13 +15,13 @@ export default async function NewOpportunityPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ pipeline?: string }>;
+  searchParams: Promise<{ pipeline?: string; contactId?: string; companyId?: string }>;
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("crm.board");
 
-  const pid = (await searchParams)?.pipeline;
+  const { pipeline: pid, contactId, companyId } = await searchParams;
   const [stages, companies, contacts, members, products] = await Promise.all([
     stageOptions(ctx.organizationId, pid),
     companyOptions(ctx.organizationId),
@@ -50,6 +50,8 @@ export default async function NewOpportunityPage({
           contacts={contacts}
           members={members.map((m) => ({ id: m.userId, name: m.name }))}
           productServices={products}
+          initialContactId={contactId}
+          initialCompanyId={companyId}
         />
       )}
     </div>

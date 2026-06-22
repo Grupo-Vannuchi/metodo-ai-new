@@ -82,7 +82,12 @@ export async function getContactPanel(organizationId: string, contactId: string)
       phone: true,
       role: true,
       tags: true,
-      company: { select: { name: true } },
+      company: { select: { id: true, name: true } },
+      opportunities: {
+        where: { status: "OPEN" },
+        select: { id: true, title: true, value: true, stage: { select: { name: true } } },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 }
