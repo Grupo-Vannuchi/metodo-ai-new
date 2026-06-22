@@ -907,13 +907,16 @@
   "notifications": {
     "title": "Notifications",
     "empty": "All caught up. Nothing pending.",
-    "tasksOverdue": "Overdue tasks",
-    "tasksToday": "Tasks due today",
-    "staleOpps": "Stale opportunities",
-    "financeOverdue": "Overdue finance entries",
-    "unread": "Unread conversations",
-    "assigned": "{name} assigned you a task",
-    "someone": "Someone"
+    "clear": "Clear",
+    "kind": {
+      "TASK_OVERDUE": "{count, plural, one {# overdue task} other {# overdue tasks}}",
+      "TASK_TODAY": "{count, plural, one {# task due today} other {# tasks due today}}",
+      "OPP_STALE": "{count, plural, one {# stale opportunity} other {# stale opportunities}}",
+      "FINANCE_OVERDUE": "{count, plural, one {# overdue entry} other {# overdue entries}}",
+      "INBOX_UNREAD": "{count, plural, one {# unread conversation} other {# unread conversations}}",
+      "TASK_ASSIGNED": "{actor} assigned you a task",
+      "OPP_ASSIGNED": "{actor} assigned you an opportunity"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -975,5 +978,15 @@
     "opportunities": "My opportunities",
     "noOpps": "You have no open opportunities assigned to you.",
     "tasks": "My tasks"
+  },
+  "teamChat": {
+    "tab": "Team",
+    "title": "Team members",
+    "search": "Search…",
+    "start": "Start a conversation with {name}",
+    "placeholder": "Write a message…",
+    "send": "Send",
+    "pick": "Select a team member to chat with",
+    "attachment": "Attachment"
   }
 }

@@ -907,13 +907,16 @@
   "notifications": {
     "title": "Notificações",
     "empty": "Tudo em dia. Sem pendências.",
-    "tasksOverdue": "Tarefas atrasadas",
-    "tasksToday": "Tarefas para hoje",
-    "staleOpps": "Oportunidades paradas",
-    "financeOverdue": "Lançamentos vencidos",
-    "unread": "Conversas não lidas",
-    "assigned": "{name} te atribuiu uma tarefa",
-    "someone": "Alguém"
+    "clear": "Limpar",
+    "kind": {
+      "TASK_OVERDUE": "{count, plural, one {# tarefa atrasada} other {# tarefas atrasadas}}",
+      "TASK_TODAY": "{count, plural, one {# tarefa para hoje} other {# tarefas para hoje}}",
+      "OPP_STALE": "{count, plural, one {# oportunidade parada} other {# oportunidades paradas}}",
+      "FINANCE_OVERDUE": "{count, plural, one {# lançamento vencido} other {# lançamentos vencidos}}",
+      "INBOX_UNREAD": "{count, plural, one {# conversa não lida} other {# conversas não lidas}}",
+      "TASK_ASSIGNED": "{actor} te atribuiu uma tarefa",
+      "OPP_ASSIGNED": "{actor} te atribuiu uma oportunidade"
+    }
   },
   "settings": {
     "title": "Configurações",
@@ -975,5 +978,15 @@
     "opportunities": "Minhas oportunidades",
     "noOpps": "Você não tem oportunidades abertas atribuídas.",
     "tasks": "Minhas tarefas"
+  },
+  "teamChat": {
+    "tab": "Equipe",
+    "title": "Membros da equipe",
+    "search": "Buscar…",
+    "start": "Inicie uma conversa com {name}",
+    "placeholder": "Escreva uma mensagem…",
+    "send": "Enviar",
+    "pick": "Selecione um membro da equipe para conversar",
+    "attachment": "Anexo"
   }
 }

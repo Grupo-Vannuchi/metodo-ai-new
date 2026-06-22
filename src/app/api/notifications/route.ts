@@ -1,17 +1,23 @@
 import { getOrgContext } from "@/lib/tenant";
-import { getAlerts } from "@/lib/queries/notifications";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { tenantDb } from "@/lib/tenant-db";
 
 export const runtime = "nodejs";
 
-/** Derived alerts for the notification bell (polled by the client). */
+/** Fetch persistent notifications for the user. */
 export async function GET() {
   const ctx = await getOrgContext();
   if (!ctx) return new Response("Unauthorized", { status: 401 });
-  const alerts = await getAlerts(
-    ctx.organizationId,
-    ctx.userId,
-    hasFeature(ctx.organization.plan as PlanKey, "finance"),
-  );
-  return Response.json(alerts);
+
+  const db = tenantDb(ctx.organizationId);
+  const [items, total] = await Promise.all([
+    db.notification.findMany({
+      where: { userId: ctx.userId, readAt: null },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: { id: true, type: true, data: true, link: true, createdAt: true },
+    }),
+    db.notification.count({ where: { userId: ctx.userId, readAt: null } }),
+  ]);
+
+  return Response.json({ total, items });
 }

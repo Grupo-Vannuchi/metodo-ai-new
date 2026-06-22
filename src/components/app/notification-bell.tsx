@@ -5,32 +5,41 @@ import { Bell, Clock, CheckSquare, AlertTriangle, Wallet, MessageCircle, UserPlu
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
+import { clearNotifications, markNotificationRead } from "@/app/actions/notifications";
 
-type Alerts = {
-  total: number;
-  tasksOverdue: number;
-  tasksToday: number;
-  staleOpps: number;
-  financeOverdue: number;
-  unread: number;
-  assigned: { id: string; title: string; byName: string | null }[];
+type Item = {
+  id: string;
+  type: string;
+  data: { count?: number; actor?: string; title?: string } | null;
+  link: string | null;
+  createdAt: string;
 };
+type Payload = { total: number; items: Item[] };
 
+const ICONS: Record<string, typeof Bell> = {
+  TASK_OVERDUE: Clock,
+  TASK_TODAY: CheckSquare,
+  OPP_STALE: AlertTriangle,
+  FINANCE_OVERDUE: Wallet,
+  INBOX_UNREAD: MessageCircle,
+  TASK_ASSIGNED: UserPlus,
+  OPP_ASSIGNED: UserPlus,
+};
+const ASSIGN_TYPES = new Set(["TASK_ASSIGNED", "OPP_ASSIGNED"]);
 const POLL_MS = 30000;
 
-/** Notification bell with derived alerts (polled). Each row links to the
- * relevant screen. A lightweight "command center" — no persisted table yet. */
+/** Notification bell: polls the persisted notifications and localizes each one
+ * from its `type` + `data` payload. Each edge anchors the dropdown differently. */
 export function NotificationBell({
   className,
   align = "right",
 }: {
   className?: string;
-  /** Which edge the dropdown anchors to. "left" opens toward the right (use in
-   * the narrow sidebar); "right" opens toward the left (use in the mobile bar). */
+  /** "left" opens toward the right (narrow sidebar); "right" toward the left (mobile bar). */
   align?: "left" | "right";
 }) {
   const t = useTranslations("notifications");
-  const [a, setA] = useState<Alerts | null>(null);
+  const [a, setA] = useState<Payload | null>(null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -52,18 +61,18 @@ export function NotificationBell({
   }, []);
 
   const total = a?.total ?? 0;
-  const assigned = a?.assigned ?? [];
-  const rows = a
-    ? (
-        [
-          { key: "tasksOverdue", icon: Clock, count: a.tasksOverdue, href: "/app/tasks", danger: true },
-          { key: "tasksToday", icon: CheckSquare, count: a.tasksToday, href: "/app/tasks", danger: false },
-          { key: "staleOpps", icon: AlertTriangle, count: a.staleOpps, href: "/app/crm", danger: false },
-          { key: "financeOverdue", icon: Wallet, count: a.financeOverdue, href: "/app/finance/entries", danger: true },
-          { key: "unread", icon: MessageCircle, count: a.unread, href: "/app/inbox", danger: false },
-        ] as const
-      ).filter((r) => r.count > 0)
-    : [];
+  const items = a?.items ?? [];
+
+  function handleClear() {
+    setA((prev) => (prev ? { total: 0, items: [] } : null));
+    void clearNotifications();
+  }
+
+  function handleOpenItem(id: string) {
+    setOpen(false);
+    setA((prev) => (prev ? { total: Math.max(0, prev.total - 1), items: prev.items.filter((i) => i.id !== id) } : null));
+    void markNotificationRead(id);
+  }
 
   return (
     <div className="relative">
@@ -90,39 +99,58 @@ export function NotificationBell({
               align === "left" ? "left-0" : "right-0",
             )}
           >
-            <div className="border-b border-border px-4 py-2.5 text-sm font-semibold">{t("title")}</div>
-            {rows.length === 0 && assigned.length === 0 ? (
+            <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+              <span className="text-sm font-semibold">{t("title")}</span>
+              {items.length > 0 ? (
+                <button type="button" onClick={handleClear} className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+                  {t("clear")}
+                </button>
+              ) : null}
+            </div>
+            {items.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-muted-foreground">{t("empty")}</p>
             ) : (
               <ul className="max-h-80 overflow-y-auto py-1">
-                {assigned.map((task) => (
-                  <li key={`assigned-${task.id}`}>
-                    <Link
-                      href={`/app/tasks/${task.id}`}
-                      onClick={() => setOpen(false)}
-                      className="flex items-start gap-3 px-4 py-2 text-sm transition-colors hover:bg-muted"
-                    >
-                      <UserPlus className="mt-0.5 size-4 shrink-0 text-brand" />
+                {items.map((item) => {
+                  const Icon = ICONS[item.type] ?? Bell;
+                  const isAssign = ASSIGN_TYPES.has(item.type);
+                  const label = t(`kind.${item.type}`, {
+                    count: item.data?.count ?? 0,
+                    actor: item.data?.actor ?? "",
+                  });
+                  const body = (
+                    <>
+                      <Icon className={cn("mt-0.5 size-4 shrink-0", isAssign ? "text-brand" : "text-muted-foreground")} />
                       <span className="min-w-0 flex-1">
-                        <span className="block">{t("assigned", { name: task.byName ?? t("someone") })}</span>
-                        <span className="block truncate text-xs text-muted-foreground">{task.title}</span>
+                        <span className="block font-medium">{label}</span>
+                        {isAssign && item.data?.title ? (
+                          <span className="block truncate text-xs text-muted-foreground">{item.data.title}</span>
+                        ) : null}
                       </span>
-                    </Link>
-                  </li>
-                ))}
-                {rows.map((r) => (
-                  <li key={r.key}>
-                    <Link
-                      href={r.href}
-                      onClick={() => setOpen(false)}
-                      className="flex items-center gap-3 px-4 py-2 text-sm transition-colors hover:bg-muted"
-                    >
-                      <r.icon className={cn("size-4 shrink-0", r.danger ? "text-red-500" : "text-muted-foreground")} />
-                      <span className="flex-1">{t(r.key)}</span>
-                      <span className="rounded-full bg-muted px-1.5 text-xs font-medium text-muted-foreground">{r.count}</span>
-                    </Link>
-                  </li>
-                ))}
+                    </>
+                  );
+                  return (
+                    <li key={item.id}>
+                      {item.link ? (
+                        <Link
+                          href={item.link}
+                          onClick={() => handleOpenItem(item.id)}
+                          className="flex items-start gap-3 px-4 py-2 text-sm transition-colors hover:bg-muted"
+                        >
+                          {body}
+                        </Link>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenItem(item.id)}
+                          className="flex w-full items-start gap-3 px-4 py-2 text-left text-sm transition-colors hover:bg-muted"
+                        >
+                          {body}
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

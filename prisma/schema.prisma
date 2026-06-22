@@ -11,7 +11,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   // Runtime connection. On Neon/Supabase use the POOLED (pgBouncer) URL.
   url       = env("DATABASE_URL")
   // Direct (non-pooled) connection for `prisma migrate`/`db push` — migrations
@@ -48,8 +48,12 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships Membership[]
-  invitations Invitation[]
+  memberships      Membership[]
+  invitations      Invitation[]
+  notifications        Notification[]
+  teamChats            TeamChat[]
+  teamChatParticipants TeamChatParticipant[]
+  teamChatMessages     TeamChatMessage[]
 
   @@map("organizations")
 }
@@ -63,8 +67,11 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships Membership[]
-  profile     UserProfile?
+  memberships          Membership[]
+  profile              UserProfile?
+  notifications        Notification[]
+  teamChatParticipants TeamChatParticipant[]
+  teamChatMessages     TeamChatMessage[]
 
   @@map("users")
 }
@@ -104,17 +111,17 @@ model UserProfile {
 
 /// Join between a user and an organization, carrying the role.
 model Membership {
-  id             String   @id @default(cuid())
-  organizationId String
-  userId         String
-  role           Role     @default(MEMBER)
+  id               String   @id @default(cuid())
+  organizationId   String
+  userId           String
+  role             Role     @default(MEMBER)
   /// Access template restricting which screens a MEMBER can reach. Null = full
   /// access. OWNER/ADMIN ignore this (they always have full access).
   accessTemplateId String?
   createdAt        DateTime @default(now())
 
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessTemplate AccessTemplate? @relation(fields: [accessTemplateId], references: [id], onDelete: SetNull)
 
   // One team per user: a user has at most one membership.
@@ -143,14 +150,14 @@ model AccessTemplate {
 
 /// A pending invitation to join an organization with a given role.
 model Invitation {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   email          String
-  role           Role     @default(MEMBER)
-  tokenHash      String   @unique
+  role           Role      @default(MEMBER)
+  tokenHash      String    @unique
   expiresAt      DateTime
   acceptedAt     DateTime?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -300,29 +307,30 @@ model ProductService {
 
 /// A deal / card on the Kanban board.
 model Opportunity {
-  id               String            @id @default(cuid())
-  organizationId   String
-  pipelineId       String
-  stageId          String
-  companyId        String?
-  contactId        String?
-  productServiceId String?
-  title            String
+  id                String            @id @default(cuid())
+  organizationId    String
+  pipelineId        String
+  stageId           String
+  companyId         String?
+  contactId         String?
+  productServiceId  String?
+  title             String
   /// Sequential per-org-per-year code, e.g. "0001/26".
-  code             String?
-  seqYear          Int?
-  seqNumber        Int?
-  value            Decimal           @default(0) @db.Decimal(14, 2)
-  status           OpportunityStatus @default(OPEN)
-  order            Int               @default(0) // position within the stage column
-  ownerId          String? // membership/user responsible
+  code              String?
+  seqYear           Int?
+  seqNumber         Int?
+  value             Decimal           @default(0) @db.Decimal(14, 2)
+  status            OpportunityStatus @default(OPEN)
+  order             Int               @default(0) // position within the stage column
+  ownerId           String? // membership/user responsible
+  createdById       String? // membership/user who created it (for notifications)
   expectedCloseDate DateTime? // data prevista de fechamento
-  notes            String?
+  notes             String?
   /// Reason for losing/canceling (required when status is LOST/CANCELED).
-  outcomeReason    String?
-  closedAt         DateTime?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  outcomeReason     String?
+  closedAt          DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   pipeline       Pipeline        @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   stage          Stage           @relation(fields: [stageId], references: [id], onDelete: Restrict)
@@ -549,25 +557,25 @@ model ExtractionJob {
 /// from Google Places; enrichment fields (email/socials) come from the
 /// business's own public website.
 model ExtractedLead {
-  id             String  @id @default(cuid())
-  organizationId String
-  jobId          String
-  placeId        String?
-  name           String?
-  segment        String?
-  address        String?
-  phone          String?
-  whatsapp       String?
-  email          String?
-  website        String?
-  instagram      String?
-  facebook       String?
-  linkedin       String?
-  rating         Float?
+  id                String    @id @default(cuid())
+  organizationId    String
+  jobId             String
+  placeId           String?
+  name              String?
+  segment           String?
+  address           String?
+  phone             String?
+  whatsapp          String?
+  email             String?
+  website           String?
+  instagram         String?
+  facebook          String?
+  linkedin          String?
+  rating            Float?
   /// Set once the user imports this lead into the CRM (idempotent).
   importedCompanyId String?
   importedAt        DateTime?
-  createdAt         DateTime @default(now())
+  createdAt         DateTime  @default(now())
 
   job ExtractionJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
@@ -725,31 +733,31 @@ model FinanceCategory {
 /// feeds Receitas, Despesas, Fluxo de Caixa and DRE. CRM links are stored as ids
 /// (no PII duplicated); names are resolved at read time.
 model FinanceEntry {
-  id             String         @id @default(cuid())
-  organizationId String
-  type           FinanceType
-  description    String
-  amount         Decimal        @db.Decimal(12, 2)
-  status         FinanceStatus  @default(PENDING)
+  id                 String         @id @default(cuid())
+  organizationId     String
+  type               FinanceType
+  description        String
+  amount             Decimal        @db.Decimal(12, 2)
+  status             FinanceStatus  @default(PENDING)
   /// Competência/vencimento (accrual basis — drives DRE).
-  dueDate        DateTime
+  dueDate            DateTime
   /// When it was actually paid/received (cash basis — drives Fluxo de Caixa).
-  settledAt      DateTime?
-  method         FinanceMethod?
-  notes          String?
-  categoryId     String?
+  settledAt          DateTime?
+  method             FinanceMethod?
+  notes              String?
+  categoryId         String?
   /// Optional CRM links (ids only).
-  contactId      String?
-  companyId      String?
-  opportunityId  String?
+  contactId          String?
+  companyId          String?
+  opportunityId      String?
   /// Installments: entries of the same sale share a group id (NNNN.../uuid),
   /// with their position (installmentNo) out of installmentTotal.
   installmentGroupId String?
   installmentNo      Int?
   installmentTotal   Int?
-  createdById    String?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdById        String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
   category FinanceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
@@ -805,4 +813,100 @@ model Task {
   @@index([organizationId, opportunityId])
   @@index([organizationId, contactId])
   @@map("tasks")
+}
+
+/// A persistent notification for the user. Used for assigned tasks, mentions,
+/// and daily digests of overdue/stale items.
+model Notification {
+  id             String @id @default(cuid())
+  organizationId String
+  userId         String
+
+  /// Granular kind, drives the icon + localized label in the bell. One of the
+  /// NotificationKind values (see src/lib/notifications/kinds.ts).
+  type String
+
+  /// i18n interpolation values for the localized message (e.g. { count } for a
+  /// digest, or { actor, title } for an assignment). Rendered client-side.
+  data Json?
+
+  /// Where clicking the notification navigates (e.g. "/app/tasks/123").
+  link String?
+
+  /// Set when the user clears notifications or opens this one.
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId, readAt])
+  @@map("notifications")
+}
+
+// ---------------------------------------------------------------------------
+// Internal Team Chat
+// ---------------------------------------------------------------------------
+
+enum TeamChatAttachmentType {
+  TASK
+  OPP
+  CONTACT
+  COMPANY
+}
+
+model TeamChat {
+  id                 String    @id @default(cuid())
+  organizationId     String
+  /// Canonical key for a 1:1 chat ("<orgId>:<sortedUserIdA>:<sortedUserIdB>"),
+  /// unique so a direct chat can be upserted without racing duplicates.
+  dmKey              String?   @unique
+  lastMessageAt      DateTime?
+  lastMessagePreview String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  participants TeamChatParticipant[]
+  messages     TeamChatMessage[]
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, lastMessageAt])
+}
+
+model TeamChatParticipant {
+  id             String   @id @default(cuid())
+  organizationId String
+  chatId         String
+  userId         String
+  unreadCount    Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  chat         TeamChat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([chatId, userId])
+  @@index([organizationId, userId])
+}
+
+model TeamChatMessage {
+  id             String @id @default(cuid())
+  organizationId String
+  chatId         String
+  senderId       String
+  body           String
+
+  attachmentType TeamChatAttachmentType?
+  attachmentId   String?
+
+  createdAt DateTime @default(now())
+
+  chat         TeamChat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt])
 }

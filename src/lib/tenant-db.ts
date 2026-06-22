@@ -35,9 +35,12 @@ const TENANT_MODELS = new Set<string>([
   "Conversation",
   "ConversationFolder",
   "Message",
-  "FinanceCategory",
   "FinanceEntry",
   "Task",
+  "Notification",
+  "TeamChat",
+  "TeamChatParticipant",
+  "TeamChatMessage",
 ]);
 
 const WHERE_OPS = new Set<string>([

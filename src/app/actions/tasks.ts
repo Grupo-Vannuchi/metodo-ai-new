@@ -31,10 +31,12 @@ async function resolveAssignee(
   organizationId: string,
   userId: string | undefined,
   fallback: string,
+  role: "OWNER" | "ADMIN" | "MEMBER",
 ): Promise<string> {
-  if (!userId) return fallback;
+  const targetId = role === "MEMBER" ? fallback : userId;
+  if (!targetId) return fallback;
   const m = await prisma.membership.findFirst({
-    where: { organizationId, userId },
+    where: { organizationId, userId: targetId },
     select: { userId: true },
   });
   return m?.userId ?? fallback;
@@ -62,9 +64,10 @@ function parse(formData: FormData) {
   });
 }
 
-async function buildData(organizationId: string, userId: string, input: ReturnType<typeof taskSchema.parse>) {
+async function buildData(organizationId: string, userId: string, role: "OWNER" | "ADMIN" | "MEMBER", input: ReturnType<typeof taskSchema.parse>, currentAssignedToId?: string | null) {
+  const fallback = currentAssignedToId || userId;
   const [assignedToId, contactId, companyId, opportunityId] = await Promise.all([
-    resolveAssignee(organizationId, input.assignedToId, userId),
+    resolveAssignee(organizationId, input.assignedToId, fallback, role),
     existsInOrg(organizationId, "contact", input.contactId),
     existsInOrg(organizationId, "company", input.companyId),
     existsInOrg(organizationId, "opportunity", input.opportunityId),
@@ -94,11 +97,22 @@ export async function createTask(formData: FormData): Promise<TaskResult> {
   const parsed = parse(formData);
   if (!parsed.success) return { ok: false, error: "invalid" };
   try {
-    const data = await buildData(ctx.organizationId, ctx.userId, parsed.data);
+    const data = await buildData(ctx.organizationId, ctx.userId, ctx.role, parsed.data);
     const task = await tenantDb(ctx.organizationId).task.create({
       data: { organizationId: ctx.organizationId, createdById: ctx.userId, ...data },
       select: { id: true },
     });
+    if (data.assignedToId && data.assignedToId !== ctx.userId) {
+      await tenantDb(ctx.organizationId).notification.create({
+        data: {
+          organizationId: ctx.organizationId,
+          userId: data.assignedToId,
+          type: "TASK_ASSIGNED",
+          data: { actor: ctx.user.name, title: data.title },
+          link: `/app/tasks/${task.id}`,
+        },
+      });
+    }
     await audit(ctx, { action: "task.created", entity: "Task", entityId: task.id });
     revalidate();
     return { ok: true, id: task.id };
@@ -114,8 +128,23 @@ export async function updateTask(id: string, formData: FormData): Promise<TaskRe
   const parsed = parse(formData);
   if (!parsed.success) return { ok: false, error: "invalid" };
   try {
-    const data = await buildData(ctx.organizationId, ctx.userId, parsed.data);
-    await tenantDb(ctx.organizationId).task.updateMany({ where: { id }, data });
+    const db = tenantDb(ctx.organizationId);
+    const current = await db.task.findFirst({ where: { id }, select: { assignedToId: true } });
+    if (!current) return { ok: false, error: "invalid" };
+
+    const data = await buildData(ctx.organizationId, ctx.userId, ctx.role, parsed.data, current.assignedToId);
+    await db.task.updateMany({ where: { id }, data });
+    if (data.assignedToId && data.assignedToId !== current.assignedToId && data.assignedToId !== ctx.userId) {
+      await db.notification.create({
+        data: {
+          organizationId: ctx.organizationId,
+          userId: data.assignedToId,
+          type: "TASK_ASSIGNED",
+          data: { actor: ctx.user.name, title: data.title },
+          link: `/app/tasks/${id}`,
+        },
+      });
+    }
     await audit(ctx, { action: "task.updated", entity: "Task", entityId: id });
     revalidate();
     return { ok: true, id };

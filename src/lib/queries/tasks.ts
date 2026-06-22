@@ -180,28 +180,3 @@ export async function getTask(organizationId: string, id: string) {
   };
 }
 
-export type AssignedAlert = { id: string; title: string; byName: string | null };
-
-/** Open tasks assigned to the user by someone else — drives the "X assigned
- * you a task" notifications. */
-export async function tasksAssignedByOthers(
-  organizationId: string,
-  userId: string,
-): Promise<AssignedAlert[]> {
-  const db = tenantDb(organizationId);
-  const tasks = await db.task.findMany({
-    where: { assignedToId: userId, doneAt: null, createdById: { not: userId } },
-    orderBy: { createdAt: "desc" },
-    take: 10,
-    select: { id: true, title: true, createdById: true },
-  });
-  if (tasks.length === 0) return [];
-  const ids = [...new Set(tasks.map((t) => t.createdById).filter(Boolean))] as string[];
-  const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
-  const uMap = new Map(users.map((u) => [u.id, u.name]));
-  return tasks.map((t) => ({
-    id: t.id,
-    title: t.title,
-    byName: t.createdById ? uMap.get(t.createdById) ?? null : null,
-  }));
-}

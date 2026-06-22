@@ -37,7 +37,7 @@ async function existsInOrg(
 /** Resolve the responsible member (must belong to the org); else the fallback. */
 async function resolveOwner(
   organizationId: string,
-  ownerId: string | undefined,
+  ownerId: string | null | undefined,
   fallback: string | null,
 ): Promise<string | null> {
   if (!ownerId) return fallback;
@@ -68,11 +68,13 @@ export async function createOpportunity(
     });
     if (!stage) return { ok: false, error: "invalid" };
 
+    const finalOwnerId = ctx.role === "MEMBER" ? ctx.userId : parsed.data.ownerId;
+
     const [companyId, contactId, productServiceId, ownerId] = await Promise.all([
       existsInOrg(org, "company", parsed.data.companyId),
       existsInOrg(org, "contact", parsed.data.contactId),
       existsInOrg(org, "productService", parsed.data.productServiceId),
-      resolveOwner(org, parsed.data.ownerId, ctx.userId),
+      resolveOwner(org, finalOwnerId, ctx.userId),
     ]);
 
     const year = new Date().getFullYear();
@@ -101,6 +103,7 @@ export async function createOpportunity(
           contactId,
           productServiceId,
           ownerId,
+          createdById: ctx.userId,
           expectedCloseDate: dateOrNull(parsed.data.expectedCloseDate),
           notes: parsed.data.notes || null,
           order,
@@ -108,9 +111,21 @@ export async function createOpportunity(
           seqNumber,
           code,
         },
-        select: { id: true },
+        select: { id: true, title: true },
       });
     });
+
+    if (ownerId && ownerId !== ctx.userId) {
+      await tenantDb(org).notification.create({
+        data: {
+          organizationId: org,
+          userId: ownerId,
+          type: "OPP_ASSIGNED",
+          data: { actor: ctx.user.name, title: opp.title },
+          link: `/app/crm/${opp.id}`,
+        },
+      });
+    }
 
     revalidatePath("/app/crm");
     return { ok: true, id: opp.id };
@@ -173,15 +188,17 @@ export async function updateOpportunity(
     const db = tenantDb(org);
     const [stage, current] = await Promise.all([
       db.stage.findFirst({ where: { id: parsed.data.stageId }, select: { id: true, pipelineId: true } }),
-      db.opportunity.findFirst({ where: { id }, select: { closedAt: true } }),
+      db.opportunity.findFirst({ where: { id }, select: { closedAt: true, ownerId: true } }),
     ]);
     if (!stage || !current) return { ok: false, error: "invalid" };
+
+    const finalOwnerId = ctx.role === "MEMBER" ? current.ownerId : parsed.data.ownerId;
 
     const [companyId, contactId, productServiceId, ownerId] = await Promise.all([
       existsInOrg(org, "company", parsed.data.companyId),
       existsInOrg(org, "contact", parsed.data.contactId),
       existsInOrg(org, "productService", parsed.data.productServiceId),
-      resolveOwner(org, parsed.data.ownerId, null),
+      resolveOwner(org, finalOwnerId, null),
     ]);
 
     const status = parsed.data.status;
@@ -208,6 +225,18 @@ export async function updateOpportunity(
       },
     });
     if (res.count === 0) return { ok: false, error: "unknown" };
+
+    if (ownerId && ownerId !== current.ownerId && ownerId !== ctx.userId) {
+      await db.notification.create({
+        data: {
+          organizationId: org,
+          userId: ownerId,
+          type: "OPP_ASSIGNED",
+          data: { actor: ctx.user.name, title: parsed.data.title },
+          link: `/app/crm/${id}`,
+        },
+      });
+    }
 
     revalidatePath("/app/crm");
     return { ok: true, id };
