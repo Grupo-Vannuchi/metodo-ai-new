@@ -4,7 +4,6 @@ import { useState, useTransition, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "@/i18n/navigation";
 import { sendLeadsToFunnel } from "@/app/actions/extractions";
-import { ArrowLeft } from "lucide-react";
 
 export function ImportForm({
   jobId,
@@ -61,13 +60,6 @@ export function ImportForm({
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <div className="flex items-center gap-4">
-        <button
-          type="button"
-          onClick={() => router.push(`/app/prospecting/${jobId}`)}
-          className="rounded-full p-2 hover:bg-muted"
-        >
-          <ArrowLeft className="size-5" />
-        </button>
         <h1 className="text-2xl font-bold tracking-tight">Importar como Oportunidade</h1>
       </div>
 
