@@ -23,17 +23,27 @@ export type LeadRow = {
 export function ImportLeads({
   jobId,
   leads,
-  stages,
+  pipelines,
+  productServices,
 }: {
   jobId: string;
   leads: LeadRow[];
-  stages: { id: string; name: string }[];
+  pipelines: { id: string; name: string; isDefault: boolean; stages: { id: string; name: string }[] }[];
+  productServices: { id: string; name: string; kind: string; price: number | null }[];
 }) {
   const t = useTranslations("prospecting");
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [stageId, setStageId] = useState(stages[0]?.id ?? "");
   const [pending, start] = useTransition();
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const defaultPipeline = pipelines.find((p) => p.isDefault) || pipelines[0];
+  const [pipelineId, setPipelineId] = useState(defaultPipeline?.id ?? "");
+  const currentPipeline = pipelines.find((p) => p.id === pipelineId);
+  const availableStages = currentPipeline?.stages ?? [];
+  // Whenever pipeline changes, or initially, we might need to reset stageId if it doesn't match
+  const [stageId, setStageId] = useState(availableStages[0]?.id ?? "");
+  const [productId, setProductId] = useState("");
 
   const importable = leads.filter((l) => !l.importedAt);
   const allSelected = importable.length > 0 && importable.every((l) => selected.has(l.id));
@@ -61,14 +71,27 @@ export function ImportLeads({
     });
   }
 
-  function onFunnel() {
+  function onFunnel(e: React.FormEvent) {
+    e.preventDefault();
     if (selected.size === 0 || !stageId) return;
     const ids = [...selected];
     start(async () => {
-      await sendLeadsToFunnel(jobId, ids, stageId);
+      await sendLeadsToFunnel(jobId, ids, stageId, productId || undefined);
       setSelected(new Set());
+      setModalOpen(false);
       router.refresh();
     });
+  }
+
+  // Handle pipeline change to reset stage to the first of the new pipeline
+  function handlePipelineChange(newPipelineId: string) {
+    setPipelineId(newPipelineId);
+    const pipe = pipelines.find((p) => p.id === newPipelineId);
+    if (pipe && pipe.stages.length > 0) {
+      setStageId(pipe.stages[0].id);
+    } else {
+      setStageId("");
+    }
   }
 
   return (
@@ -82,22 +105,10 @@ export function ImportLeads({
           <Button type="button" size="sm" variant="outline" onClick={onImport} disabled={pending || selected.size === 0}>
             {pending ? t("importing") : t("importSelected", { count: selected.size })}
           </Button>
-          {stages.length > 0 ? (
-            <div className="flex items-center gap-2">
-              <select
-                value={stageId}
-                onChange={(e) => setStageId(e.target.value)}
-                aria-label={t("funnelStage")}
-                className="h-9 max-w-40 rounded-lg border border-border bg-card px-2.5 text-sm focus-visible:border-brand focus-visible:outline-none"
-              >
-                {stages.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-              <Button type="button" size="sm" onClick={onFunnel} disabled={pending || selected.size === 0}>
-                {pending ? t("sending") : t("sendToFunnel", { count: selected.size })}
-              </Button>
-            </div>
+          {pipelines.length > 0 ? (
+            <Button type="button" size="sm" onClick={() => setModalOpen(true)} disabled={pending || selected.size === 0}>
+              Importar como Oportunidade
+            </Button>
           ) : null}
         </div>
       </div>
@@ -161,6 +172,66 @@ export function ImportLeads({
           </tbody>
         </table>
       </div>
+
+      {modalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <button type="button" tabIndex={-1} onClick={() => setModalOpen(false)} className="absolute inset-0 cursor-default bg-black/50 motion-safe:animate-overlay-in" />
+          <form onSubmit={onFunnel} className="relative w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-xl motion-safe:animate-dialog-in">
+            <h2 className="text-lg font-semibold">Importar como Oportunidade</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {selected.size} lead(s) selecionado(s) para entrar no CRM.
+            </p>
+
+            <label className="mt-4 block text-sm font-medium">Pipeline</label>
+            <select
+              value={pipelineId}
+              onChange={(e) => handlePipelineChange(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus-visible:border-brand focus-visible:outline-none"
+              required
+            >
+              {pipelines.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+
+            <label className="mt-4 block text-sm font-medium">Estágio (Stage)</label>
+            <select
+              value={stageId}
+              onChange={(e) => setStageId(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus-visible:border-brand focus-visible:outline-none"
+              required
+            >
+              <option value="" disabled>Selecione um estágio</option>
+              {availableStages.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+
+            <label className="mt-4 block text-sm font-medium">Produto / Serviço (Opcional)</label>
+            <select
+              value={productId}
+              onChange={(e) => setProductId(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus-visible:border-brand focus-visible:outline-none"
+            >
+              <option value="">Nenhum (valor zerado)</option>
+              {productServices.map((ps) => (
+                <option key={ps.id} value={ps.id}>
+                  {ps.name} {ps.price ? `(R$ ${ps.price})` : ""}
+                </option>
+              ))}
+            </select>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant="primary" size="sm" disabled={pending || !stageId}>
+                {pending ? "Criando..." : "Confirmar Importação"}
+              </Button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -253,6 +253,7 @@ export async function sendLeadsToFunnel(
   jobId: string,
   leadIds: string[],
   stageId: string,
+  productServiceId?: string,
 ): Promise<FunnelResult> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false, error: "unauthorized" };
@@ -265,6 +266,17 @@ export async function sendLeadsToFunnel(
     const stage = await db.stage.findFirst({ where: { id: stageId }, select: { id: true } });
     if (!stage) return { ok: false, error: "invalid" };
 
+    let baseValue = 0;
+    if (productServiceId) {
+      const ps = await db.productService.findFirst({
+        where: { id: productServiceId },
+        select: { price: true },
+      });
+      if (ps && ps.price) {
+        baseValue = Number(ps.price);
+      }
+    }
+
     const leads = await db.extractedLead.findMany({
       where: { jobId, id: { in: leadIds }, importedAt: null },
     });
@@ -274,10 +286,11 @@ export async function sendLeadsToFunnel(
       const { companyId, contactId, name } = await importLeadCore(db, ctx.organizationId, lead);
       const res = await createOpportunity({
         title: name,
-        value: 0,
+        value: baseValue,
         stageId,
         companyId,
         contactId: contactId ?? undefined,
+        productServiceId,
       });
       if (res.ok) sent++;
     }

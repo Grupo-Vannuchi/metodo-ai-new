@@ -50,3 +50,20 @@ export async function getPipeline(organizationId: string, id: string) {
     stages: stages.map((s) => ({ ...s, oppCount: byStage.get(s.id) ?? 0 })),
   };
 }
+
+/** Full tree of pipelines and their stages. */
+export async function listPipelinesWithStages(organizationId: string) {
+  const db = tenantDb(organizationId);
+  return db.pipeline.findMany({
+    orderBy: { order: "asc" },
+    select: {
+      id: true,
+      name: true,
+      isDefault: true,
+      stages: {
+        orderBy: { order: "asc" },
+        select: { id: true, name: true },
+      },
+    },
+  });
+}
