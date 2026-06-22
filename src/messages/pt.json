@@ -593,6 +593,16 @@
     "sendToFunnel": "Enviar ao funil ({count})",
     "sending": "Enviando…",
     "funnelStage": "Estágio do funil",
+    "importAsOpp": "Importar como oportunidade",
+    "importIntro": "Você está importando {count} lead(s) para o funil de vendas. Configure o destino abaixo.",
+    "pipeline": "Funil",
+    "selectStage": "Selecione um estágio",
+    "product": "Produto / serviço (opcional)",
+    "productNone": "Nenhum (valor zerado)",
+    "productHint": "Se atrelar um produto, os cards nascem no funil com o valor correspondente.",
+    "cancel": "Cancelar",
+    "confirmImport": "Confirmar importação",
+    "creating": "Criando…",
     "imported": "Importado",
     "colName": "Empresa",
     "colPhone": "Telefone",
@@ -988,5 +998,12 @@
     "send": "Enviar",
     "pick": "Selecione um membro da equipe para conversar",
     "attachment": "Anexo"
+  },
+  "pagination": {
+    "label": "Paginação",
+    "prev": "Anterior",
+    "next": "Próxima",
+    "showing": "Mostrando {from}–{to} de {total}",
+    "page": "Página {page} de {total}"
   }
 }

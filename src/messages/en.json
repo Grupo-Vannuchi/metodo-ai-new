@@ -593,6 +593,16 @@
     "sendToFunnel": "Send to funnel ({count})",
     "sending": "Sending…",
     "funnelStage": "Funnel stage",
+    "importAsOpp": "Import as opportunity",
+    "importIntro": "You are importing {count} lead(s) into the sales funnel. Set the destination below.",
+    "pipeline": "Pipeline",
+    "selectStage": "Select a stage",
+    "product": "Product / service (optional)",
+    "productNone": "None (zero value)",
+    "productHint": "Linking a product makes the cards start with its price.",
+    "cancel": "Cancel",
+    "confirmImport": "Confirm import",
+    "creating": "Creating…",
     "imported": "Imported",
     "colName": "Company",
     "colPhone": "Phone",
@@ -988,5 +998,12 @@
     "send": "Send",
     "pick": "Select a team member to chat with",
     "attachment": "Attachment"
+  },
+  "pagination": {
+    "label": "Pagination",
+    "prev": "Previous",
+    "next": "Next",
+    "showing": "Showing {from}–{to} of {total}",
+    "page": "Page {page} of {total}"
   }
 }

@@ -5,7 +5,7 @@ import { Check, ExternalLink, Instagram, Facebook, Linkedin } from "lucide-react
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "@/i18n/navigation";
-import { importLeads, sendLeadsToFunnel } from "@/app/actions/extractions";
+import { importLeads } from "@/app/actions/extractions";
 import { Pagination } from "@/components/ui/pagination";
 
 export type LeadRow = {
@@ -65,9 +65,10 @@ export function ImportLeads({
 
   function onFunnelConfig() {
     if (selected.size === 0) return;
-    const ids = [...selected];
-    sessionStorage.setItem("prospecting_import_leads", JSON.stringify(ids));
-    router.push(`/app/prospecting/${jobId}/import`);
+    // Pass the selection through the URL — no sessionStorage, shareable, and
+    // read by the /import server component.
+    const ids = [...selected].join(",");
+    router.push(`/app/prospecting/${jobId}/import?leads=${ids}`);
   }
 
   return (
@@ -83,7 +84,7 @@ export function ImportLeads({
           </Button>
           {pipelines.length > 0 ? (
             <Button type="button" size="sm" onClick={onFunnelConfig} disabled={pending || selected.size === 0}>
-              Importar como Oportunidade
+              {t("importAsOpp")}
             </Button>
           ) : null}
         </div>
