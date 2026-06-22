@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "@/i18n/navigation";
 import { importLeads, sendLeadsToFunnel } from "@/app/actions/extractions";
+import { Pagination } from "@/components/ui/pagination";
 
 export type LeadRow = {
   id: string;
@@ -23,21 +24,18 @@ export type LeadRow = {
 export function ImportLeads({
   jobId,
   leads,
+  totalLeads,
   pipelines,
 }: {
   jobId: string;
   leads: LeadRow[];
+  totalLeads: number;
   pipelines: { id: string; name: string; isDefault: boolean; stages: { id: string; name: string }[] }[];
 }) {
   const t = useTranslations("prospecting");
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, start] = useTransition();
-
-  const [page, setPage] = useState(1);
-  const pageSize = 50;
-  const totalPages = Math.ceil(leads.length / pageSize);
-  const visibleLeads = leads.slice((page - 1) * pageSize, page * pageSize);
 
   const importable = leads.filter((l) => !l.importedAt);
   const allSelected = importable.length > 0 && importable.every((l) => selected.has(l.id));
@@ -103,7 +101,7 @@ export function ImportLeads({
             </tr>
           </thead>
           <tbody>
-            {visibleLeads.map((l) => {
+            {leads.map((l) => {
               const imported = Boolean(l.importedAt);
               return (
                 <tr key={l.id} className="border-b border-border last:border-0">
@@ -150,23 +148,7 @@ export function ImportLeads({
           </tbody>
         </table>
         
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-border px-4 py-3">
-            <p className="text-sm text-muted-foreground">
-              Mostrando <span className="font-medium">{(page - 1) * pageSize + 1}</span> até{" "}
-              <span className="font-medium">{Math.min(page * pageSize, leads.length)}</span> de{" "}
-              <span className="font-medium">{leads.length}</span> resultados
-            </p>
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
-                Anterior
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-                Próxima
-              </Button>
-            </div>
-          </div>
-        )}
+        <Pagination total={totalLeads} pageSize={10} />
       </div>
     </div>
   );

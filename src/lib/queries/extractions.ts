@@ -25,7 +25,7 @@ export async function listExtractionJobs(organizationId: string, page = 1, pageS
 }
 
 /** A job with its leads, for the results page. Scoped: null if not in org. */
-export async function getExtractionJob(organizationId: string, id: string) {
+export async function getExtractionJob(organizationId: string, id: string, page = 1, pageSize = 10) {
   const db = tenantDb(organizationId);
   const job = await db.extractionJob.findFirst({
     where: { id },
@@ -33,28 +33,33 @@ export async function getExtractionJob(organizationId: string, id: string) {
   });
   if (!job) return null;
 
-  const leads = await db.extractedLead.findMany({
-    where: { jobId: id },
-    orderBy: { createdAt: "asc" },
-    select: {
-      id: true,
-      name: true,
-      segment: true,
-      address: true,
-      phone: true,
-      whatsapp: true,
-      email: true,
-      website: true,
-      instagram: true,
-      facebook: true,
-      linkedin: true,
-      rating: true,
-      importedCompanyId: true,
-      importedAt: true,
-    },
-  });
+  const [totalLeads, leadsData] = await Promise.all([
+    db.extractedLead.count({ where: { jobId: id } }),
+    db.extractedLead.findMany({
+      where: { jobId: id },
+      orderBy: { createdAt: "asc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: {
+        id: true,
+        name: true,
+        segment: true,
+        address: true,
+        phone: true,
+        whatsapp: true,
+        email: true,
+        website: true,
+        instagram: true,
+        facebook: true,
+        linkedin: true,
+        rating: true,
+        importedCompanyId: true,
+        importedAt: true,
+      },
+    }),
+  ]);
 
-  return { job, leads };
+  return { job, leads: { data: leadsData, total: totalLeads } };
 }
 
 /** Leads extracted since `since` (for the monthly prospecting quota). */

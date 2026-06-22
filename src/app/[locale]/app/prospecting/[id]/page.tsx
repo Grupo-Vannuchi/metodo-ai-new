@@ -25,16 +25,21 @@ function queryLabel(query: unknown): string {
 
 export default async function ExtractionDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string; id: string }>;
+  searchParams: Promise<{ page?: string }>;
 }) {
   const { locale: rawLocale, id } = await params;
   const locale = resolveLocale(rawLocale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("prospecting");
+  
+  const page = parseInt((await searchParams)?.page || "1", 10);
+  const pageSize = 10;
 
   const [data, pipelines] = await Promise.all([
-    getExtractionJob(ctx.organizationId, id),
+    getExtractionJob(ctx.organizationId, id, page, pageSize),
     listPipelinesWithStages(ctx.organizationId),
   ]);
   if (!data) notFound();
@@ -60,12 +65,12 @@ export default async function ExtractionDetailPage({
         </p>
       ) : null}
 
-      {leads.length === 0 ? (
+      {leads.data.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
           {running ? t("running") : t("noLeads")}
         </p>
       ) : (
-        <ImportLeads jobId={job.id} leads={leads} pipelines={pipelines} />
+        <ImportLeads jobId={job.id} leads={leads.data} totalLeads={leads.total} pipelines={pipelines} />
       )}
     </div>
   );
