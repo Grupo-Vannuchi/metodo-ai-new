@@ -1,6 +1,10 @@
 import { readFileSync } from "fs";
 
-const TOKEN = "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";
+const TOKEN = process.env.GITHUB_TOKEN;
+if (!TOKEN) {
+  console.error("Missing GITHUB_TOKEN env var. Export a GitHub token before running this script.");
+  process.exit(1);
+}
 const PROJECT_ID = "PVT_kwDOEVB4iM4BaZqQ";
 const STATUS_FIELD_ID = "PVTSSF_lADOEVB4iM4BaZqQzhVRjBo";
 const AREA_FIELD_ID = "PVTSSF_lADOEVB4iM4BaZqQzhV02l4";
@@ -37,7 +41,7 @@ interface TaskInput {
   comments?: string;
 }
 
-async function graphql(query: string, variables: any) {
+async function graphql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
   const response = await fetch("https://api.github.com/graphql", {
     method: "POST",
     headers: {
@@ -47,11 +51,11 @@ async function graphql(query: string, variables: any) {
     },
     body: JSON.stringify({ query, variables }),
   });
-  const result = await response.json() as any;
+  const result = (await response.json()) as { data?: T; errors?: unknown };
   if (result.errors) {
     throw new Error("GraphQL Error: " + JSON.stringify(result.errors, null, 2));
   }
-  return result.data;
+  return result.data as T;
 }
 
 async function main() {
@@ -115,7 +119,7 @@ async function main() {
       }
     }
   `;
-  const addResult = await graphql(addMutation, {
+  const addResult = await graphql<{ addProjectV2DraftIssue: { projectItem: { id: string } } }>(addMutation, {
     projectId: PROJECT_ID,
     title: finalTitle,
     body: body
@@ -143,7 +147,7 @@ async function main() {
       }
     }
   `;
-  await graphql(updateStatusMutation, {
+  await graphql<unknown>(updateStatusMutation, {
     projectId: PROJECT_ID,
     itemId: itemId,
     fieldId: STATUS_FIELD_ID,
@@ -156,7 +160,7 @@ async function main() {
   if (!areaOptionId) {
     throw new Error(`Invalid area: ${task.area}`);
   }
-  await graphql(updateStatusMutation, {
+  await graphql<unknown>(updateStatusMutation, {
     projectId: PROJECT_ID,
     itemId: itemId,
     fieldId: AREA_FIELD_ID,

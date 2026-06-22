@@ -1,6 +1,8 @@
-import { env } from "process";
-
-const TOKEN = "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";
+const TOKEN = process.env.GITHUB_TOKEN;
+if (!TOKEN) {
+  console.error("Missing GITHUB_TOKEN env var. Export a GitHub token before running this script.");
+  process.exit(1);
+}
 
 async function main() {
   const query = `
@@ -41,8 +43,11 @@ async function main() {
     body: JSON.stringify({ query }),
   });
 
-  const result = await response.json() as any;
-  if (result.errors) {
+  const result = (await response.json()) as {
+    data?: { organization: { projectV2: { id: string; title: string; fields: { nodes: unknown[] } } } };
+    errors?: unknown;
+  };
+  if (result.errors || !result.data) {
     console.error("GraphQL errors:", JSON.stringify(result.errors, null, 2));
     return;
   }
