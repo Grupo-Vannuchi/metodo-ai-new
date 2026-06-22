@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Users, Search, SendHorizontal, Paperclip, UserCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { sendTeamMessage, markTeamChatRead } from "@/app/actions/team-chat";
+import { useRealtime } from "@/components/app/realtime-provider";
 import type { TeamChatSummary } from "@/lib/queries/team-chat";
 
 type Member = { userId: string; name: string; email: string; role: string };
@@ -29,7 +30,7 @@ export function TeamChatClient({
   currentUserId: string;
 }) {
   const t = useTranslations("teamChat");
-  const [chats] = useState<TeamChatSummary[]>(initialChats);
+  const [chats, setChats] = useState<TeamChatSummary[]>(initialChats);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(initialSelectedId);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(
     initialChats.find((c) => c.id === initialSelectedId)?.otherUserId ?? null,
@@ -37,7 +38,6 @@ export function TeamChatClient({
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
-  const [reload, setReload] = useState(0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const tempIdRef = useRef(0);
@@ -49,11 +49,31 @@ export function TeamChatClient({
     if (!existing) setMessages([]);
   }
 
-  // Load (and poll) the thread for the selected chat.
+  const fetchMessages = useCallback(async () => {
+    if (!selectedChatId) return;
+    try {
+      const r = await fetch(`/api/inbox/team-messages?chatId=${selectedChatId}`, { cache: "no-store" });
+      if (r.ok) setMessages(await r.json());
+    } catch {
+      /* ignore */
+    }
+  }, [selectedChatId]);
+
+  const fetchChats = useCallback(async () => {
+    try {
+      const r = await fetch("/api/inbox/team-chats", { cache: "no-store" });
+      if (r.ok) setChats(await r.json());
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // Load the thread when a chat is opened and mark it read (inline so setState
+  // stays behind the await).
   useEffect(() => {
     if (!selectedChatId) return;
     let active = true;
-    const fetchMessages = async () => {
+    const run = async () => {
       try {
         const r = await fetch(`/api/inbox/team-messages?chatId=${selectedChatId}`, { cache: "no-store" });
         if (active && r.ok) setMessages(await r.json());
@@ -61,14 +81,18 @@ export function TeamChatClient({
         /* ignore */
       }
     };
-    void fetchMessages();
+    void run();
     void markTeamChatRead(selectedChatId);
-    const i = setInterval(() => void fetchMessages(), 5000);
     return () => {
       active = false;
-      clearInterval(i);
     };
-  }, [selectedChatId, reload]);
+  }, [selectedChatId]);
+
+  // Pushed live: new messages refresh the open thread and the sidebar.
+  useRealtime("teamChat", () => {
+    void fetchMessages();
+    void fetchChats();
+  });
 
   // Keep the thread scrolled to the latest message.
   useEffect(() => {
@@ -94,7 +118,8 @@ export function TeamChatClient({
     const res = await sendTeamMessage({ chatId: selectedChatId ?? undefined, targetUserId: selectedUserId, body });
     if (res.ok) {
       if (res.chatId !== selectedChatId) setSelectedChatId(res.chatId);
-      else setReload((n) => n + 1);
+      else void fetchMessages();
+      void fetchChats();
     }
   }
 

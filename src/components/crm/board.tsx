@@ -7,6 +7,7 @@ import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { moveOpportunity } from "@/app/actions/opportunities";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
+import { useRealtime } from "@/components/app/realtime-provider";
 import type { BoardColumn } from "@/lib/queries/crm";
 
 const brl = new Intl.NumberFormat("pt-BR", {
@@ -30,6 +31,11 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
     setPrevColumns(columns);
     setCols(columns);
   }
+
+  // Live updates from other users — but never yank the board mid-drag.
+  useRealtime("crm", () => {
+    if (!dragId) router.refresh();
+  });
 
   function findCard(id: string) {
     for (const c of cols) {

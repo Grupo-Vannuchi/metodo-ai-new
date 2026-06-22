@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Star,
@@ -18,6 +18,7 @@ import {
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
+import { useRealtime } from "@/components/app/realtime-provider";
 
 type NavKey =
   | "dashboard"
@@ -61,11 +62,21 @@ export function AppNav({ allowedScreens }: { allowedScreens: string[] }) {
     (i) => ALWAYS_SHOWN.includes(i.key) || allowedScreens.includes(i.key),
   );
 
-  // Live unread badge for the inbox item (polled).
-  useEffect(() => {
+  // Live unread badge for the inbox item — pushed by the realtime stream.
+  const loadUnread = useCallback(async () => {
     if (!allowedScreens.includes("inbox")) return;
+    try {
+      const r = await fetch("/api/inbox/unread", { cache: "no-store" });
+      if (r.ok) setUnread((await r.json()).count ?? 0);
+    } catch {
+      /* ignore */
+    }
+  }, [allowedScreens]);
+
+  useEffect(() => {
     let active = true;
-    const load = async () => {
+    const run = async () => {
+      if (!allowedScreens.includes("inbox")) return;
       try {
         const r = await fetch("/api/inbox/unread", { cache: "no-store" });
         if (active && r.ok) setUnread((await r.json()).count ?? 0);
@@ -73,13 +84,13 @@ export function AppNav({ allowedScreens }: { allowedScreens: string[] }) {
         /* ignore */
       }
     };
-    void load();
-    const i = setInterval(() => void load(), 10000);
+    void run();
     return () => {
       active = false;
-      clearInterval(i);
     };
   }, [allowedScreens]);
+
+  useRealtime("inbox", loadUnread);
 
   return (
     <nav className="flex flex-col gap-1">

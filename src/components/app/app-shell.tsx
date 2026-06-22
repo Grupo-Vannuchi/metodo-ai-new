@@ -6,6 +6,7 @@ import { AppNav } from "@/components/app/app-nav";
 import { MobileNav } from "@/components/app/mobile-nav";
 import { NotificationBell } from "@/components/app/notification-bell";
 import { CommandPalette } from "@/components/app/command-palette";
+import { RealtimeProvider } from "@/components/app/realtime-provider";
 import { SearchTrigger } from "@/components/app/search-trigger";
 import { BackBar } from "@/components/app/back-bar";
 import { PageTransition } from "@/components/app/page-transition";
@@ -32,6 +33,7 @@ export async function AppShell({
   );
 
   return (
+    <RealtimeProvider>
     <div className="flex min-h-screen bg-muted/20">
       <CommandPalette />
       <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card p-4 md:flex">
@@ -96,5 +98,6 @@ export async function AppShell({
         </main>
       </div>
     </div>
+    </RealtimeProvider>
   );
 }

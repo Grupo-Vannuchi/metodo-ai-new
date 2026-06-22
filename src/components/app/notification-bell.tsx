@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Bell, Clock, CheckSquare, AlertTriangle, Wallet, MessageCircle, UserPlus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { clearNotifications, markNotificationRead } from "@/app/actions/notifications";
+import { useRealtime } from "@/components/app/realtime-provider";
 
 type Item = {
   id: string;
@@ -26,7 +27,6 @@ const ICONS: Record<string, typeof Bell> = {
   OPP_ASSIGNED: UserPlus,
 };
 const ASSIGN_TYPES = new Set(["TASK_ASSIGNED", "OPP_ASSIGNED"]);
-const POLL_MS = 30000;
 
 /** Notification bell: polls the persisted notifications and localizes each one
  * from its `type` + `data` payload. Each edge anchors the dropdown differently. */
@@ -42,9 +42,19 @@ export function NotificationBell({
   const [a, setA] = useState<Payload | null>(null);
   const [open, setOpen] = useState(false);
 
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch("/api/notifications", { cache: "no-store" });
+      if (r.ok) setA(await r.json());
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // Initial load (inline so the setState stays clearly behind the await).
   useEffect(() => {
     let active = true;
-    const load = async () => {
+    const run = async () => {
       try {
         const r = await fetch("/api/notifications", { cache: "no-store" });
         if (active && r.ok) setA(await r.json());
@@ -52,13 +62,14 @@ export function NotificationBell({
         /* ignore */
       }
     };
-    void load();
-    const i = setInterval(() => void load(), POLL_MS);
+    void run();
     return () => {
       active = false;
-      clearInterval(i);
     };
   }, []);
+
+  // Pushed live by the realtime stream (no polling).
+  useRealtime("notifications", load);
 
   const total = a?.total ?? 0;
   const items = a?.items ?? [];

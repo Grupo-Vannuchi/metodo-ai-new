@@ -30,6 +30,7 @@ import { Link } from "@/i18n/navigation";
 import { Spinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/components/ui/confirm";
 import { usePrompt } from "@/components/ui/prompt";
+import { useRealtime } from "@/components/app/realtime-provider";
 import {
   markConversationRead,
   sendMessage,
@@ -84,8 +85,6 @@ type Message = {
 
 let tempSeq = 0;
 
-const CONVERSATIONS_POLL_MS = 5000;
-const MESSAGES_POLL_MS = 4000;
 
 const MENU_ITEM =
   "flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-muted";
@@ -149,17 +148,22 @@ export function InboxClient({
     }
   }, []);
 
-  // Poll the conversation list (interval callback → deferred setState).
-  useEffect(() => {
-    const i = setInterval(() => void loadConversations(), CONVERSATIONS_POLL_MS);
-    return () => clearInterval(i);
-  }, [loadConversations]);
+  const fetchMessages = useCallback(async () => {
+    if (!selectedId) return;
+    try {
+      const r = await fetch(`/api/inbox/messages?conversationId=${selectedId}`, { cache: "no-store" });
+      if (r.ok) setMessages(await r.json());
+    } catch {
+      /* ignore */
+    }
+  }, [selectedId]);
 
-  // Load + mark read + poll the open conversation.
+  // Load + mark read when a conversation is opened (inline so setState stays
+  // behind the await).
   useEffect(() => {
     if (!selectedId) return;
     let active = true;
-    const fetchMessages = async () => {
+    const run = async () => {
       try {
         const r = await fetch(`/api/inbox/messages?conversationId=${selectedId}`, { cache: "no-store" });
         if (active && r.ok) setMessages(await r.json());
@@ -167,14 +171,18 @@ export function InboxClient({
         /* ignore */
       }
     };
-    void fetchMessages();
+    void run();
     void markConversationRead(selectedId).then(() => loadConversations());
-    const i = setInterval(() => void fetchMessages(), MESSAGES_POLL_MS);
     return () => {
       active = false;
-      clearInterval(i);
     };
   }, [selectedId, loadConversations]);
+
+  // Pushed live: new inbound messages refresh the list and the open thread.
+  useRealtime("inbox", () => {
+    void loadConversations();
+    void fetchMessages();
+  });
 
   function select(id: string | null) {
     setSelectedId(id);

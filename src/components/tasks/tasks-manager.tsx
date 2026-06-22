@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
 import { useConfirm } from "@/components/ui/confirm";
+import { useRealtime } from "@/components/app/realtime-provider";
 import { createTask, updateTask, toggleTask, deleteTask } from "@/app/actions/tasks";
 import type { TaskRow } from "@/lib/queries/tasks";
 
@@ -59,6 +60,11 @@ export function TasksManager({
 
   const editing = editingId ? tasks.find((x) => x.id === editingId) ?? null : null;
   const formOpen = adding || editing != null;
+
+  // Live task updates from other users — but don't refresh over an open form.
+  useRealtime("tasks", () => {
+    if (!formOpen) router.refresh();
+  });
 
   const filtered = tasks.filter((x) => {
     const done = x.doneAt != null;
