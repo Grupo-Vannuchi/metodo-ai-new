@@ -22,7 +22,7 @@ export default async function EditOpportunityPage({
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("crm.opportunity");
 
-  const [opp, stages, companies, contacts, members, products] = await Promise.all([
+  const [opp, stages, companies, contacts, rawMembers, products] = await Promise.all([
     getOpportunity(ctx.organizationId, id),
     stageOptions(ctx.organizationId),
     companyOptions(ctx.organizationId),
@@ -30,6 +30,8 @@ export default async function EditOpportunityPage({
     listMembers(ctx.organizationId),
     productServiceOptions(ctx.organizationId),
   ]);
+
+  const members = ctx.role === "MEMBER" ? rawMembers.filter(m => m.userId === ctx.userId) : rawMembers;
   if (!opp) notFound();
 
   return (
@@ -59,6 +61,7 @@ export default async function EditOpportunityPage({
         contacts={contacts}
         members={members.map((m) => ({ id: m.userId, name: m.name }))}
         productServices={products}
+        isMemberRole={ctx.role === "MEMBER"}
       />
     </div>
   );

@@ -69,7 +69,7 @@ export async function ingestInbound(
         organizationId,
         connectionId,
         remoteJid: m.remoteJid,
-        name: m.pushName,
+        name: !m.fromMe ? m.pushName : null,
         contactId,
         lastMessageAt: m.timestamp,
         lastMessagePreview: m.preview,
@@ -83,7 +83,7 @@ export async function ingestInbound(
       data: {
         lastMessageAt: m.timestamp,
         lastMessagePreview: m.preview,
-        ...(m.pushName ? { name: m.pushName } : {}),
+        ...(!m.fromMe && m.pushName ? { name: m.pushName } : {}),
         ...(m.fromMe ? {} : { unreadCount: { increment: 1 } }),
       },
     });

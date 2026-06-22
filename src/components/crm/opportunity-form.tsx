@@ -42,6 +42,7 @@ export function OpportunityForm({
   contacts,
   members,
   productServices,
+  isMemberRole,
 }: {
   id: string;
   defaultValues: Values;
@@ -50,6 +51,7 @@ export function OpportunityForm({
   contacts: Option[];
   members: Option[];
   productServices: ProductOption[];
+  isMemberRole?: boolean;
 }) {
   const t = useTranslations("crm.opportunity");
   const tv = useTranslations("validation");
@@ -167,7 +169,7 @@ export function OpportunityForm({
           <div>
             <Label htmlFor="ownerId">{t("owner")}</Label>
             <select id="ownerId" className={selectCls} {...register("ownerId")}>
-              <option value="">{t("none")}</option>
+              {!isMemberRole && <option value="">{t("none")}</option>}
               {members.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}

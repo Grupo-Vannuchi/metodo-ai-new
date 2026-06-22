@@ -25,13 +25,15 @@ export default async function MyItemsPage({
   const page = parseInt((await searchParams)?.page || "1", 10);
   const pageSize = 10;
 
-  const [tasks, myOpps, members, contacts, oppOptions] = await Promise.all([
-    listTasks(ctx.organizationId, { assignedToId: ctx.userId }),
+  const [tasks, myOpps, rawMembers, contacts, opportunities] = await Promise.all([
+    listTasks(ctx.organizationId, { assignedToId: ctx.userId, scope: "all" }),
     listMyOpportunities(ctx.organizationId, ctx.userId, page, pageSize),
     listMembers(ctx.organizationId),
     contactOptions(ctx.organizationId),
     opportunityOptions(ctx.organizationId),
   ]);
+
+  const members = ctx.role === "MEMBER" ? rawMembers.filter(m => m.userId === ctx.userId) : rawMembers;
 
   return (
     <div className="flex flex-col gap-6">
@@ -73,7 +75,7 @@ export default async function MyItemsPage({
           tasks={tasks}
           members={members.map((m) => ({ id: m.userId, name: m.name }))}
           contacts={contacts}
-          opportunities={oppOptions}
+          opportunities={opportunities}
           currentUserId={ctx.userId}
           showTabs
         />

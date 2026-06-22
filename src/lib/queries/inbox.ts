@@ -6,7 +6,7 @@ import { tenantDb } from "@/lib/tenant-db";
 export async function listConversations(organizationId: string) {
   const db = tenantDb(organizationId);
   const convos = await db.conversation.findMany({
-    orderBy: [{ pinned: "desc" }, { lastMessageAt: "desc" }],
+    orderBy: [{ pinned: "desc" }, { lastMessageAt: "desc" }, { id: "desc" }],
     take: 200,
     select: {
       id: true,

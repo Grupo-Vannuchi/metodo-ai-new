@@ -38,6 +38,7 @@ export function NewOpportunityForm({
   productServices,
   initialContactId,
   initialCompanyId,
+  isMemberRole,
 }: {
   stages: Option[];
   companies: Option[];
@@ -46,6 +47,7 @@ export function NewOpportunityForm({
   productServices: ProductOption[];
   initialContactId?: string;
   initialCompanyId?: string;
+  isMemberRole?: boolean;
 }) {
   const t = useTranslations("crm.board");
   const tf = useTranslations("crm.opportunity");
@@ -66,7 +68,7 @@ export function NewOpportunityForm({
       companyId: initialCompanyId ?? "",
       contactId: initialContactId ?? "",
       productServiceId: "",
-      ownerId: "",
+      ownerId: isMemberRole && members.length > 0 ? members[0].id : "",
       expectedCloseDate: "",
       notes: "",
     },
@@ -142,7 +144,7 @@ export function NewOpportunityForm({
           <div>
             <Label htmlFor="ownerId">{tf("owner")}</Label>
             <select id="ownerId" className={selectCls} {...register("ownerId")}>
-              <option value="">{tf("none")}</option>
+              {!isMemberRole && <option value="">{tf("none")}</option>}
               {members.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}

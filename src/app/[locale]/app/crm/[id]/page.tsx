@@ -36,12 +36,13 @@ export default async function OpportunityViewPage({
   const tf = await getTranslations("finance");
   const canFinance = hasFeature(ctx.organization.plan as PlanKey, "finance");
 
-  const [opp, members, tasks, entries] = await Promise.all([
+  const [opp, rawMembers, tasks, entries] = await Promise.all([
     getOpportunity(ctx.organizationId, id),
     listMembers(ctx.organizationId),
     listTasks(ctx.organizationId, { opportunityId: id }),
     canFinance ? entriesForOpportunity(ctx.organizationId, id) : Promise.resolve([]),
   ]);
+  const members = ctx.role === "MEMBER" ? rawMembers.filter(m => m.userId === ctx.userId) : rawMembers;
   if (!opp) notFound();
 
   const fmtDate = (d: Date | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");

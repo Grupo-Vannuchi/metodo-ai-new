@@ -29,13 +29,16 @@ export default async function ContactViewPage({
   const ti = await getTranslations("inbox");
 
   const canFinance = hasFeature(ctx.organization.plan as PlanKey, "finance");
-  const [contact, conversation, tasks, members, finance] = await Promise.all([
+  const [contact, conversation, rawMembers, tasks, finance] = await Promise.all([
     getContact(ctx.organizationId, id),
     getConversationByContact(ctx.organizationId, id),
-    listTasks(ctx.organizationId, { contactId: id }),
     listMembers(ctx.organizationId),
+    listTasks(ctx.organizationId, { contactId: id }),
     canFinance ? getEntityFinance(ctx.organizationId, { contactId: id }) : Promise.resolve(null),
   ]);
+
+  const members = ctx.role === "MEMBER" ? rawMembers.filter(m => m.userId === ctx.userId) : rawMembers;
+
   if (!contact) notFound();
 
   const fmtDate = (d: Date | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");

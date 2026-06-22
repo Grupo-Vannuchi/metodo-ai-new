@@ -22,13 +22,15 @@ export default async function NewOpportunityPage({
   const t = await getTranslations("crm.board");
 
   const { pipeline: pid, contactId, companyId } = await searchParams;
-  const [stages, companies, contacts, members, products] = await Promise.all([
+  const [stages, companies, contacts, rawMembers, productServices] = await Promise.all([
     stageOptions(ctx.organizationId, pid),
     companyOptions(ctx.organizationId),
     contactOptions(ctx.organizationId),
     listMembers(ctx.organizationId),
     productServiceOptions(ctx.organizationId),
   ]);
+
+  const members = ctx.role === "MEMBER" ? rawMembers.filter(m => m.userId === ctx.userId) : rawMembers;
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
@@ -49,9 +51,10 @@ export default async function NewOpportunityPage({
           companies={companies}
           contacts={contacts}
           members={members.map((m) => ({ id: m.userId, name: m.name }))}
-          productServices={products}
+          productServices={productServices}
           initialContactId={contactId}
           initialCompanyId={companyId}
+          isMemberRole={ctx.role === "MEMBER"}
         />
       )}
     </div>

@@ -380,7 +380,7 @@ export function InboxClient({
   }
 
   return (
-    <div className="flex h-[calc(100dvh-7rem)] overflow-hidden rounded-xl border border-border bg-card">
+    <div className="flex h-full overflow-hidden rounded-xl border border-border bg-card">
       {/* Conversation list */}
       <aside
         className={cn(

@@ -18,12 +18,14 @@ export default async function TasksPage({
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("tasks");
 
-  const [tasks, members, contacts, opportunities] = await Promise.all([
+  const [tasks, rawMembers, contacts, opportunities] = await Promise.all([
     listTasks(ctx.organizationId, { scope: "all" }),
     listMembers(ctx.organizationId),
     contactOptions(ctx.organizationId),
     opportunityOptions(ctx.organizationId),
   ]);
+
+  const members = ctx.role === "MEMBER" ? rawMembers.filter(m => m.userId === ctx.userId) : rawMembers;
 
   return (
     <div className="flex flex-col gap-6">
