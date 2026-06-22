@@ -1,21 +1,27 @@
 import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
 
-export async function listExtractionJobs(organizationId: string) {
+export async function listExtractionJobs(organizationId: string, page = 1, pageSize = 10) {
   const db = tenantDb(organizationId);
-  return db.extractionJob.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 50,
-    select: {
-      id: true,
-      query: true,
-      status: true,
-      total: true,
-      target: true,
-      error: true,
-      createdAt: true,
-    },
-  });
+  const [total, data] = await Promise.all([
+    db.extractionJob.count(),
+    db.extractionJob.findMany({
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: {
+        id: true,
+        query: true,
+        status: true,
+        total: true,
+        target: true,
+        error: true,
+        createdAt: true,
+      },
+    }),
+  ]);
+  
+  return { data, total };
 }
 
 /** A job with its leads, for the results page. Scoped: null if not in org. */

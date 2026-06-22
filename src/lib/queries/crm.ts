@@ -141,21 +141,30 @@ export async function getOpportunity(organizationId: string, id: string) {
 }
 
 /** Open opportunities owned by a user (for the "My items" view). */
-export async function listMyOpportunities(organizationId: string, userId: string) {
+export async function listMyOpportunities(organizationId: string, userId: string, page = 1, pageSize = 10) {
   const db = tenantDb(organizationId);
-  const opps = await db.opportunity.findMany({
-    where: { status: "OPEN", ownerId: userId },
-    orderBy: [{ updatedAt: "desc" }],
-    take: 100,
-    select: { id: true, code: true, title: true, value: true, stage: { select: { name: true } } },
-  });
-  return opps.map((o) => ({
+  const where = { status: "OPEN" as const, ownerId: userId };
+  
+  const [total, opps] = await Promise.all([
+    db.opportunity.count({ where }),
+    db.opportunity.findMany({
+      where,
+      orderBy: [{ updatedAt: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: { id: true, code: true, title: true, value: true, stage: { select: { name: true } } },
+    }),
+  ]);
+  
+  const data = opps.map((o) => ({
     id: o.id,
     code: o.code,
     title: o.title,
     value: Number(o.value),
     stageName: o.stage?.name ?? null,
   }));
+  
+  return { data, total };
 }
 
 /** Open opportunities (id + label) for linking tasks/finance. */

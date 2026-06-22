@@ -3,20 +3,26 @@ import { tenantDb } from "@/lib/tenant-db";
 
 type Addr = { city?: string };
 
-export async function listCompanies(organizationId: string) {
+export async function listCompanies(organizationId: string, page = 1, pageSize = 10) {
   const db = tenantDb(organizationId);
-  const rows = await db.company.findMany({
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      cnpj: true,
-      email: true,
-      phone: true,
-      address: true,
-    },
-  });
-  return rows.map((r) => ({
+  const [total, rows] = await Promise.all([
+    db.company.count(),
+    db.company.findMany({
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: {
+        id: true,
+        name: true,
+        cnpj: true,
+        email: true,
+        phone: true,
+        address: true,
+      },
+    }),
+  ]);
+
+  const data = rows.map((r) => ({
     id: r.id,
     name: r.name,
     cnpj: r.cnpj,
@@ -24,6 +30,8 @@ export async function listCompanies(organizationId: string) {
     phone: r.phone,
     city: (r.address as Addr)?.city ?? "",
   }));
+
+  return { data, total };
 }
 
 /** Full company for the view/edit pages. Scoped: returns null if not in this org. */

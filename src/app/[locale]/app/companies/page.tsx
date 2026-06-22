@@ -7,19 +7,24 @@ import { DeleteButton } from "@/components/crm/delete-button";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
+import { Pagination } from "@/components/ui/pagination";
 
 export const dynamic = "force-dynamic";
 
 export default async function CompaniesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{ page?: string }>;
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("crm.companies");
+  const page = parseInt((await searchParams)?.page || "1", 10);
+  const pageSize = 10;
 
-  const companies = await listCompanies(ctx.organizationId);
+  const companies = await listCompanies(ctx.organizationId, page, pageSize);
 
   return (
     <div className="flex flex-col gap-6">
@@ -34,12 +39,12 @@ export default async function CompaniesPage({
         </Link>
       </div>
 
-      {companies.length === 0 ? (
+      {companies.data.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
           {t("empty")}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-card">
+        <div className="flex flex-col overflow-x-auto rounded-xl border border-border bg-card">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-border text-muted-foreground">
               <tr>
@@ -51,7 +56,7 @@ export default async function CompaniesPage({
               </tr>
             </thead>
             <tbody>
-              {companies.map((c) => (
+              {companies.data.map((c) => (
                 <tr key={c.id} className="border-b border-border last:border-0">
                   <td className="px-5 py-3 font-medium">{c.name}</td>
                   <td className="px-5 py-3 text-muted-foreground">{c.cnpj ?? "—"}</td>
@@ -72,6 +77,7 @@ export default async function CompaniesPage({
               ))}
             </tbody>
           </table>
+          <Pagination total={companies.total} pageSize={pageSize} />
         </div>
       )}
     </div>

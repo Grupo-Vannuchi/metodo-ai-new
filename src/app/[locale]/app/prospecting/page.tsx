@@ -12,6 +12,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
+import { Pagination } from "@/components/ui/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -30,15 +31,19 @@ function queryLabel(query: unknown): string {
 
 export default async function ProspectingPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{ page?: string }>;
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("prospecting");
+  const page = parseInt((await searchParams)?.page || "1", 10);
+  const pageSize = 10;
 
-  const [jobs, connections, usage] = await Promise.all([
-    listExtractionJobs(ctx.organizationId),
+  const [extractionData, connections, usage] = await Promise.all([
+    listExtractionJobs(ctx.organizationId, page, pageSize),
     listConnections(ctx.organizationId),
     getUsageSummary(ctx.organizationId, ctx.organization.plan as PlanKey),
   ]);
@@ -96,12 +101,12 @@ export default async function ProspectingPage({
         {t("lgpdNotice")}
       </p>
 
-      {jobs.length === 0 ? (
+      {extractionData.data.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
           {t("empty")}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-card">
+        <div className="flex flex-col overflow-x-auto rounded-xl border border-border bg-card">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-border text-muted-foreground">
               <tr>
@@ -112,7 +117,7 @@ export default async function ProspectingPage({
               </tr>
             </thead>
             <tbody>
-              {jobs.map((job) => (
+              {extractionData.data.map((job) => (
                 <tr key={job.id} className="border-b border-border last:border-0">
                   <td className="px-5 py-3 font-medium">
                     <Link href={`/app/prospecting/${job.id}`} className="hover:underline">
@@ -137,6 +142,7 @@ export default async function ProspectingPage({
               ))}
             </tbody>
           </table>
+          <Pagination total={extractionData.total} pageSize={pageSize} />
         </div>
       )}
     </div>
