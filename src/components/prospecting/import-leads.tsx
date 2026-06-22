@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Check, ExternalLink, Instagram, Facebook, Linkedin } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,14 @@ export function ImportLeads({
   // Whenever pipeline changes, or initially, we might need to reset stageId if it doesn't match
   const [stageId, setStageId] = useState(availableStages[0]?.id ?? "");
   const [productId, setProductId] = useState("");
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+  const totalPages = Math.ceil(leads.length / pageSize);
+  const visibleLeads = leads.slice((page - 1) * pageSize, page * pageSize);
 
   const importable = leads.filter((l) => !l.importedAt);
   const allSelected = importable.length > 0 && importable.every((l) => selected.has(l.id));
@@ -125,7 +134,7 @@ export function ImportLeads({
             </tr>
           </thead>
           <tbody>
-            {leads.map((l) => {
+            {visibleLeads.map((l) => {
               const imported = Boolean(l.importedAt);
               return (
                 <tr key={l.id} className="border-b border-border last:border-0">
@@ -171,9 +180,27 @@ export function ImportLeads({
             })}
           </tbody>
         </table>
+        
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-border px-4 py-3">
+            <p className="text-sm text-muted-foreground">
+              Mostrando <span className="font-medium">{(page - 1) * pageSize + 1}</span> até{" "}
+              <span className="font-medium">{Math.min(page * pageSize, leads.length)}</span> de{" "}
+              <span className="font-medium">{leads.length}</span> resultados
+            </p>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
+                Anterior
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
+                Próxima
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {modalOpen ? (
+      {modalOpen && mounted ? createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
           <button type="button" tabIndex={-1} onClick={() => setModalOpen(false)} className="absolute inset-0 cursor-default bg-black/50 motion-safe:animate-overlay-in" />
           <form onSubmit={onFunnel} className="relative w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-xl motion-safe:animate-dialog-in">
@@ -230,7 +257,8 @@ export function ImportLeads({
               </Button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       ) : null}
     </div>
   );
