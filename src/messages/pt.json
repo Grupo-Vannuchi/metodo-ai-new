@@ -999,6 +999,7 @@
   "teamChat": {
     "tab": "Equipe",
     "title": "Membros da equipe",
+    "back": "Voltar",
     "search": "Buscar…",
     "noResults": "Nenhum resultado.",
     "start": "Inicie uma conversa com {name}",

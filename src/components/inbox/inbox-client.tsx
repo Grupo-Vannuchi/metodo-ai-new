@@ -31,6 +31,7 @@ import { Link } from "@/i18n/navigation";
 import { Spinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/components/ui/confirm";
 import { usePrompt } from "@/components/ui/prompt";
+import { Avatar } from "@/components/app/avatar";
 import { useRealtime } from "@/components/app/realtime-provider";
 import {
   markConversationRead,
@@ -337,9 +338,7 @@ export function InboxClient({
           selectedId === c.id ? "bg-muted" : "",
         )}
       >
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
-          <MessageCircle className="size-4" />
-        </div>
+        <Avatar name={displayName(c)} className="size-9" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <p className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">

@@ -7,7 +7,7 @@ import {
   Search,
   SendHorizontal,
   Paperclip,
-  UserCircle,
+  ArrowLeft,
   FolderPlus,
   Folder,
   FolderInput,
@@ -23,6 +23,8 @@ import { cn } from "@/lib/utils";
 import { useRouter } from "@/i18n/navigation";
 import { useConfirm } from "@/components/ui/confirm";
 import { usePrompt } from "@/components/ui/prompt";
+import { Avatar } from "@/components/app/avatar";
+import { Spinner } from "@/components/ui/spinner";
 import { sendTeamMessage, markTeamChatRead } from "@/app/actions/team-chat";
 import {
   createTeamFolder,
@@ -46,6 +48,11 @@ type Menu = { x: number; y: number; userId: string };
 
 const MENU_ITEM =
   "flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted";
+
+function fmtTime(value: string | Date | null): string {
+  if (!value) return "";
+  return new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
 
 export function TeamChatClient({
   members,
@@ -72,6 +79,7 @@ export function TeamChatClient({
   );
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
   const [search, setSearch] = useState("");
   const [closedFolders, setClosedFolders] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<Menu | null>(null);
@@ -137,10 +145,11 @@ export function TeamChatClient({
 
   const activeUser = members.find((m) => m.userId === selectedUserId) ?? null;
 
-  async function onSend(e: React.FormEvent) {
-    e.preventDefault();
+  async function onSend(e?: React.FormEvent) {
+    e?.preventDefault();
     const body = draft.trim();
-    if (!body || !selectedUserId) return;
+    if (!body || !selectedUserId || sending) return;
+    setSending(true);
     setDraft("");
     const tempId = `temp-${tempIdRef.current++}`;
     setMessages((prev) => [
@@ -148,6 +157,7 @@ export function TeamChatClient({
       { id: tempId, senderId: currentUserId, body, attachmentType: null, attachmentId: null, createdAt: "" },
     ]);
     const res = await sendTeamMessage({ chatId: selectedChatId ?? undefined, targetUserId: selectedUserId, body });
+    setSending(false);
     if (res.ok) {
       if (res.chatId !== selectedChatId) setSelectedChatId(res.chatId);
       else void fetchMessages();
@@ -238,18 +248,21 @@ export function TeamChatClient({
         onClick={() => selectUser(m.userId)}
         onContextMenu={(e) => openMenu(e, m.userId)}
         className={cn(
-          "flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left transition-colors hover:bg-muted",
+          "flex w-full items-start gap-3 border-b border-border px-4 py-3 text-left transition-colors hover:bg-muted",
           isSelected ? "bg-muted" : "",
         )}
       >
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
-          <UserCircle className="size-5" />
-        </div>
+        <Avatar name={m.name} src={m.avatarUrl} className="size-9" />
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 truncate text-sm font-medium">
-            {m.teamPinned ? <Pin className="size-3 shrink-0 text-muted-foreground" /> : null}
-            <span className="truncate">{m.name}</span>
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">
+              {m.teamPinned ? <Pin className="size-3 shrink-0 text-brand" /> : null}
+              <span className="truncate">{m.name}</span>
+            </p>
+            {chat?.lastMessageAt ? (
+              <span className="shrink-0 text-xs text-muted-foreground">{fmtTime(chat.lastMessageAt)}</span>
+            ) : null}
+          </div>
           <div className="mt-0.5 flex items-center justify-between gap-2">
             <p className="truncate text-xs text-muted-foreground">{chat?.lastMessagePreview ?? m.email}</p>
             {unread > 0 ? (
@@ -267,7 +280,12 @@ export function TeamChatClient({
 
   return (
     <div className="flex h-full overflow-hidden rounded-xl border border-border bg-card">
-      <aside className="flex w-full flex-col border-border md:w-80 md:shrink-0 md:border-r">
+      <aside
+        className={cn(
+          "w-full flex-col border-border md:flex md:w-80 md:shrink-0 md:border-r",
+          selectedUserId ? "hidden md:flex" : "flex",
+        )}
+      >
         <div className="flex flex-col gap-2 border-b border-border px-4 py-3">
           <div className="flex items-center justify-between gap-2">
             <h1 className="font-semibold">{t("title")}</h1>
@@ -355,74 +373,98 @@ export function TeamChatClient({
         </div>
       </aside>
 
-      <main className="flex min-w-0 flex-1 flex-col">
+      <section
+        className={cn(
+          "min-w-0 flex-1 flex-col",
+          selectedUserId ? "flex" : "hidden md:flex",
+        )}
+      >
         {selectedUserId && activeUser ? (
           <>
-            <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-              <div className="flex items-center gap-3">
-                <div className="flex size-8 items-center justify-center rounded-full bg-brand/10 text-brand">
-                  <UserCircle className="size-5" />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="truncate text-sm font-semibold">{activeUser.name}</h2>
-                  <p className="truncate text-xs text-muted-foreground">{activeUser.email}</p>
-                </div>
+            <header className="flex items-center gap-3 border-b border-border px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setSelectedUserId(null)}
+                className="text-muted-foreground hover:text-foreground md:hidden"
+                aria-label={t("back")}
+              >
+                <ArrowLeft className="size-5" />
+              </button>
+              <Avatar name={activeUser.name} src={activeUser.avatarUrl} className="size-9" />
+              <div className="min-w-0">
+                <p className="truncate font-medium">{activeUser.name}</p>
+                <p className="truncate text-xs text-muted-foreground">{activeUser.email}</p>
               </div>
             </header>
 
-            <div className="flex-1 overflow-y-auto p-4" ref={scrollRef}>
+            <div ref={scrollRef} className="flex flex-1 flex-col gap-2 overflow-y-auto bg-muted/20 p-4">
               {messages.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-                  <p className="text-sm">{t("start", { name: activeUser.name })}</p>
-                </div>
+                <p className="m-auto text-sm text-muted-foreground">{t("start", { name: activeUser.name })}</p>
               ) : (
-                <div className="flex flex-col gap-4">
-                  {messages.map((msg) => {
-                    const fromMe = msg.senderId === currentUserId;
-                    return (
-                      <div key={msg.id} className={cn("flex max-w-[75%]", fromMe ? "self-end" : "self-start")}>
-                        <div className={cn("rounded-2xl px-4 py-2 text-sm", fromMe ? "bg-brand text-brand-foreground" : "bg-muted text-foreground")}>
-                          {msg.attachmentType ? (
-                            <div className="mb-2 flex items-center gap-2 rounded bg-background/20 p-2 text-xs font-semibold">
-                              <Paperclip className="size-3" />
-                              {t("attachment")}: {msg.attachmentType}
-                            </div>
-                          ) : null}
-                          <p className="whitespace-pre-wrap">{msg.body}</p>
+                messages.map((msg) => {
+                  const out = msg.senderId === currentUserId;
+                  return (
+                    <div
+                      key={msg.id}
+                      className={cn(
+                        "max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm",
+                        out ? "self-end bg-brand text-brand-foreground" : "self-start bg-card",
+                      )}
+                    >
+                      {msg.attachmentType ? (
+                        <div className="mb-2 flex items-center gap-2 rounded bg-background/20 p-2 text-xs font-semibold">
+                          <Paperclip className="size-3" />
+                          {t("attachment")}: {msg.attachmentType}
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      ) : null}
+                      <p className="whitespace-pre-wrap break-words">{msg.body}</p>
+                      {msg.createdAt ? (
+                        <span
+                          className={cn(
+                            "mt-1 flex items-center justify-end text-[10px]",
+                            out ? "text-brand-foreground/70" : "text-muted-foreground",
+                          )}
+                        >
+                          {fmtTime(msg.createdAt)}
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })
               )}
             </div>
 
-            <div className="border-t border-border p-4">
-              <form onSubmit={onSend} className="flex gap-2">
-                <input
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder={t("placeholder")}
-                  className="flex-1 rounded-lg border border-border bg-card px-4 py-2 text-sm focus-visible:border-brand focus-visible:outline-none"
-                />
-                <button
-                  type="submit"
-                  disabled={!draft.trim()}
-                  aria-label={t("send")}
-                  className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand text-brand-foreground transition-colors hover:bg-brand/90 disabled:opacity-50"
-                >
-                  <SendHorizontal className="size-4" />
-                </button>
-              </form>
-            </div>
+            <form onSubmit={onSend} className="flex items-end gap-2 border-t border-border p-3">
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void onSend();
+                  }
+                }}
+                rows={1}
+                placeholder={t("placeholder")}
+                className="max-h-32 min-h-10 flex-1 resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm focus-visible:border-brand focus-visible:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={sending || !draft.trim()}
+                aria-label={t("send")}
+                className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {sending ? <Spinner className="size-4" /> : <SendHorizontal className="size-4" />}
+              </button>
+            </form>
           </>
         ) : (
-          <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-            <Users className="mb-4 size-12 opacity-20" />
-            <p>{t("pick")}</p>
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
+            <Users className="size-8" />
+            <p className="text-sm">{t("pick")}</p>
           </div>
         )}
-      </main>
+      </section>
 
       {menu && menuMember
         ? createPortal(

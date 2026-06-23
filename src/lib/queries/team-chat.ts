@@ -18,12 +18,13 @@ export type TeamMember = {
   name: string;
   email: string;
   role: string;
+  avatarUrl: string | null;
   teamFolderId: string | null;
   teamPinned: boolean;
 };
 
-/** Org members for the team-chat sidebar, with their folder + pin state.
- * Pinned members first. */
+/** Org members for the team-chat sidebar, with their avatar, folder + pin
+ * state. Pinned members first. */
 export async function listTeamMembers(organizationId: string): Promise<TeamMember[]> {
   const memberships = await prisma.membership.findMany({
     where: { organizationId },
@@ -33,7 +34,7 @@ export async function listTeamMembers(organizationId: string): Promise<TeamMembe
       role: true,
       teamFolderId: true,
       teamPinned: true,
-      user: { select: { name: true, email: true } },
+      user: { select: { name: true, email: true, profile: { select: { avatarUrl: true } } } },
     },
   });
   return memberships.map((m) => ({
@@ -41,6 +42,7 @@ export async function listTeamMembers(organizationId: string): Promise<TeamMembe
     name: m.user.name,
     email: m.user.email,
     role: m.role,
+    avatarUrl: m.user.profile?.avatarUrl ?? null,
     teamFolderId: m.teamFolderId,
     teamPinned: m.teamPinned,
   }));
