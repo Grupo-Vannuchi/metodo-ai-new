@@ -1,7 +1,8 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { Link } from "@/i18n/navigation";
+import { Link, redirect } from "@/i18n/navigation";
 import { Logo } from "@/components/layout/logo";
 import { PlansGrid } from "@/components/marketing/plans-grid";
+import { getSession } from "@/lib/session";
 import { resolveLocale } from "@/i18n/routing";
 
 export default async function PricingPage({
@@ -11,6 +12,10 @@ export default async function PricingPage({
 }) {
   const locale = resolveLocale((await params).locale);
   setRequestLocale(locale);
+
+  // Pricing is a public marketing page — signed-in users belong in the app.
+  if (await getSession()) redirect({ href: "/app/crm", locale });
+
   const t = await getTranslations("pricing");
 
   return (
