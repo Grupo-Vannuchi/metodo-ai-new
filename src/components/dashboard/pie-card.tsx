@@ -50,6 +50,16 @@ export function PieCard({ models, defaultModel }: { models: string[]; defaultMod
 
   const isCurrency = CURRENCY_MODELS.has(model);
   const fmt = (n: number) => (isCurrency ? formatBRL(n) : String(n));
+  // Compact form for the donut centre so large currency totals don't overflow.
+  const fmtCompact = (n: number) =>
+    isCurrency
+      ? new Intl.NumberFormat("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+          notation: "compact",
+          maximumFractionDigits: 1,
+        }).format(n)
+      : new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 }).format(n);
 
   function labelFor(key: string): string {
     if (key === "__none__") return t("none");
@@ -100,8 +110,10 @@ export function PieCard({ models, defaultModel }: { models: string[]; defaultMod
         <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center">
           <div className="relative shrink-0">
             <PieChart data={data} />
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-lg font-bold tabular-nums">{fmt(total)}</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
+              <span className="max-w-full truncate text-base font-bold tabular-nums" title={fmt(total)}>
+                {fmtCompact(total)}
+              </span>
               <span className="text-[11px] text-muted-foreground">{t("total")}</span>
             </div>
           </div>

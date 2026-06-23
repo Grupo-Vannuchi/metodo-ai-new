@@ -20,7 +20,15 @@ export type PieModel = (typeof PIE_MODELS)[number] | (typeof PIE_FINANCE_MODELS)
  * raw enum value (status/priority/type) that the route localizes. */
 export type PieSlice = { key: string; value: number };
 
-const desc = (a: PieSlice, b: PieSlice) => b.value - a.value;
+/** Merge slices that share a key (e.g. same-named stages across pipelines),
+ * drop empties and sort by value descending — the shape the chart expects. */
+function finalize(slices: PieSlice[]): PieSlice[] {
+  const merged = new Map<string, number>();
+  for (const s of slices) {
+    if (s.value > 0) merged.set(s.key, (merged.get(s.key) ?? 0) + s.value);
+  }
+  return [...merged.entries()].map(([key, value]) => ({ key, value })).sort((a, b) => b.value - a.value);
+}
 
 export async function dashboardPie(organizationId: string, model: PieModel): Promise<PieSlice[]> {
   const db = tenantDb(organizationId);
@@ -32,10 +40,7 @@ export async function dashboardPie(organizationId: string, model: PieModel): Pro
         db.stage.findMany({ select: { id: true, name: true } }),
       ]);
       const names = new Map(stages.map((s) => [s.id, s.name]));
-      return groups
-        .map((g) => ({ key: names.get(g.stageId) ?? "—", value: g._count._all }))
-        .filter((s) => s.value > 0)
-        .sort(desc);
+      return finalize(groups.map((g) => ({ key: names.get(g.stageId) ?? "—", value: g._count._all })));
     }
     case "value_by_stage": {
       const [groups, stages] = await Promise.all([
@@ -43,14 +48,11 @@ export async function dashboardPie(organizationId: string, model: PieModel): Pro
         db.stage.findMany({ select: { id: true, name: true } }),
       ]);
       const names = new Map(stages.map((s) => [s.id, s.name]));
-      return groups
-        .map((g) => ({ key: names.get(g.stageId) ?? "—", value: Number(g._sum.value ?? 0) }))
-        .filter((s) => s.value > 0)
-        .sort(desc);
+      return finalize(groups.map((g) => ({ key: names.get(g.stageId) ?? "—", value: Number(g._sum.value ?? 0) })));
     }
     case "opps_by_status": {
       const groups = await db.opportunity.groupBy({ by: ["status"], _count: { _all: true } });
-      return groups.map((g) => ({ key: g.status, value: g._count._all })).filter((s) => s.value > 0).sort(desc);
+      return finalize(groups.map((g) => ({ key: g.status, value: g._count._all })));
     }
     case "opps_by_owner": {
       const groups = await db.opportunity.groupBy({ by: ["ownerId"], where: { status: "OPEN" }, _count: { _all: true } });
@@ -59,28 +61,19 @@ export async function dashboardPie(organizationId: string, model: PieModel): Pro
         ? await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
         : [];
       const names = new Map(users.map((u) => [u.id, u.name]));
-      return groups
-        .map((g) => ({ key: g.ownerId ? names.get(g.ownerId) ?? "—" : "__none__", value: g._count._all }))
-        .filter((s) => s.value > 0)
-        .sort(desc);
+      return finalize(groups.map((g) => ({ key: g.ownerId ? names.get(g.ownerId) ?? "—" : "__none__", value: g._count._all })));
     }
     case "contacts_by_source": {
       const groups = await db.contact.groupBy({ by: ["source"], _count: { _all: true } });
-      return groups
-        .map((g) => ({ key: g.source || "__none__", value: g._count._all }))
-        .filter((s) => s.value > 0)
-        .sort(desc);
+      return finalize(groups.map((g) => ({ key: g.source || "__none__", value: g._count._all })));
     }
     case "tasks_by_priority": {
       const groups = await db.task.groupBy({ by: ["priority"], where: { doneAt: null }, _count: { _all: true } });
-      return groups.map((g) => ({ key: g.priority, value: g._count._all })).filter((s) => s.value > 0).sort(desc);
+      return finalize(groups.map((g) => ({ key: g.priority, value: g._count._all })));
     }
     case "finance_by_type": {
       const groups = await db.financeEntry.groupBy({ by: ["type"], _sum: { amount: true } });
-      return groups
-        .map((g) => ({ key: g.type, value: Number(g._sum.amount ?? 0) }))
-        .filter((s) => s.value > 0)
-        .sort(desc);
+      return finalize(groups.map((g) => ({ key: g.type, value: Number(g._sum.amount ?? 0) })));
     }
     default:
       return [];
