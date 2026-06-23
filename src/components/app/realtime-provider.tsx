@@ -7,7 +7,7 @@ type RealtimeCtx = { subscribe: (event: string, handler: Handler) => () => void 
 
 const RealtimeContext = createContext<RealtimeCtx | null>(null);
 
-const EVENTS = ["notifications", "inbox", "teamChat", "crm", "tasks"] as const;
+const EVENTS = ["notifications", "inbox", "teamChat", "crm", "tasks", "feed"] as const;
 
 /**
  * Single Server-Sent Events connection for the whole app. Widgets subscribe to

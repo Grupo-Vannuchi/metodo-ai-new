@@ -15,17 +15,26 @@ export const DIGEST_KINDS = [
 ] as const;
 
 /** Created once, when the event happens (never by the cron). */
-export const ASSIGN_KINDS = ["TASK_ASSIGNED", "OPP_ASSIGNED", "TEAM_ATTACHMENT"] as const;
+export const ASSIGN_KINDS = [
+  "TASK_ASSIGNED",
+  "OPP_ASSIGNED",
+  "TEAM_ATTACHMENT",
+  "FEED_POST",
+  "FEED_MENTION",
+  "FEED_REACTION",
+] as const;
 
 export type NotificationKind =
   | (typeof DIGEST_KINDS)[number]
   | (typeof ASSIGN_KINDS)[number];
 
 /** i18n interpolation payload. `count` for digests; `actor`/`title` for
- * assignments; `actor`/`attachmentType` for a team-chat share. */
+ * assignments; `actor`/`attachmentType` for a team-chat share; `actor`/`emoji`
+ * for a feed reaction. */
 export type NotificationData = {
   count?: number;
   actor?: string;
   title?: string;
   attachmentType?: string;
+  emoji?: string;
 };

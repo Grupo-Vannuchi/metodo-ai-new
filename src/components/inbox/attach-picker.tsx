@@ -19,7 +19,7 @@ export function AttachPicker({
   onPick,
   onClose,
 }: {
-  onPick: (type: AttachKind, id: string) => void;
+  onPick: (type: AttachKind, id: string, label: string) => void;
   onClose: () => void;
 }) {
   const t = useTranslations("teamChat");
@@ -109,7 +109,7 @@ export function AttachPicker({
                   <button
                     key={r.id}
                     type="button"
-                    onClick={() => onPick(kind, r.id)}
+                    onClick={() => onPick(kind, r.id, r.label)}
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
                   >
                     <span className="min-w-0 flex-1">

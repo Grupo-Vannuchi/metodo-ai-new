@@ -55,6 +55,10 @@ model Organization {
   teamChatParticipants TeamChatParticipant[]
   teamChatMessages     TeamChatMessage[]
   teamChatFolders      TeamChatFolder[]
+  feedPosts            FeedPost[]
+  feedPostAttachments  FeedPostAttachment[]
+  feedMentions         FeedMention[]
+  feedReactions        FeedReaction[]
 
   @@map("organizations")
 }
@@ -73,6 +77,9 @@ model User {
   notifications        Notification[]
   teamChatParticipants TeamChatParticipant[]
   teamChatMessages     TeamChatMessage[]
+  feedPosts            FeedPost[]
+  feedMentions         FeedMention[]
+  feedReactions        FeedReaction[]
 
   @@map("users")
 }
@@ -936,4 +943,77 @@ model TeamChatFolder {
 
   @@index([organizationId, order])
   @@map("team_chat_folders")
+}
+
+// ---------------------------------------------------------------------------
+// Team feed (ephemeral 24h posts by managers, with mentions + reactions)
+// ---------------------------------------------------------------------------
+
+model FeedPost {
+  id             String   @id @default(cuid())
+  organizationId String
+  authorId       String
+  body           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  author       User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  attachments  FeedPostAttachment[]
+  mentions     FeedMention[]
+  reactions    FeedReaction[]
+
+  @@index([organizationId, createdAt])
+  @@map("feed_posts")
+}
+
+model FeedPostAttachment {
+  id             String                 @id @default(cuid())
+  organizationId String
+  postId         String
+  type           TeamChatAttachmentType
+  entityId       String
+  /// Snapshot of the entity's label + link, resolved at post time.
+  label          String
+  href           String
+
+  post         FeedPost     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([postId])
+  @@map("feed_post_attachments")
+}
+
+model FeedMention {
+  id             String @id @default(cuid())
+  organizationId String
+  postId         String
+  userId         String
+
+  post         FeedPost     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([organizationId])
+  @@map("feed_mentions")
+}
+
+model FeedReaction {
+  id             String   @id @default(cuid())
+  organizationId String
+  postId         String
+  userId         String
+  emoji          String
+  createdAt      DateTime @default(now())
+
+  post         FeedPost     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId, emoji])
+  @@index([organizationId])
+  @@index([postId])
+  @@map("feed_reactions")
 }

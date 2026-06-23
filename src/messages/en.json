@@ -165,6 +165,7 @@
     "nav": {
       "dashboard": "Dashboard",
       "my": "My items",
+      "feed": "Feed",
       "crm": "Pipeline",
       "tasks": "Tasks",
       "prospecting": "Prospecting",
@@ -933,7 +934,10 @@
       "INBOX_UNREAD": "{count, plural, one {# unread conversation} other {# unread conversations}}",
       "TASK_ASSIGNED": "{actor} assigned you a task",
       "OPP_ASSIGNED": "{actor} assigned you an opportunity",
-      "TEAM_ATTACHMENT": "{actor} sent you {entity} in team chat"
+      "TEAM_ATTACHMENT": "{actor} sent you {entity} in team chat",
+      "FEED_POST": "{actor} posted on the wall",
+      "FEED_MENTION": "{actor} mentioned you in a post",
+      "FEED_REACTION": "{actor} reacted {emoji} to your post"
     },
     "entity": {
       "TASK": "a task",
@@ -1051,5 +1055,23 @@
     "next": "Next",
     "showing": "Showing {from}–{to} of {total}",
     "page": "Page {page} of {total}"
+  },
+  "feed": {
+    "title": "Team feed",
+    "subtitle": "Announcements and news. Posts disappear after 24 hours.",
+    "composerPlaceholder": "Share something with the team… use @ to mention someone.",
+    "post": "Post",
+    "attach": "Attach",
+    "remove": "Remove",
+    "empty": "No posts in the last 24 hours.",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this post?",
+    "attachType": {
+      "TASK": "Task",
+      "OPP": "Opportunity",
+      "CONTACT": "Contact",
+      "COMPANY": "Company",
+      "LEAD": "Lead"
+    }
   }
 }

@@ -3,6 +3,7 @@
   "crons": [
     { "path": "/api/cron/campaigns", "schedule": "* * * * *" },
     { "path": "/api/cron/extractions", "schedule": "*/10 * * * *" },
-    { "path": "/api/cron/notifications", "schedule": "0 7 * * *" }
+    { "path": "/api/cron/notifications", "schedule": "0 7 * * *" },
+    { "path": "/api/cron/feed-cleanup", "schedule": "0 * * * *" }
   ]
 }

@@ -165,6 +165,7 @@
     "nav": {
       "dashboard": "Painel",
       "my": "Meus itens",
+      "feed": "Mural",
       "crm": "Funil",
       "tasks": "Tarefas",
       "prospecting": "Prospecção",
@@ -933,7 +934,10 @@
       "INBOX_UNREAD": "{count, plural, one {# conversa não lida} other {# conversas não lidas}}",
       "TASK_ASSIGNED": "{actor} te atribuiu uma tarefa",
       "OPP_ASSIGNED": "{actor} te atribuiu uma oportunidade",
-      "TEAM_ATTACHMENT": "{actor} te enviou {entity} no chat de equipe"
+      "TEAM_ATTACHMENT": "{actor} te enviou {entity} no chat de equipe",
+      "FEED_POST": "{actor} publicou no mural",
+      "FEED_MENTION": "{actor} te mencionou num post",
+      "FEED_REACTION": "{actor} reagiu {emoji} ao seu post"
     },
     "entity": {
       "TASK": "uma tarefa",
@@ -1051,5 +1055,23 @@
     "next": "Próxima",
     "showing": "Mostrando {from}–{to} de {total}",
     "page": "Página {page} de {total}"
+  },
+  "feed": {
+    "title": "Mural da equipe",
+    "subtitle": "Avisos e novidades. Os posts somem após 24 horas.",
+    "composerPlaceholder": "Compartilhe algo com a equipe… use @ para marcar alguém.",
+    "post": "Publicar",
+    "attach": "Anexar",
+    "remove": "Remover",
+    "empty": "Nenhuma postagem nas últimas 24 horas.",
+    "delete": "Excluir",
+    "deleteConfirm": "Excluir esta postagem?",
+    "attachType": {
+      "TASK": "Tarefa",
+      "OPP": "Oportunidade",
+      "CONTACT": "Contato",
+      "COMPANY": "Empresa",
+      "LEAD": "Lead"
+    }
   }
 }

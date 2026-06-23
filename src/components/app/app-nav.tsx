@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Star,
+  Megaphone,
   KanbanSquare,
   CheckSquare,
   Radar,
@@ -25,6 +26,7 @@ import { useRealtime } from "@/components/app/realtime-provider";
 type NavKey =
   | "dashboard"
   | "my"
+  | "feed"
   | "crm"
   | "tasks"
   | "prospecting"
@@ -46,6 +48,7 @@ const GROUPS: Group[] = [
     items: [
       { href: "/app", key: "dashboard", icon: LayoutDashboard },
       { href: "/app/my", key: "my", icon: Star },
+      { href: "/app/feed", key: "feed", icon: Megaphone },
     ],
   },
   {
@@ -79,7 +82,7 @@ const GROUPS: Group[] = [
 ];
 
 /** Screens that are never gated by access templates. */
-const ALWAYS_SHOWN: NavKey[] = ["dashboard", "my", "settings"];
+const ALWAYS_SHOWN: NavKey[] = ["dashboard", "my", "feed", "settings"];
 
 export function AppNav({ allowedScreens }: { allowedScreens: string[] }) {
   const t = useTranslations("app.nav");

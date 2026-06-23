@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bell, Clock, CheckSquare, AlertTriangle, Wallet, MessageCircle, UserPlus, Paperclip } from "lucide-react";
+import { Bell, Clock, CheckSquare, AlertTriangle, Wallet, MessageCircle, UserPlus, Paperclip, Megaphone, AtSign, Smile } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,7 @@ import { useRealtime } from "@/components/app/realtime-provider";
 type Item = {
   id: string;
   type: string;
-  data: { count?: number; actor?: string; title?: string; attachmentType?: string } | null;
+  data: { count?: number; actor?: string; title?: string; attachmentType?: string; emoji?: string } | null;
   link: string | null;
   createdAt: string;
 };
@@ -26,8 +26,18 @@ const ICONS: Record<string, typeof Bell> = {
   TASK_ASSIGNED: UserPlus,
   OPP_ASSIGNED: UserPlus,
   TEAM_ATTACHMENT: Paperclip,
+  FEED_POST: Megaphone,
+  FEED_MENTION: AtSign,
+  FEED_REACTION: Smile,
 };
-const ASSIGN_TYPES = new Set(["TASK_ASSIGNED", "OPP_ASSIGNED", "TEAM_ATTACHMENT"]);
+const ASSIGN_TYPES = new Set([
+  "TASK_ASSIGNED",
+  "OPP_ASSIGNED",
+  "TEAM_ATTACHMENT",
+  "FEED_POST",
+  "FEED_MENTION",
+  "FEED_REACTION",
+]);
 
 /** Notification bell: polls the persisted notifications and localizes each one
  * from its `type` + `data` payload. Each edge anchors the dropdown differently. */
@@ -130,6 +140,7 @@ export function NotificationBell({
                     count: item.data?.count ?? 0,
                     actor: item.data?.actor ?? "",
                     entity: item.data?.attachmentType ? t(`entity.${item.data.attachmentType}`) : "",
+                    emoji: item.data?.emoji ?? "",
                   });
                   const body = (
                     <>
