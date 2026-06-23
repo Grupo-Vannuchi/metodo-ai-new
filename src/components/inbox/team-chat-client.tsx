@@ -1,14 +1,39 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Users, Search, SendHorizontal, Paperclip, UserCircle } from "lucide-react";
+import { createPortal } from "react-dom";
+import {
+  Users,
+  Search,
+  SendHorizontal,
+  Paperclip,
+  UserCircle,
+  FolderPlus,
+  Folder,
+  FolderInput,
+  ChevronRight,
+  ChevronDown,
+  Pin,
+  PinOff,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
+import { useRouter } from "@/i18n/navigation";
+import { useConfirm } from "@/components/ui/confirm";
+import { usePrompt } from "@/components/ui/prompt";
 import { sendTeamMessage, markTeamChatRead } from "@/app/actions/team-chat";
+import {
+  createTeamFolder,
+  renameTeamFolder,
+  deleteTeamFolder,
+  moveTeamMember,
+  pinTeamMember,
+} from "@/app/actions/team-folders";
 import { useRealtime } from "@/components/app/realtime-provider";
-import type { TeamChatSummary } from "@/lib/queries/team-chat";
+import type { TeamChatSummary, TeamMember, TeamChatFolderRow } from "@/lib/queries/team-chat";
 
-type Member = { userId: string; name: string; email: string; role: string };
 type Message = {
   id: string;
   senderId: string;
@@ -17,19 +42,29 @@ type Message = {
   attachmentId: string | null;
   createdAt: string;
 };
+type Menu = { x: number; y: number; userId: string };
+
+const MENU_ITEM =
+  "flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted";
 
 export function TeamChatClient({
   members,
+  folders,
   initialChats,
   initialSelectedId,
   currentUserId,
 }: {
-  members: Member[];
+  members: TeamMember[];
+  folders: TeamChatFolderRow[];
   initialChats: TeamChatSummary[];
   initialSelectedId: string | null;
   currentUserId: string;
 }) {
   const t = useTranslations("teamChat");
+  const router = useRouter();
+  const confirm = useConfirm();
+  const prompt = usePrompt();
+
   const [chats, setChats] = useState<TeamChatSummary[]>(initialChats);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(initialSelectedId);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(
@@ -38,6 +73,8 @@ export function TeamChatClient({
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
+  const [closedFolders, setClosedFolders] = useState<Set<string>>(new Set());
+  const [menu, setMenu] = useState<Menu | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const tempIdRef = useRef(0);
@@ -68,8 +105,7 @@ export function TeamChatClient({
     }
   }, []);
 
-  // Load the thread when a chat is opened and mark it read (inline so setState
-  // stays behind the await).
+  // Load the thread when a chat is opened and mark it read.
   useEffect(() => {
     if (!selectedChatId) return;
     let active = true;
@@ -94,7 +130,6 @@ export function TeamChatClient({
     void fetchChats();
   });
 
-  // Keep the thread scrolled to the latest message.
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -107,14 +142,11 @@ export function TeamChatClient({
     const body = draft.trim();
     if (!body || !selectedUserId) return;
     setDraft("");
-
-    // Optimistic echo, reconciled by the next fetch.
     const tempId = `temp-${tempIdRef.current++}`;
     setMessages((prev) => [
       ...prev,
       { id: tempId, senderId: currentUserId, body, attachmentType: null, attachmentId: null, createdAt: "" },
     ]);
-
     const res = await sendTeamMessage({ chatId: selectedChatId ?? undefined, targetUserId: selectedUserId, body });
     if (res.ok) {
       if (res.chatId !== selectedChatId) setSelectedChatId(res.chatId);
@@ -123,18 +155,132 @@ export function TeamChatClient({
     }
   }
 
+  // ---- Folder + member organization (org-shared) ----------------------------
+  function openMenu(e: React.MouseEvent, userId: string) {
+    e.preventDefault();
+    const x = Math.min(e.clientX, window.innerWidth - 244);
+    const y = Math.min(e.clientY, window.innerHeight - 300);
+    setMenu({ x, y, userId });
+  }
+
+  function toggleFolder(id: string) {
+    setClosedFolders((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+
+  async function onPin(m: TeamMember) {
+    setMenu(null);
+    await pinTeamMember(m.userId, !m.teamPinned);
+    router.refresh();
+  }
+
+  async function onMove(m: TeamMember, folderId: string | null) {
+    setMenu(null);
+    await moveTeamMember(m.userId, folderId);
+    router.refresh();
+  }
+
+  async function onMoveToNew(m: TeamMember) {
+    setMenu(null);
+    const name = await prompt({ title: t("newFolderTitle"), placeholder: t("folderNamePlaceholder") });
+    if (!name) return;
+    const res = await createTeamFolder(name);
+    if (res.ok && res.id) {
+      await moveTeamMember(m.userId, res.id);
+      router.refresh();
+    }
+  }
+
+  async function onNewFolder() {
+    const name = await prompt({ title: t("newFolderTitle"), placeholder: t("folderNamePlaceholder") });
+    if (!name) return;
+    await createTeamFolder(name);
+    router.refresh();
+  }
+
+  async function onRenameFolder(f: TeamChatFolderRow) {
+    const name = await prompt({ title: t("renameFolderTitle"), defaultValue: f.name });
+    if (!name) return;
+    await renameTeamFolder(f.id, name);
+    router.refresh();
+  }
+
+  async function onDeleteFolder(f: TeamChatFolderRow) {
+    const ok = await confirm({
+      description: t("deleteFolderConfirm", { name: f.name }),
+      confirmLabel: t("deleteFolder"),
+      variant: "danger",
+    });
+    if (!ok) return;
+    await deleteTeamFolder(f.id);
+    router.refresh();
+  }
+
   const term = search.toLowerCase();
-  const filteredMembers = members.filter(
-    (m) =>
-      m.userId !== currentUserId &&
-      (m.name.toLowerCase().includes(term) || m.email.toLowerCase().includes(term)),
-  );
+  const searching = term.length > 0;
+  const visible = members.filter((m) => m.userId !== currentUserId);
+  const matches = (m: TeamMember) =>
+    m.name.toLowerCase().includes(term) || m.email.toLowerCase().includes(term);
+
+  /** A single member row in the sidebar. */
+  function memberRow(m: TeamMember) {
+    const chat = chats.find((c) => c.otherUserId === m.userId);
+    const isSelected = selectedUserId === m.userId;
+    const unread = chat?.unreadCount ?? 0;
+    return (
+      <button
+        key={m.userId}
+        type="button"
+        onClick={() => selectUser(m.userId)}
+        onContextMenu={(e) => openMenu(e, m.userId)}
+        className={cn(
+          "flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left transition-colors hover:bg-muted",
+          isSelected ? "bg-muted" : "",
+        )}
+      >
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
+          <UserCircle className="size-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+            {m.teamPinned ? <Pin className="size-3 shrink-0 text-muted-foreground" /> : null}
+            <span className="truncate">{m.name}</span>
+          </p>
+          <div className="mt-0.5 flex items-center justify-between gap-2">
+            <p className="truncate text-xs text-muted-foreground">{chat?.lastMessagePreview ?? m.email}</p>
+            {unread > 0 ? (
+              <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-xs font-medium text-brand-foreground">
+                {unread}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </button>
+    );
+  }
+
+  const menuMember = menu ? members.find((m) => m.userId === menu.userId) ?? null : null;
 
   return (
     <div className="flex h-full overflow-hidden rounded-xl border border-border bg-card">
       <aside className="flex w-full flex-col border-border md:w-80 md:shrink-0 md:border-r">
         <div className="flex flex-col gap-2 border-b border-border px-4 py-3">
-          <h1 className="font-semibold">{t("title")}</h1>
+          <div className="flex items-center justify-between gap-2">
+            <h1 className="font-semibold">{t("title")}</h1>
+            <button
+              type="button"
+              onClick={onNewFolder}
+              title={t("newFolder")}
+              aria-label={t("newFolder")}
+              className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <FolderPlus className="size-4" />
+            </button>
+          </div>
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -146,37 +292,66 @@ export function TeamChatClient({
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {filteredMembers.map((m) => {
-            const chat = chats.find((c) => c.otherUserId === m.userId);
-            const isSelected = selectedUserId === m.userId;
-            const unread = chat?.unreadCount ?? 0;
-            return (
-              <button
-                key={m.userId}
-                type="button"
-                onClick={() => selectUser(m.userId)}
-                className={cn(
-                  "flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left transition-colors hover:bg-muted",
-                  isSelected ? "bg-muted" : "",
-                )}
-              >
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
-                  <UserCircle className="size-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{m.name}</p>
-                  <div className="mt-0.5 flex items-center justify-between gap-2">
-                    <p className="truncate text-xs text-muted-foreground">{chat?.lastMessagePreview ?? m.email}</p>
-                    {unread > 0 ? (
-                      <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-xs font-medium text-brand-foreground">
-                        {unread}
-                      </span>
-                    ) : null}
+          {searching ? (
+            visible.filter(matches).length === 0 ? (
+              <p className="p-6 text-center text-sm text-muted-foreground">{t("noResults")}</p>
+            ) : (
+              visible.filter(matches).map(memberRow)
+            )
+          ) : (
+            <>
+              {visible.filter((m) => !m.teamFolderId).map(memberRow)}
+              {folders.map((f) => {
+                const items = visible.filter((m) => m.teamFolderId === f.id);
+                const isClosed = closedFolders.has(f.id);
+                return (
+                  <div key={f.id}>
+                    <div
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        void onRenameFolder(f);
+                      }}
+                      className="flex items-center gap-1.5 border-b border-border bg-muted/30 px-3 py-2"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleFolder(f.id)}
+                        className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs font-semibold text-muted-foreground"
+                      >
+                        {isClosed ? (
+                          <ChevronRight className="size-3.5 shrink-0" />
+                        ) : (
+                          <ChevronDown className="size-3.5 shrink-0" />
+                        )}
+                        <Folder className="size-3.5 shrink-0" />
+                        <span className="truncate">{f.name}</span>
+                        <span className="text-muted-foreground/70">({items.length})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void onRenameFolder(f)}
+                        title={t("renameFolder")}
+                        aria-label={t("renameFolder")}
+                        className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void onDeleteFolder(f)}
+                        title={t("deleteFolder")}
+                        aria-label={t("deleteFolder")}
+                        className="rounded p-0.5 text-muted-foreground hover:text-red-600"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                    {!isClosed ? items.map(memberRow) : null}
                   </div>
-                </div>
-              </button>
-            );
-          })}
+                );
+              })}
+            </>
+          )}
         </div>
       </aside>
 
@@ -248,6 +423,57 @@ export function TeamChatClient({
           </div>
         )}
       </main>
+
+      {menu && menuMember
+        ? createPortal(
+            <>
+              <button
+                type="button"
+                aria-hidden
+                tabIndex={-1}
+                onClick={() => setMenu(null)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setMenu(null);
+                }}
+                className="fixed inset-0 z-40 cursor-default"
+              />
+              <div
+                style={{ left: menu.x, top: menu.y }}
+                className="fixed z-50 w-60 overflow-hidden rounded-xl border border-border bg-card py-1 text-sm shadow-xl motion-safe:animate-dialog-in"
+              >
+                <button type="button" onClick={() => void onPin(menuMember)} className={MENU_ITEM}>
+                  {menuMember.teamPinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+                  {menuMember.teamPinned ? t("unpin") : t("pin")}
+                </button>
+
+                <div className="my-1 border-t border-border" />
+                <p className="px-3 py-1 text-xs font-medium text-muted-foreground">{t("moveTo")}</p>
+                <div className="max-h-40 overflow-y-auto">
+                  {menuMember.teamFolderId ? (
+                    <button type="button" onClick={() => void onMove(menuMember, null)} className={MENU_ITEM}>
+                      <FolderInput className="size-4" />
+                      {t("noFolder")}
+                    </button>
+                  ) : null}
+                  {folders
+                    .filter((f) => f.id !== menuMember.teamFolderId)
+                    .map((f) => (
+                      <button key={f.id} type="button" onClick={() => void onMove(menuMember, f.id)} className={MENU_ITEM}>
+                        <Folder className="size-4 shrink-0" />
+                        <span className="truncate">{f.name}</span>
+                      </button>
+                    ))}
+                  <button type="button" onClick={() => void onMoveToNew(menuMember)} className={MENU_ITEM}>
+                    <FolderPlus className="size-4" />
+                    {t("newFolderMove")}
+                  </button>
+                </div>
+              </div>
+            </>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

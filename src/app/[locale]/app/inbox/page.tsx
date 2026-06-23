@@ -5,8 +5,7 @@ import { listConversations, listConversationFolders } from "@/lib/queries/inbox"
 import { InboxClient } from "@/components/inbox/inbox-client";
 import { TeamChatClient } from "@/components/inbox/team-chat-client";
 import { resolveLocale } from "@/i18n/routing";
-import { listMembers } from "@/lib/queries/organizations";
-import { listTeamChats } from "@/lib/queries/team-chat";
+import { listTeamChats, listTeamMembers, listTeamChatFolders } from "@/lib/queries/team-chat";
 import { Link } from "@/i18n/navigation";
 import { MessageCircle, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -27,11 +26,12 @@ export default async function InboxPage({
 
   const { c, chat, mode = "whatsapp" } = await searchParams;
 
-  const [conversations, folders, members, teamChats] = await Promise.all([
+  const [conversations, folders, teamMembers, teamChats, teamFolders] = await Promise.all([
     mode === "whatsapp" ? listConversations(ctx.organizationId) : Promise.resolve([]),
     mode === "whatsapp" ? listConversationFolders(ctx.organizationId) : Promise.resolve([]),
-    mode === "team" ? listMembers(ctx.organizationId) : Promise.resolve([]),
+    mode === "team" ? listTeamMembers(ctx.organizationId) : Promise.resolve([]),
     mode === "team" ? listTeamChats(ctx.organizationId, ctx.userId) : Promise.resolve([]),
+    mode === "team" ? listTeamChatFolders(ctx.organizationId) : Promise.resolve([]),
   ]);
 
   return (
@@ -69,7 +69,8 @@ export default async function InboxPage({
           />
         ) : (
           <TeamChatClient
-            members={members}
+            members={teamMembers}
+            folders={teamFolders}
             initialChats={teamChats}
             initialSelectedId={chat ?? null}
             currentUserId={ctx.userId}

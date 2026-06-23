@@ -41,6 +41,7 @@ const TENANT_MODELS = new Set<string>([
   "TeamChat",
   "TeamChatParticipant",
   "TeamChatMessage",
+  "TeamChatFolder",
 ]);
 
 const WHERE_OPS = new Set<string>([

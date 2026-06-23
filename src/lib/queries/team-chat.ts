@@ -1,5 +1,50 @@
 import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
+import { prisma } from "@/lib/prisma";
+
+export type TeamChatFolderRow = { id: string; name: string };
+
+/** The org's team-chat folders (shared, like the WhatsApp inbox folders). */
+export async function listTeamChatFolders(organizationId: string): Promise<TeamChatFolderRow[]> {
+  const db = tenantDb(organizationId);
+  return db.teamChatFolder.findMany({
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+    select: { id: true, name: true },
+  });
+}
+
+export type TeamMember = {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  teamFolderId: string | null;
+  teamPinned: boolean;
+};
+
+/** Org members for the team-chat sidebar, with their folder + pin state.
+ * Pinned members first. */
+export async function listTeamMembers(organizationId: string): Promise<TeamMember[]> {
+  const memberships = await prisma.membership.findMany({
+    where: { organizationId },
+    orderBy: [{ teamPinned: "desc" }, { createdAt: "asc" }],
+    select: {
+      userId: true,
+      role: true,
+      teamFolderId: true,
+      teamPinned: true,
+      user: { select: { name: true, email: true } },
+    },
+  });
+  return memberships.map((m) => ({
+    userId: m.userId,
+    name: m.user.name,
+    email: m.user.email,
+    role: m.role,
+    teamFolderId: m.teamFolderId,
+    teamPinned: m.teamPinned,
+  }));
+}
 
 export type TeamChatSummary = {
   id: string;
