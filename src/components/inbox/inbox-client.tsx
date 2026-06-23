@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowLeft,
   Check,
@@ -695,8 +696,11 @@ export function InboxClient({
       ) : null}
 
       {/* Right-click context menu for a conversation */}
-      {menu && menuConvo ? (
-        <>
+      {menu && menuConvo
+        ? createPortal(
+            // Portal to <body> so `position: fixed` is anchored to the viewport
+            // (clientX/clientY), immune to any transformed/filtered ancestor.
+            <>
           <button
             type="button"
             aria-hidden
@@ -759,8 +763,10 @@ export function InboxClient({
               {t("delete")}
             </button>
           </div>
-        </>
-      ) : null}
+            </>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
