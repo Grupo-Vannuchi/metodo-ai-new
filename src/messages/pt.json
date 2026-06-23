@@ -1059,6 +1059,13 @@
   "feed": {
     "title": "Mural da equipe",
     "subtitle": "Avisos e novidades. Os posts somem após 24 horas.",
+    "greeting": {
+      "morning": "Bom dia, {name} 👋",
+      "afternoon": "Boa tarde, {name} 👋",
+      "evening": "Boa noite, {name} 👋"
+    },
+    "statTasks": "{count, plural, =0 {nenhuma tarefa aberta} one {# tarefa aberta} other {# tarefas abertas}}",
+    "statOpps": "{count, plural, =0 {nenhuma oportunidade} one {# oportunidade} other {# oportunidades}}",
     "composerPlaceholder": "Compartilhe algo com a equipe… use @ para marcar alguém.",
     "post": "Publicar",
     "attach": "Anexar",
