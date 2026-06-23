@@ -175,6 +175,13 @@
       "finance": "Finance",
       "connections": "Connections",
       "settings": "Settings",
+      "group": {
+        "general": "General",
+        "crm": "CRM",
+        "comms": "Communication",
+        "finance": "Finance",
+        "system": "System"
+      },
       "signOut": "Sign out",
       "menu": "Open menu",
       "close": "Close menu",

@@ -175,6 +175,13 @@
       "finance": "Financeiro",
       "connections": "Conexões",
       "settings": "Configurações",
+      "group": {
+        "general": "Geral",
+        "crm": "CRM",
+        "comms": "Comunicação",
+        "finance": "Financeiro",
+        "system": "Sistema"
+      },
       "signOut": "Sair",
       "menu": "Abrir menu",
       "close": "Fechar menu",
