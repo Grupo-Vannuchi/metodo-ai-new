@@ -8,6 +8,7 @@
  */
 
 export const GATEABLE_SCREENS = [
+  "feed",
   "crm",
   "tasks",
   "prospecting",

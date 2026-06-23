@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
+import { requireScreen } from "@/lib/access";
 import { tenantDb } from "@/lib/tenant-db";
 import { listFeed } from "@/lib/queries/feed";
 import { listTeamMembers } from "@/lib/queries/team-chat";
@@ -17,6 +18,7 @@ export default async function FeedPage({
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
+  await requireScreen(ctx, "feed", locale);
   const t = await getTranslations("feed");
   const db = tenantDb(ctx.organizationId);
 

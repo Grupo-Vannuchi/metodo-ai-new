@@ -82,7 +82,7 @@ const GROUPS: Group[] = [
 ];
 
 /** Screens that are never gated by access templates. */
-const ALWAYS_SHOWN: NavKey[] = ["dashboard", "my", "feed", "settings"];
+const ALWAYS_SHOWN: NavKey[] = ["dashboard", "my", "settings"];
 
 export function AppNav({ allowedScreens }: { allowedScreens: string[] }) {
   const t = useTranslations("app.nav");
