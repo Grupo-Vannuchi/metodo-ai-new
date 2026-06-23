@@ -201,7 +201,26 @@
       "emptyFunnel": "No opportunities in the funnel yet.",
       "companies": "Companies",
       "contacts": "Contacts",
-      "dispatchMonth": "Dispatch (month)"
+      "dispatchMonth": "Dispatch (month)",
+      "pie": {
+        "title": "Breakdown",
+        "total": "total",
+        "empty": "No data to show.",
+        "none": "Unassigned",
+        "model": {
+          "opps_by_stage": "Opportunities by stage",
+          "value_by_stage": "Value by stage",
+          "opps_by_status": "Opportunities by status",
+          "opps_by_owner": "Opportunities by owner",
+          "contacts_by_source": "Contacts by source",
+          "tasks_by_priority": "Tasks by priority",
+          "finance_by_type": "Finance by type"
+        },
+        "status": { "OPEN": "Open", "WON": "Won", "LOST": "Lost", "CANCELED": "Canceled" },
+        "priority": { "LOW": "Low", "MEDIUM": "Medium", "HIGH": "High" },
+        "finance": { "INCOME": "Income", "EXPENSE": "Expense" },
+        "source": { "manual": "Manual", "prospecting": "Prospecting", "import": "Import" }
+      }
     },
     "team": {
       "title": "Team",

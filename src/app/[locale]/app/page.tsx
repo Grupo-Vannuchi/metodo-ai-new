@@ -11,6 +11,9 @@ import {
 } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getDashboardInsights } from "@/lib/queries/insights";
+import { PIE_MODELS, PIE_FINANCE_MODELS } from "@/lib/queries/dashboard";
+import { hasFeature, type PlanKey } from "@/config/plans";
+import { PieCard } from "@/components/dashboard/pie-card";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
@@ -33,6 +36,11 @@ export default async function DashboardPage({
     maximumFractionDigits: 0,
   });
   const maxStageValue = Math.max(1, ...ins.stages.map((s) => s.value));
+
+  const pieModels: string[] = [
+    ...PIE_MODELS,
+    ...(hasFeature(ctx.organization.plan as PlanKey, "finance") ? PIE_FINANCE_MODELS : []),
+  ];
 
   const kpis = [
     { icon: TrendingUp, label: t("openCount"), value: String(ins.pipeline.openCount) },
@@ -71,6 +79,8 @@ export default async function DashboardPage({
           </div>
         ))}
       </section>
+
+      <PieCard models={pieModels} defaultModel="opps_by_stage" />
 
       <section className="rounded-xl border border-border bg-card p-5">
         <div className="mb-4 flex items-center justify-between">

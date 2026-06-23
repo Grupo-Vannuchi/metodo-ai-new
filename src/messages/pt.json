@@ -201,7 +201,26 @@
       "emptyFunnel": "Sem oportunidades no funil ainda.",
       "companies": "Empresas",
       "contacts": "Contatos",
-      "dispatchMonth": "Disparos (mês)"
+      "dispatchMonth": "Disparos (mês)",
+      "pie": {
+        "title": "Distribuição",
+        "total": "total",
+        "empty": "Sem dados para exibir.",
+        "none": "Não definido",
+        "model": {
+          "opps_by_stage": "Oportunidades por estágio",
+          "value_by_stage": "Valor por estágio",
+          "opps_by_status": "Oportunidades por situação",
+          "opps_by_owner": "Oportunidades por responsável",
+          "contacts_by_source": "Contatos por origem",
+          "tasks_by_priority": "Tarefas por prioridade",
+          "finance_by_type": "Financeiro por tipo"
+        },
+        "status": { "OPEN": "Aberta", "WON": "Ganha", "LOST": "Perdida", "CANCELED": "Cancelada" },
+        "priority": { "LOW": "Baixa", "MEDIUM": "Média", "HIGH": "Alta" },
+        "finance": { "INCOME": "Receita", "EXPENSE": "Despesa" },
+        "source": { "manual": "Manual", "prospecting": "Prospecção", "import": "Importação" }
+      }
     },
     "team": {
       "title": "Equipe",
