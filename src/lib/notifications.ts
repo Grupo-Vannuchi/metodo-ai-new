@@ -14,17 +14,18 @@ export const DIGEST_KINDS = [
   "INBOX_UNREAD",
 ] as const;
 
-/** Created once, when the assignment happens (event-based, never by the cron). */
-export const ASSIGN_KINDS = ["TASK_ASSIGNED", "OPP_ASSIGNED"] as const;
+/** Created once, when the event happens (never by the cron). */
+export const ASSIGN_KINDS = ["TASK_ASSIGNED", "OPP_ASSIGNED", "TEAM_ATTACHMENT"] as const;
 
 export type NotificationKind =
   | (typeof DIGEST_KINDS)[number]
   | (typeof ASSIGN_KINDS)[number];
 
 /** i18n interpolation payload. `count` for digests; `actor`/`title` for
- * assignments. */
+ * assignments; `actor`/`attachmentType` for a team-chat share. */
 export type NotificationData = {
   count?: number;
   actor?: string;
   title?: string;
+  attachmentType?: string;
 };

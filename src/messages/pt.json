@@ -932,7 +932,15 @@
       "FINANCE_OVERDUE": "{count, plural, one {# lançamento vencido} other {# lançamentos vencidos}}",
       "INBOX_UNREAD": "{count, plural, one {# conversa não lida} other {# conversas não lidas}}",
       "TASK_ASSIGNED": "{actor} te atribuiu uma tarefa",
-      "OPP_ASSIGNED": "{actor} te atribuiu uma oportunidade"
+      "OPP_ASSIGNED": "{actor} te atribuiu uma oportunidade",
+      "TEAM_ATTACHMENT": "{actor} te enviou {entity} no chat de equipe"
+    },
+    "entity": {
+      "TASK": "uma tarefa",
+      "OPP": "uma oportunidade",
+      "CONTACT": "um contato",
+      "COMPANY": "uma empresa",
+      "LEAD": "um lead"
     }
   },
   "settings": {
@@ -1018,7 +1026,24 @@
     "newFolderTitle": "Nova pasta",
     "folderNamePlaceholder": "Nome da pasta",
     "renameFolderTitle": "Renomear pasta",
-    "deleteFolderConfirm": "Excluir a pasta \"{name}\"? Os membros voltam para \"Sem pasta\"."
+    "deleteFolderConfirm": "Excluir a pasta \"{name}\"? Os membros voltam para \"Sem pasta\".",
+    "attach": "Anexar",
+    "attachTitle": "Anexar ao chat",
+    "attachSearch": "Buscar…",
+    "attachEmpty": "Nada encontrado.",
+    "close": "Fechar",
+    "attachType": {
+      "TASK": "Tarefa",
+      "OPP": "Oportunidade",
+      "CONTACT": "Contato",
+      "COMPANY": "Empresa",
+      "LEAD": "Lead"
+    },
+    "info": "Informações",
+    "memberTasks": "Tarefas",
+    "memberOpps": "Oportunidades",
+    "noTasks": "Sem tarefas abertas.",
+    "noOpps": "Sem oportunidades abertas."
   },
   "pagination": {
     "label": "Paginação",

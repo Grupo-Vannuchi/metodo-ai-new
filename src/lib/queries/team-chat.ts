@@ -120,6 +120,8 @@ export async function listTeamChatMessages(
       body: true,
       attachmentType: true,
       attachmentId: true,
+      attachmentLabel: true,
+      attachmentHref: true,
       createdAt: true,
     },
   });
@@ -155,4 +157,139 @@ export async function getOrCreateDirectChat(
     select: { id: true },
   });
   return chat.id;
+}
+
+// --------------------------------------------------------------- Attachments
+
+export type AttachKind = "TASK" | "CONTACT" | "COMPANY" | "OPP" | "LEAD";
+export type AttachOption = { id: string; label: string; sublabel: string | null };
+
+/** Search the org's entities of a given kind for the attachment picker. */
+export async function searchAttachables(
+  organizationId: string,
+  kind: AttachKind,
+  q: string,
+): Promise<AttachOption[]> {
+  const db = tenantDb(organizationId);
+  const term = q.trim();
+  const c = term ? { contains: term, mode: "insensitive" as const } : undefined;
+  const take = 20;
+  switch (kind) {
+    case "TASK": {
+      const rows = await db.task.findMany({
+        where: c ? { title: c } : {},
+        orderBy: { createdAt: "desc" },
+        take,
+        select: { id: true, title: true },
+      });
+      return rows.map((r) => ({ id: r.id, label: r.title, sublabel: null }));
+    }
+    case "CONTACT": {
+      const rows = await db.contact.findMany({
+        where: c ? { OR: [{ name: c }, { email: c }] } : {},
+        orderBy: { createdAt: "desc" },
+        take,
+        select: { id: true, name: true, email: true },
+      });
+      return rows.map((r) => ({ id: r.id, label: r.name, sublabel: r.email }));
+    }
+    case "COMPANY": {
+      const rows = await db.company.findMany({
+        where: c ? { OR: [{ name: c }, { cnpj: c }] } : {},
+        orderBy: { createdAt: "desc" },
+        take,
+        select: { id: true, name: true },
+      });
+      return rows.map((r) => ({ id: r.id, label: r.name, sublabel: null }));
+    }
+    case "OPP": {
+      const rows = await db.opportunity.findMany({
+        where: c ? { OR: [{ title: c }, { code: c }] } : {},
+        orderBy: { createdAt: "desc" },
+        take,
+        select: { id: true, title: true, code: true },
+      });
+      return rows.map((r) => ({ id: r.id, label: r.code ? `${r.code} · ${r.title}` : r.title, sublabel: null }));
+    }
+    case "LEAD": {
+      const rows = await db.extractedLead.findMany({
+        where: c ? { OR: [{ name: c }, { phone: c }] } : {},
+        orderBy: { createdAt: "desc" },
+        take,
+        select: { id: true, name: true, phone: true, segment: true },
+      });
+      return rows.map((r) => ({ id: r.id, label: r.name || r.phone || "Lead", sublabel: r.segment ?? r.phone }));
+    }
+    default:
+      return [];
+  }
+}
+
+// ------------------------------------------------------------- Member info
+
+export type TeamMemberInfo = {
+  userId: string;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+  position: string | null;
+  phone: string | null;
+  role: string;
+  tasks: { id: string; title: string; dueDate: Date | null }[];
+  opportunities: { id: string; code: string | null; title: string; value: number; stageName: string | null }[];
+};
+
+/** Profile + open work of a team member, for the chat's info panel. */
+export async function getTeamMemberInfo(
+  organizationId: string,
+  userId: string,
+): Promise<TeamMemberInfo | null> {
+  const membership = await prisma.membership.findFirst({
+    where: { organizationId, userId },
+    select: {
+      role: true,
+      user: {
+        select: {
+          name: true,
+          email: true,
+          profile: { select: { avatarUrl: true, position: true, phone: true } },
+        },
+      },
+    },
+  });
+  if (!membership) return null;
+
+  const db = tenantDb(organizationId);
+  const [tasks, opps] = await Promise.all([
+    db.task.findMany({
+      where: { assignedToId: userId, doneAt: null },
+      orderBy: [{ dueDate: "asc" }],
+      take: 20,
+      select: { id: true, title: true, dueDate: true },
+    }),
+    db.opportunity.findMany({
+      where: { ownerId: userId, status: "OPEN" },
+      orderBy: { updatedAt: "desc" },
+      take: 20,
+      select: { id: true, code: true, title: true, value: true, stage: { select: { name: true } } },
+    }),
+  ]);
+
+  return {
+    userId,
+    name: membership.user.name,
+    email: membership.user.email,
+    avatarUrl: membership.user.profile?.avatarUrl ?? null,
+    position: membership.user.profile?.position ?? null,
+    phone: membership.user.profile?.phone ?? null,
+    role: membership.role,
+    tasks: tasks.map((t) => ({ id: t.id, title: t.title, dueDate: t.dueDate })),
+    opportunities: opps.map((o) => ({
+      id: o.id,
+      code: o.code,
+      title: o.title,
+      value: Number(o.value),
+      stageName: o.stage?.name ?? null,
+    })),
+  };
 }

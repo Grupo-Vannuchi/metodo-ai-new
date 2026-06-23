@@ -861,6 +861,7 @@ enum TeamChatAttachmentType {
   OPP
   CONTACT
   COMPANY
+  LEAD
 }
 
 model TeamChat {
@@ -906,8 +907,12 @@ model TeamChatMessage {
   senderId       String
   body           String
 
-  attachmentType TeamChatAttachmentType?
-  attachmentId   String?
+  attachmentType  TeamChatAttachmentType?
+  attachmentId    String?
+  /// Snapshot of the attached entity's label + link, resolved at send time so
+  /// the bubble renders without N+1 lookups and survives the entity changing.
+  attachmentLabel String?
+  attachmentHref  String?
 
   createdAt DateTime @default(now())
 

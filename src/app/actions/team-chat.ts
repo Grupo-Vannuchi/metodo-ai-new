@@ -7,6 +7,7 @@ import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateDirectChat, isChatParticipant } from "@/lib/queries/team-chat";
+import type { TenantDb } from "@/lib/tenant-db";
 
 export type TeamChatResult =
   | { ok: true; chatId: string }
@@ -16,11 +17,46 @@ const sendSchema = z
   .object({
     chatId: z.string().trim().min(1).optional(),
     targetUserId: z.string().trim().min(1).optional(),
-    body: z.string().trim().min(1).max(4000),
+    body: z.string().trim().max(4000).optional(),
     attachmentType: z.nativeEnum(TeamChatAttachmentType).optional(),
     attachmentId: z.string().trim().min(1).max(64).optional(),
   })
-  .refine((d) => Boolean(d.chatId || d.targetUserId), { message: "chatId or targetUserId required" });
+  .refine((d) => Boolean(d.chatId || d.targetUserId), { message: "chat target required" })
+  // Either text or an attachment (both ids must come together).
+  .refine((d) => Boolean(d.body) || Boolean(d.attachmentType && d.attachmentId), { message: "empty message" });
+
+/** Resolve an attachment's display label + link from its entity (org-scoped),
+ * snapshotted onto the message so the bubble renders without extra lookups. */
+async function resolveAttachment(
+  db: TenantDb,
+  type: TeamChatAttachmentType,
+  id: string,
+): Promise<{ label: string; href: string } | null> {
+  switch (type) {
+    case "TASK": {
+      const x = await db.task.findFirst({ where: { id }, select: { title: true } });
+      return x ? { label: x.title, href: `/app/tasks/${id}` } : null;
+    }
+    case "CONTACT": {
+      const x = await db.contact.findFirst({ where: { id }, select: { name: true } });
+      return x ? { label: x.name, href: `/app/contacts/${id}` } : null;
+    }
+    case "COMPANY": {
+      const x = await db.company.findFirst({ where: { id }, select: { name: true } });
+      return x ? { label: x.name, href: `/app/companies/${id}` } : null;
+    }
+    case "OPP": {
+      const x = await db.opportunity.findFirst({ where: { id }, select: { title: true, code: true } });
+      return x ? { label: x.code ? `${x.code} · ${x.title}` : x.title, href: `/app/crm/${id}` } : null;
+    }
+    case "LEAD": {
+      const x = await db.extractedLead.findFirst({ where: { id }, select: { name: true, phone: true, jobId: true } });
+      return x ? { label: x.name || x.phone || "Lead", href: `/app/prospecting/${x.jobId}` } : null;
+    }
+    default:
+      return null;
+  }
+}
 
 export async function sendTeamMessage(input: unknown): Promise<TeamChatResult> {
   const ctx = await getOrgContext();
@@ -50,24 +86,53 @@ export async function sendTeamMessage(input: unknown): Promise<TeamChatResult> {
       return { ok: false, error: "forbidden" };
     }
 
+    // Resolve the attachment (must belong to the org); drop it if not found.
+    let attachment: { label: string; href: string } | null = null;
+    if (attachmentType && attachmentId) {
+      attachment = await resolveAttachment(db, attachmentType, attachmentId);
+      if (!attachment) return { ok: false, error: "invalid" };
+    }
+
+    const text = body ?? "";
     await db.teamChatMessage.create({
       data: {
         organizationId: ctx.organizationId,
         chatId,
         senderId: ctx.userId,
-        body,
-        attachmentType,
-        attachmentId,
+        body: text,
+        attachmentType: attachment ? attachmentType : null,
+        attachmentId: attachment ? attachmentId : null,
+        attachmentLabel: attachment?.label ?? null,
+        attachmentHref: attachment?.href ?? null,
       },
     });
     await db.teamChat.updateMany({
       where: { id: chatId },
-      data: { lastMessageAt: new Date(), lastMessagePreview: body },
+      data: { lastMessageAt: new Date(), lastMessagePreview: text || attachment?.label || null },
     });
     await db.teamChatParticipant.updateMany({
       where: { chatId, userId: { not: ctx.userId } },
       data: { unreadCount: { increment: 1 } },
     });
+
+    // Notify the other participants when something was shared.
+    if (attachment && attachmentType) {
+      const others = await db.teamChatParticipant.findMany({
+        where: { chatId, userId: { not: ctx.userId } },
+        select: { userId: true },
+      });
+      if (others.length > 0) {
+        await db.notification.createMany({
+          data: others.map((o) => ({
+            organizationId: ctx.organizationId,
+            userId: o.userId,
+            type: "TEAM_ATTACHMENT",
+            data: { actor: ctx.user.name, attachmentType },
+            link: `/app/inbox?mode=team&chat=${chatId}`,
+          })),
+        });
+      }
+    }
 
     revalidatePath("/app/inbox");
     return { ok: true, chatId };

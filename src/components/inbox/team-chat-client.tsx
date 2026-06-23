@@ -17,14 +17,24 @@ import {
   PinOff,
   Pencil,
   Trash2,
+  Info,
+  CheckSquare,
+  KanbanSquare,
+  Contact as ContactIcon,
+  Building2,
+  Radar,
+  Mail,
+  Phone,
+  X,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
-import { useRouter } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { useConfirm } from "@/components/ui/confirm";
 import { usePrompt } from "@/components/ui/prompt";
 import { Avatar } from "@/components/app/avatar";
 import { Spinner } from "@/components/ui/spinner";
+import { formatBRL } from "@/lib/money";
 import { sendTeamMessage, markTeamChatRead } from "@/app/actions/team-chat";
 import {
   createTeamFolder,
@@ -33,8 +43,15 @@ import {
   moveTeamMember,
   pinTeamMember,
 } from "@/app/actions/team-folders";
+import { AttachPicker } from "@/components/inbox/attach-picker";
 import { useRealtime } from "@/components/app/realtime-provider";
-import type { TeamChatSummary, TeamMember, TeamChatFolderRow } from "@/lib/queries/team-chat";
+import type {
+  TeamChatSummary,
+  TeamMember,
+  TeamChatFolderRow,
+  TeamMemberInfo,
+  AttachKind,
+} from "@/lib/queries/team-chat";
 
 type Message = {
   id: string;
@@ -42,12 +59,22 @@ type Message = {
   body: string;
   attachmentType: string | null;
   attachmentId: string | null;
+  attachmentLabel: string | null;
+  attachmentHref: string | null;
   createdAt: string;
 };
 type Menu = { x: number; y: number; userId: string };
 
 const MENU_ITEM =
   "flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted";
+
+const ATTACH_ICONS: Record<string, typeof CheckSquare> = {
+  TASK: CheckSquare,
+  OPP: KanbanSquare,
+  CONTACT: ContactIcon,
+  COMPANY: Building2,
+  LEAD: Radar,
+};
 
 function fmtTime(value: string | Date | null): string {
   if (!value) return "";
@@ -83,6 +110,9 @@ export function TeamChatClient({
   const [search, setSearch] = useState("");
   const [closedFolders, setClosedFolders] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<Menu | null>(null);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  const [memberInfo, setMemberInfo] = useState<TeamMemberInfo | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const tempIdRef = useRef(0);
@@ -154,7 +184,7 @@ export function TeamChatClient({
     const tempId = `temp-${tempIdRef.current++}`;
     setMessages((prev) => [
       ...prev,
-      { id: tempId, senderId: currentUserId, body, attachmentType: null, attachmentId: null, createdAt: "" },
+      { id: tempId, senderId: currentUserId, body, attachmentType: null, attachmentId: null, attachmentLabel: null, attachmentHref: null, createdAt: "" },
     ]);
     const res = await sendTeamMessage({ chatId: selectedChatId ?? undefined, targetUserId: selectedUserId, body });
     setSending(false);
@@ -164,6 +194,44 @@ export function TeamChatClient({
       void fetchChats();
     }
   }
+
+  // Share a CRM entity: sends a message carrying the attachment (with any draft).
+  async function sendAttachment(type: AttachKind, id: string) {
+    setAttachOpen(false);
+    if (!selectedUserId) return;
+    const body = draft.trim();
+    setDraft("");
+    const res = await sendTeamMessage({
+      chatId: selectedChatId ?? undefined,
+      targetUserId: selectedUserId,
+      body: body || undefined,
+      attachmentType: type,
+      attachmentId: id,
+    });
+    if (res.ok) {
+      if (res.chatId !== selectedChatId) setSelectedChatId(res.chatId);
+      else void fetchMessages();
+      void fetchChats();
+    }
+  }
+
+  // Member info panel — load the selected member's profile + open work.
+  useEffect(() => {
+    if (!showInfo || !selectedUserId) return;
+    let active = true;
+    const run = async () => {
+      try {
+        const r = await fetch(`/api/inbox/team-member?userId=${selectedUserId}`, { cache: "no-store" });
+        if (active && r.ok) setMemberInfo(await r.json());
+      } catch {
+        /* ignore */
+      }
+    };
+    void run();
+    return () => {
+      active = false;
+    };
+  }, [showInfo, selectedUserId]);
 
   // ---- Folder + member organization (org-shared) ----------------------------
   function openMenu(e: React.MouseEvent, userId: string) {
@@ -391,10 +459,22 @@ export function TeamChatClient({
                 <ArrowLeft className="size-5" />
               </button>
               <Avatar name={activeUser.name} src={activeUser.avatarUrl} className="size-9" />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{activeUser.name}</p>
                 <p className="truncate text-xs text-muted-foreground">{activeUser.email}</p>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowInfo((v) => !v)}
+                title={t("info")}
+                aria-label={t("info")}
+                className={cn(
+                  "rounded-lg p-1.5 transition-colors hover:bg-muted hover:text-foreground",
+                  showInfo ? "text-brand" : "text-muted-foreground",
+                )}
+              >
+                <Info className="size-4" />
+              </button>
             </header>
 
             <div ref={scrollRef} className="flex flex-1 flex-col gap-2 overflow-y-auto bg-muted/20 p-4">
@@ -411,13 +491,31 @@ export function TeamChatClient({
                         out ? "self-end bg-brand text-brand-foreground" : "self-start bg-card",
                       )}
                     >
-                      {msg.attachmentType ? (
-                        <div className="mb-2 flex items-center gap-2 rounded bg-background/20 p-2 text-xs font-semibold">
-                          <Paperclip className="size-3" />
-                          {t("attachment")}: {msg.attachmentType}
-                        </div>
+                      {msg.attachmentType && msg.attachmentHref ? (
+                        (() => {
+                          const Icon = ATTACH_ICONS[msg.attachmentType] ?? Paperclip;
+                          return (
+                            <Link
+                              href={msg.attachmentHref}
+                              className={cn(
+                                "mb-1 flex items-center gap-2 rounded-lg p-2 transition-colors",
+                                out ? "bg-brand-foreground/15 hover:bg-brand-foreground/25" : "bg-muted hover:bg-muted/70",
+                              )}
+                            >
+                              <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-md", out ? "bg-brand-foreground/20" : "bg-brand/10 text-brand")}>
+                                <Icon className="size-4" />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className={cn("block text-[10px] uppercase tracking-wide", out ? "text-brand-foreground/70" : "text-muted-foreground")}>
+                                  {t(`attachType.${msg.attachmentType}`)}
+                                </span>
+                                <span className="block truncate text-sm font-medium">{msg.attachmentLabel}</span>
+                              </span>
+                            </Link>
+                          );
+                        })()
                       ) : null}
-                      <p className="whitespace-pre-wrap break-words">{msg.body}</p>
+                      {msg.body ? <p className="whitespace-pre-wrap break-words">{msg.body}</p> : null}
                       {msg.createdAt ? (
                         <span
                           className={cn(
@@ -435,6 +533,15 @@ export function TeamChatClient({
             </div>
 
             <form onSubmit={onSend} className="flex items-end gap-2 border-t border-border p-3">
+              <button
+                type="button"
+                onClick={() => setAttachOpen(true)}
+                title={t("attach")}
+                aria-label={t("attach")}
+                className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <Paperclip className="size-4" />
+              </button>
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
@@ -465,6 +572,99 @@ export function TeamChatClient({
           </div>
         )}
       </section>
+
+      {/* Member info panel */}
+      {showInfo && selectedUserId && activeUser ? (
+        <aside className="hidden w-full flex-col border-border md:w-80 md:shrink-0 md:border-l lg:flex">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <h2 className="font-semibold">{t("info")}</h2>
+            <button
+              type="button"
+              onClick={() => setShowInfo(false)}
+              aria-label={t("close")}
+              className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex flex-col items-center gap-2 text-center">
+              <Avatar name={activeUser.name} src={activeUser.avatarUrl} className="size-16 text-lg" />
+              <div className="min-w-0">
+                <p className="truncate font-medium">{activeUser.name}</p>
+                {memberInfo?.position ? <p className="truncate text-sm text-muted-foreground">{memberInfo.position}</p> : null}
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2 text-sm text-muted-foreground">
+              <p className="flex items-center gap-2">
+                <Mail className="size-4 shrink-0" />
+                <span className="truncate">{activeUser.email}</span>
+              </p>
+              {memberInfo?.phone ? (
+                <p className="flex items-center gap-2">
+                  <Phone className="size-4 shrink-0" />
+                  {memberInfo.phone}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="mt-6">
+              <h3 className="mb-2 text-sm font-semibold">{t("memberTasks")}</h3>
+              {memberInfo && memberInfo.tasks.length > 0 ? (
+                <ul className="flex flex-col gap-1.5">
+                  {memberInfo.tasks.map((task) => (
+                    <li key={task.id}>
+                      <Link
+                        href={`/app/tasks/${task.id}`}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm transition-colors hover:bg-muted"
+                      >
+                        <span className="truncate">{task.title}</span>
+                        {task.dueDate ? (
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            {new Date(task.dueDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+                          </span>
+                        ) : null}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm italic text-muted-foreground">{t("noTasks")}</p>
+              )}
+            </div>
+
+            <div className="mt-6">
+              <h3 className="mb-2 text-sm font-semibold">{t("memberOpps")}</h3>
+              {memberInfo && memberInfo.opportunities.length > 0 ? (
+                <ul className="flex flex-col gap-1.5">
+                  {memberInfo.opportunities.map((opp) => (
+                    <li key={opp.id}>
+                      <Link
+                        href={`/app/crm/${opp.id}`}
+                        className="block rounded-lg border border-border bg-muted/20 p-3 text-sm transition-colors hover:bg-muted"
+                      >
+                        <p className="truncate font-medium">
+                          {opp.code ? <span className="mr-1 text-xs tabular-nums text-muted-foreground">{opp.code}</span> : null}
+                          {opp.title}
+                        </p>
+                        <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                          {opp.stageName ? <span className="rounded-full bg-muted px-2 py-0.5">{opp.stageName}</span> : <span />}
+                          <span className="font-medium text-foreground">{formatBRL(opp.value)}</span>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm italic text-muted-foreground">{t("noOpps")}</p>
+              )}
+            </div>
+          </div>
+        </aside>
+      ) : null}
+
+      {attachOpen ? <AttachPicker onPick={sendAttachment} onClose={() => setAttachOpen(false)} /> : null}
 
       {menu && menuMember
         ? createPortal(

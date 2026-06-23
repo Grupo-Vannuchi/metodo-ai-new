@@ -932,7 +932,15 @@
       "FINANCE_OVERDUE": "{count, plural, one {# overdue entry} other {# overdue entries}}",
       "INBOX_UNREAD": "{count, plural, one {# unread conversation} other {# unread conversations}}",
       "TASK_ASSIGNED": "{actor} assigned you a task",
-      "OPP_ASSIGNED": "{actor} assigned you an opportunity"
+      "OPP_ASSIGNED": "{actor} assigned you an opportunity",
+      "TEAM_ATTACHMENT": "{actor} sent you {entity} in team chat"
+    },
+    "entity": {
+      "TASK": "a task",
+      "OPP": "an opportunity",
+      "CONTACT": "a contact",
+      "COMPANY": "a company",
+      "LEAD": "a lead"
     }
   },
   "settings": {
@@ -1018,7 +1026,24 @@
     "newFolderTitle": "New folder",
     "folderNamePlaceholder": "Folder name",
     "renameFolderTitle": "Rename folder",
-    "deleteFolderConfirm": "Delete the folder \"{name}\"? Members move back to \"No folder\"."
+    "deleteFolderConfirm": "Delete the folder \"{name}\"? Members move back to \"No folder\".",
+    "attach": "Attach",
+    "attachTitle": "Attach to chat",
+    "attachSearch": "Search…",
+    "attachEmpty": "Nothing found.",
+    "close": "Close",
+    "attachType": {
+      "TASK": "Task",
+      "OPP": "Opportunity",
+      "CONTACT": "Contact",
+      "COMPANY": "Company",
+      "LEAD": "Lead"
+    },
+    "info": "Details",
+    "memberTasks": "Tasks",
+    "memberOpps": "Opportunities",
+    "noTasks": "No open tasks.",
+    "noOpps": "No open opportunities."
   },
   "pagination": {
     "label": "Pagination",
