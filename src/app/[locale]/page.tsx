@@ -60,9 +60,9 @@ export default async function HomePage({
               {t("hero.ctaPrimary")}
               <ArrowRight className="size-4" />
             </Link>
-            <a href="#pricing" className={buttonVariants({ variant: "outline", size: "lg" })}>
+            <Link href="/pricing" className={buttonVariants({ variant: "outline", size: "lg" })}>
               {t("hero.ctaSecondary")}
-            </a>
+            </Link>
           </div>
           <p className="text-sm text-muted-foreground">{t("hero.note")}</p>
         </section>
