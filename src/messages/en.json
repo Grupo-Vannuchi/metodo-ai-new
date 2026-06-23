@@ -926,6 +926,8 @@
     "title": "Notifications",
     "empty": "All caught up. Nothing pending.",
     "clear": "Clear",
+    "mute": "Mute sound",
+    "unmute": "Unmute sound",
     "kind": {
       "TASK_OVERDUE": "{count, plural, one {# overdue task} other {# overdue tasks}}",
       "TASK_TODAY": "{count, plural, one {# task due today} other {# tasks due today}}",

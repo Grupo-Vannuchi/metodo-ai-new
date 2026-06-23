@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bell, Clock, CheckSquare, AlertTriangle, Wallet, MessageCircle, UserPlus, Paperclip, Megaphone, AtSign, Smile } from "lucide-react";
+import { Bell, Clock, CheckSquare, AlertTriangle, Wallet, MessageCircle, UserPlus, Paperclip, Megaphone, AtSign, Smile, Volume2, VolumeX } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { clearNotifications, markNotificationRead } from "@/app/actions/notifications";
 import { useRealtime } from "@/components/app/realtime-provider";
+import { SOUND_MUTED_KEY } from "@/components/app/notification-sound";
 
 type Item = {
   id: string;
@@ -52,6 +53,19 @@ export function NotificationBell({
   const t = useTranslations("notifications");
   const [a, setA] = useState<Payload | null>(null);
   const [open, setOpen] = useState(false);
+  // Sound mute toggle (only rendered inside the open dropdown, so reading
+  // localStorage in the lazy initializer can't cause a hydration mismatch).
+  const [muted, setMuted] = useState(() => typeof window !== "undefined" && localStorage.getItem(SOUND_MUTED_KEY) === "1");
+
+  function toggleMute() {
+    const next = !muted;
+    setMuted(next);
+    try {
+      localStorage.setItem(SOUND_MUTED_KEY, next ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -123,11 +137,22 @@ export function NotificationBell({
           >
             <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
               <span className="text-sm font-semibold">{t("title")}</span>
-              {items.length > 0 ? (
-                <button type="button" onClick={handleClear} className="text-xs text-muted-foreground hover:text-foreground hover:underline">
-                  {t("clear")}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={toggleMute}
+                  title={muted ? t("unmute") : t("mute")}
+                  aria-label={muted ? t("unmute") : t("mute")}
+                  className="text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
                 </button>
-              ) : null}
+                {items.length > 0 ? (
+                  <button type="button" onClick={handleClear} className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+                    {t("clear")}
+                  </button>
+                ) : null}
+              </div>
             </div>
             {items.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-muted-foreground">{t("empty")}</p>

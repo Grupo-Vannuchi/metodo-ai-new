@@ -926,6 +926,8 @@
     "title": "Notificações",
     "empty": "Tudo em dia. Sem pendências.",
     "clear": "Limpar",
+    "mute": "Silenciar som",
+    "unmute": "Ativar som",
     "kind": {
       "TASK_OVERDUE": "{count, plural, one {# tarefa atrasada} other {# tarefas atrasadas}}",
       "TASK_TODAY": "{count, plural, one {# tarefa para hoje} other {# tarefas para hoje}}",
