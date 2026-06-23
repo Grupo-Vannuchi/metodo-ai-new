@@ -8,6 +8,7 @@ import { PieChart } from "@/components/dashboard/pie-chart";
 import { useRealtime } from "@/components/app/realtime-provider";
 
 type RawSlice = { key: string; value: number };
+type Loaded = { model: string; slices: RawSlice[] };
 
 const COLORS = ["#18375d", "#2ecc71", "#5b8fc7", "#f39c12", "#9b59b6", "#e74c3c", "#1abc9c", "#7f8c8d"];
 const SOURCE_KEY: Record<string, string> = { manual: "manual", "extractor:google": "prospecting", import: "import" };
@@ -16,7 +17,9 @@ const CURRENCY_MODELS = new Set(["value_by_stage", "finance_by_type"]);
 export function PieCard({ models, defaultModel }: { models: string[]; defaultModel: string }) {
   const t = useTranslations("app.dashboard.pie");
   const [model, setModel] = useState(defaultModel);
-  const [raw, setRaw] = useState<RawSlice[]>([]);
+  // Keep the loaded slices tied to the model they came from, so labels are never
+  // resolved with the wrong (stale) model while a new selection is fetching.
+  const [loaded, setLoaded] = useState<Loaded>({ model: defaultModel, slices: [] });
   const [loading, setLoading] = useState(true);
 
   // Reload when the selected model changes.
@@ -26,7 +29,7 @@ export function PieCard({ models, defaultModel }: { models: string[]; defaultMod
       if (active) setLoading(true);
       try {
         const r = await fetch(`/api/dashboard/pie?model=${model}`, { cache: "no-store" });
-        if (active && r.ok) setRaw(await r.json());
+        if (active && r.ok) setLoaded({ model, slices: await r.json() });
       } catch {
         /* ignore */
       } finally {
@@ -42,44 +45,47 @@ export function PieCard({ models, defaultModel }: { models: string[]; defaultMod
   const refetch = useCallback(() => {
     fetch(`/api/dashboard/pie?model=${model}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setRaw(d))
+      .then((d) => d && setLoaded({ model, slices: d }))
       .catch(() => {});
   }, [model]);
   useRealtime("crm", refetch);
   useRealtime("tasks", refetch);
 
-  const isCurrency = CURRENCY_MODELS.has(model);
+  // Everything below renders the *loaded* model, not the pending selection.
+  const activeModel = loaded.model;
+  const isCurrency = CURRENCY_MODELS.has(activeModel);
   const fmt = (n: number) => (isCurrency ? formatBRL(n) : String(n));
   // Compact form for the donut centre so large currency totals don't overflow.
   const fmtCompact = (n: number) =>
-    isCurrency
-      ? new Intl.NumberFormat("pt-BR", {
-          style: "currency",
-          currency: "BRL",
-          notation: "compact",
-          maximumFractionDigits: 1,
-        }).format(n)
-      : new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+    new Intl.NumberFormat("pt-BR", {
+      ...(isCurrency ? { style: "currency" as const, currency: "BRL" } : {}),
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(n);
+
+  // Resolve a message but fall back to the raw key if it is missing — guards
+  // against unexpected enum values (and any transient model/data mismatch).
+  const tr = (key: string, fallback: string) => (t.has(key) ? t(key) : fallback);
 
   function labelFor(key: string): string {
     if (key === "__none__") return t("none");
-    switch (model) {
+    switch (activeModel) {
       case "opps_by_status":
-        return t(`status.${key}`);
+        return tr(`status.${key}`, key);
       case "tasks_by_priority":
-        return t(`priority.${key}`);
+        return tr(`priority.${key}`, key);
       case "finance_by_type":
-        return t(`finance.${key}`);
+        return tr(`finance.${key}`, key);
       case "contacts_by_source": {
         const k = SOURCE_KEY[key];
-        return k ? t(`source.${k}`) : key;
+        return k ? tr(`source.${k}`, key) : key;
       }
       default:
         return key;
     }
   }
 
-  const data = raw.map((s, i) => ({ label: labelFor(s.key), value: s.value, color: COLORS[i % COLORS.length] }));
+  const data = loaded.slices.map((s, i) => ({ label: labelFor(s.key), value: s.value, color: COLORS[i % COLORS.length] }));
   const total = data.reduce((a, d) => a + d.value, 0);
 
   return (
