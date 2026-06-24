@@ -59,9 +59,19 @@ function formatErrors(error: z.ZodError): string {
 
 const isServer = typeof window === "undefined";
 
-function parseServerEnv() {
+function parseServerEnv(): z.infer<typeof serverSchema> {
   const parsed = serverSchema.safeParse(process.env);
   if (!parsed.success) {
+    // `next build` (page-data collection) imports this module before the host
+    // injects runtime env vars — Hostinger provides them only at runtime. Don't
+    // fail the build; the real validation runs when the server boots (NEXT_PHASE
+    // is unset then). SKIP_ENV_VALIDATION is an explicit manual escape hatch.
+    if (
+      process.env.NEXT_PHASE === "phase-production-build" ||
+      process.env.SKIP_ENV_VALIDATION === "1"
+    ) {
+      return process.env as unknown as z.infer<typeof serverSchema>;
+    }
     throw new Error(
       `Invalid server environment variables:\n${formatErrors(parsed.error)}`,
     );
