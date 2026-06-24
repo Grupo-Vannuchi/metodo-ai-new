@@ -158,13 +158,21 @@ export function InboxClient({
     }
   }, []);
 
-  // On-demand media: when the open thread has PENDING bubbles, fetch only those
-  // (the ones the user actually opened) with bounded concurrency, swapping each
-  // placeholder for the real media as it resolves. Replaces infinite polling and
-  // never re-fetches the same message (in-flight guard + idempotent endpoint).
+  // On-demand media: when the open thread has media without stored bytes, fetch
+  // only those (the ones the user actually opened) with bounded concurrency,
+  // swapping each placeholder for the real media as it resolves. Covers both new
+  // (PENDING) and legacy (null status, received before this feature) messages;
+  // skips READY (already stored) and FAILED (terminal). In-flight guard +
+  // idempotent endpoint prevent re-fetching. Replaces infinite polling.
   const mediaInflight = useRef<Set<string>>(new Set());
   const repairPendingMedia = useCallback(async (msgs: Message[]) => {
-    const queue = msgs.filter((m) => m.mediaStatus === "PENDING" && !mediaInflight.current.has(m.id));
+    const queue = msgs.filter(
+      (m) =>
+        MEDIA_TYPES.has(m.type) &&
+        !m.mediaUrl &&
+        m.mediaStatus !== "FAILED" &&
+        !mediaInflight.current.has(m.id),
+    );
     if (queue.length === 0) return;
     queue.forEach((m) => mediaInflight.current.add(m.id));
     let cursor = 0;
