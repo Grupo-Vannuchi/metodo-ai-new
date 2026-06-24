@@ -158,15 +158,53 @@ export function InboxClient({
     }
   }, []);
 
+  // On-demand media: when the open thread has PENDING bubbles, fetch only those
+  // (the ones the user actually opened) with bounded concurrency, swapping each
+  // placeholder for the real media as it resolves. Replaces infinite polling and
+  // never re-fetches the same message (in-flight guard + idempotent endpoint).
+  const mediaInflight = useRef<Set<string>>(new Set());
+  const repairPendingMedia = useCallback(async (msgs: Message[]) => {
+    const queue = msgs.filter((m) => m.mediaStatus === "PENDING" && !mediaInflight.current.has(m.id));
+    if (queue.length === 0) return;
+    queue.forEach((m) => mediaInflight.current.add(m.id));
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < queue.length) {
+        const m = queue[cursor++];
+        if (!m) break;
+        try {
+          const r = await fetch("/api/inbox/media/fetch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messageId: m.id }),
+          });
+          if (r.ok) {
+            const upd = (await r.json()) as Partial<Message>;
+            setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...upd } : x)));
+          }
+        } catch {
+          /* leave PENDING; reopening the thread retries */
+        } finally {
+          mediaInflight.current.delete(m.id);
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, queue.length) }, worker));
+  }, []);
+
   const fetchMessages = useCallback(async () => {
     if (!selectedId) return;
     try {
       const r = await fetch(`/api/inbox/messages?conversationId=${selectedId}`, { cache: "no-store" });
-      if (r.ok) setMessages(await r.json());
+      if (r.ok) {
+        const data = (await r.json()) as Message[];
+        setMessages(data);
+        void repairPendingMedia(data);
+      }
     } catch {
       /* ignore */
     }
-  }, [selectedId]);
+  }, [selectedId, repairPendingMedia]);
 
   // Load + mark read when a conversation is opened (inline so setState stays
   // behind the await).
@@ -176,7 +214,11 @@ export function InboxClient({
     const run = async () => {
       try {
         const r = await fetch(`/api/inbox/messages?conversationId=${selectedId}`, { cache: "no-store" });
-        if (active && r.ok) setMessages(await r.json());
+        if (active && r.ok) {
+          const data = (await r.json()) as Message[];
+          setMessages(data);
+          void repairPendingMedia(data);
+        }
       } catch {
         /* ignore */
       }
@@ -186,22 +228,13 @@ export function InboxClient({
     return () => {
       active = false;
     };
-  }, [selectedId, loadConversations]);
+  }, [selectedId, loadConversations, repairPendingMedia]);
 
   // Pushed live: new inbound messages refresh the list and the open thread.
   useRealtime("inbox", () => {
     void loadConversations();
     void fetchMessages();
   });
-
-  // While any media is still being fetched/stored, poll the thread until every
-  // bubble flips to READY/FAILED — then stop (no idle polling).
-  const hasPendingMedia = messages.some((m) => m.mediaStatus === "PENDING");
-  useEffect(() => {
-    if (!hasPendingMedia) return;
-    const id = setInterval(() => void fetchMessages(), 3000);
-    return () => clearInterval(id);
-  }, [hasPendingMedia, fetchMessages]);
 
   function select(id: string | null) {
     setSelectedId(id);

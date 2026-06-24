@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { formatBrPhone, brPhoneKey } from "@/lib/phone";
 import type { ParsedInbound } from "@/lib/whatsapp/inbound";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
-import { runWhatsappMediaJob, type WhatsappMediaJob } from "@/lib/whatsapp/media";
+import type { WhatsappMediaJob } from "@/lib/whatsapp/media";
 
 /**
  * Persist an inbound (or own-phone outbound) WhatsApp message: link the
@@ -121,27 +121,21 @@ export async function ingestInbound(
     select: { id: true },
   });
 
-  // Fetch + store the bytes off the webhook's hot path. With QStash configured
-  // (production) we enqueue; locally (no queue) we process inline as fire-and-
-  // forget so the webhook still returns fast. Storage always works (Blob in
-  // prod, local disk in dev), so media never gets stuck PENDING.
-  if (hasMedia && m.providerMessageId) {
+  // Pre-warm the media in production (QStash) so it's ready when a conversation
+  // is opened. Without a queue (local dev) we do nothing here — the inbox fetches
+  // media lazily/on-demand when it renders a PENDING bubble (see /api/inbox/
+  // media/fetch), which avoids fragile post-response work and infinite spinners.
+  if (hasMedia && m.providerMessageId && isQueueConfigured()) {
     const job: WhatsappMediaJob = {
       messageId: message.id,
       organizationId,
       connectionId,
       key: { id: m.providerMessageId, remoteJid: m.remoteJid, fromMe: m.fromMe },
     };
-    if (isQueueConfigured()) {
-      try {
-        await enqueue("whatsapp-media", job, { deduplicationId: `media:${message.id}` });
-      } catch (error) {
-        console.error("[ingest] failed to enqueue media job", error);
-      }
-    } else {
-      void runWhatsappMediaJob(job).catch((error) =>
-        console.error("[ingest] inline media job failed", error),
-      );
+    try {
+      await enqueue("whatsapp-media", job, { deduplicationId: `media:${message.id}` });
+    } catch (error) {
+      console.error("[ingest] failed to enqueue media job", error);
     }
   }
 }

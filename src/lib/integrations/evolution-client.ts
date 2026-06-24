@@ -35,14 +35,21 @@ async function req(
   method: string,
   path: string,
   body?: Json,
+  timeoutMs?: number,
 ): Promise<{ ok: boolean; status: number; data: Json }> {
-  const res = await fetch(`${base(creds)}${path}`, {
-    method,
-    headers: headers(creds),
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = (await res.json().catch(() => ({}))) as Json;
-  return { ok: res.ok, status: res.status, data };
+  try {
+    const res = await fetch(`${base(creds)}${path}`, {
+      method,
+      headers: headers(creds),
+      body: body ? JSON.stringify(body) : undefined,
+      signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
+    });
+    const data = (await res.json().catch(() => ({}))) as Json;
+    return { ok: res.ok, status: res.status, data };
+  } catch {
+    // Network error / timeout — surface as a non-ok result instead of throwing.
+    return { ok: false, status: 0, data: {} };
+  }
 }
 
 /** Pull a QR-code base64 string out of the various shapes Evolution may return. */
@@ -166,6 +173,7 @@ export async function getBase64FromMediaMessage(
     "POST",
     `/chat/getBase64FromMediaMessage/${encodeURIComponent(creds.instance)}`,
     { message: { key }, convertToMp4: false },
+    25000,
   );
   if (!ok) return null;
   const envelope = (data.media as Json | undefined) ?? data;
