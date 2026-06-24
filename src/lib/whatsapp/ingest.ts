@@ -3,6 +3,9 @@ import type { MessageType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatBrPhone, brPhoneKey } from "@/lib/phone";
 import type { ParsedInbound } from "@/lib/whatsapp/inbound";
+import { enqueue, isQueueConfigured } from "@/lib/queue";
+import { isBlobConfigured } from "@/lib/storage/blob";
+import type { WhatsappMediaJob } from "@/lib/whatsapp/media";
 
 /**
  * Persist an inbound (or own-phone outbound) WhatsApp message: link the
@@ -89,7 +92,11 @@ export async function ingestInbound(
     });
   }
 
-  await prisma.message.create({
+  // Media bytes are fetched off the hot path (see enqueue below): store the
+  // message immediately as PENDING with the metadata we already have from the
+  // webhook, so the UI can render a sized placeholder before bytes arrive.
+  const hasMedia = m.media !== null;
+  const message = await prisma.message.create({
     data: {
       organizationId,
       conversationId: conversation.id,
@@ -100,6 +107,34 @@ export async function ingestInbound(
       fromMe: m.fromMe,
       status: m.fromMe ? "SENT" : null,
       timestamp: m.timestamp,
+      ...(hasMedia
+        ? {
+            mediaStatus: "PENDING",
+            mediaMime: m.media!.mime,
+            mediaName: m.media!.name,
+            mediaSize: m.media!.size,
+            mediaDurationSec: m.media!.durationSec,
+            mediaWidth: m.media!.width,
+            mediaHeight: m.media!.height,
+          }
+        : {}),
     },
+    select: { id: true },
   });
+
+  // Fetch + store the bytes asynchronously. Skip silently when storage/queue
+  // aren't configured (e.g. local dev) — the message just stays PENDING.
+  if (hasMedia && m.providerMessageId && isQueueConfigured() && isBlobConfigured()) {
+    const job: WhatsappMediaJob = {
+      messageId: message.id,
+      organizationId,
+      connectionId,
+      key: { id: m.providerMessageId, remoteJid: m.remoteJid, fromMe: m.fromMe },
+    };
+    try {
+      await enqueue("whatsapp-media", job, { deduplicationId: `media:${message.id}` });
+    } catch (error) {
+      console.error("[ingest] failed to enqueue media job", error);
+    }
+  }
 }

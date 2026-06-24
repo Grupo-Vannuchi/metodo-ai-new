@@ -147,3 +147,31 @@ export async function logout(creds: EvoCreds): Promise<{ ok: boolean }> {
   );
   return { ok };
 }
+
+/** The Baileys message key needed to fetch (and decrypt) a media message. */
+export type EvoMediaKey = { id: string; remoteJid: string; fromMe: boolean };
+
+/**
+ * Fetch and decrypt the media bytes of a message. WhatsApp media is end-to-end
+ * encrypted, so the only way to get usable bytes is through Evolution, which
+ * decrypts and returns base64. Response shapes vary across versions, so we read
+ * `base64`/`mimetype` defensively (also accepting a nested envelope).
+ */
+export async function getBase64FromMediaMessage(
+  creds: EvoCreds,
+  key: EvoMediaKey,
+): Promise<{ base64: string; mimetype: string } | null> {
+  const { ok, data } = await req(
+    creds,
+    "POST",
+    `/chat/getBase64FromMediaMessage/${encodeURIComponent(creds.instance)}`,
+    { message: { key }, convertToMp4: false },
+  );
+  if (!ok) return null;
+  const envelope = (data.media as Json | undefined) ?? data;
+  const base64 = envelope.base64 as string | undefined;
+  const mimetype =
+    (envelope.mimetype as string | undefined) ?? (envelope.mediaType as string | undefined);
+  if (!base64 || !mimetype) return null;
+  return { base64, mimetype };
+}

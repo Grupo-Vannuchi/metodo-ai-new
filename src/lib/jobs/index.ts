@@ -1,6 +1,7 @@
 import "server-only";
 import { dispatchCampaignBatch } from "@/lib/dispatch";
 import { runExtractionBatch } from "@/lib/prospecting/runner";
+import { runWhatsappMediaJob, type WhatsappMediaJob } from "@/lib/whatsapp/media";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
 
 /**
@@ -39,5 +40,12 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
     if (!done && isQueueConfigured()) {
       await enqueue("extraction-run", { jobId });
     }
+  },
+
+  /** Fetch a WhatsApp message's media from Evolution and store it in Blob. */
+  "whatsapp-media": async (payload) => {
+    const job = payload as WhatsappMediaJob;
+    if (!job?.messageId || !job?.connectionId || !job?.key?.id) return;
+    await runWhatsappMediaJob(job);
   },
 };

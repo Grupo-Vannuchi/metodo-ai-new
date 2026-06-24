@@ -31,6 +31,8 @@ const serverSchema = z.object({
   QSTASH_TOKEN: z.string().optional(),
   QSTASH_CURRENT_SIGNING_KEY: z.string().optional(),
   QSTASH_NEXT_SIGNING_KEY: z.string().optional(),
+  // Object storage (Vercel Blob) — optional until inbox media storage runs.
+  BLOB_READ_WRITE_TOKEN: z.string().optional(),
   // Cache / rate-limit (Upstash Redis) — optional until dispatch throttling runs.
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),

@@ -627,6 +627,13 @@ enum MessageStatus {
   FAILED
 }
 
+/// Lifecycle of a message's media bytes in our own storage (Vercel Blob).
+enum MediaStatus {
+  PENDING
+  READY
+  FAILED
+}
+
 /// A WhatsApp chat with one remote party (a contact's number), tied to the
 /// Evolution connection it flows through.
 model Conversation {
@@ -686,6 +693,15 @@ model Message {
   body              String?
   mediaUrl          String?
   mediaMime         String?
+  /// PENDING = bytes still being fetched/stored; READY = playable; FAILED = give up.
+  mediaStatus       MediaStatus?
+  /// Original filename (documents) and known metadata captured from the webhook.
+  mediaName         String?
+  mediaSize         Int?
+  /// Audio/video length in seconds (lets the player render before bytes load).
+  mediaDurationSec  Int?
+  mediaWidth        Int?
+  mediaHeight       Int?
   /// Provider message id (Baileys key id) — idempotency + status mapping.
   providerMessageId String?
   status            MessageStatus?

@@ -14,6 +14,16 @@ export type InboundType =
   | "LOCATION"
   | "UNKNOWN";
 
+/** Media metadata available from the webhook itself (no download needed). */
+export type InboundMedia = {
+  mime: string | null;
+  name: string | null;
+  size: number | null;
+  durationSec: number | null;
+  width: number | null;
+  height: number | null;
+};
+
 export type ParsedInbound = {
   remoteJid: string;
   fromMe: boolean;
@@ -24,6 +34,8 @@ export type ParsedInbound = {
   /** Short text for the conversation list. */
   preview: string;
   timestamp: Date;
+  /** Present for downloadable media types; null for text/location/unknown. */
+  media: InboundMedia | null;
 };
 
 type Json = Record<string, unknown>;
@@ -36,6 +48,26 @@ const MEDIA: Record<string, InboundType> = {
   stickerMessage: "STICKER",
   locationMessage: "LOCATION",
 };
+
+/** Media types whose bytes we fetch + store (LOCATION carries coords, not bytes). */
+const DOWNLOADABLE = new Set<InboundType>(["IMAGE", "AUDIO", "VIDEO", "DOCUMENT", "STICKER"]);
+
+/** Coerce Baileys numeric fields (string | number | long-ish) to a finite int. */
+function num(v: unknown): number | null {
+  const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+}
+
+function extractMedia(node: Json): InboundMedia {
+  return {
+    mime: typeof node.mimetype === "string" ? node.mimetype : null,
+    name: typeof node.fileName === "string" ? node.fileName : null,
+    size: num(node.fileLength),
+    durationSec: num(node.seconds),
+    width: num(node.width),
+    height: num(node.height),
+  };
+}
 
 const PREVIEW_FALLBACK: Record<InboundType, string> = {
   TEXT: "",
@@ -67,6 +99,7 @@ function parseOne(data: Json): ParsedInbound | null {
   const message = (data.message as Json | undefined) ?? {};
   let type: InboundType = "UNKNOWN";
   let body: string | null = null;
+  let media: InboundMedia | null = null;
 
   if (typeof message.conversation === "string") {
     type = "TEXT";
@@ -80,13 +113,14 @@ function parseOne(data: Json): ParsedInbound | null {
       if (node) {
         type = mediaType;
         body = typeof node.caption === "string" ? node.caption : null;
+        if (DOWNLOADABLE.has(mediaType)) media = extractMedia(node);
         break;
       }
     }
   }
 
   const preview = body?.trim() || PREVIEW_FALLBACK[type] || "[mensagem]";
-  return { remoteJid, fromMe, pushName, providerMessageId, type, body, preview, timestamp };
+  return { remoteJid, fromMe, pushName, providerMessageId, type, body, preview, timestamp, media };
 }
 
 /** Parse a webhook payload into inbound messages (handles single / array / Baileys shapes). */
