@@ -6,6 +6,7 @@ import { tenantDb } from "@/lib/tenant-db";
 import { decryptCredentials } from "@/lib/integrations/crypto";
 import { getChannelAdapter } from "@/lib/integrations/channels";
 import { normalizeWhatsappNumber } from "@/lib/phone";
+import { purgeConversationMedia } from "@/lib/whatsapp/media";
 
 /** Reset a conversation's unread counter (called when it's opened). */
 export async function markConversationRead(id: string): Promise<{ ok: boolean }> {
@@ -171,7 +172,13 @@ export async function deleteConversation(id: string): Promise<Ok> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false };
   try {
-    await tenantDb(ctx.organizationId).conversation.deleteMany({ where: { id } });
+    const db = tenantDb(ctx.organizationId);
+    // Only the org's own conversation; if it isn't, both calls are no-ops.
+    const owned = await db.conversation.findFirst({ where: { id }, select: { id: true } });
+    if (!owned) return { ok: false };
+    // LGPD: drop stored media before the messages cascade away (best-effort).
+    await purgeConversationMedia(ctx.organizationId, [id]).catch(() => {});
+    await db.conversation.deleteMany({ where: { id } });
     revalidatePath("/app/inbox");
     return { ok: true };
   } catch (error) {
