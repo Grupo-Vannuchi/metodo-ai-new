@@ -4,8 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { formatBrPhone, brPhoneKey } from "@/lib/phone";
 import type { ParsedInbound } from "@/lib/whatsapp/inbound";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
-import { isBlobConfigured } from "@/lib/storage/blob";
-import type { WhatsappMediaJob } from "@/lib/whatsapp/media";
+import { runWhatsappMediaJob, type WhatsappMediaJob } from "@/lib/whatsapp/media";
 
 /**
  * Persist an inbound (or own-phone outbound) WhatsApp message: link the
@@ -122,19 +121,27 @@ export async function ingestInbound(
     select: { id: true },
   });
 
-  // Fetch + store the bytes asynchronously. Skip silently when storage/queue
-  // aren't configured (e.g. local dev) — the message just stays PENDING.
-  if (hasMedia && m.providerMessageId && isQueueConfigured() && isBlobConfigured()) {
+  // Fetch + store the bytes off the webhook's hot path. With QStash configured
+  // (production) we enqueue; locally (no queue) we process inline as fire-and-
+  // forget so the webhook still returns fast. Storage always works (Blob in
+  // prod, local disk in dev), so media never gets stuck PENDING.
+  if (hasMedia && m.providerMessageId) {
     const job: WhatsappMediaJob = {
       messageId: message.id,
       organizationId,
       connectionId,
       key: { id: m.providerMessageId, remoteJid: m.remoteJid, fromMe: m.fromMe },
     };
-    try {
-      await enqueue("whatsapp-media", job, { deduplicationId: `media:${message.id}` });
-    } catch (error) {
-      console.error("[ingest] failed to enqueue media job", error);
+    if (isQueueConfigured()) {
+      try {
+        await enqueue("whatsapp-media", job, { deduplicationId: `media:${message.id}` });
+      } catch (error) {
+        console.error("[ingest] failed to enqueue media job", error);
+      }
+    } else {
+      void runWhatsappMediaJob(job).catch((error) =>
+        console.error("[ingest] inline media job failed", error),
+      );
     }
   }
 }
