@@ -33,6 +33,11 @@ const serverSchema = z.object({
   QSTASH_NEXT_SIGNING_KEY: z.string().optional(),
   // Object storage (Vercel Blob) — optional until inbox media storage runs.
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
+  // Object storage (Supabase Storage) — production media backend on Hostinger.
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  // Secret guarding the /api/cron/* endpoints (sent as `Authorization: Bearer`).
+  CRON_SECRET: z.string().optional(),
   // Cache / rate-limit (Upstash Redis) — optional until dispatch throttling runs.
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),

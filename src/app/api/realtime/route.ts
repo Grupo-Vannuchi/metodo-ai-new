@@ -3,8 +3,9 @@ import { realtimeFingerprints, REALTIME_EVENTS, type RealtimeFingerprint } from 
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// Hold the stream just under the Hobby function ceiling, then let EventSource
-// reconnect (which also resyncs every channel).
+// Recycle the stream under a minute, then let EventSource reconnect (which also
+// resyncs every channel). Stays under common proxy idle timeouts (~60s on the
+// Hostinger LiteSpeed proxy) and any serverless ceiling.
 export const maxDuration = 60;
 
 const TICK_MS = 2500;
