@@ -73,6 +73,8 @@ type Conversation = {
   contactName: string | null;
   pinned: boolean;
   folderId: string | null;
+  avatarUrl: string | null;
+  avatarChecked: boolean;
 };
 
 type Menu = { x: number; y: number; conversationId: string };
@@ -157,14 +159,54 @@ export function InboxClient({
     });
   }, []);
 
+  // Lazily resolve WhatsApp profile pictures for conversations we haven't checked
+  // yet (server caches weekly). Bounded: most-recent first, capped, concurrency 3.
+  const avatarInflight = useRef<Set<string>>(new Set());
+  const syncAvatars = useCallback(async (convos: Conversation[]) => {
+    const queue = convos
+      .filter((c) => !c.avatarChecked && !avatarInflight.current.has(c.id))
+      .slice(0, 40);
+    if (queue.length === 0) return;
+    queue.forEach((c) => avatarInflight.current.add(c.id));
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < queue.length) {
+        const c = queue[cursor++];
+        if (!c) break;
+        try {
+          const r = await fetch("/api/inbox/avatar/fetch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ conversationId: c.id }),
+          });
+          if (r.ok) {
+            const { avatarUrl } = (await r.json()) as { avatarUrl: string | null };
+            setConversations((prev) =>
+              prev.map((x) => (x.id === c.id ? { ...x, avatarUrl, avatarChecked: true } : x)),
+            );
+          }
+        } catch {
+          /* ignore */
+        } finally {
+          avatarInflight.current.delete(c.id);
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, queue.length) }, worker));
+  }, []);
+
   const loadConversations = useCallback(async () => {
     try {
       const r = await fetch("/api/inbox/conversations", { cache: "no-store" });
-      if (r.ok) setConversations(await r.json());
+      if (r.ok) {
+        const data = (await r.json()) as Conversation[];
+        setConversations(data);
+        void syncAvatars(data);
+      }
     } catch {
       /* keep current on transient failure */
     }
-  }, []);
+  }, [syncAvatars]);
 
   const loadFolders = useCallback(async () => {
     try {
@@ -232,6 +274,11 @@ export function InboxClient({
       /* ignore */
     }
   }, [selectedId, repairPendingMedia, scrollToBottom]);
+
+  // Resolve avatars for the conversations rendered on first paint.
+  useEffect(() => {
+    void syncAvatars(initial);
+  }, [syncAvatars, initial]);
 
   // Load + mark read when a conversation is opened (inline so setState stays
   // behind the await).
@@ -410,7 +457,7 @@ export function InboxClient({
           selectedId === c.id ? "bg-muted" : "",
         )}
       >
-        <Avatar name={displayName(c)} className="size-9" />
+        <Avatar name={displayName(c)} src={c.avatarUrl} className="size-9" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <p className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">
@@ -577,6 +624,7 @@ export function InboxClient({
                 >
                   <ArrowLeft className="size-5" />
                 </button>
+                <Avatar name={displayName(selected)} src={selected.avatarUrl} className="size-9" />
                 <div className="min-w-0">
                   <p className="truncate font-medium">{displayName(selected)}</p>
                   {selected.contactId ? (

@@ -183,3 +183,24 @@ export async function getBase64FromMediaMessage(
   if (!base64 || !mimetype) return null;
   return { base64, mimetype };
 }
+
+/**
+ * Fetch a contact's WhatsApp profile-picture URL (a pps.whatsapp.net link).
+ * Returns null when the contact has no public photo or the call fails. The URL
+ * is durable enough to store and refresh periodically.
+ */
+export async function fetchProfilePictureUrl(
+  creds: EvoCreds,
+  number: string,
+): Promise<string | null> {
+  const { ok, data } = await req(
+    creds,
+    "POST",
+    `/chat/fetchProfilePictureUrl/${encodeURIComponent(creds.instance)}`,
+    { number },
+    15000,
+  );
+  if (!ok) return null;
+  const url = (data.profilePictureUrl as string | undefined) ?? (data.url as string | undefined);
+  return url && url.startsWith("http") ? url : null;
+}

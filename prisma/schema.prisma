@@ -648,6 +648,9 @@ model Conversation {
   customName         String?
   /// Optional link to a CRM contact (identified/created from the number).
   contactId          String?
+  /// WhatsApp profile-picture URL + when we last refreshed it (cached ~weekly).
+  avatarUrl          String?
+  avatarCheckedAt    DateTime?
   /// Team member this conversation is assigned to (a User id), if any.
   assignedToId       String?
   /// Inbox organization: pin to top and optional folder.

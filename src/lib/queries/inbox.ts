@@ -19,6 +19,8 @@ export async function listConversations(organizationId: string) {
       contactId: true,
       pinned: true,
       folderId: true,
+      avatarUrl: true,
+      avatarCheckedAt: true,
     },
   });
 
@@ -40,6 +42,8 @@ export async function listConversations(organizationId: string) {
     contactName: c.contactId ? cMap.get(c.contactId) ?? null : null,
     pinned: c.pinned,
     folderId: c.folderId,
+    avatarUrl: c.avatarUrl,
+    avatarChecked: c.avatarCheckedAt !== null,
   }));
 }
 
