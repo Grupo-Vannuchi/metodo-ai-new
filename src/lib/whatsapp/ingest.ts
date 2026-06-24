@@ -65,7 +65,13 @@ export async function ingestInbound(
   });
 
   if (!conversation) {
-    const contactId = await resolveContactId(organizationId, m.remoteJid, m.pushName);
+    // On outbound (fromMe) messages `pushName` is OUR connected account's name
+    // (e.g. "Comercial"), not the recipient's — never use it to name a contact.
+    const contactId = await resolveContactId(
+      organizationId,
+      m.remoteJid,
+      m.fromMe ? null : m.pushName,
+    );
     conversation = await prisma.conversation.create({
       data: {
         organizationId,
