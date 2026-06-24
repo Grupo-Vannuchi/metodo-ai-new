@@ -51,7 +51,7 @@ export function MessageMedia({ m, out }: { m: MessageMediaData; out: boolean }) 
     return (
       <div
         className="flex items-center justify-center rounded-lg bg-muted/60"
-        style={aspectStyle(m.mediaWidth, m.mediaHeight, 220)}
+        style={aspectStyle(m.mediaWidth, m.mediaHeight, 260)}
       >
         <Loader2 className="size-5 animate-spin text-muted-foreground" />
       </div>

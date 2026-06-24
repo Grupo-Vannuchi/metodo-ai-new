@@ -139,6 +139,23 @@ export function InboxClient({
   const [menu, setMenu] = useState<Menu | null>(null);
   const [closedFolders, setClosedFolders] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Auto-scroll: pin to the bottom on open and on new messages (only while the
+  // user is near the bottom) — never just because a media bubble finished
+  // loading. `nearBottomRef` tracks the user's position via onScroll.
+  const nearBottomRef = useRef(true);
+  const onThreadScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (el) nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  }, []);
+  const scrollToBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (el) {
+        el.scrollTop = el.scrollHeight;
+        nearBottomRef.current = true;
+      }
+    });
+  }, []);
 
   const loadConversations = useCallback(async () => {
     try {
@@ -206,13 +223,15 @@ export function InboxClient({
       const r = await fetch(`/api/inbox/messages?conversationId=${selectedId}`, { cache: "no-store" });
       if (r.ok) {
         const data = (await r.json()) as Message[];
+        const wasNearBottom = nearBottomRef.current;
         setMessages(data);
         void repairPendingMedia(data);
+        if (wasNearBottom) scrollToBottom();
       }
     } catch {
       /* ignore */
     }
-  }, [selectedId, repairPendingMedia]);
+  }, [selectedId, repairPendingMedia, scrollToBottom]);
 
   // Load + mark read when a conversation is opened (inline so setState stays
   // behind the await).
@@ -226,6 +245,7 @@ export function InboxClient({
           const data = (await r.json()) as Message[];
           setMessages(data);
           void repairPendingMedia(data);
+          scrollToBottom(); // always pin to bottom when a conversation is opened
         }
       } catch {
         /* ignore */
@@ -236,7 +256,7 @@ export function InboxClient({
     return () => {
       active = false;
     };
-  }, [selectedId, loadConversations, repairPendingMedia]);
+  }, [selectedId, loadConversations, repairPendingMedia, scrollToBottom]);
 
   // Pushed live: new inbound messages refresh the list and the open thread.
   useRealtime("inbox", () => {
@@ -269,12 +289,6 @@ export function InboxClient({
       active = false;
     };
   }, [showContact, selectedId, conversations]);
-
-  // Keep the thread scrolled to the latest message.
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
 
   const selected = conversations.find((c) => c.id === selectedId) ?? null;
 
@@ -593,7 +607,11 @@ export function InboxClient({
               </div>
             </header>
 
-            <div ref={scrollRef} className="flex flex-1 flex-col gap-2 overflow-y-auto bg-muted/20 p-4">
+            <div
+              ref={scrollRef}
+              onScroll={onThreadScroll}
+              className="flex flex-1 flex-col gap-2 overflow-y-auto bg-muted/20 p-4"
+            >
               {messages.length === 0 ? (
                 <p className="m-auto text-sm text-muted-foreground">{t("noMessages")}</p>
               ) : (
