@@ -66,6 +66,13 @@ export async function listMessages(organizationId: string, conversationId: strin
       body: true,
       status: true,
       timestamp: true,
+      mediaUrl: true,
+      mediaMime: true,
+      mediaStatus: true,
+      mediaName: true,
+      mediaDurationSec: true,
+      mediaWidth: true,
+      mediaHeight: true,
     },
   });
 }

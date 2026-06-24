@@ -33,6 +33,7 @@ import { useConfirm } from "@/components/ui/confirm";
 import { usePrompt } from "@/components/ui/prompt";
 import { Avatar } from "@/components/app/avatar";
 import { useRealtime } from "@/components/app/realtime-provider";
+import { MessageMedia, MEDIA_TYPES } from "@/components/inbox/message-media";
 import {
   markConversationRead,
   sendMessage,
@@ -83,6 +84,13 @@ type Message = {
   body: string | null;
   status: string | null;
   timestamp: string | Date;
+  mediaUrl?: string | null;
+  mediaMime?: string | null;
+  mediaStatus?: string | null;
+  mediaName?: string | null;
+  mediaDurationSec?: number | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
 };
 
 let tempSeq = 0;
@@ -185,6 +193,15 @@ export function InboxClient({
     void loadConversations();
     void fetchMessages();
   });
+
+  // While any media is still being fetched/stored, poll the thread until every
+  // bubble flips to READY/FAILED — then stop (no idle polling).
+  const hasPendingMedia = messages.some((m) => m.mediaStatus === "PENDING");
+  useEffect(() => {
+    if (!hasPendingMedia) return;
+    const id = setInterval(() => void fetchMessages(), 3000);
+    return () => clearInterval(id);
+  }, [hasPendingMedia, fetchMessages]);
 
   function select(id: string | null) {
     setSelectedId(id);
@@ -542,23 +559,38 @@ export function InboxClient({
                 messages.map((m) => {
                   const out = m.direction === "OUTBOUND";
                   const failed = m.status === "FAILED";
+                  const isMedia = MEDIA_TYPES.has(m.type);
+                  const bare = m.type === "STICKER"; // stickers render without bubble chrome
                   return (
                     <div
                       key={m.id}
                       className={cn(
-                        "max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm",
-                        out
-                          ? failed
-                            ? "self-end border border-red-300 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300"
-                            : "self-end bg-brand text-brand-foreground"
-                          : "self-start bg-card",
+                        "max-w-[75%] text-sm",
+                        out ? "self-end" : "self-start",
+                        bare
+                          ? null
+                          : cn(
+                              "rounded-2xl px-3 py-2 shadow-sm",
+                              out
+                                ? failed
+                                  ? "border border-red-300 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300"
+                                  : "bg-brand text-brand-foreground"
+                                : "bg-card",
+                            ),
                       )}
                     >
-                      <p className="whitespace-pre-wrap break-words">{m.body ?? ""}</p>
+                      {isMedia ? <MessageMedia m={m} out={out} /> : null}
+                      {isMedia ? (
+                        m.body ? (
+                          <p className="mt-1 whitespace-pre-wrap break-words">{m.body}</p>
+                        ) : null
+                      ) : (
+                        <p className="whitespace-pre-wrap break-words">{m.body ?? ""}</p>
+                      )}
                       <span
                         className={cn(
                           "mt-1 flex items-center justify-end gap-1 text-[10px]",
-                          out && !failed ? "text-brand-foreground/70" : "text-muted-foreground",
+                          out && !failed && !bare ? "text-brand-foreground/70" : "text-muted-foreground",
                         )}
                       >
                         {fmtTime(m.timestamp)}
