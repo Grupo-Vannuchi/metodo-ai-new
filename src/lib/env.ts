@@ -29,6 +29,9 @@ const serverSchema = z.object({
     .regex(/^[0-9a-fA-F]{64}$/, "INTEGRATION_ENC_KEY must be 64 hex chars (32 bytes)"),
   // Background jobs (Upstash QStash) — optional until campaign dispatch runs.
   QSTASH_TOKEN: z.string().optional(),
+  // Region endpoint for the QStash account (e.g. https://qstash-us-east-1
+  // .upstash.io). Required when the account isn't in the SDK's default region.
+  QSTASH_URL: z.string().url().optional(),
   QSTASH_CURRENT_SIGNING_KEY: z.string().optional(),
   QSTASH_NEXT_SIGNING_KEY: z.string().optional(),
   // Object storage (Vercel Blob) — optional until inbox media storage runs.

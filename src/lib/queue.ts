@@ -18,7 +18,10 @@ function getClient(): Client {
   if (!env.QSTASH_TOKEN) {
     throw new Error("Queue not configured: set QSTASH_TOKEN");
   }
-  client ??= new Client({ token: env.QSTASH_TOKEN });
+  // baseUrl pins the QStash region endpoint (e.g. https://qstash-us-east-1
+  // .upstash.io). Without it the SDK may route to the wrong region and reject
+  // the token ("user not found in this region"). Undefined → SDK default.
+  client ??= new Client({ token: env.QSTASH_TOKEN, baseUrl: env.QSTASH_URL });
   return client;
 }
 
