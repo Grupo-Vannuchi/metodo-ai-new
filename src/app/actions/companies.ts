@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { companySchema, type CompanyInput } from "@/lib/validations/company";
+import { onlyDigits, formatCep, formatPhoneBR } from "@/lib/cnpj";
 
 export type CompanyActionResult =
   | { ok: true; id: string }
@@ -74,6 +75,91 @@ export async function updateCompany(
   } catch (error) {
     console.error("Failed to update company", error);
     return { ok: false, error: "unknown" };
+  }
+}
+
+// ── CNPJ auto-fill ─────────────────────────────────────────────────────────
+
+/** Company fields we can derive from a CNPJ (subset of the form values). */
+export type CnpjCompanyData = {
+  name: string;
+  email: string;
+  phone: string;
+  street: string;
+  city: string;
+  uf: string;
+  zip: string;
+  situacao: string;
+};
+
+export type CnpjLookupResult =
+  | { ok: true; data: CnpjCompanyData }
+  | { ok: false; error: "unauthorized" | "invalid" | "notFound" | "unavailable" };
+
+type BrasilApiCnpj = {
+  razao_social?: string;
+  nome_fantasia?: string;
+  email?: string;
+  ddd_telefone_1?: string;
+  logradouro?: string;
+  numero?: string;
+  bairro?: string;
+  municipio?: string;
+  uf?: string;
+  cep?: string;
+  descricao_situacao_cadastral?: string;
+};
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Look up a company's public registry data by CNPJ (Receita Federal, via the
+ * free BrasilAPI — no key needed). Returns normalized form fields; the client
+ * fills the blanks. Auth-gated so it isn't an open proxy.
+ */
+export async function lookupCnpj(cnpj: string): Promise<CnpjLookupResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+
+  const digits = onlyDigits(cnpj);
+  if (digits.length !== 14) return { ok: false, error: "invalid" };
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`, {
+      signal: controller.signal,
+      // BrasilAPI's edge (Cloudflare) rejects requests without a User-Agent.
+      headers: { Accept: "application/json", "User-Agent": "MetodoAI-CRM/1.0" },
+      cache: "no-store",
+    }).finally(() => clearTimeout(timer));
+
+    if (res.status === 404) return { ok: false, error: "notFound" };
+    if (!res.ok) return { ok: false, error: "unavailable" };
+
+    const j = (await res.json()) as BrasilApiCnpj;
+    const email = (j.email ?? "").trim().toLowerCase();
+    const street = [[j.logradouro, j.numero].filter(Boolean).join(", "), j.bairro]
+      .filter(Boolean)
+      .join(" - ")
+      .trim();
+
+    return {
+      ok: true,
+      data: {
+        name: (j.nome_fantasia || j.razao_social || "").trim(),
+        email: EMAIL_RE.test(email) ? email : "",
+        phone: formatPhoneBR(j.ddd_telefone_1 ?? ""),
+        street,
+        city: (j.municipio ?? "").trim(),
+        uf: (j.uf ?? "").trim(),
+        zip: formatCep(j.cep ?? ""),
+        situacao: (j.descricao_situacao_cadastral ?? "").trim(),
+      },
+    };
+  } catch (error) {
+    console.error("CNPJ lookup failed", error);
+    return { ok: false, error: "unavailable" };
   }
 }
 
