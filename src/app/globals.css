@@ -137,15 +137,18 @@
    utility classes — no per-element edits. A consistent navy rail in both themes
    that breaks the white. (Its inline dropdowns inherit the navy too.) */
 .sidebar-brand {
-  --background: #18375d;
-  --card: #18375d;
-  --card-foreground: #ffffff;
-  --foreground: #ffffff;
-  --muted: rgba(255, 255, 255, 0.1);
-  --muted-foreground: rgba(255, 255, 255, 0.7);
-  --border: rgba(255, 255, 255, 0.16);
-  --brand: #ffffff;
-  --brand-foreground: #18375d;
+  /* Override the resolved `--color-*` tokens (what the utilities read), NOT the
+     `--card`/`--muted` source vars — those resolve once at :root, so overriding
+     them on a nested element wouldn't take. */
+  --color-background: #18375d;
+  --color-card: #18375d;
+  --color-card-foreground: #ffffff;
+  --color-foreground: #ffffff;
+  --color-muted: rgba(255, 255, 255, 0.1);
+  --color-muted-foreground: rgba(255, 255, 255, 0.7);
+  --color-border: rgba(255, 255, 255, 0.16);
+  --color-brand: #ffffff;
+  --color-brand-foreground: #18375d;
 }
 
 @layer base {
