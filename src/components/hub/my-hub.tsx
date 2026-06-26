@@ -21,6 +21,7 @@ import { createTask } from "@/app/actions/tasks";
 import { togglePin } from "@/app/actions/hub";
 import { HubCalendar, dayKey } from "@/components/hub/hub-calendar";
 import { TasksManager } from "@/components/tasks/tasks-manager";
+import { usePaged, Pager } from "@/components/ui/client-pager";
 import type { TaskRow } from "@/lib/queries/tasks";
 import type { HubOpportunity, HubNotification, HubPin } from "@/lib/queries/hub";
 
@@ -142,7 +143,7 @@ export function MyHub({
       ) : null}
 
       {/* Calendar + tabs */}
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <HubCalendar
           tasks={tasks}
           opps={opps}
@@ -173,6 +174,7 @@ export function MyHub({
               opportunities={opportunities}
               currentUserId={currentUserId}
               showTabs
+              pageSize={8}
             />
           ) : null}
 
@@ -387,6 +389,8 @@ function AgendaTab({
     return list.filter((i) => dayKey(i.date) >= todayKey); // upcoming
   }, [tasks, opps, day, todayKey]);
 
+  const { pageItems, page, setPage, totalPages } = usePaged(items, 8, day);
+
   return (
     <div className="flex flex-col gap-3">
       {day ? (
@@ -402,7 +406,7 @@ function AgendaTab({
         <Empty>{day ? t("noDayItems") : t("noAgenda")}</Empty>
       ) : (
         <ul className="flex flex-col rounded-xl border border-border bg-card">
-          {items.map((i) => (
+          {pageItems.map((i) => (
             <li key={`${i.kind}-${i.id}`} className="border-b border-border last:border-0">
               <Link href={i.href} className="flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted">
                 <span
@@ -423,31 +427,36 @@ function AgendaTab({
           ))}
         </ul>
       )}
+      <Pager page={page} totalPages={totalPages} onPage={setPage} />
     </div>
   );
 }
 
 function OppsTab({ opps }: { opps: HubOpportunity[] }) {
   const t = useTranslations("my");
+  const { pageItems, page, setPage, totalPages } = usePaged(opps, 8);
   if (opps.length === 0) return <Empty>{t("noOpps")}</Empty>;
   return (
-    <ul className="flex flex-col rounded-xl border border-border bg-card">
-      {opps.map((o) => (
-        <li key={o.id} className="border-b border-border last:border-0">
-          <Link
-            href={`/app/crm/${o.id}`}
-            className="flex items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted"
-          >
-            <span className="min-w-0">
-              {o.code ? <span className="mr-2 text-xs tabular-nums text-muted-foreground">{o.code}</span> : null}
-              <span className="font-medium">{o.title}</span>
-              {o.stageName ? <span className="ml-2 text-xs text-muted-foreground">· {o.stageName}</span> : null}
-            </span>
-            <span className="shrink-0 font-semibold tabular-nums text-brand">{formatBRL(o.value)}</span>
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <div className="flex flex-col gap-3">
+      <ul className="flex flex-col rounded-xl border border-border bg-card">
+        {pageItems.map((o) => (
+          <li key={o.id} className="border-b border-border last:border-0">
+            <Link
+              href={`/app/crm/${o.id}`}
+              className="flex items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted"
+            >
+              <span className="min-w-0">
+                {o.code ? <span className="mr-2 text-xs tabular-nums text-muted-foreground">{o.code}</span> : null}
+                <span className="font-medium">{o.title}</span>
+                {o.stageName ? <span className="ml-2 text-xs text-muted-foreground">· {o.stageName}</span> : null}
+              </span>
+              <span className="shrink-0 font-semibold tabular-nums text-brand">{formatBRL(o.value)}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <Pager page={page} totalPages={totalPages} onPage={setPage} />
+    </div>
   );
 }
 
@@ -455,10 +464,12 @@ function NotificationsTab({ notifications }: { notifications: HubNotification[] 
   const t = useTranslations("my");
   const locale = useLocale();
   const fmt = useMemo(() => new Intl.DateTimeFormat(locale, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }), [locale]);
+  const { pageItems, page, setPage, totalPages } = usePaged(notifications, 10);
   if (notifications.length === 0) return <Empty>{t("noNotifications")}</Empty>;
   return (
+    <div className="flex flex-col gap-3">
     <ul className="flex flex-col rounded-xl border border-border bg-card">
-      {notifications.map((n) => {
+      {pageItems.map((n) => {
         const data = n.data as { title?: string; actor?: string } | null;
         const typeLabel = t.has(`notif.${n.type}`) ? t(`notif.${n.type}`) : t("notifGeneric");
         const label = data?.title ?? typeLabel;
@@ -486,6 +497,8 @@ function NotificationsTab({ notifications }: { notifications: HubNotification[] 
         );
       })}
     </ul>
+      <Pager page={page} totalPages={totalPages} onPage={setPage} />
+    </div>
   );
 }
 

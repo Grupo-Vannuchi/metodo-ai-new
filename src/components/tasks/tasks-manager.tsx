@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
 import { useConfirm } from "@/components/ui/confirm";
+import { usePaged, Pager } from "@/components/ui/client-pager";
 import { useRealtime } from "@/components/app/realtime-provider";
 import { createTask, updateTask, toggleTask, deleteTask } from "@/app/actions/tasks";
 import type { TaskRow } from "@/lib/queries/tasks";
@@ -39,6 +40,7 @@ export function TasksManager({
   fixed,
   currentUserId,
   showTabs = false,
+  pageSize,
 }: {
   tasks: TaskRow[];
   members: Option[];
@@ -47,6 +49,8 @@ export function TasksManager({
   fixed?: Fixed;
   currentUserId: string;
   showTabs?: boolean;
+  /** When set, paginate the list at this size (opt-in; default = no paging). */
+  pageSize?: number;
 }) {
   const t = useTranslations("tasks");
   const router = useRouter();
@@ -88,6 +92,9 @@ export function TasksManager({
     }
     return true; // open
   });
+
+  // Opt-in client pagination (resets to page 1 when the tab filter changes).
+  const { pageItems, page, setPage, totalPages } = usePaged(filtered, pageSize ?? Number.MAX_SAFE_INTEGER, tab);
 
   function closeForm() {
     setEditingId(null);
@@ -240,7 +247,7 @@ export function TasksManager({
         </p>
       ) : (
         <ul className="flex flex-col gap-1.5">
-          {filtered.map((task) => {
+          {pageItems.map((task) => {
             const done = task.doneAt != null;
             const overdue = isOverdue(task.dueDate, done);
             return (
@@ -315,6 +322,8 @@ export function TasksManager({
           })}
         </ul>
       )}
+
+      <Pager page={page} totalPages={totalPages} onPage={setPage} />
     </div>
   );
 }

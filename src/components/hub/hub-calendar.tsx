@@ -62,7 +62,9 @@ export function HubCalendar({
   const cells: (Date | null)[] = [];
   for (let i = 0; i < first.getDay(); i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(view.y, view.m, d));
-  while (cells.length % 7 !== 0) cells.push(null);
+  // Always render a 6-week grid (42 cells) so the calendar keeps a fixed height
+  // regardless of how many weeks the month spans.
+  while (cells.length < 42) cells.push(null);
 
   const monthLabel = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(first);
   const shift = (delta: number) =>
