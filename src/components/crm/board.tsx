@@ -78,13 +78,15 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
   return (
     // Horizontal timeline: a single row of fixed-width stages that scrolls
     // sideways. A numbered rail across the top connects the stages; each stage
-    // is a tall column so cards stay easy to read.
-    <div className="overflow-x-auto pb-4">
-      <div className="flex min-w-max">
+    // is a column whose card area scrolls vertically on its own — so the board
+    // fills the viewport height and the horizontal scrollbar stays pinned at
+    // the bottom (`flex-1 min-h-0` against the page's fixed height).
+    <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
+      <div className="flex h-full min-w-max">
         {cols.map((col, i) => {
           const total = col.cards.reduce((sum, c) => sum + c.value, 0);
           return (
-            <div key={col.id} className="flex w-72 shrink-0 flex-col">
+            <div key={col.id} className="flex h-full w-72 shrink-0 flex-col">
               {/* Timeline rail + node (flush between columns = continuous line) */}
               <div className="flex items-center">
                 <div className={cn("h-0.5 flex-1 bg-border", i === 0 && "opacity-0")} />
@@ -110,7 +112,7 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
                 onDragLeave={() => setOverCol((c) => (c === col.id ? null : c))}
                 onDrop={() => onDrop(col.id)}
                 className={cn(
-                  "mx-2 flex min-h-[60vh] flex-1 flex-col gap-2 rounded-xl border bg-muted/30 p-3 transition-colors",
+                  "mx-2 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded-xl border bg-muted/30 p-3 transition-colors",
                   overCol === col.id ? "border-brand bg-brand/5" : "border-border",
                 )}
               >

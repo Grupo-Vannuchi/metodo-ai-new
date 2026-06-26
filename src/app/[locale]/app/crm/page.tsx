@@ -45,7 +45,10 @@ export default async function CrmPage({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    // Fixed-height page so the board fills the viewport and its horizontal
+    // scrollbar stays pinned at the bottom (instead of being pushed off-screen
+    // when columns grow). Offset ≈ the app shell's padding (+ mobile header).
+    <div className="flex h-[calc(100dvh-7rem)] flex-col gap-6 md:h-[calc(100dvh-4.5rem)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
