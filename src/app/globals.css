@@ -132,23 +132,31 @@
   --border: #27272a;
 }
 
-/* Brand-blue sidebar: scoped token overrides recolour the whole sidebar (nav,
-   icons, search, badges, footer) for a deep-navy surface via the existing
-   utility classes — no per-element edits. A consistent navy rail in both themes
-   that breaks the white. (Its inline dropdowns inherit the navy too.) */
-.sidebar-brand {
-  /* Override the resolved `--color-*` tokens (what the utilities read), NOT the
-     `--card`/`--muted` source vars — those resolve once at :root, so overriding
-     them on a nested element wouldn't take. */
+/* Brand-blue sidebar — LIGHT THEME ONLY.
+ *
+ * A scoped colour context: inside the sidebar subtree we re-point the resolved
+ * `--color-*` tokens to a deep-navy surface, so the whole nav (links, icons,
+ * search box, badges, footer) recolours through the very tokens it already uses
+ * — no per-element colour overrides. `color` carries the foreground down to any
+ * un-classed text (org/user name) so nothing stays black.
+ *
+ * Scoped with `:root:not(.dark)` (the theme toggles `.dark` on <html>), so in
+ * dark mode this never matches and the sidebar keeps the default dark surface.
+ *
+ * We override `--color-*` (what the utilities read) rather than the `--card`/
+ * `--muted` source vars: `@theme` (non-inline) resolves `--color-card` once at
+ * :root, so re-declaring `--card` on a nested element wouldn't propagate. */
+:root:not(.dark) .sidebar-brand {
   --color-background: #18375d;
   --color-card: #18375d;
   --color-card-foreground: #ffffff;
   --color-foreground: #ffffff;
-  --color-muted: rgba(255, 255, 255, 0.1);
-  --color-muted-foreground: rgba(255, 255, 255, 0.7);
-  --color-border: rgba(255, 255, 255, 0.16);
+  --color-muted: rgb(255 255 255 / 0.1);
+  --color-muted-foreground: rgb(255 255 255 / 0.72);
+  --color-border: rgb(255 255 255 / 0.16);
   --color-brand: #ffffff;
   --color-brand-foreground: #18375d;
+  color: var(--color-foreground);
 }
 
 @layer base {
