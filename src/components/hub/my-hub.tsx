@@ -9,7 +9,6 @@ import {
   CheckSquare,
   Star,
   X,
-  Plus,
   Bell,
   ArrowRight,
 } from "lucide-react";
@@ -17,7 +16,6 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { formatBRL } from "@/lib/money";
-import { createTask } from "@/app/actions/tasks";
 import { togglePin } from "@/app/actions/hub";
 import { HubCalendar, dayKey } from "@/components/hub/hub-calendar";
 import { TasksManager } from "@/components/tasks/tasks-manager";
@@ -79,12 +77,9 @@ export function MyHub({
   return (
     <div className="flex flex-col gap-6">
       {/* Header + stats */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t("hubTitle", { name: userName })}</h1>
-          <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <QuickAddTask currentUserId={currentUserId} />
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">{t("hubTitle", { name: userName })}</h1>
+        <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
       </div>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -234,80 +229,6 @@ function TabBtn({
     >
       {children}
     </button>
-  );
-}
-
-function QuickAddTask({ currentUserId }: { currentUserId: string }) {
-  const t = useTranslations("my");
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [due, setDue] = useState("");
-  const [pending, start] = useTransition();
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!title.trim() || pending) return;
-    const fd = new FormData();
-    fd.set("title", title.trim());
-    if (due) fd.set("dueDate", due);
-    fd.set("assignedToId", currentUserId);
-    start(async () => {
-      const r = await createTask(fd);
-      if (r.ok) {
-        setTitle("");
-        setDue("");
-        setOpen(false);
-        router.refresh();
-      }
-    });
-  }
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90"
-      >
-        <Plus className="size-4" /> {t("quickAdd")}
-      </button>
-    );
-  }
-  return (
-    <form
-      onSubmit={submit}
-      className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-2"
-    >
-      <input
-        autoFocus
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder={t("quickAddPlaceholder")}
-        className="h-9 min-w-44 flex-1 rounded-md border border-border bg-card px-2.5 text-sm focus-visible:border-brand focus-visible:outline-none"
-      />
-      <input
-        type="date"
-        value={due}
-        onChange={(e) => setDue(e.target.value)}
-        className="h-9 rounded-md border border-border bg-card px-2 text-sm focus-visible:border-brand focus-visible:outline-none"
-      />
-      <button
-        type="submit"
-        disabled={pending || !title.trim()}
-        className="h-9 rounded-md bg-brand px-3 text-sm font-medium text-brand-foreground disabled:opacity-50"
-      >
-        {t("add")}
-      </button>
-      <button
-        type="button"
-        onClick={() => setOpen(false)}
-        className="rounded-md p-1.5 text-muted-foreground hover:bg-muted"
-        aria-label="Cancel"
-      >
-        <X className="size-4" />
-      </button>
-    </form>
   );
 }
 
