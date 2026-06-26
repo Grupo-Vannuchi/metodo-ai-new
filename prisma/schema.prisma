@@ -59,6 +59,7 @@ model Organization {
   feedPostAttachments  FeedPostAttachment[]
   feedMentions         FeedMention[]
   feedReactions        FeedReaction[]
+  pinnedItems          PinnedItem[]
 
   @@map("organizations")
 }
@@ -1035,4 +1036,34 @@ model FeedReaction {
   @@index([organizationId])
   @@index([postId])
   @@map("feed_reactions")
+}
+
+// ---------------------------------------------------------------------------
+// Personal hub (Meus Itens) — pins/favourites
+// ---------------------------------------------------------------------------
+
+/// Entity kinds a user can pin. Values mirror resolveAttachment() so the same
+/// resolver builds the label + link.
+enum PinnedEntity {
+  TASK
+  OPP
+  CONTACT
+  COMPANY
+}
+
+/// A user's pinned/favourited item, shown on their personal hub. One per
+/// (user, entity); org-scoped.
+model PinnedItem {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String
+  entityType     PinnedEntity
+  entityId       String
+  createdAt      DateTime     @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entityType, entityId])
+  @@index([organizationId, userId])
+  @@map("pinned_items")
 }
