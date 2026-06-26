@@ -117,9 +117,11 @@
 :root {
   --card: #ffffff;
   --card-foreground: #0a0a0a;
-  --muted: #f4f4f5;
-  --muted-foreground: #52525b;
-  --border: #e4e4e7;
+  /* Light theme carries a soft blue undertone (slate, not pure zinc) so the UI
+     reads calmer/on-brand instead of stark white. Cards stay white to pop. */
+  --muted: #eaf0f8;
+  --muted-foreground: #55657a;
+  --border: #dce4ef;
 }
 
 .dark {
@@ -128,6 +130,22 @@
   --muted: #1c1c1f;
   --muted-foreground: #a1a1aa;
   --border: #27272a;
+}
+
+/* Brand-blue sidebar: scoped token overrides recolour the whole sidebar (nav,
+   icons, search, badges, footer) for a deep-navy surface via the existing
+   utility classes — no per-element edits. A consistent navy rail in both themes
+   that breaks the white. (Its inline dropdowns inherit the navy too.) */
+.sidebar-brand {
+  --background: #18375d;
+  --card: #18375d;
+  --card-foreground: #ffffff;
+  --foreground: #ffffff;
+  --muted: rgba(255, 255, 255, 0.1);
+  --muted-foreground: rgba(255, 255, 255, 0.7);
+  --border: rgba(255, 255, 255, 0.16);
+  --brand: #ffffff;
+  --brand-foreground: #18375d;
 }
 
 @layer base {

@@ -96,7 +96,8 @@ export const siteConfig: SiteConfig = {
       brand: "#18375d",
       brandForeground: "#ffffff",
       accent: "#2ecc71",
-      background: "#ffffff",
+      // Soft blue-tinted page background (not stark white) to ease the eyes.
+      background: "#f5f7fb",
       foreground: "#0a0a0a",
     },
     dark: {

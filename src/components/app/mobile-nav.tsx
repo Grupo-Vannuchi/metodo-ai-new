@@ -29,9 +29,9 @@ export function MobileNav({ allowedScreens }: { allowedScreens: string[] }) {
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <aside className="absolute left-0 top-0 flex h-full w-64 flex-col gap-4 border-r border-border bg-card p-4 shadow-xl">
+          <aside className="sidebar-brand absolute left-0 top-0 flex h-full w-64 flex-col gap-4 border-r border-border bg-card p-4 shadow-xl">
             <div className="flex items-center justify-between px-1">
-              <Logo />
+              <Logo onDark />
               <button
                 type="button"
                 onClick={() => setOpen(false)}
