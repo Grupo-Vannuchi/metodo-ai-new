@@ -28,7 +28,9 @@ export default async function InboxPage({
   const { c, chat, mode = "whatsapp" } = await searchParams;
 
   const [conversations, folders, teamMembers, teamChats, teamFolders] = await Promise.all([
-    mode === "whatsapp" ? listConversations(ctx.organizationId) : Promise.resolve([]),
+    mode === "whatsapp"
+      ? listConversations(ctx.organizationId, { userId: ctx.userId, role: ctx.role })
+      : Promise.resolve([]),
     mode === "whatsapp" ? listConversationFolders(ctx.organizationId) : Promise.resolve([]),
     mode === "team" ? listTeamMembers(ctx.organizationId) : Promise.resolve([]),
     mode === "team" ? listTeamChats(ctx.organizationId, ctx.userId) : Promise.resolve([]),

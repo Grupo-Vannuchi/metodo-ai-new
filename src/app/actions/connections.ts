@@ -10,7 +10,12 @@ import { searchPlacesPage } from "@/lib/prospecting/places";
 import { audit } from "@/lib/audit";
 import { providerSpec, type IntegrationProviderKey } from "@/lib/integrations/registry";
 import { planConfig, type PlanKey } from "@/config/plans";
-import { countConnections } from "@/lib/queries/connections";
+import {
+  countNonWhatsappConnections,
+  countWhatsappConnections,
+  countUserWhatsappConnections,
+  WHATSAPP_PROVIDERS,
+} from "@/lib/queries/connections";
 import {
   connectionSchema,
   connectionUpdateSchema,
@@ -20,7 +25,18 @@ import {
 
 export type ConnectionActionResult =
   | { ok: true; id: string }
-  | { ok: false; error: "unauthorized" | "invalid" | "limit" | "unknown" };
+  | { ok: false; error: "unauthorized" | "invalid" | "limit" | "number_exists" | "unknown" };
+
+/** Members may only act on connections they own; OWNER/ADMIN on any (org-scoped). */
+async function canManageConnection(
+  db: ReturnType<typeof tenantDb>,
+  ctx: { role: string; userId: string },
+  id: string,
+): Promise<boolean> {
+  if (ctx.role !== "MEMBER") return true;
+  const conn = await db.integrationConnection.findFirst({ where: { id }, select: { ownerId: true } });
+  return conn !== null && conn.ownerId === ctx.userId;
+}
 
 export async function createConnection(
   input: ConnectionInput,
@@ -40,11 +56,22 @@ export async function createConnection(
   );
   if (missing) return { ok: false, error: "invalid" };
 
-  // Plan connection limit.
-  const limit = planConfig(ctx.organization.plan as PlanKey).connectionsLimit;
-  if (limit !== null) {
-    const count = await countConnections(ctx.organizationId);
-    if (count >= limit) return { ok: false, error: "limit" };
+  // Limits. WhatsApp numbers are personal (one per user) and capped per plan;
+  // other integrations use the general (org-level) connection limit.
+  const plan = planConfig(ctx.organization.plan as PlanKey);
+  const isWhatsapp = (WHATSAPP_PROVIDERS as readonly string[]).includes(provider);
+  let ownerId: string | null = null;
+  if (isWhatsapp) {
+    const mine = await countUserWhatsappConnections(ctx.organizationId, ctx.userId);
+    if (mine >= 1) return { ok: false, error: "number_exists" };
+    if (plan.whatsappNumbersLimit !== null) {
+      const orgWa = await countWhatsappConnections(ctx.organizationId);
+      if (orgWa >= plan.whatsappNumbersLimit) return { ok: false, error: "limit" };
+    }
+    ownerId = ctx.userId;
+  } else if (plan.connectionsLimit !== null) {
+    const count = await countNonWhatsappConnections(ctx.organizationId);
+    if (count >= plan.connectionsLimit) return { ok: false, error: "limit" };
   }
 
   // Evolution: auto-generate an instance name when the user leaves it blank.
@@ -58,6 +85,7 @@ export async function createConnection(
     const conn = await db.integrationConnection.create({
       data: {
         organizationId: ctx.organizationId,
+        ownerId,
         provider,
         label: parsed.data.label,
         credentialsEnc: encryptCredentials(credentials),
@@ -95,6 +123,7 @@ export async function updateConnection(
 
   try {
     const db = tenantDb(ctx.organizationId);
+    if (!(await canManageConnection(db, ctx, id))) return { ok: false, error: "unauthorized" };
     const conn = await db.integrationConnection.findFirst({
       where: { id },
       select: { id: true, provider: true, credentialsEnc: true },
@@ -152,6 +181,7 @@ export async function testConnection(id: string): Promise<{ ok: boolean }> {
 
   try {
     const db = tenantDb(ctx.organizationId);
+    if (!(await canManageConnection(db, ctx, id))) return { ok: false };
     const conn = await db.integrationConnection.findFirst({
       where: { id },
       select: { id: true, provider: true, credentialsEnc: true },
@@ -200,6 +230,7 @@ export async function deleteConnection(id: string): Promise<{ ok: boolean }> {
 
   try {
     const db = tenantDb(ctx.organizationId);
+    if (!(await canManageConnection(db, ctx, id))) return { ok: false };
     await db.integrationConnection.deleteMany({ where: { id } });
     await audit(ctx, {
       action: "connection.deleted",

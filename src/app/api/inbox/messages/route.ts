@@ -1,5 +1,5 @@
 import { getOrgContext } from "@/lib/tenant";
-import { listMessages } from "@/lib/queries/inbox";
+import { listMessages, canAccessConversation } from "@/lib/queries/inbox";
 
 export const runtime = "nodejs";
 
@@ -9,5 +9,9 @@ export async function GET(req: Request) {
   if (!ctx) return new Response("Unauthorized", { status: 401 });
   const id = new URL(req.url).searchParams.get("conversationId");
   if (!id) return Response.json([]);
+  const viewer = { userId: ctx.userId, role: ctx.role };
+  if (!(await canAccessConversation(ctx.organizationId, id, viewer))) {
+    return Response.json([]);
+  }
   return Response.json(await listMessages(ctx.organizationId, id));
 }

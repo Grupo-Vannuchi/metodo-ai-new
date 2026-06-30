@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { Plus } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { listConnections } from "@/lib/queries/connections";
+import { listMembers } from "@/lib/queries/organizations";
 import { deleteConnection } from "@/app/actions/connections";
 import { DeleteButton } from "@/components/crm/delete-button";
 import { TestButton } from "@/components/integrations/test-button";
@@ -28,7 +29,15 @@ export default async function ConnectionsPage({
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("connections");
 
-  const connections = await listConnections(ctx.organizationId);
+  // Members see only the WhatsApp number they connected; OWNER/ADMIN see all
+  // connections (with the owning member's name).
+  const canSeeAll = ctx.role !== "MEMBER";
+  const connections = await listConnections(
+    ctx.organizationId,
+    canSeeAll ? undefined : { ownerId: ctx.userId },
+  );
+  const members = canSeeAll ? await listMembers(ctx.organizationId) : [];
+  const ownerName = new Map(members.map((m) => [m.userId, m.name]));
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,6 +74,11 @@ export default async function ConnectionsPage({
                     <Link href={`/app/connections/${c.id}`} className="hover:underline">
                       {c.label}
                     </Link>
+                    {canSeeAll && c.ownerId ? (
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        {ownerName.get(c.ownerId) ?? "—"}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">
                     {PROVIDERS[c.provider as IntegrationProviderKey]?.label ?? c.provider}

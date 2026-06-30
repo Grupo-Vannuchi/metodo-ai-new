@@ -46,6 +46,15 @@ export async function sendMessage(conversationId: string, text: string): Promise
     });
     if (!convo) return { ok: false, error: "not_found" };
 
+    // Members can only send in conversations from their own connected number.
+    if (ctx.role === "MEMBER") {
+      const owned = await db.integrationConnection.findFirst({
+        where: { id: convo.connectionId, ownerId: ctx.userId },
+        select: { id: true },
+      });
+      if (!owned) return { ok: false, error: "not_found" };
+    }
+
     const conn = await db.integrationConnection.findFirst({
       where: { id: convo.connectionId, provider: "EVOLUTION" },
       select: { credentialsEnc: true },

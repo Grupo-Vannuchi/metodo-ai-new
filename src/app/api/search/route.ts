@@ -15,6 +15,7 @@ export async function GET(req: Request) {
   const results = await globalSearch(ctx.organizationId, q, {
     allowed: (screen) => canAccessScreen(ctx, screen),
     canFinance,
+    viewer: { userId: ctx.userId, role: ctx.role },
   });
   return Response.json(results);
 }

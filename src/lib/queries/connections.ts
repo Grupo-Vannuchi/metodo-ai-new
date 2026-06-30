@@ -3,10 +3,18 @@ import { tenantDb } from "@/lib/tenant-db";
 import { decryptCredentials } from "@/lib/integrations/crypto";
 import { PROVIDERS, PROVIDER_KEYS, type IntegrationProviderKey } from "@/lib/integrations/registry";
 
-/** Connections for the list view — never includes the encrypted credentials. */
-export async function listConnections(organizationId: string) {
+/** WhatsApp providers — these connections are personal (one number per user). */
+export const WHATSAPP_PROVIDERS = ["EVOLUTION", "META_CLOUD"] as const;
+
+/**
+ * Connections for the list view — never includes the encrypted credentials.
+ * `ownerId` filters to a single user's connections (members see only their own
+ * WhatsApp number); omit it for the admin/owner view (all connections).
+ */
+export async function listConnections(organizationId: string, opts?: { ownerId?: string }) {
   const db = tenantDb(organizationId);
   return db.integrationConnection.findMany({
+    where: opts?.ownerId ? { ownerId: opts.ownerId } : {},
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -14,14 +22,35 @@ export async function listConnections(organizationId: string) {
       label: true,
       status: true,
       lastTestAt: true,
+      ownerId: true,
     },
   });
 }
 
-/** How many active connections the org has (for plan limits). */
+/** How many active connections the org has (legacy total — informational). */
 export function countConnections(organizationId: string): Promise<number> {
   const db = tenantDb(organizationId);
   return db.integrationConnection.count();
+}
+
+/** Non-WhatsApp connections (org-level) — bounds the general connections limit. */
+export function countNonWhatsappConnections(organizationId: string): Promise<number> {
+  const db = tenantDb(organizationId);
+  return db.integrationConnection.count({ where: { provider: { notIn: [...WHATSAPP_PROVIDERS] } } });
+}
+
+/** Connected WhatsApp numbers for the org (bounds the per-plan numbers limit). */
+export function countWhatsappConnections(organizationId: string): Promise<number> {
+  const db = tenantDb(organizationId);
+  return db.integrationConnection.count({ where: { provider: { in: [...WHATSAPP_PROVIDERS] } } });
+}
+
+/** WhatsApp numbers a given user already connected (one-per-user rule). */
+export function countUserWhatsappConnections(organizationId: string, userId: string): Promise<number> {
+  const db = tenantDb(organizationId);
+  return db.integrationConnection.count({
+    where: { provider: { in: [...WHATSAPP_PROVIDERS] }, ownerId: userId },
+  });
 }
 
 /** A single connection for the detail page (never includes credentials). */

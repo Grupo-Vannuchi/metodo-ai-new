@@ -382,6 +382,9 @@ enum ConnectionStatus {
 model IntegrationConnection {
   id             String              @id @default(cuid())
   organizationId String
+  /// Owning user for personal connections (WhatsApp numbers are per-user).
+  /// Null = org-level connection (Google, email, n8n…), managed by admins.
+  ownerId        String?
   provider       IntegrationProvider
   label          String
   credentialsEnc String
@@ -392,6 +395,7 @@ model IntegrationConnection {
   updatedAt      DateTime            @updatedAt
 
   @@index([organizationId, provider])
+  @@index([organizationId, ownerId])
   @@map("integration_connections")
 }
 

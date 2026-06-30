@@ -1,5 +1,6 @@
 import { getOrgContext } from "@/lib/tenant";
 import { syncConversationAvatar } from "@/lib/whatsapp/avatar";
+import { canAccessConversation } from "@/lib/queries/inbox";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,10 @@ export async function POST(req: Request) {
     /* ignore */
   }
   if (!conversationId) return new Response("Bad request", { status: 400 });
+  const viewer = { userId: ctx.userId, role: ctx.role };
+  if (!(await canAccessConversation(ctx.organizationId, conversationId, viewer))) {
+    return new Response("Forbidden", { status: 403 });
+  }
 
   const result = await syncConversationAvatar(ctx.organizationId, conversationId, new Date(), force);
   return Response.json(result);

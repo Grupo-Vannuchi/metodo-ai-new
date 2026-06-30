@@ -1,5 +1,6 @@
 import { getOrgContext } from "@/lib/tenant";
 import { processMessageMedia } from "@/lib/whatsapp/media";
+import { canAccessMessage } from "@/lib/queries/inbox";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,10 @@ export async function POST(req: Request) {
     /* ignore */
   }
   if (!messageId) return new Response("Bad request", { status: 400 });
+  const viewer = { userId: ctx.userId, role: ctx.role };
+  if (!(await canAccessMessage(ctx.organizationId, messageId, viewer))) {
+    return new Response("Forbidden", { status: 403 });
+  }
 
   const media = await processMessageMedia(ctx.organizationId, messageId);
   if (!media) return new Response("Not found", { status: 404 });

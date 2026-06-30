@@ -600,6 +600,7 @@
       "unauthorized": "Session expired.",
       "invalid": "Fill in the required fields.",
       "limit": "Plan connection limit reached.",
+      "number_exists": "You already have a WhatsApp number connected.",
       "unknown": "Something went wrong."
     }
   },

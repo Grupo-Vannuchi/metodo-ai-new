@@ -35,7 +35,7 @@ export async function getAlerts(
     hasFinance
       ? db.financeEntry.count({ where: { status: "PENDING", dueDate: { lt: today } } })
       : Promise.resolve(0),
-    countUnread(organizationId),
+    countUnread(organizationId, { userId, role: "MEMBER" }),
   ]);
 
   return {

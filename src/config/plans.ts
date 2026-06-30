@@ -31,8 +31,11 @@ export type PlanConfig = {
   prospectingQuotaPerMonth: number;
   /** Max prospecting searches (extraction runs) per calendar month. */
   extractionsPerMonth: number;
-  /** Max active integration connections. `null` = unlimited. */
+  /** Max active integration connections (non-WhatsApp). `null` = unlimited. */
   connectionsLimit: number | null;
+  /** Max connected WhatsApp numbers (Evolution/Meta) for the org — one per
+   * user. `null` = unlimited. */
+  whatsappNumbersLimit: number | null;
   /** Features unlocked by this plan. */
   features: Feature[];
 };
@@ -64,6 +67,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     prospectingQuotaPerMonth: 200,
     extractionsPerMonth: 20,
     connectionsLimit: 1,
+    whatsappNumbersLimit: 3,
     features: STANDARD_FEATURES,
   },
   PLUS: {
@@ -72,6 +76,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     prospectingQuotaPerMonth: 2_000,
     extractionsPerMonth: 100,
     connectionsLimit: 3,
+    whatsappNumbersLimit: 10,
     features: PLUS_FEATURES,
   },
   GOLD: {
@@ -80,6 +85,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     prospectingQuotaPerMonth: 10_000,
     extractionsPerMonth: 500,
     connectionsLimit: null,
+    whatsappNumbersLimit: 25,
     features: GOLD_FEATURES,
   },
   ENTERPRISE: {
@@ -88,6 +94,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     prospectingQuotaPerMonth: 100_000,
     extractionsPerMonth: 5_000,
     connectionsLimit: null,
+    whatsappNumbersLimit: null,
     features: ENTERPRISE_FEATURES,
   },
 };

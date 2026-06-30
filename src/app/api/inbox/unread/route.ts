@@ -7,5 +7,7 @@ export const runtime = "nodejs";
 export async function GET() {
   const ctx = await getOrgContext();
   if (!ctx) return new Response("Unauthorized", { status: 401 });
-  return Response.json({ count: await countUnread(ctx.organizationId) });
+  return Response.json({
+    count: await countUnread(ctx.organizationId, { userId: ctx.userId, role: ctx.role }),
+  });
 }
