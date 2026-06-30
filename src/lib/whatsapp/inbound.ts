@@ -1,7 +1,8 @@
 /**
  * Pure parser for Evolution `messages.upsert` webhook payloads → a flat list of
  * normalized inbound messages. No DB / server-only so it stays unit-testable.
- * Groups, broadcasts and status updates are skipped (individual chats only).
+ * Individual chats and groups (`@g.us`) are kept; broadcasts and status updates
+ * are skipped.
  */
 
 export type InboundType =
@@ -26,8 +27,12 @@ export type InboundMedia = {
 
 export type ParsedInbound = {
   remoteJid: string;
+  /** True when the chat is a WhatsApp group (`@g.us`). */
+  isGroup: boolean;
   fromMe: boolean;
   pushName: string | null;
+  /** Group sender's display name (groups only, inbound) — for "who said it". */
+  senderName: string | null;
   providerMessageId: string | null;
   type: InboundType;
   body: string | null;
@@ -80,18 +85,20 @@ const PREVIEW_FALLBACK: Record<InboundType, string> = {
   UNKNOWN: "[mensagem]",
 };
 
-function isIndividualChat(jid: string): boolean {
-  return jid.endsWith("@s.whatsapp.net");
-}
-
 function parseOne(data: Json): ParsedInbound | null {
   const key = data.key as Json | undefined;
   const remoteJid = (key?.remoteJid as string | undefined)?.trim();
-  if (!remoteJid || !isIndividualChat(remoteJid)) return null;
+  if (!remoteJid) return null;
+  const isGroup = remoteJid.endsWith("@g.us");
+  const isIndividual = remoteJid.endsWith("@s.whatsapp.net");
+  // Skip broadcasts / status / newsletters — only real chats and groups.
+  if (!isGroup && !isIndividual) return null;
 
   const fromMe = Boolean(key?.fromMe);
   const providerMessageId = (key?.id as string | undefined) ?? null;
   const pushName = ((data.pushName as string | undefined) ?? "").trim() || null;
+  // In groups `pushName` is the participant who sent the message.
+  const senderName = isGroup && !fromMe ? pushName : null;
 
   const tsRaw = Number(data.messageTimestamp ?? 0);
   const timestamp = tsRaw > 0 ? new Date(tsRaw * 1000) : new Date();
@@ -120,7 +127,7 @@ function parseOne(data: Json): ParsedInbound | null {
   }
 
   const preview = body?.trim() || PREVIEW_FALLBACK[type] || "[mensagem]";
-  return { remoteJid, fromMe, pushName, providerMessageId, type, body, preview, timestamp, media };
+  return { remoteJid, isGroup, fromMe, pushName, senderName, providerMessageId, type, body, preview, timestamp, media };
 }
 
 /** Parse a webhook payload into inbound messages (handles single / array / Baileys shapes). */

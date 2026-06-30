@@ -42,7 +42,7 @@ export async function sendMessage(conversationId: string, text: string): Promise
     const db = tenantDb(ctx.organizationId);
     const convo = await db.conversation.findFirst({
       where: { id: conversationId },
-      select: { id: true, connectionId: true, remoteJid: true },
+      select: { id: true, connectionId: true, remoteJid: true, isGroup: true },
     });
     if (!convo) return { ok: false, error: "not_found" };
 
@@ -59,7 +59,8 @@ export async function sendMessage(conversationId: string, text: string): Promise
       return { ok: false, error: "no_connection" };
     }
 
-    const to = convo.remoteJid.split("@")[0] ?? "";
+    // Groups send to the full JID; individuals to the bare number.
+    const to = convo.isGroup ? convo.remoteJid : (convo.remoteJid.split("@")[0] ?? "");
     const adapter = getChannelAdapter("WHATSAPP_EVOLUTION");
     const result = await adapter.send(creds, { to, body: body.slice(0, MAX_LEN) });
     if (!result.ok) return { ok: false, error: "send_failed" };

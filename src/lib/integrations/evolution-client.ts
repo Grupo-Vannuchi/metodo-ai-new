@@ -184,6 +184,49 @@ export async function getBase64FromMediaMessage(
   return { base64, mimetype };
 }
 
+/** A WhatsApp group's subject, picture and participants. */
+export type EvoGroupInfo = {
+  subject: string | null;
+  pictureUrl: string | null;
+  participants: { number: string; jid: string; admin: boolean }[];
+};
+
+/**
+ * Fetch a group's metadata (subject + participants) by its JID. Used to name
+ * group conversations and to export the member list. Returns null on failure.
+ */
+export async function findGroupInfo(
+  creds: EvoCreds,
+  groupJid: string,
+): Promise<EvoGroupInfo | null> {
+  const { ok, data } = await req(
+    creds,
+    "GET",
+    `/group/findGroupInfos/${encodeURIComponent(creds.instance)}?groupJid=${encodeURIComponent(groupJid)}`,
+    undefined,
+    20000,
+  );
+  if (!ok) return null;
+  // Some versions wrap the group in an array or a `groupInfo`/`group` envelope.
+  const g = (Array.isArray(data) ? (data as Json[])[0] : (data.group ?? data.groupInfo ?? data)) as Json;
+  if (!g || typeof g !== "object") return null;
+
+  const subject = typeof g.subject === "string" ? g.subject.trim() || null : null;
+  const pictureUrl =
+    typeof g.pictureUrl === "string" && g.pictureUrl.startsWith("http") ? g.pictureUrl : null;
+  const rawParts = Array.isArray(g.participants) ? (g.participants as Json[]) : [];
+  const participants = rawParts
+    .map((p) => {
+      const jid = String(p.id ?? "").trim();
+      const number = jid.split("@")[0] ?? "";
+      const admin = p.admin === "admin" || p.admin === "superadmin";
+      return { number, jid, admin };
+    })
+    .filter((p) => p.number);
+
+  return { subject, pictureUrl, participants };
+}
+
 /**
  * Fetch a contact's WhatsApp profile-picture URL (a pps.whatsapp.net link).
  * Returns null when the contact has no public photo or the call fails. The URL

@@ -65,19 +65,20 @@ export async function ingestInbound(
   });
 
   if (!conversation) {
-    // On outbound (fromMe) messages `pushName` is OUR connected account's name
-    // (e.g. "Comercial"), not the recipient's — never use it to name a contact.
-    const contactId = await resolveContactId(
-      organizationId,
-      m.remoteJid,
-      m.fromMe ? null : m.pushName,
-    );
+    // Groups have no CRM contact, and their `name` is the group subject (resolved
+    // lazily — pushName here is the participant, not the group). On outbound
+    // (fromMe) messages `pushName` is OUR connected account's name, never the
+    // other party's — so it's never used to name a contact/conversation.
+    const contactId = m.isGroup
+      ? null
+      : await resolveContactId(organizationId, m.remoteJid, m.fromMe ? null : m.pushName);
     conversation = await prisma.conversation.create({
       data: {
         organizationId,
         connectionId,
         remoteJid: m.remoteJid,
-        name: !m.fromMe ? m.pushName : null,
+        isGroup: m.isGroup,
+        name: !m.isGroup && !m.fromMe ? m.pushName : null,
         contactId,
         lastMessageAt: m.timestamp,
         lastMessagePreview: m.preview,
@@ -91,7 +92,7 @@ export async function ingestInbound(
       data: {
         lastMessageAt: m.timestamp,
         lastMessagePreview: m.preview,
-        ...(!m.fromMe && m.pushName ? { name: m.pushName } : {}),
+        ...(!m.isGroup && !m.fromMe && m.pushName ? { name: m.pushName } : {}),
         ...(m.fromMe ? {} : { unreadCount: { increment: 1 } }),
       },
     });
@@ -110,6 +111,7 @@ export async function ingestInbound(
       body: m.body,
       providerMessageId: m.providerMessageId,
       fromMe: m.fromMe,
+      senderName: m.senderName,
       status: m.fromMe ? "SENT" : null,
       timestamp: m.timestamp,
       ...(hasMedia
@@ -131,7 +133,10 @@ export async function ingestInbound(
   // is opened. Without a queue (local dev) we do nothing here — the inbox fetches
   // media lazily/on-demand when it renders a PENDING bubble (see /api/inbox/
   // media/fetch), which avoids fragile post-response work and infinite spinners.
-  if (hasMedia && m.providerMessageId && isQueueConfigured()) {
+  // Groups are skipped on purpose: they're high-volume, so their media stays
+  // strictly on-demand (fetched only when a bubble is opened) to protect
+  // bandwidth/storage.
+  if (hasMedia && m.providerMessageId && isQueueConfigured() && !m.isGroup) {
     const job: WhatsappMediaJob = {
       messageId: message.id,
       organizationId,

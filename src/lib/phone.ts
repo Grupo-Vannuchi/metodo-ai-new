@@ -4,7 +4,11 @@
  * Brazil's country code (55) when the number looks like a local 10/11-digit one.
  */
 export function normalizeWhatsappNumber(raw: string): string {
-  const digits = (raw ?? "").replace(/\D/g, "");
+  const value = (raw ?? "").trim();
+  // Group JIDs (e.g. "123456789-987654@g.us") are valid Evolution destinations
+  // on their own — pass them through untouched instead of stripping to digits.
+  if (value.endsWith("@g.us")) return value;
+  const digits = value.replace(/\D/g, "");
   if (!digits) return "";
   // Local BR number (DDD + number) without country code → prepend 55.
   if (digits.length === 10 || digits.length === 11) return `55${digits}`;

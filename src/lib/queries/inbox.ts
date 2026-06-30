@@ -11,6 +11,7 @@ export async function listConversations(organizationId: string) {
     select: {
       id: true,
       remoteJid: true,
+      isGroup: true,
       name: true,
       customName: true,
       lastMessagePreview: true,
@@ -33,6 +34,7 @@ export async function listConversations(organizationId: string) {
   return convos.map((c) => ({
     id: c.id,
     remoteJid: c.remoteJid,
+    isGroup: c.isGroup,
     name: c.name,
     customName: c.customName,
     lastMessagePreview: c.lastMessagePreview,
@@ -68,6 +70,7 @@ export async function listMessages(organizationId: string, conversationId: strin
       direction: true,
       type: true,
       body: true,
+      senderName: true,
       status: true,
       timestamp: true,
       mediaUrl: true,

@@ -1,14 +1,18 @@
+import { Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** Round avatar: shows the image when present, otherwise the name's initials.
+/** Round avatar: shows the image when present, otherwise the name's initials
+ * (or a group icon when `group` is set and there's no image).
  * Size is controlled via `className` (e.g. "size-10"). */
 export function Avatar({
   name,
   src,
+  group = false,
   className,
 }: {
   name: string;
   src?: string | null;
+  group?: boolean;
   className?: string;
 }) {
   const initials =
@@ -30,7 +34,7 @@ export function Avatar({
   }
   return (
     <span className={base} aria-hidden>
-      {initials}
+      {group ? <Users className="size-[55%]" /> : initials}
     </span>
   );
 }

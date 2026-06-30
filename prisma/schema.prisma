@@ -641,8 +641,12 @@ model Conversation {
   id                 String    @id @default(cuid())
   organizationId     String
   connectionId       String
-  /// WhatsApp JID, e.g. "5511999999999@s.whatsapp.net".
+  /// WhatsApp JID, e.g. "5511999999999@s.whatsapp.net" (individual) or
+  /// "...@g.us" (group).
   remoteJid          String
+  /// True when the JID is a WhatsApp group (`@g.us`). Groups have no CRM
+  /// contact; `name` holds the group subject (resolved lazily, like the avatar).
+  isGroup            Boolean   @default(false)
   name               String?
   /// User-set label that overrides the WhatsApp push name in the list. Never
   /// touched by inbound ingestion, so a rename sticks.
@@ -710,6 +714,9 @@ model Message {
   providerMessageId String?
   status            MessageStatus?
   fromMe            Boolean          @default(false)
+  /// In group chats, the display name of the participant who sent this inbound
+  /// message (null for individual chats and own messages).
+  senderName        String?
   timestamp         DateTime
   createdAt         DateTime         @default(now())
 

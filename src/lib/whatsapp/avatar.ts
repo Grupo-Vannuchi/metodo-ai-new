@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { tenantDb } from "@/lib/tenant-db";
 import { loadEvoCredsById } from "@/lib/integrations/evolution-creds";
-import { fetchProfilePictureUrl } from "@/lib/integrations/evolution-client";
+import { fetchProfilePictureUrl, findGroupInfo } from "@/lib/integrations/evolution-client";
 
 /** Refresh a conversation's avatar at most once a week. */
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -11,7 +11,8 @@ const TTL_MS = 7 * 24 * 60 * 60 * 1000;
  * Resolve a conversation's WhatsApp profile picture on demand, triggered by the
  * inbox when it renders a conversation we haven't checked recently. Cached for a
  * week (avatarCheckedAt) so we don't hammer Evolution; stores just the URL (no
- * download) to stay light. Org-scoped ownership; never throws.
+ * download) to stay light. For groups it also (re)resolves the group subject as
+ * the conversation name. Org-scoped ownership; never throws.
  */
 export async function syncConversationAvatar(
   organizationId: string,
@@ -22,7 +23,7 @@ export async function syncConversationAvatar(
   const db = tenantDb(organizationId);
   const conv = await db.conversation.findFirst({
     where: { id: conversationId },
-    select: { remoteJid: true, connectionId: true, avatarUrl: true, avatarCheckedAt: true },
+    select: { remoteJid: true, connectionId: true, isGroup: true, avatarUrl: true, avatarCheckedAt: true },
   });
   if (!conv) return { avatarUrl: null };
 
@@ -31,6 +32,21 @@ export async function syncConversationAvatar(
 
   try {
     const creds = await loadEvoCredsById(conv.connectionId);
+
+    if (conv.isGroup) {
+      // Groups: one call yields both the subject (→ name) and the picture.
+      const info = creds ? await findGroupInfo(creds, conv.remoteJid) : null;
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: {
+          avatarUrl: info?.pictureUrl ?? null,
+          avatarCheckedAt: now,
+          ...(info?.subject ? { name: info.subject } : {}),
+        },
+      });
+      return { avatarUrl: info?.pictureUrl ?? null };
+    }
+
     const number = conv.remoteJid.split("@")[0] ?? "";
     const url = creds && number ? await fetchProfilePictureUrl(creds, number) : null;
     await prisma.conversation.update({

@@ -64,6 +64,7 @@ type ContactInfo = {
 type Conversation = {
   id: string;
   remoteJid: string;
+  isGroup: boolean;
   name: string | null;
   customName: string | null;
   lastMessagePreview: string | null;
@@ -84,6 +85,7 @@ type Message = {
   direction: "INBOUND" | "OUTBOUND";
   type: string;
   body: string | null;
+  senderName?: string | null;
   status: string | null;
   timestamp: string | Date;
   mediaUrl?: string | null;
@@ -102,11 +104,13 @@ const MENU_ITEM =
   "flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-muted";
 
 function displayName(
-  c: Pick<Conversation, "name" | "customName" | "remoteJid" | "contactName">,
+  c: Pick<Conversation, "name" | "customName" | "remoteJid" | "contactName" | "isGroup">,
 ): string {
   if (c.customName) return c.customName;
   if (c.contactName) return c.contactName;
   if (c.name) return c.name;
+  // Group with no subject resolved yet — a group id isn't a phone number.
+  if (c.isGroup) return "Grupo";
   const digits = c.remoteJid.split("@")[0] ?? "";
   return formatBrPhone(digits) || digits;
 }
@@ -457,7 +461,7 @@ export function InboxClient({
           selectedId === c.id ? "bg-muted" : "",
         )}
       >
-        <Avatar name={displayName(c)} src={c.avatarUrl} className="size-9" />
+        <Avatar name={displayName(c)} src={c.avatarUrl} group={c.isGroup} className="size-9" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <p className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">
@@ -624,7 +628,7 @@ export function InboxClient({
                 >
                   <ArrowLeft className="size-5" />
                 </button>
-                <Avatar name={displayName(selected)} src={selected.avatarUrl} className="size-9" />
+                <Avatar name={displayName(selected)} src={selected.avatarUrl} group={selected.isGroup} className="size-9" />
                 <div className="min-w-0">
                   <p className="truncate font-medium">{displayName(selected)}</p>
                   {selected.contactId ? (
@@ -686,6 +690,9 @@ export function InboxClient({
                             ),
                       )}
                     >
+                      {selected?.isGroup && !out && m.senderName ? (
+                        <p className="mb-0.5 text-xs font-semibold text-brand">{m.senderName}</p>
+                      ) : null}
                       {isMedia ? <MessageMedia m={m} out={out} /> : null}
                       {isMedia ? (
                         m.body ? (
