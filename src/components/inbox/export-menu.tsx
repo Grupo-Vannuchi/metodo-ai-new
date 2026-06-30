@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Download, FileText, FileCode, FileType } from "lucide-react";
+import { Download, FileText, FileSpreadsheet, FileType } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 type Group = { id: string; name: string };
@@ -25,7 +25,7 @@ export function ExportMenu({ groups }: { groups: Group[] }) {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  function download(format: "pdf" | "doc" | "xml") {
+  function download(format: "pdf" | "doc" | "xlsx") {
     const params = new URLSearchParams();
     if (target === "contacts") {
       params.set("type", "contacts");
@@ -76,8 +76,8 @@ export function ExportMenu({ groups }: { groups: Group[] }) {
           <p className="mt-3 text-xs font-medium text-muted-foreground">{t("export.format")}</p>
           <div className="mt-1 grid grid-cols-3 gap-2">
             <FormatBtn icon={FileText} label="PDF" onClick={() => download("pdf")} />
+            <FormatBtn icon={FileSpreadsheet} label="Excel" onClick={() => download("xlsx")} />
             <FormatBtn icon={FileType} label="Word" onClick={() => download("doc")} />
-            <FormatBtn icon={FileCode} label="XML" onClick={() => download("xml")} />
           </div>
         </div>
       ) : null}

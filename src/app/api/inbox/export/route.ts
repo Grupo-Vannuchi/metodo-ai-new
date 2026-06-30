@@ -3,7 +3,7 @@ import {
   getContactRows,
   getGroupRows,
   toPdf,
-  toXml,
+  toXlsx,
   toDoc,
   type ExportFormat,
   type ExportRow,
@@ -46,11 +46,12 @@ export async function GET(req: Request) {
 
   const filename = slugify(title);
 
-  if (format === "xml") {
-    return new Response(toXml(title, rows), {
+  if (format === "xlsx") {
+    const buf = await toXlsx(title, rows);
+    return new Response(new Uint8Array(buf), {
       headers: {
-        "Content-Type": "application/xml; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${filename}.xml"`,
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${filename}.xlsx"`,
       },
     });
   }

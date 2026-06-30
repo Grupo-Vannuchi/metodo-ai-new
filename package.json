@@ -35,6 +35,7 @@
     "@vercel/blob": "^2.4.1",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
+    "exceljs": "^4.4.0",
     "jose": "^5.9.6",
     "lucide-react": "^0.469.0",
     "next": "16.2.7",

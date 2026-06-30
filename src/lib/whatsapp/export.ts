@@ -1,5 +1,6 @@
 import "server-only";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import ExcelJS from "exceljs";
 import { tenantDb } from "@/lib/tenant-db";
 import { loadEvoCredsById } from "@/lib/integrations/evolution-creds";
 import { findGroupInfo } from "@/lib/integrations/evolution-client";
@@ -12,7 +13,7 @@ import { formatBrPhone } from "@/lib/phone";
  */
 
 export type ExportRow = { name: string; number: string };
-export type ExportFormat = "pdf" | "xml" | "doc";
+export type ExportFormat = "pdf" | "xlsx" | "doc";
 
 // ── Data ────────────────────────────────────────────────────────────────────
 
@@ -67,11 +68,21 @@ function xmlEscape(s: string): string {
   return s.replace(/[<>&'"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[c]!);
 }
 
-export function toXml(title: string, rows: ExportRow[]): string {
-  const items = rows
-    .map((r) => `  <contact>\n    <name>${xmlEscape(r.name)}</name>\n    <number>${xmlEscape(r.number)}</number>\n  </contact>`)
-    .join("\n");
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<contacts title="${xmlEscape(title)}" count="${rows.length}">\n${items}\n</contacts>\n`;
+/** Native .xlsx spreadsheet (opens in Excel with no format warning). */
+export async function toXlsx(title: string, rows: ExportRow[]): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "MétodoAI";
+  // Excel sheet names: max 31 chars, and []:*?/\ are not allowed.
+  const sheetName = (title || "Contatos").replace(/[[\]:*?/\\]/g, " ").slice(0, 31);
+  const ws = wb.addWorksheet(sheetName);
+  ws.columns = [
+    { header: "Nome", key: "name", width: 40 },
+    { header: "Número", key: "number", width: 24 },
+  ];
+  ws.getRow(1).font = { bold: true };
+  for (const r of rows) ws.addRow({ name: r.name, number: r.number });
+  const buf = await wb.xlsx.writeBuffer();
+  return Buffer.from(buf as ArrayBuffer);
 }
 
 /** Word-compatible HTML (.doc) — opens natively in MS Word, no extra dependency. */
