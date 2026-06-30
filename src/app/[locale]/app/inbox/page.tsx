@@ -4,6 +4,7 @@ import { requireScreen } from "@/lib/access";
 import { listConversations, listConversationFolders } from "@/lib/queries/inbox";
 import { InboxClient } from "@/components/inbox/inbox-client";
 import { TeamChatClient } from "@/components/inbox/team-chat-client";
+import { ExportMenu } from "@/components/inbox/export-menu";
 import { resolveLocale } from "@/i18n/routing";
 import { listTeamChats, listTeamMembers, listTeamChatFolders } from "@/lib/queries/team-chat";
 import { Link } from "@/i18n/navigation";
@@ -34,30 +35,37 @@ export default async function InboxPage({
     mode === "team" ? listTeamChatFolders(ctx.organizationId) : Promise.resolve([]),
   ]);
 
+  const exportGroups = conversations
+    .filter((c) => c.isGroup)
+    .map((c) => ({ id: c.id, name: c.customName || c.name || "Grupo" }));
+
   return (
     <div className="flex flex-col gap-4">
-      {/* Tabs */}
-      <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-1 shadow-sm w-fit">
-        <Link
-          href="/app/inbox?mode=whatsapp"
-          className={cn(
-            "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors",
-            mode === "whatsapp" ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:bg-muted"
-          )}
-        >
-          <MessageCircle className="size-4" />
-          WhatsApp
-        </Link>
-        <Link
-          href="/app/inbox?mode=team"
-          className={cn(
-            "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors",
-            mode === "team" ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:bg-muted"
-          )}
-        >
-          <Users className="size-4" />
-          {t("tab")}
-        </Link>
+      {/* Tabs + export */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-1 shadow-sm w-fit">
+          <Link
+            href="/app/inbox?mode=whatsapp"
+            className={cn(
+              "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors",
+              mode === "whatsapp" ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:bg-muted"
+            )}
+          >
+            <MessageCircle className="size-4" />
+            WhatsApp
+          </Link>
+          <Link
+            href="/app/inbox?mode=team"
+            className={cn(
+              "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors",
+              mode === "team" ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:bg-muted"
+            )}
+          >
+            <Users className="size-4" />
+            {t("tab")}
+          </Link>
+        </div>
+        {mode === "whatsapp" ? <ExportMenu groups={exportGroups} /> : null}
       </div>
 
       <div className="h-[calc(100dvh-11rem)]">

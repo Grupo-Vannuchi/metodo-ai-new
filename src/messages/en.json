@@ -275,6 +275,13 @@
   },
   "inbox": {
     "title": "Inbox",
+    "export": {
+      "button": "Export",
+      "target": "What to export",
+      "allContacts": "All contacts",
+      "groups": "Groups",
+      "format": "Format"
+    },
     "empty": "No conversations yet. Incoming WhatsApp messages show up here.",
     "selectConversation": "Select a conversation to see the messages.",
     "noMessages": "No messages in this conversation.",

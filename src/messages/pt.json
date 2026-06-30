@@ -275,6 +275,13 @@
   },
   "inbox": {
     "title": "Conversas",
+    "export": {
+      "button": "Exportar",
+      "target": "O que exportar",
+      "allContacts": "Todos os contatos",
+      "groups": "Grupos",
+      "format": "Formato"
+    },
     "empty": "Nenhuma conversa ainda. As mensagens recebidas no WhatsApp aparecem aqui.",
     "selectConversation": "Selecione uma conversa para ver as mensagens.",
     "noMessages": "Sem mensagens nesta conversa.",
