@@ -1,21 +1,16 @@
 import "server-only";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import ExcelJS from "exceljs";
 import { tenantDb } from "@/lib/tenant-db";
 import { loadEvoCredsById } from "@/lib/integrations/evolution-creds";
 import { findGroupInfo } from "@/lib/integrations/evolution-client";
 import { formatBrPhone } from "@/lib/phone";
 
 /**
- * WhatsApp inbox exports: the contact list (individual conversations) or a
- * group's members, rendered as PDF / XML / Word (.doc HTML). Just names +
- * numbers in a list.
+ * Data for the WhatsApp inbox exports: the contact list (individual
+ * conversations) or a group's members. The file generation itself is the shared
+ * tabular exporter in src/lib/export/table.ts.
  */
 
 export type ExportRow = { name: string; number: string };
-export type ExportFormat = "pdf" | "xlsx" | "doc";
-
-// ── Data ────────────────────────────────────────────────────────────────────
 
 /** All individual (non-group) conversations as name + number rows. */
 export async function getContactRows(organizationId: string): Promise<ExportRow[]> {
@@ -60,71 +55,4 @@ export async function getGroupRows(
     return { name: p.admin ? `${number} (admin)` : number, number };
   });
   return { title, rows };
-}
-
-// ── Generators ───────────────────────────────────────────────────────────────
-
-function xmlEscape(s: string): string {
-  return s.replace(/[<>&'"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[c]!);
-}
-
-/** Native .xlsx spreadsheet (opens in Excel with no format warning). */
-export async function toXlsx(title: string, rows: ExportRow[]): Promise<Buffer> {
-  const wb = new ExcelJS.Workbook();
-  wb.creator = "MétodoAI";
-  // Excel sheet names: max 31 chars, and []:*?/\ are not allowed.
-  const sheetName = (title || "Contatos").replace(/[[\]:*?/\\]/g, " ").slice(0, 31);
-  const ws = wb.addWorksheet(sheetName);
-  ws.columns = [
-    { header: "Nome", key: "name", width: 40 },
-    { header: "Número", key: "number", width: 24 },
-  ];
-  ws.getRow(1).font = { bold: true };
-  for (const r of rows) ws.addRow({ name: r.name, number: r.number });
-  const buf = await wb.xlsx.writeBuffer();
-  return Buffer.from(buf as ArrayBuffer);
-}
-
-/** Word-compatible HTML (.doc) — opens natively in MS Word, no extra dependency. */
-export function toDoc(title: string, rows: ExportRow[]): string {
-  const trs = rows
-    .map((r) => `<tr><td>${xmlEscape(r.name)}</td><td>${xmlEscape(r.number)}</td></tr>`)
-    .join("");
-  return (
-    `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">` +
-    `<head><meta charset="utf-8"><title>${xmlEscape(title)}</title></head>` +
-    `<body><h2>${xmlEscape(title)}</h2>` +
-    `<p>${rows.length} registro(s)</p>` +
-    `<table border="1" cellspacing="0" cellpadding="4"><thead><tr><th>Nome</th><th>Número</th></tr></thead><tbody>${trs}</tbody></table>` +
-    `</body></html>`
-  );
-}
-
-export async function toPdf(title: string, rows: ExportRow[]): Promise<Uint8Array> {
-  const pdf = await PDFDocument.create();
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  // The standard fonts are WinAnsi-encoded — drop anything they can't render
-  // (e.g. emojis) so pdf-lib doesn't throw.
-  const safe = (s: string) => s.replace(/[^\x20-\x7E\xA0-\xFF]/g, "").trim();
-
-  const margin = 50;
-  let page = pdf.addPage();
-  let y = page.getHeight() - margin;
-
-  page.drawText(safe(title) || "Export", { x: margin, y, size: 16, font: bold });
-  y -= 26;
-  page.drawText(`${rows.length} registro(s)`, { x: margin, y, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
-  y -= 22;
-
-  for (const r of rows) {
-    if (y < margin) {
-      page = pdf.addPage();
-      y = page.getHeight() - margin;
-    }
-    const line = r.name && r.name !== r.number ? `${r.name} — ${r.number}` : r.number;
-    page.drawText(safe(line).slice(0, 95), { x: margin, y, size: 11, font });
-    y -= 16;
-  }
-  return pdf.save();
 }

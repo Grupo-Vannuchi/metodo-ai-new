@@ -4,6 +4,7 @@ import { requireOrgContext } from "@/lib/tenant";
 import { listCompanies } from "@/lib/queries/companies";
 import { deleteCompany } from "@/app/actions/companies";
 import { DeleteButton } from "@/components/crm/delete-button";
+import { ExportButton } from "@/components/ui/export-button";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -28,15 +29,18 @@ export default async function CompaniesPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
           <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
         </div>
-        <Link href="/app/companies/new" className={buttonVariants()}>
-          <Plus className="size-4" />
-          {t("new")}
-        </Link>
+        <div className="flex items-center gap-2">
+          <ExportButton endpoint="/api/crm/export" params={{ entity: "companies" }} label={t("export")} />
+          <Link href="/app/companies/new" className={buttonVariants()}>
+            <Plus className="size-4" />
+            {t("new")}
+          </Link>
+        </div>
       </div>
 
       {companies.data.length === 0 ? (
