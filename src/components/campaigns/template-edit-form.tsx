@@ -78,6 +78,9 @@ export function TemplateEditForm({
             <Textarea id="body" aria-invalid={Boolean(errors.body)} {...register("body", { required: tv("required") })} />
             <FieldError>{errors.body?.message}</FieldError>
             <p className="mt-1 text-xs text-muted-foreground">{t("bodyHint")}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("spintaxHint")} <code className="rounded bg-muted px-1">{"{oi|olá|e aí}"}</code>
+            </p>
           </div>
         </div>
       </fieldset>

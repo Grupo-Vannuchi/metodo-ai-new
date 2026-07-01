@@ -478,6 +478,9 @@ model Campaign {
   templateId     String?
   status         CampaignStatus @default(DRAFT)
   startAt        DateTime?
+  /// Last time a dispatch batch ran for this campaign. Lets the per-minute cron
+  /// avoid piling jobs onto an active (self-re-enqueuing, throttled) chain.
+  lastDispatchAt DateTime?
   createdById    String
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt

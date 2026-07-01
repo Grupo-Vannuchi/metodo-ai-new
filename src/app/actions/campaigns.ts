@@ -252,14 +252,21 @@ export async function startCampaign(id: string): Promise<{ ok: boolean; error?: 
       });
     }
 
-    await db.campaign.updateMany({ where: { id }, data: { status: "RUNNING" } });
+    // Stamp lastDispatchAt so the per-minute cron doesn't also enqueue a job
+    // (we enqueue the first one right here).
+    await db.campaign.updateMany({
+      where: { id },
+      data: { status: "RUNNING", lastDispatchAt: new Date() },
+    });
 
     await audit(ctx, { action: "campaign.started", entity: "Campaign", entityId: id });
 
     if (isQueueConfigured()) {
       await enqueue("dispatch-campaign", { campaignId: id });
     } else {
-      await dispatchCampaignToCompletion(id);
+      // Dev/no-queue: run in the background so the request isn't blocked while
+      // the campaign paces itself out.
+      void dispatchCampaignToCompletion(id).catch((e) => console.error("dispatch failed", e));
     }
 
     revalidatePath(`/app/campaigns/${id}`);

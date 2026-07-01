@@ -24,8 +24,16 @@ export async function GET() {
     await prisma.campaign.update({ where: { id: c.id }, data: { status: "RUNNING" } });
   }
 
+  // Only kick RUNNING campaigns that aren't already being dispatched: an active
+  // campaign self-re-enqueues each throttled batch and stamps lastDispatchAt, so
+  // enqueueing again here would pile jobs onto the chain and break the pacing.
+  // A stale timestamp means the chain died — pick it back up.
+  const staleBefore = new Date(now.getTime() - 3 * 60 * 1000);
   const running = await prisma.campaign.findMany({
-    where: { status: "RUNNING" },
+    where: {
+      status: "RUNNING",
+      OR: [{ lastDispatchAt: null }, { lastDispatchAt: { lt: staleBefore } }],
+    },
     select: { id: true },
     take: 100,
   });

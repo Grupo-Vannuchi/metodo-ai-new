@@ -8,14 +8,45 @@ import { makeRateLimiter } from "@/lib/ratelimit";
 import { unsubscribeUrl } from "@/lib/unsubscribe";
 import { planConfig, type PlanKey } from "@/config/plans";
 
-const BATCH = 25;
-
-/** Per-channel sliding-window rate limit (events per window). */
+/** Per-channel sliding-window rate limit (events per window) — a hard ceiling. */
 const RATE: Record<ChannelKey, { limit: number; windowSec: number }> = {
   WHATSAPP_EVOLUTION: { limit: 20, windowSec: 60 },
   WHATSAPP_CLOUD: { limit: 60, windowSec: 60 },
   EMAIL: { limit: 100, windowSec: 60 },
 };
+
+/**
+ * Anti-spam pacing per channel. WhatsApp bans numbers that send identical
+ * messages in quick succession, so we send a tiny batch per invocation and
+ * space the next one by a randomized gap (jitter) — a human-like cadence,
+ * ~1 msg/min. Email has no such ban risk, so it stays fast. `maxGapSec === 0`
+ * means "no throttle" (send the whole batch, re-enqueue immediately).
+ */
+const THROTTLE: Record<ChannelKey, { perBatch: number; minGapSec: number; maxGapSec: number }> = {
+  WHATSAPP_EVOLUTION: { perBatch: 1, minGapSec: 30, maxGapSec: 60 },
+  WHATSAPP_CLOUD: { perBatch: 1, minGapSec: 30, maxGapSec: 60 },
+  EMAIL: { perBatch: 25, minGapSec: 0, maxGapSec: 0 },
+};
+
+const randInt = (min: number, max: number) => Math.floor(min + Math.random() * (max - min + 1));
+
+/**
+ * Resolve spintax: `{a|b|c}` picks one option at random (nesting supported).
+ * Applied per recipient so identical templates yield varied messages — the
+ * other half of WhatsApp's spam heuristic (identical text). `{{nome}}` and other
+ * double-brace variables are left untouched (they contain no `|`).
+ */
+export function renderSpintax(text: string): string {
+  const re = /\{([^{}]*\|[^{}]*)\}/;
+  let out = text;
+  for (let guard = 0; guard < 200 && re.test(out); guard++) {
+    out = out.replace(re, (_m, group: string) => {
+      const options = group.split("|");
+      return options[randInt(0, options.length - 1)] ?? "";
+    });
+  }
+  return out;
+}
 
 export type ChannelCreds = { credentials: ChannelCredentials; from?: string };
 
@@ -76,6 +107,10 @@ export async function dispatchCampaignBatch(
   if (!campaign) return { done: true };
   if (campaign.status !== "RUNNING") return { done: true };
 
+  // Stamp so the per-minute cron doesn't enqueue a second job onto this active,
+  // self-throttling chain (which would break the pacing / duplicate sends).
+  await prisma.campaign.update({ where: { id: campaignId }, data: { lastDispatchAt: new Date() } });
+
   const channel = campaign.channel as ChannelKey;
   const creds = await resolveChannelCredentials(campaign.organizationId, channel);
   if (!creds) {
@@ -103,7 +138,7 @@ export async function dispatchCampaignBatch(
 
   const recipients = await prisma.campaignRecipient.findMany({
     where: { campaignId, status: "PENDING" },
-    take: Math.min(BATCH, remaining),
+    take: Math.min(THROTTLE[channel].perBatch, remaining),
   });
   if (recipients.length === 0) {
     await prisma.campaign.update({ where: { id: campaignId }, data: { status: "DONE" } });
@@ -146,7 +181,8 @@ export async function dispatchCampaignBatch(
       continue;
     }
 
-    const text = renderTemplate(body, {
+    // Spintax first (varied per recipient), then variable substitution.
+    const text = renderTemplate(renderSpintax(body), {
       nome: contact?.name ?? "",
       empresa: contact?.company?.name ?? "",
     });
@@ -181,13 +217,23 @@ export async function dispatchCampaignBatch(
     await prisma.campaign.update({ where: { id: campaignId }, data: { status: "DONE" } });
     return { done: true };
   }
-  return { done: false };
+  // Pace the next batch with a randomized gap (jitter) for throttled channels.
+  const t = THROTTLE[channel];
+  const retryAfter = t.maxGapSec > 0 ? randInt(t.minGapSec, t.maxGapSec) : undefined;
+  return { done: false, retryAfter };
 }
 
-/** Run a campaign to completion in-process (dev / no queue). */
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Run a campaign to completion in-process (dev / no queue), honoring the
+ * per-channel pacing so local sends don't trip WhatsApp's anti-spam. Meant to
+ * run in the background (the caller should NOT await it).
+ */
 export async function dispatchCampaignToCompletion(campaignId: string): Promise<void> {
-  for (let i = 0; i < 50; i++) {
-    const { done } = await dispatchCampaignBatch(campaignId);
+  for (let i = 0; i < 5000; i++) {
+    const { done, retryAfter } = await dispatchCampaignBatch(campaignId);
     if (done) return;
+    if (retryAfter) await sleep(retryAfter * 1000);
   }
 }

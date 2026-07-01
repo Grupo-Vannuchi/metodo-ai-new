@@ -719,6 +719,7 @@
     "subject": "Subject",
     "body": "Message",
     "bodyHint": "Use {{nome}} and {{empresa}} to personalize.",
+    "spintaxHint": "Anti-spam: vary the text with spintax — one option is picked at random per send. E.g.:",
     "createTemplate": "Create template",
     "newTemplate": "New template",
     "edit": "Edit",
