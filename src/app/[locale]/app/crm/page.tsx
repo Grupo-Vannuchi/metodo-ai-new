@@ -49,12 +49,12 @@ export default async function CrmPage({
     // scrollbar stays pinned at the bottom (instead of being pushed off-screen
     // when columns grow). Offset ≈ the app shell's padding (+ mobile header).
     <div className="flex h-[calc(100dvh-7rem)] flex-col gap-6 md:h-[calc(100dvh-4.5rem)]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
           <p className="mt-1 text-muted-foreground">{board.pipelineName}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center rounded-lg border border-border p-0.5">
             <Link
               href={`/app/crm${board.pipelineId ? `?pipeline=${board.pipelineId}` : ""}`}
