@@ -9,8 +9,16 @@ import { cn } from "@/lib/utils";
 const UNLIMITED_THRESHOLD = 1_000_000;
 
 /** The 4 plan cards, driven by config/plans + config/pricing. Shared by the
- * pricing page and the landing page. */
-export async function PlansGrid({ locale }: { locale: string }) {
+ * pricing page and the landing page. When `currentPlan` is set (signed-in
+ * view), the CTA is replaced by a "current plan" marker instead of the signup
+ * button. */
+export async function PlansGrid({
+  locale,
+  currentPlan,
+}: {
+  locale: string;
+  currentPlan?: PlanKey;
+}) {
   const t = await getTranslations("pricing");
 
   const nf = new Intl.NumberFormat(locale === "pt" ? "pt-BR" : "en-US");
@@ -57,15 +65,23 @@ export async function PlansGrid({ locale }: { locale: string }) {
               </li>
             </ul>
 
-            <Link
-              href="/signup"
-              className={cn(
-                "mt-6",
-                buttonVariants({ variant: entry.highlight ? "primary" : "outline", size: "lg" }),
-              )}
-            >
-              {t("cta")}
-            </Link>
+            {currentPlan ? (
+              currentPlan === entry.key ? (
+                <span className="mt-6 rounded-lg border border-brand bg-brand/10 px-4 py-2.5 text-center text-sm font-medium text-brand">
+                  {t("currentPlan")}
+                </span>
+              ) : null
+            ) : (
+              <Link
+                href="/signup"
+                className={cn(
+                  "mt-6",
+                  buttonVariants({ variant: entry.highlight ? "primary" : "outline", size: "lg" }),
+                )}
+              >
+                {t("cta")}
+              </Link>
+            )}
           </div>
         );
       })}

@@ -770,6 +770,8 @@
     "unlimited": "Ilimitado",
     "includedCore": "CRM, funil, prospecção, campanhas e conexões",
     "cta": "Começar agora",
+    "currentPlan": "Seu plano atual",
+    "changeNote": "Para mudar de plano, fale com o suporte.",
     "backHome": "Voltar ao início",
     "plans": {
       "STANDARD": "Standard",

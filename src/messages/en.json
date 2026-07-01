@@ -770,6 +770,8 @@
     "unlimited": "Unlimited",
     "includedCore": "CRM, pipeline, prospecting, campaigns and connections",
     "cta": "Get started",
+    "currentPlan": "Your current plan",
+    "changeNote": "To change your plan, contact support.",
     "backHome": "Back to home",
     "plans": {
       "STANDARD": "Standard",

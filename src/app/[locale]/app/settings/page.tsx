@@ -66,7 +66,7 @@ export default async function SettingsPage({
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="text-sm text-muted-foreground">{t("plan")}</p>
           <p className="mt-1 text-lg font-semibold">{ctx.organization.plan}</p>
-          <Link href="/pricing" className="text-xs font-medium text-brand underline underline-offset-4">
+          <Link href="/app/settings/plans" className="text-xs font-medium text-brand underline underline-offset-4">
             {t("seePlans")}
           </Link>
         </div>
@@ -97,7 +97,7 @@ export default async function SettingsPage({
           <Users className="size-4" />
           {t("manageTeam")}
         </Link>
-        <Link href="/pricing" className={buttonVariants({ variant: "outline" })}>
+        <Link href="/app/settings/plans" className={buttonVariants({ variant: "outline" })}>
           <CreditCard className="size-4" />
           {t("seePlans")}
         </Link>
