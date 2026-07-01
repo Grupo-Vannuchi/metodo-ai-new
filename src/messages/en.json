@@ -280,7 +280,11 @@
       "target": "What to export",
       "allContacts": "All contacts",
       "groups": "Groups",
-      "format": "Format"
+      "format": "Format",
+      "crmTitle": "Add to CRM",
+      "toCrm": "Add to contacts",
+      "imported": "{created} added, {skipped} already existed.",
+      "importError": "Couldn't add to the CRM."
     },
     "empty": "No conversations yet. Incoming WhatsApp messages show up here.",
     "selectConversation": "Select a conversation to see the messages.",

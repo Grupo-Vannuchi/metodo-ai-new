@@ -3,9 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
+import { prisma } from "@/lib/prisma";
 import { decryptCredentials } from "@/lib/integrations/crypto";
 import { getChannelAdapter } from "@/lib/integrations/channels";
-import { normalizeWhatsappNumber } from "@/lib/phone";
+import { normalizeWhatsappNumber, formatBrPhone, brPhoneKey } from "@/lib/phone";
+import { onlyDigits } from "@/lib/cnpj";
+import { getContactRows, getGroupRows } from "@/lib/whatsapp/export";
 import { purgeConversationMedia } from "@/lib/whatsapp/media";
 
 /** Reset a conversation's unread counter (called when it's opened). */
@@ -264,5 +267,77 @@ export async function deleteConversationFolder(id: string): Promise<Ok> {
   } catch (error) {
     console.error("Failed to delete folder", error);
     return { ok: false };
+  }
+}
+
+export type ImportContactsResult =
+  | { ok: true; created: number; skipped: number }
+  | { ok: false; error: "unauthorized" | "not_found" | "unknown" };
+
+/**
+ * Import WhatsApp contacts into the CRM: either every individual conversation,
+ * or an entire group's participants. Creates a Contact per number, deduping by
+ * phone (skips numbers already in the CRM and repeats within the batch).
+ */
+export async function importWhatsappContactsToCrm(
+  target: { type: "contacts" } | { type: "group"; conversationId: string },
+): Promise<ImportContactsResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+
+  try {
+    let rows: { name: string; number: string }[];
+    if (target.type === "group") {
+      const group = await getGroupRows(ctx.organizationId, target.conversationId);
+      if (!group) return { ok: false, error: "not_found" };
+      // Groups expose numbers, not names — use the number as the contact name.
+      rows = group.rows.map((r) => ({ name: r.number, number: r.number }));
+    } else {
+      rows = await getContactRows(ctx.organizationId);
+    }
+
+    const db = tenantDb(ctx.organizationId);
+    const seen = new Set<string>();
+    let created = 0;
+    let skipped = 0;
+
+    for (const r of rows) {
+      const digits = onlyDigits(r.number);
+      const key = brPhoneKey(digits);
+      if (!key || seen.has(key)) {
+        skipped++;
+        continue;
+      }
+      seen.add(key);
+
+      const existing = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM contacts
+        WHERE "organizationId" = ${ctx.organizationId}
+          AND phone IS NOT NULL
+          AND right(regexp_replace(phone, '\D', '', 'g'), 11) = ${key}
+        LIMIT 1`;
+      if (existing[0]) {
+        skipped++;
+        continue;
+      }
+
+      const phone = formatBrPhone(digits) || digits;
+      await db.contact.create({
+        data: {
+          organizationId: ctx.organizationId,
+          name: r.name?.trim() || phone,
+          phone,
+          tags: ["whatsapp"],
+          source: "whatsapp-import",
+        },
+      });
+      created++;
+    }
+
+    revalidatePath("/app/contacts");
+    return { ok: true, created, skipped };
+  } catch (error) {
+    console.error("Failed to import WhatsApp contacts to CRM", error);
+    return { ok: false, error: "unknown" };
   }
 }
