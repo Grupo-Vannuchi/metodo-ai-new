@@ -1,4 +1,5 @@
 import "server-only";
+import type { OpportunityStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { tenantDb } from "@/lib/tenant-db";
 
@@ -167,8 +168,53 @@ export async function listMyOpportunities(organizationId: string, userId: string
     value: Number(o.value),
     stageName: o.stage?.name ?? null,
   }));
-  
+
   return { data, total };
+}
+
+export type ClosedStatusFilter = "LOST" | "CANCELED" | "WON" | "ALL";
+
+/** Closed opportunities (won/lost/canceled) — the "archive" where deals go when
+ * they leave the board. Used by the closed-opportunities page so they can be
+ * found and reopened. */
+export async function listClosedOpportunities(
+  organizationId: string,
+  opts: { status?: ClosedStatusFilter; ownerId?: string } = {},
+) {
+  const db = tenantDb(organizationId);
+  const CLOSED: OpportunityStatus[] = ["LOST", "CANCELED", "WON"];
+  const statusWhere = opts.status && opts.status !== "ALL" ? opts.status : { in: CLOSED };
+
+  const opps = await db.opportunity.findMany({
+    where: { status: statusWhere, ...(opts.ownerId ? { ownerId: opts.ownerId } : {}) },
+    orderBy: [{ closedAt: "desc" }, { updatedAt: "desc" }],
+    take: 200,
+    select: {
+      id: true,
+      code: true,
+      title: true,
+      value: true,
+      status: true,
+      closedAt: true,
+      outcomeReason: true,
+      stage: { select: { name: true } },
+      company: { select: { name: true } },
+      contact: { select: { name: true } },
+    },
+  });
+
+  return opps.map((o) => ({
+    id: o.id,
+    code: o.code,
+    title: o.title,
+    value: Number(o.value),
+    status: o.status,
+    closedAt: o.closedAt,
+    outcomeReason: o.outcomeReason,
+    stageName: o.stage?.name ?? null,
+    companyName: o.company?.name ?? null,
+    contactName: o.contact?.name ?? null,
+  }));
 }
 
 /** Open opportunities (id + label) for linking tasks/finance. */

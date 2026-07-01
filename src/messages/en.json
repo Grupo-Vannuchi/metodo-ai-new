@@ -455,12 +455,29 @@
       "createFunnel": "Create funnel",
       "managePipelines": "Manage funnels",
       "productsLink": "Products & services",
+      "closedLink": "Closed",
       "back": "Back to funnel",
       "noStages": "This funnel has no stages.",
       "error": {
         "invalid": "Invalid data.",
         "unauthorized": "Session expired.",
         "unknown": "Something went wrong."
+      }
+    },
+    "closed": {
+      "title": "Closed opportunities",
+      "subtitle": "Won, lost and canceled — reopen to send them back to the board.",
+      "empty": "No closed opportunities here.",
+      "reopen": "Reopen",
+      "colOpp": "Opportunity",
+      "colValue": "Value",
+      "colStatus": "Status",
+      "colClosedAt": "Closed on",
+      "filter": {
+        "ALL": "All",
+        "LOST": "Lost",
+        "CANCELED": "Canceled",
+        "WON": "Won"
       }
     },
     "opportunity": {

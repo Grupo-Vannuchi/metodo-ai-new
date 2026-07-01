@@ -455,12 +455,29 @@
       "createFunnel": "Criar funil",
       "managePipelines": "Gerenciar funis",
       "productsLink": "Produtos e serviços",
+      "closedLink": "Fechadas",
       "back": "Voltar ao funil",
       "noStages": "Este funil não tem estágios.",
       "error": {
         "invalid": "Dados inválidos.",
         "unauthorized": "Sessão expirada.",
         "unknown": "Algo deu errado."
+      }
+    },
+    "closed": {
+      "title": "Oportunidades fechadas",
+      "subtitle": "Ganhas, perdidas e canceladas — reabra para voltar ao funil.",
+      "empty": "Nenhuma oportunidade fechada aqui.",
+      "reopen": "Reabrir",
+      "colOpp": "Oportunidade",
+      "colValue": "Valor",
+      "colStatus": "Situação",
+      "colClosedAt": "Fechada em",
+      "filter": {
+        "ALL": "Todas",
+        "LOST": "Perdidas",
+        "CANCELED": "Canceladas",
+        "WON": "Ganhas"
       }
     },
     "opportunity": {
