@@ -292,6 +292,7 @@ model Stage {
 
 enum OpportunityStatus {
   OPEN
+  ON_HOLD
   WON
   LOST
   CANCELED

@@ -8,6 +8,8 @@ import { listTasks } from "@/lib/queries/tasks";
 import { entriesForOpportunity } from "@/lib/queries/finance";
 import { hasFeature, type PlanKey } from "@/config/plans";
 import { TasksManager } from "@/components/tasks/tasks-manager";
+import { OpportunityStatusBar } from "@/components/crm/opportunity-status-bar";
+import { type OppStatus } from "@/app/actions/opportunities";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
@@ -16,13 +18,6 @@ import { cn } from "@/lib/utils";
 import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
-
-const STATUS_STYLE: Record<string, string> = {
-  OPEN: "bg-brand/10 text-brand",
-  WON: "bg-green-500/10 text-green-600",
-  LOST: "bg-red-500/10 text-red-600",
-  CANCELED: "bg-amber-500/10 text-amber-600",
-};
 
 export default async function OpportunityViewPage({
   params,
@@ -80,9 +75,6 @@ export default async function OpportunityViewPage({
         <div className="min-w-0">
           {opp.code ? <p className="text-sm font-medium tabular-nums text-muted-foreground">{opp.code}</p> : null}
           <h1 className="text-2xl font-bold tracking-tight">{opp.title}</h1>
-          <span className={cn("mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", STATUS_STYLE[opp.status])}>
-            {t(`status${opp.status}`)}
-          </span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {opp.contactPhone ? (
@@ -94,6 +86,10 @@ export default async function OpportunityViewPage({
           </Link>
         </div>
       </div>
+
+      <section className="rounded-xl border border-border bg-card p-5">
+        <OpportunityStatusBar id={opp.id} status={opp.status as OppStatus} />
+      </section>
 
       {opp.status === "WON" && canFinance ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-green-500/40 bg-green-500/5 p-4">

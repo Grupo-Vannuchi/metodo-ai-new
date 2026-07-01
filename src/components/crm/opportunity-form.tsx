@@ -19,7 +19,7 @@ type Values = {
   title: string;
   value: string;
   stageId: string;
-  status: "OPEN" | "WON" | "LOST" | "CANCELED";
+  status: "OPEN" | "ON_HOLD" | "WON" | "LOST" | "CANCELED";
   companyId: string;
   contactId: string;
   productServiceId: string;
@@ -124,6 +124,7 @@ export function OpportunityForm({
             <Label htmlFor="status">{t("status")}</Label>
             <select id="status" className={selectCls} {...register("status")}>
               <option value="OPEN">{t("statusOPEN")}</option>
+              <option value="ON_HOLD">{t("statusON_HOLD")}</option>
               <option value="WON">{t("statusWON")}</option>
               <option value="LOST">{t("statusLOST")}</option>
               <option value="CANCELED">{t("statusCANCELED")}</option>

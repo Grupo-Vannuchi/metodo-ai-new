@@ -7,6 +7,7 @@ export type BoardCard = {
   code: string | null;
   title: string;
   value: number;
+  status: string;
   companyName: string | null;
   contactName: string | null;
   contactId: string | null;
@@ -59,7 +60,8 @@ export async function getBoard(
       select: { id: true, name: true, probability: true },
     }),
     db.opportunity.findMany({
-      where: { pipelineId: pipeline.id, status: "OPEN", ...(ownerId ? { ownerId } : {}) },
+      // ON_HOLD stays on the board (paused, still open) with a badge.
+      where: { pipelineId: pipeline.id, status: { in: ["OPEN", "ON_HOLD"] }, ...(ownerId ? { ownerId } : {}) },
       orderBy: { order: "asc" },
       select: {
         id: true,
@@ -68,6 +70,7 @@ export async function getBoard(
         value: true,
         order: true,
         stageId: true,
+        status: true,
         company: { select: { name: true } },
         contact: { select: { id: true, name: true, phone: true } },
       },
@@ -85,6 +88,7 @@ export async function getBoard(
         code: o.code,
         title: o.title,
         value: Number(o.value),
+        status: o.status,
         companyName: o.company?.name ?? null,
         contactName: o.contact?.name ?? null,
         contactId: o.contact?.id ?? null,

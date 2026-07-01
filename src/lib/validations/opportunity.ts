@@ -33,7 +33,7 @@ export type MoveOpportunityInput = z.infer<typeof moveOpportunitySchema>;
 export const updateOpportunitySchema = z
   .object({
     ...baseFields,
-    status: z.enum(["OPEN", "WON", "LOST", "CANCELED"]),
+    status: z.enum(["OPEN", "ON_HOLD", "WON", "LOST", "CANCELED"]),
     outcomeReason: optionalText(500),
   })
   .superRefine((data, ctx) => {

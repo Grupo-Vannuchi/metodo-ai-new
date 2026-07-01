@@ -122,7 +122,12 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
                     draggable
                     onDragStart={() => setDragId(card.id)}
                     onDragEnd={() => setDragId(null)}
-                    className="cursor-grab rounded-lg border border-border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing"
+                    onDoubleClick={() => router.push(`/app/crm/${card.id}`)}
+                    title={t("openHint")}
+                    className={cn(
+                      "cursor-grab select-none rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing",
+                      card.status === "ON_HOLD" ? "border-amber-400/70" : "border-border",
+                    )}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -130,6 +135,11 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
                           <p className="text-[11px] font-medium tabular-nums text-muted-foreground">{card.code}</p>
                         ) : null}
                         <p className="text-sm font-medium">{card.title}</p>
+                        {card.status === "ON_HOLD" ? (
+                          <span className="mt-1 inline-flex rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                            {t("onHold")}
+                          </span>
+                        ) : null}
                       </div>
                       <div className="flex shrink-0 items-center" onPointerDown={(e) => e.stopPropagation()}>
                         {card.contactPhone ? (

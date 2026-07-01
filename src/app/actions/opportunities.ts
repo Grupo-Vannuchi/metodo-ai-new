@@ -202,7 +202,8 @@ export async function updateOpportunity(
     ]);
 
     const status = parsed.data.status;
-    const closedAt = status === "OPEN" ? null : (current.closedAt ?? new Date());
+    // OPEN and ON_HOLD are active (not closed) — no closedAt.
+    const closedAt = status === "OPEN" || status === "ON_HOLD" ? null : (current.closedAt ?? new Date());
     const outcomeReason =
       status === "LOST" || status === "CANCELED" ? parsed.data.outcomeReason || null : null;
 
@@ -242,6 +243,50 @@ export async function updateOpportunity(
     return { ok: true, id };
   } catch (error) {
     console.error("Failed to update opportunity", error);
+    return { ok: false, error: "unknown" };
+  }
+}
+
+const STATUSES = ["OPEN", "ON_HOLD", "WON", "LOST", "CANCELED"] as const;
+export type OppStatus = (typeof STATUSES)[number];
+
+/**
+ * Quick status change from the opportunity detail (status bar) — no full form.
+ * OPEN/ON_HOLD are active (no closedAt); LOST/CANCELED require a reason.
+ */
+export async function setOpportunityStatus(
+  id: string,
+  status: OppStatus,
+  outcomeReason?: string,
+): Promise<OpportunityActionResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!STATUSES.includes(status)) return { ok: false, error: "invalid" };
+
+  const reason = (outcomeReason ?? "").trim();
+  if ((status === "LOST" || status === "CANCELED") && !reason) {
+    return { ok: false, error: "invalid" };
+  }
+
+  try {
+    const db = tenantDb(ctx.organizationId);
+    const current = await db.opportunity.findFirst({ where: { id }, select: { closedAt: true } });
+    if (!current) return { ok: false, error: "unknown" };
+
+    const closedAt = status === "OPEN" || status === "ON_HOLD" ? null : (current.closedAt ?? new Date());
+    const finalReason = status === "LOST" || status === "CANCELED" ? reason : null;
+
+    const res = await db.opportunity.updateMany({
+      where: { id },
+      data: { status, closedAt, outcomeReason: finalReason },
+    });
+    if (res.count === 0) return { ok: false, error: "unknown" };
+
+    revalidatePath("/app/crm");
+    revalidatePath(`/app/crm/${id}`);
+    return { ok: true, id };
+  } catch (error) {
+    console.error("Failed to set opportunity status", error);
     return { ok: false, error: "unknown" };
   }
 }
