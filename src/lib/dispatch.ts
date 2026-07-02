@@ -6,6 +6,7 @@ import type { ChannelCredentials } from "@/lib/integrations/channels/types";
 import { decryptCredentials } from "@/lib/integrations/crypto";
 import { makeRateLimiter } from "@/lib/ratelimit";
 import { unsubscribeUrl } from "@/lib/unsubscribe";
+import { normalizeWhatsappNumber, looksLikeWhatsappMobile } from "@/lib/phone";
 import { planConfig, type PlanKey } from "@/config/plans";
 
 /** Per-channel sliding-window rate limit (events per window) — a hard ceiling. */
@@ -177,6 +178,16 @@ export async function dispatchCampaignBatch(
       await prisma.campaignRecipient.update({
         where: { id: r.id },
         data: { status: "FAILED", error: "Contato sem destino para o canal." },
+      });
+      continue;
+    }
+
+    // WhatsApp: skip numbers that can't receive it (landlines, LIDs, malformed).
+    // They only 400 on Evolution and waste the number's reputation.
+    if (targetField === "phone" && !looksLikeWhatsappMobile(normalizeWhatsappNumber(to))) {
+      await prisma.campaignRecipient.update({
+        where: { id: r.id },
+        data: { status: "FAILED", error: "Número não é um WhatsApp válido." },
       });
       continue;
     }

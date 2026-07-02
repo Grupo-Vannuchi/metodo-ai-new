@@ -32,6 +32,19 @@ export function formatBrPhone(raw: string): string {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
+/**
+ * Heuristic: does a normalized (country-coded) number look like it can receive
+ * WhatsApp? BR numbers must be a 13-digit mobile (55 + DDD + 9 + 8 digits) —
+ * landlines and malformed numbers are rejected (they 400 on Evolution and waste
+ * the number's reputation). Non-BR numbers are accepted (Evolution validates).
+ */
+export function looksLikeWhatsappMobile(raw: string): boolean {
+  const d = (raw ?? "").replace(/\D/g, "");
+  if (d.length < 12 || d.length > 15) return false;
+  if (d.startsWith("55")) return d.length === 13 && d[4] === "9";
+  return true;
+}
+
 /** True when empty or a plausible BR phone (10 digits landline / 11 mobile). */
 export function isValidBrPhone(raw: string): boolean {
   const d = (raw ?? "").replace(/\D/g, "");

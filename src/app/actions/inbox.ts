@@ -6,7 +6,7 @@ import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { decryptCredentials } from "@/lib/integrations/crypto";
 import { getChannelAdapter } from "@/lib/integrations/channels";
-import { normalizeWhatsappNumber, formatBrPhone, brPhoneKey } from "@/lib/phone";
+import { normalizeWhatsappNumber, formatBrPhone, brPhoneKey, looksLikeWhatsappMobile } from "@/lib/phone";
 import { onlyDigits } from "@/lib/cnpj";
 import { getContactRows, getGroupRows } from "@/lib/whatsapp/export";
 import { purgeConversationMedia } from "@/lib/whatsapp/media";
@@ -304,7 +304,9 @@ export async function importWhatsappContactsToCrm(
     for (const r of rows) {
       const digits = onlyDigits(r.number);
       const key = brPhoneKey(digits);
-      if (!key || seen.has(key)) {
+      // Skip non-WhatsApp-capable numbers (LIDs, landlines, malformed) so we
+      // don't create junk CRM contacts that would fail on send.
+      if (!key || seen.has(key) || !looksLikeWhatsappMobile(normalizeWhatsappNumber(digits))) {
         skipped++;
         continue;
       }

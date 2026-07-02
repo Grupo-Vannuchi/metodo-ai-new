@@ -2,7 +2,22 @@ import "server-only";
 import type { ChannelAdapter } from "./types";
 import { normalizeWhatsappNumber } from "@/lib/phone";
 
-type EvoResponse = { key?: { id?: string }; message?: string };
+type EvoResponse = { key?: { id?: string } };
+
+/** Evolution nests error details in different shapes across versions — dig out a
+ * human-readable message (falling back to the status code). */
+function evolutionError(data: unknown, status: number): string {
+  const flat = (v: unknown): string | null => {
+    if (typeof v === "string") return v.trim() || null;
+    if (Array.isArray(v)) return v.map((x) => flat(x)).filter(Boolean).join("; ") || null;
+    if (v && typeof v === "object") {
+      const o = v as Record<string, unknown>;
+      return flat(o.message) ?? flat(o.error) ?? flat(o.response) ?? flat(o.exception);
+    }
+    return null;
+  };
+  return flat(data) ?? `Evolution ${status}`;
+}
 
 /** WhatsApp via Evolution API. Credentials: { baseUrl, apiKey, instance }. */
 const adapter: ChannelAdapter = {
@@ -21,9 +36,11 @@ const adapter: ChannelAdapter = {
           text: input.body,
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as EvoResponse;
+      const data = (await res.json().catch(() => ({}))) as EvoResponse & Record<string, unknown>;
       if (!res.ok) {
-        return { ok: false, error: data.message || `Evolution ${res.status}` };
+        const message = evolutionError(data, res.status);
+        console.error(`[evolution] send ${res.status}: ${message} | to=${normalizeWhatsappNumber(input.to)}`);
+        return { ok: false, error: message };
       }
       return { ok: true, providerMessageId: data.key?.id };
     } catch (e) {

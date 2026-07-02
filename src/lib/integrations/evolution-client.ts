@@ -222,7 +222,15 @@ export async function findGroupInfo(
       const admin = p.admin === "admin" || p.admin === "superadmin";
       return { number, jid, admin };
     })
-    .filter((p) => p.number);
+    // Keep only real phone numbers. Newer WhatsApp exposes participants as LIDs
+    // (`@lid` privacy identifiers) that are NOT phone numbers — importing those
+    // would create junk contacts that fail on send. Drop them.
+    .filter(
+      (p) =>
+        /^\d{10,15}$/.test(p.number) &&
+        !p.jid.endsWith("@lid") &&
+        (p.jid.includes("@s.whatsapp.net") || p.jid.includes("@c.us") || !p.jid.includes("@")),
+    );
 
   return { subject, pictureUrl, participants };
 }
