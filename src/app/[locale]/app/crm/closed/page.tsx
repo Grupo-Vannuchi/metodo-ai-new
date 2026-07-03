@@ -1,8 +1,8 @@
 import { getTranslations } from "next-intl/server";
-import { Eye } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { listClosedOpportunities, type ClosedStatusFilter } from "@/lib/queries/crm";
 import { ReopenButton } from "@/components/crm/reopen-button";
+import { OpenRow } from "@/components/ui/open-row";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { formatBRL } from "@/lib/money";
@@ -83,7 +83,12 @@ export default async function ClosedOpportunitiesPage({
             </thead>
             <tbody>
               {opps.map((o) => (
-                <tr key={o.id} className="border-b border-border last:border-0 align-top">
+                <OpenRow
+                  key={o.id}
+                  href={`/app/crm/${o.id}`}
+                  title={t("openHint")}
+                  className="border-b border-border last:border-0 align-top hover:bg-muted/40"
+                >
                   <td className="px-5 py-3">
                     <div className="flex flex-col">
                       <span className="font-medium">
@@ -111,17 +116,10 @@ export default async function ClosedOpportunitiesPage({
                   <td className="px-5 py-3 text-muted-foreground">{fmtDate(o.closedAt)}</td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-2">
-                      <Link
-                        href={`/app/crm/${o.id}`}
-                        className="inline-flex items-center rounded-lg px-2 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                        aria-label={to("edit")}
-                      >
-                        <Eye className="size-4" />
-                      </Link>
                       <ReopenButton id={o.id} />
                     </div>
                   </td>
-                </tr>
+                </OpenRow>
               ))}
             </tbody>
           </table>

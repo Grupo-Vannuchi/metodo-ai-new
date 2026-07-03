@@ -4,7 +4,6 @@ import { useEffect, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import {
   Pencil,
-  Eye,
   Trash2,
   FolderPlus,
   Folder,
@@ -17,7 +16,7 @@ import {
   LayoutGrid,
   List,
 } from "lucide-react";
-import { Link, useRouter } from "@/i18n/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
@@ -40,8 +39,8 @@ type ContactItemProps = {
   view: "grid" | "list";
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
+  onOpen: (id: string) => void;
   onDelete: (id: string) => void;
-  editLabel: string;
   deleteLabel: string;
 };
 
@@ -51,22 +50,19 @@ function ContactList({
   view,
   onDragStart,
   onDragEnd,
+  onOpen,
   onDelete,
-  editLabel,
   deleteLabel,
 }: ContactItemProps) {
+  const openOnDblClick = (e: React.MouseEvent, id: string) => {
+    if ((e.target as HTMLElement).closest("button, a")) return;
+    onOpen(id);
+  };
   const actions = (card: ContactCard) => (
     <div className="flex shrink-0 items-center" onPointerDown={(e) => e.stopPropagation()}>
       {card.phone ? (
         <StartChatButton phone={card.phone} name={card.name} contactId={card.id} iconOnly />
       ) : null}
-      <Link
-        href={`/app/contacts/${card.id}`}
-        className="rounded-lg px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        aria-label={editLabel}
-      >
-        <Eye className="size-3.5" />
-      </Link>
       <button
         type="button"
         onClick={() => onDelete(card.id)}
@@ -87,7 +83,8 @@ function ContactList({
             draggable
             onDragStart={() => onDragStart(card.id)}
             onDragEnd={onDragEnd}
-            className="flex cursor-grab items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 shadow-sm active:cursor-grabbing"
+            onDoubleClick={(e) => openOnDblClick(e, card.id)}
+            className="flex cursor-grab select-none items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 shadow-sm active:cursor-grabbing"
           >
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{card.name}</p>
@@ -115,7 +112,8 @@ function ContactList({
           draggable
           onDragStart={() => onDragStart(card.id)}
           onDragEnd={onDragEnd}
-          className="cursor-grab rounded-lg border border-border bg-card p-3 shadow-sm active:cursor-grabbing"
+          onDoubleClick={(e) => openOnDblClick(e, card.id)}
+          className="cursor-grab select-none rounded-lg border border-border bg-card p-3 shadow-sm active:cursor-grabbing"
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -373,8 +371,8 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
               view={view}
               onDragStart={setDragId}
               onDragEnd={() => setDragId(null)}
+              onOpen={(id) => router.push(`/app/contacts/${id}`)}
               onDelete={onDeleteContact}
-              editLabel={tc("edit")}
               deleteLabel={tc("delete")}
             />
           )
@@ -473,8 +471,8 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
                       view={view}
                       onDragStart={setDragId}
                       onDragEnd={() => setDragId(null)}
+                      onOpen={(id) => router.push(`/app/contacts/${id}`)}
                       onDelete={onDeleteContact}
-                      editLabel={tc("edit")}
                       deleteLabel={tc("delete")}
                     />
                   )}

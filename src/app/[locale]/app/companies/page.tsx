@@ -1,10 +1,11 @@
 import { getTranslations } from "next-intl/server";
-import { Plus, Eye } from "lucide-react";
+import { Plus } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { listCompanies } from "@/lib/queries/companies";
 import { deleteCompany } from "@/app/actions/companies";
 import { DeleteButton } from "@/components/crm/delete-button";
 import { ExportButton } from "@/components/ui/export-button";
+import { OpenRow } from "@/components/ui/open-row";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -61,23 +62,22 @@ export default async function CompaniesPage({
             </thead>
             <tbody>
               {companies.data.map((c) => (
-                <tr key={c.id} className="border-b border-border last:border-0">
+                <OpenRow
+                  key={c.id}
+                  href={`/app/companies/${c.id}`}
+                  title={t("openHint")}
+                  className="border-b border-border last:border-0 hover:bg-muted/40"
+                >
                   <td className="px-5 py-3 font-medium">{c.name}</td>
                   <td className="px-5 py-3 text-muted-foreground">{c.cnpj ?? "—"}</td>
                   <td className="px-5 py-3 text-muted-foreground">{c.email ?? "—"}</td>
                   <td className="px-5 py-3 text-muted-foreground">{c.city || "—"}</td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <Link
-                        href={`/app/companies/${c.id}`}
-                        className="inline-flex items-center rounded-lg px-2 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                      >
-                        <Eye className="size-4" />
-                      </Link>
                       <DeleteButton action={deleteCompany.bind(null, c.id)} />
                     </div>
                   </td>
-                </tr>
+                </OpenRow>
               ))}
             </tbody>
           </table>

@@ -2,8 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Eye } from "lucide-react";
-import { Link, useRouter } from "@/i18n/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { moveOpportunity } from "@/app/actions/opportunities";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
@@ -122,7 +121,10 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
                     draggable
                     onDragStart={() => setDragId(card.id)}
                     onDragEnd={() => setDragId(null)}
-                    onDoubleClick={() => router.push(`/app/crm/${card.id}`)}
+                    onDoubleClick={(e) => {
+                      if ((e.target as HTMLElement).closest("button, a")) return;
+                      router.push(`/app/crm/${card.id}`);
+                    }}
                     title={t("openHint")}
                     className={cn(
                       "cursor-grab select-none rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing",
@@ -150,13 +152,6 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
                             iconOnly
                           />
                         ) : null}
-                        <Link
-                          href={`/app/crm/${card.id}`}
-                          className="text-muted-foreground transition-colors hover:text-foreground"
-                          aria-label={t("open")}
-                        >
-                          <Eye className="size-3.5" />
-                        </Link>
                       </div>
                     </div>
                     {card.companyName ? (
