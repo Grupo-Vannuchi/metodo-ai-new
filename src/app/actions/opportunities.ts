@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
+import { deleteMedia } from "@/lib/storage/blob";
 import {
   opportunitySchema,
   moveOpportunitySchema,
@@ -297,11 +298,36 @@ export async function deleteOpportunity(id: string): Promise<{ ok: boolean }> {
 
   try {
     const db = tenantDb(ctx.organizationId);
+    // Drop attachment blobs before the rows cascade away (best-effort).
+    const atts = await db.opportunityAttachment.findMany({ where: { opportunityId: id }, select: { url: true } });
+    await Promise.all(atts.map((a) => deleteMedia(a.url).catch(() => {})));
     await db.opportunity.deleteMany({ where: { id } });
     revalidatePath("/app/crm");
     return { ok: true };
   } catch (error) {
     console.error("Failed to delete opportunity", error);
+    return { ok: false };
+  }
+}
+
+/** Remove one attachment: delete the row and its blob. */
+export async function deleteOpportunityAttachment(id: string): Promise<{ ok: boolean }> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+
+  try {
+    const db = tenantDb(ctx.organizationId);
+    const att = await db.opportunityAttachment.findFirst({
+      where: { id },
+      select: { url: true, opportunityId: true },
+    });
+    if (!att) return { ok: false };
+    await db.opportunityAttachment.deleteMany({ where: { id } });
+    await deleteMedia(att.url).catch(() => {});
+    revalidatePath(`/app/crm/${att.opportunityId}`);
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to delete attachment", error);
     return { ok: false };
   }
 }

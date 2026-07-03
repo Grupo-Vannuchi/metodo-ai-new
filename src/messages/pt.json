@@ -486,6 +486,22 @@
         "WON": "Ganhas"
       }
     },
+    "attachments": {
+      "title": "Anexos",
+      "add": "Anexar arquivo",
+      "empty": "Nenhum arquivo anexado.",
+      "download": "Baixar",
+      "delete": "Excluir",
+      "hint": "Documentos e imagens, até 10 MB. Máximo de 20 arquivos.",
+      "error": {
+        "size": "Arquivo acima de 10 MB.",
+        "type": "Tipo de arquivo não permitido.",
+        "count": "Limite de 20 arquivos atingido.",
+        "invalid": "Arquivo inválido.",
+        "not_found": "Oportunidade não encontrada.",
+        "unknown": "Não foi possível anexar. Tente de novo."
+      }
+    },
     "opportunity": {
       "back": "Voltar",
       "editTitle": "Editar oportunidade",

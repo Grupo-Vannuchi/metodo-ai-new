@@ -486,6 +486,22 @@
         "WON": "Won"
       }
     },
+    "attachments": {
+      "title": "Attachments",
+      "add": "Attach file",
+      "empty": "No files attached.",
+      "download": "Download",
+      "delete": "Delete",
+      "hint": "Documents and images, up to 10 MB. Max 20 files.",
+      "error": {
+        "size": "File over 10 MB.",
+        "type": "File type not allowed.",
+        "count": "20-file limit reached.",
+        "invalid": "Invalid file.",
+        "not_found": "Opportunity not found.",
+        "unknown": "Couldn't attach it. Try again."
+      }
+    },
     "opportunity": {
       "back": "Back",
       "editTitle": "Edit opportunity",

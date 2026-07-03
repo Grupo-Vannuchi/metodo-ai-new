@@ -2,13 +2,14 @@ import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { Pencil, Wallet } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
-import { getOpportunity } from "@/lib/queries/crm";
+import { getOpportunity, listOpportunityAttachments } from "@/lib/queries/crm";
 import { listMembers } from "@/lib/queries/organizations";
 import { listTasks } from "@/lib/queries/tasks";
 import { entriesForOpportunity } from "@/lib/queries/finance";
 import { hasFeature, type PlanKey } from "@/config/plans";
 import { TasksManager } from "@/components/tasks/tasks-manager";
 import { OpportunityStatusBar } from "@/components/crm/opportunity-status-bar";
+import { OpportunityAttachments } from "@/components/crm/opportunity-attachments";
 import { type OppStatus } from "@/app/actions/opportunities";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { buttonVariants } from "@/components/ui/button";
@@ -31,11 +32,12 @@ export default async function OpportunityViewPage({
   const tf = await getTranslations("finance");
   const canFinance = hasFeature(ctx.organization.plan as PlanKey, "finance");
 
-  const [opp, rawMembers, tasks, entries] = await Promise.all([
+  const [opp, rawMembers, tasks, entries, attachments] = await Promise.all([
     getOpportunity(ctx.organizationId, id),
     listMembers(ctx.organizationId),
     listTasks(ctx.organizationId, { opportunityId: id }),
     canFinance ? entriesForOpportunity(ctx.organizationId, id) : Promise.resolve([]),
+    listOpportunityAttachments(ctx.organizationId, id),
   ]);
   const members = ctx.role === "MEMBER" ? rawMembers.filter(m => m.userId === ctx.userId) : rawMembers;
   if (!opp) notFound();
@@ -165,6 +167,8 @@ export default async function OpportunityViewPage({
           </div>
         ) : null}
       </dl>
+
+      <OpportunityAttachments opportunityId={opp.id} attachments={attachments} />
 
       <section className="rounded-xl border border-border bg-card p-5">
         <TasksManager

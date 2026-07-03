@@ -353,10 +353,33 @@ model Opportunity {
   company        Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
   contact        Contact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
   productService ProductService? @relation(fields: [productServiceId], references: [id], onDelete: SetNull)
+  attachments    OpportunityAttachment[]
 
   @@index([organizationId, pipelineId, stageId, order])
   @@index([organizationId, seqYear, seqNumber])
   @@map("opportunities")
+}
+
+/// A file attached to an opportunity. Bytes live in object storage (Supabase);
+/// only metadata + the URL are kept here (never the bytes) so the DB stays light.
+model OpportunityAttachment {
+  id             String   @id @default(cuid())
+  organizationId String
+  opportunityId  String
+  /// Original filename (for display + download).
+  name           String
+  mime           String
+  /// Size in bytes.
+  size           Int
+  /// Public object-storage URL (Supabase / local media route).
+  url            String
+  uploadedById   String?
+  createdAt      DateTime @default(now())
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, opportunityId])
+  @@map("opportunity_attachments")
 }
 
 // ---------------------------------------------------------------------------

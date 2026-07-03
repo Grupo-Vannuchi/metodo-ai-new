@@ -282,3 +282,14 @@ export async function stageOptions(organizationId: string, pipelineId?: string) 
   });
   return { pipelineId: pipeline.id, stages };
 }
+
+/** Attachment metadata for an opportunity (never the bytes — those live in blob
+ * storage). Loaded on the detail page; the files are downloaded on demand. */
+export async function listOpportunityAttachments(organizationId: string, opportunityId: string) {
+  const db = tenantDb(organizationId);
+  return db.opportunityAttachment.findMany({
+    where: { opportunityId },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, name: true, mime: true, size: true, url: true, createdAt: true },
+  });
+}
