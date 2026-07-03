@@ -463,6 +463,34 @@
       "closedLink": "Fechadas",
       "back": "Voltar ao funil",
       "noStages": "Este funil não tem estágios.",
+      "pipelineLabel": "Funil",
+      "statusLabel": "Situação",
+      "periodLabel": "Período",
+      "viewKanban": "Kanban",
+      "viewList": "Lista",
+      "colOpp": "Oportunidade",
+      "colStage": "Estágio",
+      "colStatus": "Situação",
+      "colValue": "Valor",
+      "emptyList": "Nenhuma oportunidade encontrada.",
+      "filters": {
+        "status": {
+          "ACTIVE": "Ativas",
+          "OPEN": "Abertas",
+          "ON_HOLD": "Em espera",
+          "WON": "Ganhas",
+          "LOST": "Perdidas",
+          "CANCELED": "Canceladas"
+        },
+        "period": {
+          "ALL": "Todo período",
+          "TODAY": "Hoje",
+          "7D": "Últimos 7 dias",
+          "30D": "Últimos 30 dias",
+          "MONTH": "Este mês",
+          "YEAR": "Este ano"
+        }
+      },
       "error": {
         "invalid": "Dados inválidos.",
         "unauthorized": "Sessão expirada.",

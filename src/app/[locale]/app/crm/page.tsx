@@ -1,9 +1,18 @@
+import { cookies } from "next/headers";
 import { getTranslations } from "next-intl/server";
 import { Settings2, Plus, Package, Archive } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
-import { getBoard } from "@/lib/queries/crm";
+import {
+  getBoard,
+  BOARD_STATUS_FILTERS,
+  BOARD_PERIOD_FILTERS,
+  type BoardStatusFilter,
+  type BoardPeriodFilter,
+} from "@/lib/queries/crm";
 import { pipelineOptions } from "@/lib/queries/pipelines";
 import { Board } from "@/components/crm/board";
+import { BoardToolbar } from "@/components/crm/board-toolbar";
+import { OpportunityList, type OpportunityRow } from "@/components/crm/opportunity-list";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -16,17 +25,24 @@ export default async function CrmPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ pipeline?: string; owner?: string }>;
+  searchParams: Promise<{ pipeline?: string; owner?: string; status?: string; period?: string; view?: string }>;
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("crm.board");
 
   const sp = await searchParams;
-  const pid = sp?.pipeline;
   const mine = sp?.owner === "me";
+  const status = (BOARD_STATUS_FILTERS.includes(sp?.status as BoardStatusFilter) ? sp!.status : "ACTIVE") as BoardStatusFilter;
+  const period = (BOARD_PERIOD_FILTERS.includes(sp?.period as BoardPeriodFilter) ? sp!.period : "ALL") as BoardPeriodFilter;
+  const view = sp?.view === "list" ? "list" : "kanban";
+
+  // Fall back to the last-opened funnel (cookie) when no explicit ?pipeline.
+  const cookiePid = (await cookies()).get("crm_pipeline")?.value;
+  const requestedPid = sp?.pipeline || cookiePid || undefined;
+
   const [board, pipelines] = await Promise.all([
-    getBoard(ctx.organizationId, pid, mine ? ctx.userId : undefined),
+    getBoard(ctx.organizationId, requestedPid, mine ? ctx.userId : undefined, { status, period }),
     pipelineOptions(ctx.organizationId),
   ]);
 
@@ -44,6 +60,11 @@ export default async function CrmPage({
     );
   }
 
+  const rows: OpportunityRow[] =
+    view === "list"
+      ? board.columns.flatMap((c) => c.cards.map((card) => ({ ...card, stageName: c.name })))
+      : [];
+
   return (
     // Fixed-height page so the board fills the viewport and its horizontal
     // scrollbar stays pinned at the bottom (instead of being pushed off-screen
@@ -55,20 +76,6 @@ export default async function CrmPage({
           <p className="mt-1 text-muted-foreground">{board.pipelineName}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center rounded-lg border border-border p-0.5">
-            <Link
-              href={`/app/crm${board.pipelineId ? `?pipeline=${board.pipelineId}` : ""}`}
-              className={cn("rounded-md px-3 py-1 text-sm transition-colors", !mine ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground")}
-            >
-              {t("allDeals")}
-            </Link>
-            <Link
-              href={`/app/crm?owner=me${board.pipelineId ? `&pipeline=${board.pipelineId}` : ""}`}
-              className={cn("rounded-md px-3 py-1 text-sm transition-colors", mine ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground")}
-            >
-              {t("myDeals")}
-            </Link>
-          </div>
           <Link href="/app/crm/closed" className={buttonVariants({ variant: "outline" })}>
             <Archive className="size-4" />
             {t("closedLink")}
@@ -88,26 +95,12 @@ export default async function CrmPage({
         </div>
       </div>
 
-      {pipelines.length > 1 ? (
-        <div className="flex flex-wrap gap-2">
-          {pipelines.map((p) => (
-            <Link
-              key={p.id}
-              href={`/app/crm?pipeline=${p.id}`}
-              className={cn(
-                "rounded-full border px-3 py-1 text-sm transition-colors",
-                p.id === board.pipelineId
-                  ? "border-brand bg-brand/10 font-medium text-brand"
-                  : "border-border text-muted-foreground hover:bg-muted",
-              )}
-            >
-              {p.name}
-            </Link>
-          ))}
-        </div>
-      ) : null}
+      <BoardToolbar
+        pipelines={pipelines}
+        current={{ pipelineId: board.pipelineId, owner: mine ? "me" : "all", status, period, view }}
+      />
 
-      <Board columns={board.columns} />
+      {view === "list" ? <OpportunityList rows={rows} /> : <Board columns={board.columns} />}
     </div>
   );
 }

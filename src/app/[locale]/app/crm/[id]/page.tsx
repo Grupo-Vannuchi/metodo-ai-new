@@ -10,6 +10,7 @@ import { hasFeature, type PlanKey } from "@/config/plans";
 import { TasksManager } from "@/components/tasks/tasks-manager";
 import { OpportunityStatusBar } from "@/components/crm/opportunity-status-bar";
 import { OpportunityAttachments } from "@/components/crm/opportunity-attachments";
+import { DeleteOpportunityButton } from "@/components/crm/delete-opportunity-button";
 import { type OppStatus } from "@/app/actions/opportunities";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { buttonVariants } from "@/components/ui/button";
@@ -86,6 +87,7 @@ export default async function OpportunityViewPage({
             <Pencil className="size-4" />
             {t("edit")}
           </Link>
+          <DeleteOpportunityButton id={opp.id} />
         </div>
       </div>
 

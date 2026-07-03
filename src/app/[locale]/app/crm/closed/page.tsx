@@ -2,6 +2,8 @@ import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
 import { listClosedOpportunities, type ClosedStatusFilter } from "@/lib/queries/crm";
 import { ReopenButton } from "@/components/crm/reopen-button";
+import { DeleteButton } from "@/components/crm/delete-button";
+import { deleteOpportunity } from "@/app/actions/opportunities";
 import { OpenRow } from "@/components/ui/open-row";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
@@ -117,6 +119,7 @@ export default async function ClosedOpportunitiesPage({
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-2">
                       <ReopenButton id={o.id} />
+                      <DeleteButton action={deleteOpportunity.bind(null, o.id)} />
                     </div>
                   </td>
                 </OpenRow>

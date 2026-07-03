@@ -463,6 +463,34 @@
       "closedLink": "Closed",
       "back": "Back to funnel",
       "noStages": "This funnel has no stages.",
+      "pipelineLabel": "Funnel",
+      "statusLabel": "Situation",
+      "periodLabel": "Period",
+      "viewKanban": "Kanban",
+      "viewList": "List",
+      "colOpp": "Opportunity",
+      "colStage": "Stage",
+      "colStatus": "Situation",
+      "colValue": "Value",
+      "emptyList": "No opportunities found.",
+      "filters": {
+        "status": {
+          "ACTIVE": "Active",
+          "OPEN": "Open",
+          "ON_HOLD": "On hold",
+          "WON": "Won",
+          "LOST": "Lost",
+          "CANCELED": "Canceled"
+        },
+        "period": {
+          "ALL": "All time",
+          "TODAY": "Today",
+          "7D": "Last 7 days",
+          "30D": "Last 30 days",
+          "MONTH": "This month",
+          "YEAR": "This year"
+        }
+      },
       "error": {
         "invalid": "Invalid data.",
         "unauthorized": "Session expired.",

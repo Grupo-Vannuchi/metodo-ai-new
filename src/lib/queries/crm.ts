@@ -40,20 +40,73 @@ async function defaultPipeline(organizationId: string) {
   );
 }
 
+// ── Board filters (status + period) ─────────────────────────────────────────
+/** "ACTIVE" = the default board (open + on-hold); the rest narrow to one status. */
+export type BoardStatusFilter = "ACTIVE" | "OPEN" | "ON_HOLD" | "WON" | "LOST" | "CANCELED";
+export type BoardPeriodFilter = "ALL" | "TODAY" | "7D" | "30D" | "MONTH" | "YEAR";
+
+export const BOARD_STATUS_FILTERS: BoardStatusFilter[] = ["ACTIVE", "OPEN", "ON_HOLD", "WON", "LOST", "CANCELED"];
+export const BOARD_PERIOD_FILTERS: BoardPeriodFilter[] = ["ALL", "TODAY", "7D", "30D", "MONTH", "YEAR"];
+
+/** The Prisma `status` condition for a board status filter. */
+function boardStatusWhere(status?: BoardStatusFilter): OpportunityStatus | { in: OpportunityStatus[] } {
+  switch (status) {
+    case "OPEN":
+    case "ON_HOLD":
+    case "WON":
+    case "LOST":
+    case "CANCELED":
+      return status;
+    default:
+      return { in: ["OPEN", "ON_HOLD"] };
+  }
+}
+
+/** Start-of-range Date for a period filter (null = no lower bound). */
+function periodCutoff(period?: BoardPeriodFilter): Date | null {
+  const now = new Date();
+  switch (period) {
+    case "TODAY": {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    case "7D": {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 7);
+      return d;
+    }
+    case "30D": {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 30);
+      return d;
+    }
+    case "MONTH":
+      return new Date(now.getFullYear(), now.getMonth(), 1);
+    case "YEAR":
+      return new Date(now.getFullYear(), 0, 1);
+    default:
+      return null;
+  }
+}
+
 /** The full Kanban board: ordered stages, each with its ordered cards. When
  * `pipelineId` is given (and belongs to the org) that pipeline is shown;
- * otherwise the default. */
+ * otherwise the default (also the fallback when a stale id no longer exists).
+ * `filters` narrows the cards by status and creation period. */
 export async function getBoard(
   organizationId: string,
   pipelineId?: string,
   ownerId?: string,
+  filters: { status?: BoardStatusFilter; period?: BoardPeriodFilter } = {},
 ): Promise<Board | null> {
   const db = tenantDb(organizationId);
-  const pipeline = pipelineId
-    ? await db.pipeline.findFirst({ where: { id: pipelineId } })
-    : await defaultPipeline(organizationId);
+  const pipeline =
+    (pipelineId ? await db.pipeline.findFirst({ where: { id: pipelineId } }) : null) ??
+    (await defaultPipeline(organizationId));
   if (!pipeline) return null;
 
+  const cutoff = periodCutoff(filters.period);
   const [stages, opportunities] = await Promise.all([
     db.stage.findMany({
       where: { pipelineId: pipeline.id },
@@ -61,8 +114,14 @@ export async function getBoard(
       select: { id: true, name: true, probability: true },
     }),
     db.opportunity.findMany({
-      // ON_HOLD stays on the board (paused, still open) with a badge.
-      where: { pipelineId: pipeline.id, status: { in: ["OPEN", "ON_HOLD"] }, ...(ownerId ? { ownerId } : {}) },
+      // Default board keeps OPEN + ON_HOLD (paused-but-open, badged); a status
+      // filter narrows to one situation (closed ones show in their last stage).
+      where: {
+        pipelineId: pipeline.id,
+        status: boardStatusWhere(filters.status),
+        ...(ownerId ? { ownerId } : {}),
+        ...(cutoff ? { createdAt: { gte: cutoff } } : {}),
+      },
       orderBy: { order: "asc" },
       select: {
         id: true,
