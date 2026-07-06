@@ -1117,6 +1117,16 @@
     "cancel": "Cancel",
     "view": "View",
     "openHint": "Double-click to open",
+    "viewList": "List",
+    "viewKanban": "Kanban",
+    "board": {
+      "overdue": "Overdue",
+      "today": "Today",
+      "upcoming": "Upcoming",
+      "nodate": "No date",
+      "done": "Done",
+      "empty": "No tasks"
+    },
     "edit": "Edit",
     "delete": "Delete",
     "complete": "Complete",
