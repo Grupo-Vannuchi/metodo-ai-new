@@ -8,14 +8,14 @@
 
 generator client {
   provider = "prisma-client-js"
-  // Production runs on Hostinger under Phusion Passenger, which forks the Node
-  // process after preloading. Prisma's default `library` engine embeds a Tokio
-  // runtime that does not survive that fork → "PANIC: timer has gone away" on the
-  // first query. The `binary` engine runs the query engine as a separate,
-  // fork-safe process. binaryTargets pins the host's engine (Debian/OpenSSL 1.1)
-  // so `prisma generate` fetches it on deploy.
-  engineType    = "binary"
-  binaryTargets = ["native", "debian-openssl-1.1.x"]
+  // Production runs on Hostinger under Phusion Passenger + CloudLinux. Prisma's
+  // native engines don't survive there: the `library` engine's Tokio runtime
+  // dies on Passenger's fork ("PANIC: timer has gone away"), and the `binary`
+  // engine can't spawn its process under the LVE process cap ("spawn ... EAGAIN").
+  // `engineType = "client"` drops the Rust engine entirely — queries are compiled
+  // in-process and run through the `pg` driver adapter, so there's no engine
+  // process or native thread to break. See src/lib/prisma.ts.
+  engineType = "client"
 }
 
 datasource db {
