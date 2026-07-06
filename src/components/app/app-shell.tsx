@@ -36,7 +36,7 @@ export async function AppShell({
   return (
     <RealtimeProvider>
     <NotificationSound />
-    <div className="flex min-h-screen bg-muted/20">
+    <div className="flex h-screen overflow-hidden bg-muted/20">
       <CommandPalette />
       <aside className="sidebar-brand hidden w-64 shrink-0 flex-col border-r border-border bg-card p-4 md:flex">
         <div className="flex items-center justify-between gap-2 px-1 py-2">
@@ -53,7 +53,7 @@ export async function AppShell({
           <SearchTrigger variant="box" />
         </div>
 
-        <div className="mt-4 flex-1">
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
           <AppNav allowedScreens={navScreens} />
         </div>
 
@@ -77,7 +77,7 @@ export async function AppShell({
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3 md:hidden">
           <div className="flex items-center gap-3">
             <MobileNav allowedScreens={navScreens} />
@@ -94,7 +94,7 @@ export async function AppShell({
             </form>
           </div>
         </header>
-        <main className="flex-1 p-6 sm:p-8">
+        <main className="min-h-0 flex-1 overflow-y-auto p-6 sm:p-8">
           <BackBar />
           <PageTransition>{children}</PageTransition>
         </main>
