@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Eye, Pencil, Trash2, Plus, X, Link2 } from "lucide-react";
+import { Check, Pencil, Trash2, Plus, X, Link2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
@@ -253,7 +253,12 @@ export function TasksManager({
             return (
               <li
                 key={task.id}
-                className="flex items-start gap-3 rounded-lg border border-border bg-card p-3"
+                onDoubleClick={(e) => {
+                  if ((e.target as HTMLElement).closest("button, a")) return;
+                  router.push(`/app/tasks/${task.id}`);
+                }}
+                title={t("openHint")}
+                className="flex items-start gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:border-brand/40"
               >
                 <button
                   type="button"
@@ -292,13 +297,6 @@ export function TasksManager({
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-0.5">
-                  <Link
-                    href={`/app/tasks/${task.id}`}
-                    aria-label={t("view")}
-                    className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    <Eye className="size-4" />
-                  </Link>
                   <button
                     type="button"
                     onClick={() => { setEditingId(task.id); setAdding(false); setFormKey((k) => k + 1); }}
