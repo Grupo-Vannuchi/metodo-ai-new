@@ -27,13 +27,15 @@ async function existsInOrg(
   return found?.id ?? null;
 }
 
+/** Resolve the assignee — any org member can be assigned (so users can hand
+ * tasks to each other). Falls back to the current assignee/self if the picked
+ * user isn't a member of this org. */
 async function resolveAssignee(
   organizationId: string,
   userId: string | undefined,
   fallback: string,
-  role: "OWNER" | "ADMIN" | "MEMBER",
 ): Promise<string> {
-  const targetId = role === "MEMBER" ? fallback : userId;
+  const targetId = userId || fallback;
   if (!targetId) return fallback;
   const m = await prisma.membership.findFirst({
     where: { organizationId, userId: targetId },
@@ -64,10 +66,10 @@ function parse(formData: FormData) {
   });
 }
 
-async function buildData(organizationId: string, userId: string, role: "OWNER" | "ADMIN" | "MEMBER", input: ReturnType<typeof taskSchema.parse>, currentAssignedToId?: string | null) {
+async function buildData(organizationId: string, userId: string, input: ReturnType<typeof taskSchema.parse>, currentAssignedToId?: string | null) {
   const fallback = currentAssignedToId || userId;
   const [assignedToId, contactId, companyId, opportunityId] = await Promise.all([
-    resolveAssignee(organizationId, input.assignedToId, fallback, role),
+    resolveAssignee(organizationId, input.assignedToId, fallback),
     existsInOrg(organizationId, "contact", input.contactId),
     existsInOrg(organizationId, "company", input.companyId),
     existsInOrg(organizationId, "opportunity", input.opportunityId),
@@ -97,7 +99,7 @@ export async function createTask(formData: FormData): Promise<TaskResult> {
   const parsed = parse(formData);
   if (!parsed.success) return { ok: false, error: "invalid" };
   try {
-    const data = await buildData(ctx.organizationId, ctx.userId, ctx.role, parsed.data);
+    const data = await buildData(ctx.organizationId, ctx.userId, parsed.data);
     const task = await tenantDb(ctx.organizationId).task.create({
       data: { organizationId: ctx.organizationId, createdById: ctx.userId, ...data },
       select: { id: true },
@@ -132,7 +134,7 @@ export async function updateTask(id: string, formData: FormData): Promise<TaskRe
     const current = await db.task.findFirst({ where: { id }, select: { assignedToId: true } });
     if (!current) return { ok: false, error: "invalid" };
 
-    const data = await buildData(ctx.organizationId, ctx.userId, ctx.role, parsed.data, current.assignedToId);
+    const data = await buildData(ctx.organizationId, ctx.userId, parsed.data, current.assignedToId);
     await db.task.updateMany({ where: { id }, data });
     if (data.assignedToId && data.assignedToId !== current.assignedToId && data.assignedToId !== ctx.userId) {
       await db.notification.create({

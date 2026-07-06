@@ -27,8 +27,8 @@ export default async function MyItemsPage({
     opportunityOptions(ctx.organizationId),
   ]);
 
-  // MEMBERs can only assign tasks to themselves.
-  const members = ctx.role === "MEMBER" ? rawMembers.filter((m) => m.userId === ctx.userId) : rawMembers;
+  // Anyone can assign a task to any member (users hand tasks to each other).
+  const members = rawMembers;
 
   return (
     <MyHub

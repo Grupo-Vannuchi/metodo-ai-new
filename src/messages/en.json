@@ -1127,6 +1127,7 @@
       "done": "Done",
       "empty": "No tasks"
     },
+    "descriptionHint": "Notes for this task (shown on the task view)…",
     "edit": "Edit",
     "delete": "Delete",
     "complete": "Complete",
@@ -1153,7 +1154,7 @@
       "contact": "Contact",
       "company": "Company",
       "opportunity": "Opportunity",
-      "description": "Description"
+      "description": "Notes"
     },
     "type": {
       "CALL": "Call",

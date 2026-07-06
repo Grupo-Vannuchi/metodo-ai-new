@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input, Label } from "@/components/ui/field";
+import { Input, Label, Textarea } from "@/components/ui/field";
 import { useConfirm } from "@/components/ui/confirm";
 import { usePaged, Pager } from "@/components/ui/client-pager";
 import { useRealtime } from "@/components/app/realtime-provider";
@@ -226,6 +226,18 @@ export function TasksManager({
                 </div>
               </>
             ) : null}
+          </div>
+
+          <div>
+            <Label htmlFor="description">{t("field.description")}</Label>
+            <Textarea
+              id="description"
+              name="description"
+              rows={4}
+              maxLength={20000}
+              defaultValue={editing?.description ?? ""}
+              placeholder={t("descriptionHint")}
+            />
           </div>
 
           {error ? <p role="alert" className="text-sm text-red-500">{error}</p> : null}

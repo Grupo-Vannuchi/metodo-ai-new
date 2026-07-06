@@ -36,7 +36,8 @@ export default async function TasksPage({
     opportunityOptions(ctx.organizationId),
   ]);
 
-  const members = ctx.role === "MEMBER" ? rawMembers.filter((m) => m.userId === ctx.userId) : rawMembers;
+  // Anyone can assign a task to any member (users hand tasks to each other).
+  const members = rawMembers;
 
   const header = (
     <div className="flex flex-wrap items-center justify-between gap-3">

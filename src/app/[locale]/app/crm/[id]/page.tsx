@@ -40,7 +40,8 @@ export default async function OpportunityViewPage({
     canFinance ? entriesForOpportunity(ctx.organizationId, id) : Promise.resolve([]),
     listOpportunityAttachments(ctx.organizationId, id),
   ]);
-  const members = ctx.role === "MEMBER" ? rawMembers.filter(m => m.userId === ctx.userId) : rawMembers;
+  // Anyone can assign a task to any member (users hand tasks to each other).
+  const members = rawMembers;
   if (!opp) notFound();
 
   const fmtDate = (d: Date | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
