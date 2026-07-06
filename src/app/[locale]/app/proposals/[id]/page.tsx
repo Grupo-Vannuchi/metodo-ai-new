@@ -54,6 +54,9 @@ export default async function ProposalDetailPage({
     });
     if (proposal.contactId) p.set("contactId", proposal.contactId);
     if (proposal.companyId) p.set("companyId", proposal.companyId);
+    // Link the entry back to the opportunity too, closing the loop
+    // (opportunity → proposal → finance) so it shows under the opportunity.
+    if (proposal.opportunityId) p.set("opportunityId", proposal.opportunityId);
     return `/app/finance/entries/new?${p.toString()}`;
   })();
 
