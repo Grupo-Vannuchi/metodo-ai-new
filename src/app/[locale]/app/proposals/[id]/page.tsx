@@ -1,11 +1,12 @@
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
-import { Pencil, FileDown, FileText, Wallet } from "lucide-react";
+import { Pencil, Wallet } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getProposal, listProposalAttachments } from "@/lib/queries/proposals";
 import { hasFeature, type PlanKey } from "@/config/plans";
 import { ProposalStatusBar } from "@/components/proposals/proposal-status-bar";
 import { ProposalAttachments } from "@/components/proposals/proposal-attachments";
+import { ProposalExportMenu } from "@/components/proposals/proposal-export-menu";
 import { DeleteProposalButton } from "@/components/proposals/delete-proposal-button";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
@@ -66,23 +67,7 @@ export default async function ProposalDetailPage({
           <h1 className="text-2xl font-bold tracking-tight">{proposal.title}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* API routes are locale-agnostic — plain anchors, not the i18n Link. */}
-          <a
-            href={`/api/proposals/${proposal.id}/document?format=pdf`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            <FileDown className="size-4" />
-            {t("exportPdf")}
-          </a>
-          <a
-            href={`/api/proposals/${proposal.id}/document?format=word`}
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            <FileText className="size-4" />
-            {t("exportWord")}
-          </a>
+          <ProposalExportMenu proposalId={proposal.id} />
           <Link href={`/app/proposals/${proposal.id}/edit`} className={buttonVariants({ variant: "outline", size: "sm" })}>
             <Pencil className="size-4" />
             {t("edit")}
