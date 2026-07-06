@@ -6,6 +6,7 @@ import {
   Star,
   Megaphone,
   KanbanSquare,
+  FileText,
   CheckSquare,
   Radar,
   Send,
@@ -28,6 +29,7 @@ type NavKey =
   | "my"
   | "feed"
   | "crm"
+  | "proposals"
   | "tasks"
   | "prospecting"
   | "campaigns"
@@ -55,6 +57,7 @@ const GROUPS: Group[] = [
     key: "crm",
     items: [
       { href: "/app/crm", key: "crm", icon: KanbanSquare },
+      { href: "/app/proposals", key: "proposals", icon: FileText },
       { href: "/app/contacts", key: "contacts", icon: Contact },
       { href: "/app/companies", key: "companies", icon: Building2 },
       { href: "/app/tasks", key: "tasks", icon: CheckSquare },

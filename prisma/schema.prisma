@@ -206,6 +206,7 @@ model Company {
 
   contacts      Contact[]
   opportunities Opportunity[]
+  proposals     Proposal[]
 
   @@index([organizationId, name])
   @@index([organizationId, cnpj])
@@ -232,6 +233,7 @@ model Contact {
   company            Company?            @relation(fields: [companyId], references: [id], onDelete: SetNull)
   folder             ContactFolder?      @relation(fields: [folderId], references: [id], onDelete: SetNull)
   opportunities      Opportunity[]
+  proposals          Proposal[]
   campaignRecipients CampaignRecipient[]
 
   @@index([organizationId, companyId])
@@ -316,6 +318,7 @@ model ProductService {
   updatedAt      DateTime    @updatedAt
 
   opportunities Opportunity[]
+  proposalItems ProposalItem[]
 
   @@index([organizationId, active])
   @@map("product_services")
@@ -354,6 +357,7 @@ model Opportunity {
   contact        Contact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
   productService ProductService? @relation(fields: [productServiceId], references: [id], onDelete: SetNull)
   attachments    OpportunityAttachment[]
+  proposals      Proposal[]
 
   @@index([organizationId, pipelineId, stageId, order])
   @@index([organizationId, seqYear, seqNumber])
@@ -380,6 +384,113 @@ model OpportunityAttachment {
 
   @@index([organizationId, opportunityId])
   @@map("opportunity_attachments")
+}
+
+/// Lifecycle of a commercial proposal.
+enum ProposalStatus {
+  DRAFT // Rascunho
+  SENT // Enviada ao cliente
+  ACCEPTED // Aceita
+  REJECTED // Recusada
+  EXPIRED // Expirada (venceu a validade)
+}
+
+/// A commercial proposal / quote sent to a client. Optionally tied to a CRM
+/// opportunity/company/contact; carries a client snapshot so the printed
+/// document stays stable even if the linked records change later. Money is
+/// stored (subtotal/discount/total) so lists and reports don't recompute.
+model Proposal {
+  id             String         @id @default(cuid())
+  organizationId String
+  /// Sequential per-org-per-year code, e.g. "PROP-0001/26".
+  code           String?
+  seqYear        Int?
+  seqNumber      Int?
+  title          String
+  status         ProposalStatus @default(DRAFT)
+
+  // Optional CRM links (SetNull so deleting the record keeps the proposal).
+  opportunityId String?
+  companyId     String?
+  contactId     String?
+
+  // Client snapshot (editable; prefilled from the linked records).
+  clientCompany String?
+  clientName    String?
+  clientEmail   String?
+  clientPhone   String?
+  clientAddress String?
+
+  /// Free intro / scope / terms text printed on the document.
+  intro      String?  @db.Text
+  /// Internal notes (never printed).
+  notes      String?  @db.Text
+  validUntil DateTime?
+
+  discount Decimal @default(0) @db.Decimal(14, 2)
+  subtotal Decimal @default(0) @db.Decimal(14, 2)
+  total    Decimal @default(0) @db.Decimal(14, 2)
+
+  ownerId     String?
+  createdById String?
+  sentAt      DateTime?
+  decidedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items       ProposalItem[]
+  attachments ProposalAttachment[]
+
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  company     Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, seqYear, seqNumber])
+  @@map("proposals")
+}
+
+/// A line item of a proposal (catalog product/service or free text).
+model ProposalItem {
+  id               String   @id @default(cuid())
+  organizationId   String
+  proposalId       String
+  productServiceId String?
+  /// Snapshot label (kept even if the catalog item is renamed/removed).
+  name             String
+  description      String?  @db.Text
+  quantity         Decimal  @default(1) @db.Decimal(14, 2)
+  unitPrice        Decimal  @default(0) @db.Decimal(14, 2)
+  /// quantity × unitPrice, stored so totals don't recompute on read.
+  total            Decimal  @default(0) @db.Decimal(14, 2)
+  order            Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  proposal       Proposal        @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  productService ProductService? @relation(fields: [productServiceId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, proposalId])
+  @@map("proposal_items")
+}
+
+/// A file attached to a proposal. Bytes live in object storage (Supabase); only
+/// metadata + the URL are kept here, mirroring OpportunityAttachment.
+model ProposalAttachment {
+  id             String   @id @default(cuid())
+  organizationId String
+  proposalId     String
+  name           String
+  mime           String
+  size           Int
+  url            String
+  uploadedById   String?
+  createdAt      DateTime @default(now())
+
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, proposalId])
+  @@map("proposal_attachments")
 }
 
 // ---------------------------------------------------------------------------

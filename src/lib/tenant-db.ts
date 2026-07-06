@@ -48,6 +48,9 @@ const TENANT_MODELS = new Set<string>([
   "FeedReaction",
   "PinnedItem",
   "OpportunityAttachment",
+  "Proposal",
+  "ProposalItem",
+  "ProposalAttachment",
 ]);
 
 const WHERE_OPS = new Set<string>([

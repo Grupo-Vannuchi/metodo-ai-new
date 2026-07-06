@@ -10,6 +10,7 @@
 export const GATEABLE_SCREENS = [
   "feed",
   "crm",
+  "proposals",
   "tasks",
   "prospecting",
   "campaigns",

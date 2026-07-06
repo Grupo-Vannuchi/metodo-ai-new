@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
-import { Pencil, Wallet } from "lucide-react";
+import { Pencil, Wallet, FileText } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getOpportunity, listOpportunityAttachments } from "@/lib/queries/crm";
 import { listMembers } from "@/lib/queries/organizations";
@@ -83,6 +83,13 @@ export default async function OpportunityViewPage({
           {opp.contactPhone ? (
             <StartChatButton phone={opp.contactPhone} name={opp.contactName ?? undefined} contactId={opp.contactId ?? undefined} />
           ) : null}
+          <Link
+            href={`/app/proposals/new?opportunity=${opp.id}`}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            <FileText className="size-4" />
+            {t("newProposal")}
+          </Link>
           <Link href={`/app/crm/${opp.id}/edit`} className={buttonVariants({ variant: "outline", size: "sm" })}>
             <Pencil className="size-4" />
             {t("edit")}
