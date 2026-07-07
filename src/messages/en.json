@@ -1361,6 +1361,15 @@
       "LEAD": "Lead"
     },
     "info": "Details",
+    "channelInfo": "Channel info",
+    "createdBy": "Created by {name}",
+    "openChat": "Open chat",
+    "you": "you",
+    "role": {
+      "OWNER": "Owner",
+      "ADMIN": "Admin",
+      "MEMBER": "Member"
+    },
     "memberTasks": "Tasks",
     "memberOpps": "Opportunities",
     "noTasks": "No open tasks.",

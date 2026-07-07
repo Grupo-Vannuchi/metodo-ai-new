@@ -63,6 +63,7 @@ import type {
   TeamMember,
   TeamChatFolderRow,
   TeamMemberInfo,
+  ChannelInfo,
   AttachKind,
 } from "@/lib/queries/team-chat";
 
@@ -143,6 +144,7 @@ export function TeamChatClient({
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [memberInfo, setMemberInfo] = useState<TeamMemberInfo | null>(null);
+  const [channelInfo, setChannelInfo] = useState<ChannelInfo | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const tempIdRef = useRef(0);
@@ -352,6 +354,25 @@ export function TeamChatClient({
       active = false;
     };
   }, [showInfo, selectedUserId]);
+
+  // Channel info panel — load the channel's members when opened.
+  const isGroupOpen = selectedChat?.isGroup ?? false;
+  useEffect(() => {
+    if (!showInfo || !isGroupOpen || !selectedChatId) return;
+    let active = true;
+    const run = async () => {
+      try {
+        const r = await fetch(`/api/inbox/channel-info?chatId=${selectedChatId}`, { cache: "no-store" });
+        if (active && r.ok) setChannelInfo(await r.json());
+      } catch {
+        /* ignore */
+      }
+    };
+    void run();
+    return () => {
+      active = false;
+    };
+  }, [showInfo, isGroupOpen, selectedChatId]);
 
   // ---- Folder + member organization (org-shared) ----------------------------
   function openMenu(e: React.MouseEvent, userId: string) {
@@ -644,15 +665,29 @@ export function TeamChatClient({
                 </p>
               </div>
               {selectedChat?.isGroup ? (
-                <button
-                  type="button"
-                  onClick={() => void leaveTeamChannel(selectedChat.id)}
-                  title={t("leaveChannel")}
-                  aria-label={t("leaveChannel")}
-                  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-red-600"
-                >
-                  <LogOut className="size-4" />
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowInfo((v) => !v)}
+                    title={t("channelInfo")}
+                    aria-label={t("channelInfo")}
+                    className={cn(
+                      "rounded-lg p-1.5 transition-colors hover:bg-muted hover:text-foreground",
+                      showInfo ? "text-brand" : "text-muted-foreground",
+                    )}
+                  >
+                    <Info className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void leaveTeamChannel(selectedChat.id)}
+                    title={t("leaveChannel")}
+                    aria-label={t("leaveChannel")}
+                    className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-red-600"
+                  >
+                    <LogOut className="size-4" />
+                  </button>
+                </>
               ) : (
                 <button
                   type="button"
@@ -1023,6 +1058,91 @@ export function TeamChatClient({
                 <p className="text-sm italic text-muted-foreground">{t("noOpps")}</p>
               )}
             </div>
+          </div>
+        </aside>
+      ) : null}
+
+      {/* Channel info panel */}
+      {showInfo && selectedChat?.isGroup ? (
+        <aside className="hidden w-full flex-col border-border md:w-80 md:shrink-0 md:border-l lg:flex">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <h2 className="font-semibold">{t("channelInfo")}</h2>
+            <button
+              type="button"
+              onClick={() => setShowInfo(false)}
+              aria-label={t("close")}
+              className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex flex-col items-center gap-2 text-center">
+              <span className="flex size-16 items-center justify-center rounded-full bg-brand/10 text-brand">
+                <Users className="size-7" />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate font-medium">{selectedChat.name}</p>
+                <p className="text-sm text-muted-foreground">{t("memberCount", { count: selectedChat.memberCount })}</p>
+              </div>
+            </div>
+
+            {(() => {
+              const info = channelInfo?.id === selectedChat.id ? channelInfo : null;
+              const creator = info?.members.find((m) => m.userId === info.createdById);
+              return creator ? (
+                <p className="mt-2 text-center text-xs text-muted-foreground">
+                  {t("createdBy", { name: creator.userId === currentUserId ? t("you") : creator.name })}
+                </p>
+              ) : null;
+            })()}
+
+            <div className="mt-6">
+              <h3 className="mb-2 text-sm font-semibold">{t("members")}</h3>
+              {channelInfo?.id === selectedChat.id ? (
+                <ul className="flex flex-col gap-1.5">
+                  {channelInfo.members.map((m) => {
+                    const isMe = m.userId === currentUserId;
+                    return (
+                      <li key={m.userId}>
+                        <button
+                          type="button"
+                          disabled={isMe}
+                          onClick={() => selectUser(m.userId)}
+                          title={isMe ? undefined : t("openChat")}
+                          className="flex w-full items-center gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-left transition-colors enabled:hover:bg-muted disabled:cursor-default"
+                        >
+                          <Avatar name={m.name} src={m.avatarUrl} className="size-8" />
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-1 text-sm font-medium">
+                              <span className="truncate">{m.name}</span>
+                              {isMe ? <span className="shrink-0 text-xs text-muted-foreground">({t("you")})</span> : null}
+                            </span>
+                            <span className="block truncate text-xs text-muted-foreground">{m.email}</span>
+                          </span>
+                          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            {t(`role.${m.role}`)}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className="flex justify-center py-4">
+                  <Spinner className="size-5 text-muted-foreground" />
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void leaveTeamChannel(selectedChat.id)}
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-600/10"
+            >
+              <LogOut className="size-4" />
+              {t("leaveChannel")}
+            </button>
           </div>
         </aside>
       ) : null}

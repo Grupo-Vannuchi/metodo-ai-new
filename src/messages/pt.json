@@ -1361,6 +1361,15 @@
       "LEAD": "Lead"
     },
     "info": "Informações",
+    "channelInfo": "Informações do canal",
+    "createdBy": "Criado por {name}",
+    "openChat": "Abrir conversa",
+    "you": "você",
+    "role": {
+      "OWNER": "Dono",
+      "ADMIN": "Administrador",
+      "MEMBER": "Membro"
+    },
     "memberTasks": "Tarefas",
     "memberOpps": "Oportunidades",
     "noTasks": "Sem tarefas abertas.",

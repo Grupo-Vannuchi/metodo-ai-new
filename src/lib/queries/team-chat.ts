@@ -92,9 +92,26 @@ export async function listTeamChats(
   });
 }
 
-/** Participants of a channel (for the member list / management), if the caller
- * is in it. */
-export async function getChannelInfo(organizationId: string, chatId: string, userId: string) {
+export type ChannelInfo = {
+  id: string;
+  name: string | null;
+  createdById: string | null;
+  members: {
+    userId: string;
+    name: string;
+    email: string;
+    avatarUrl: string | null;
+    role: string;
+  }[];
+};
+
+/** Full info of a channel (name, creator, members with avatar/email/role) for
+ * the info panel — only if the caller participates in it. */
+export async function getChannelInfo(
+  organizationId: string,
+  chatId: string,
+  userId: string,
+): Promise<ChannelInfo | null> {
   const db = tenantDb(organizationId);
   const chat = await db.teamChat.findFirst({
     where: { id: chatId, isGroup: true, participants: { some: { userId } } },
@@ -102,15 +119,36 @@ export async function getChannelInfo(organizationId: string, chatId: string, use
       id: true,
       name: true,
       createdById: true,
-      participants: { select: { userId: true, user: { select: { name: true } } } },
+      participants: {
+        select: {
+          userId: true,
+          user: {
+            select: { name: true, email: true, profile: { select: { avatarUrl: true } } },
+          },
+        },
+      },
     },
   });
   if (!chat) return null;
+
+  // Roles live on Membership, not the chat participant — map them in.
+  const roles = await prisma.membership.findMany({
+    where: { organizationId, userId: { in: chat.participants.map((p) => p.userId) } },
+    select: { userId: true, role: true },
+  });
+  const roleOf = new Map(roles.map((r) => [r.userId, r.role]));
+
   return {
     id: chat.id,
     name: chat.name,
     createdById: chat.createdById,
-    members: chat.participants.map((p) => ({ userId: p.userId, name: p.user.name })),
+    members: chat.participants.map((p) => ({
+      userId: p.userId,
+      name: p.user.name,
+      email: p.user.email,
+      avatarUrl: p.user.profile?.avatarUrl ?? null,
+      role: roleOf.get(p.userId) ?? "MEMBER",
+    })),
   };
 }
 
