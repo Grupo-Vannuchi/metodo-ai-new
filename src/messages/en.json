@@ -326,6 +326,15 @@
       "no_connection": "WhatsApp connection unavailable.",
       "send_failed": "Couldn't send. Please try again."
     },
+    "attach": "Attach file",
+    "sendMediaError": {
+      "invalid": "Invalid file.",
+      "size": "File over 16 MB.",
+      "type": "File type not allowed.",
+      "not_found": "Conversation not found.",
+      "no_connection": "WhatsApp connection unavailable.",
+      "send_failed": "Couldn't send the file. Please try again."
+    },
     "startError": {
       "unauthorized": "Session expired.",
       "invalid": "Invalid phone.",

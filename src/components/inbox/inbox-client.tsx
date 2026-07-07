@@ -9,6 +9,7 @@ import {
   MessageCircle,
   Search,
   SendHorizontal,
+  Paperclip,
   AlertCircle,
   Info,
   Building2,
@@ -139,7 +140,9 @@ export function InboxClient({
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [showContact, setShowContact] = useState(false);
   const [contactInfo, setContactInfo] = useState<ContactInfo | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
@@ -510,6 +513,35 @@ export function InboxClient({
     }
   }
 
+  // Send an image/video/audio/document. The current draft (if any) becomes the
+  // caption; the file uploads to storage and goes out through Evolution.
+  async function onSendMedia(file: File) {
+    if (!selectedId || uploading || sending) return;
+    setSendError(null);
+    setUploading(true);
+    const caption = draft.trim();
+    setDraft("");
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      fd.set("conversationId", selectedId);
+      if (caption) fd.set("caption", caption);
+      const r = await fetch("/api/inbox/messages/media", { method: "POST", body: fd });
+      const data = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (r.ok && data.ok) {
+        await fetchMessages();
+        void loadConversations();
+        scrollToBottom();
+      } else {
+        setSendError(t(`sendMediaError.${data.error ?? "send_failed"}`));
+      }
+    } catch {
+      setSendError(t("sendMediaError.send_failed"));
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="flex h-full overflow-hidden rounded-xl border border-border bg-card">
       {/* Conversation list */}
@@ -720,6 +752,27 @@ export function InboxClient({
             </div>
 
             <form onSubmit={onSend} className="flex items-end gap-2 border-t border-border p-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) void onSendMedia(f);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading || sending}
+                aria-label={t("attach")}
+                title={t("attach")}
+                className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+              >
+                {uploading ? <Spinner className="size-4" /> : <Paperclip className="size-4" />}
+              </button>
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}

@@ -47,6 +47,46 @@ const adapter: ChannelAdapter = {
       return { ok: false, error: e instanceof Error ? e.message : "Erro Evolution" };
     }
   },
+
+  async sendMedia(creds, input) {
+    if (!creds.baseUrl || !creds.apiKey || !creds.instance) {
+      return { ok: false, error: "Conexão Evolution incompleta." };
+    }
+    const base = creds.baseUrl.replace(/\/$/, "");
+    const inst = encodeURIComponent(creds.instance);
+    const number = normalizeWhatsappNumber(input.to);
+    // Voice notes use a dedicated endpoint; everything else goes via sendMedia.
+    const isAudio = input.mediatype === "audio";
+    const url = isAudio
+      ? `${base}/message/sendWhatsAppAudio/${inst}`
+      : `${base}/message/sendMedia/${inst}`;
+    const body = isAudio
+      ? { number, audio: input.media }
+      : {
+          number,
+          mediatype: input.mediatype,
+          mimetype: input.mimetype,
+          caption: input.caption || undefined,
+          media: input.media,
+          fileName: input.fileName,
+        };
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { apikey: creds.apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => ({}))) as EvoResponse & Record<string, unknown>;
+      if (!res.ok) {
+        const message = evolutionError(data, res.status);
+        console.error(`[evolution] sendMedia ${res.status}: ${message} | to=${number}`);
+        return { ok: false, error: message };
+      }
+      return { ok: true, providerMessageId: data.key?.id };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Erro Evolution" };
+    }
+  },
 };
 
 export default adapter;

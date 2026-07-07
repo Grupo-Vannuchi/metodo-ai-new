@@ -326,6 +326,15 @@
       "no_connection": "Conexão do WhatsApp indisponível.",
       "send_failed": "Não foi possível enviar. Tente novamente."
     },
+    "attach": "Anexar arquivo",
+    "sendMediaError": {
+      "invalid": "Arquivo inválido.",
+      "size": "Arquivo acima de 16 MB.",
+      "type": "Tipo de arquivo não permitido.",
+      "not_found": "Conversa não encontrada.",
+      "no_connection": "Conexão do WhatsApp indisponível.",
+      "send_failed": "Não foi possível enviar o arquivo. Tente novamente."
+    },
     "startError": {
       "unauthorized": "Sessão expirada.",
       "invalid": "Telefone inválido.",

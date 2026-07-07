@@ -21,6 +21,19 @@ export type SendResult = {
   error?: string;
 };
 
+/** Outbound media (WhatsApp). `media` is a publicly-fetchable URL. */
+export type SendMediaInput = {
+  to: string;
+  mediatype: "image" | "video" | "document" | "audio";
+  media: string;
+  mimetype?: string;
+  caption?: string;
+  fileName?: string;
+};
+
 export interface ChannelAdapter {
   send(creds: ChannelCredentials, input: SendInput): Promise<SendResult>;
+  /** Send an image/video/document/audio. Only channels that support it
+   * (WhatsApp Evolution) implement this. */
+  sendMedia?(creds: ChannelCredentials, input: SendMediaInput): Promise<SendResult>;
 }
