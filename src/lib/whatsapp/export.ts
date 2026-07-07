@@ -1,5 +1,6 @@
 import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
+import { WHATSAPP_PROVIDERS } from "@/lib/queries/connections";
 import { loadEvoCredsById } from "@/lib/integrations/evolution-creds";
 import { findGroupInfo } from "@/lib/integrations/evolution-client";
 import { formatBrPhone } from "@/lib/phone";
@@ -7,16 +8,28 @@ import { formatBrPhone } from "@/lib/phone";
 /**
  * Data for the WhatsApp inbox exports: the contact list (individual
  * conversations) or a group's members. The file generation itself is the shared
- * tabular exporter in src/lib/export/table.ts.
+ * tabular exporter in src/lib/export/table.ts. Everything is scoped to the
+ * user's OWN connected numbers — exports are per-user, never shared.
  */
 
 export type ExportRow = { name: string; number: string };
 
-/** All individual (non-group) conversations as name + number rows. */
-export async function getContactRows(organizationId: string): Promise<ExportRow[]> {
+/** WhatsApp connection ids the user owns. */
+async function ownedConnIds(db: ReturnType<typeof tenantDb>, userId: string): Promise<string[]> {
+  const conns = await db.integrationConnection.findMany({
+    where: { ownerId: userId, provider: { in: [...WHATSAPP_PROVIDERS] } },
+    select: { id: true },
+  });
+  return conns.map((c) => c.id);
+}
+
+/** The user's own individual (non-group) conversations as name + number rows. */
+export async function getContactRows(organizationId: string, userId: string): Promise<ExportRow[]> {
   const db = tenantDb(organizationId);
+  const ids = await ownedConnIds(db, userId);
+  if (ids.length === 0) return [];
   const convos = await db.conversation.findMany({
-    where: { isGroup: false },
+    where: { isGroup: false, connectionId: { in: ids } },
     orderBy: [{ lastMessageAt: "desc" }],
     take: 5000,
     select: { remoteJid: true, name: true, customName: true, contactId: true },
@@ -39,10 +52,13 @@ export async function getContactRows(organizationId: string): Promise<ExportRow[
 export async function getGroupRows(
   organizationId: string,
   conversationId: string,
+  userId: string,
 ): Promise<{ title: string; rows: ExportRow[] } | null> {
   const db = tenantDb(organizationId);
+  const ids = await ownedConnIds(db, userId);
+  // Only export a group that lives on one of the user's own numbers.
   const conv = await db.conversation.findFirst({
-    where: { id: conversationId, isGroup: true },
+    where: { id: conversationId, isGroup: true, connectionId: { in: ids } },
     select: { remoteJid: true, connectionId: true, name: true, customName: true },
   });
   if (!conv) return null;

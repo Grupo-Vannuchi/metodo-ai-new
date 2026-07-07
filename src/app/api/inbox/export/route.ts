@@ -20,11 +20,11 @@ export async function GET(req: Request) {
   let table: ExportTable;
   if (type === "group") {
     if (!conversationId) return new Response("Missing conversationId", { status: 400 });
-    const group = await getGroupRows(ctx.organizationId, conversationId);
+    const group = await getGroupRows(ctx.organizationId, conversationId, ctx.userId);
     if (!group) return new Response("Group not found", { status: 404 });
     table = { title: `Grupo - ${group.title}`, headers: HEADERS, rows: group.rows.map((r) => [r.name, r.number]) };
   } else {
-    const rows = await getContactRows(ctx.organizationId);
+    const rows = await getContactRows(ctx.organizationId, ctx.userId);
     table = { title: "Contatos do WhatsApp", headers: HEADERS, rows: rows.map((r) => [r.name, r.number]) };
   }
 

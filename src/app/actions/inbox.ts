@@ -49,14 +49,13 @@ export async function sendMessage(conversationId: string, text: string): Promise
     });
     if (!convo) return { ok: false, error: "not_found" };
 
-    // Members can only send in conversations from their own connected number.
-    if (ctx.role === "MEMBER") {
-      const owned = await db.integrationConnection.findFirst({
-        where: { id: convo.connectionId, ownerId: ctx.userId },
-        select: { id: true },
-      });
-      if (!owned) return { ok: false, error: "not_found" };
-    }
+    // A user can only send in conversations from their OWN connected number —
+    // WhatsApp is strictly per-user (admins included), never shared.
+    const owned = await db.integrationConnection.findFirst({
+      where: { id: convo.connectionId, ownerId: ctx.userId },
+      select: { id: true },
+    });
+    if (!owned) return { ok: false, error: "not_found" };
 
     const conn = await db.integrationConnection.findFirst({
       where: { id: convo.connectionId, provider: "EVOLUTION" },
@@ -122,8 +121,10 @@ export async function startConversation(input: {
 
   try {
     const db = tenantDb(ctx.organizationId);
+    // Start the chat on the user's OWN connected number (per-user WhatsApp) —
+    // not whatever number happens to be the most recent in the org.
     const conn = await db.integrationConnection.findFirst({
-      where: { provider: "EVOLUTION" },
+      where: { provider: "EVOLUTION", ownerId: ctx.userId },
       orderBy: { createdAt: "desc" },
       select: { id: true },
     });
@@ -288,12 +289,12 @@ export async function importWhatsappContactsToCrm(
   try {
     let rows: { name: string; number: string }[];
     if (target.type === "group") {
-      const group = await getGroupRows(ctx.organizationId, target.conversationId);
+      const group = await getGroupRows(ctx.organizationId, target.conversationId, ctx.userId);
       if (!group) return { ok: false, error: "not_found" };
       // Groups expose numbers, not names — use the number as the contact name.
       rows = group.rows.map((r) => ({ name: r.number, number: r.number }));
     } else {
-      rows = await getContactRows(ctx.organizationId);
+      rows = await getContactRows(ctx.organizationId, ctx.userId);
     }
 
     const db = tenantDb(ctx.organizationId);

@@ -2,21 +2,21 @@ import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
 import { WHATSAPP_PROVIDERS } from "@/lib/queries/connections";
 
-/** Viewer scope: who is asking. Members see only conversations from the numbers
- * they connected; OWNER/ADMIN see all of the org's numbers. */
+/** Viewer scope: who is asking. WhatsApp is strictly per-user — every user
+ * (admins included) sees only conversations from the numbers THEY connected, so
+ * one user's chats are never shared with another. */
 export type InboxViewer = { userId: string; role: string };
 
 /**
- * WhatsApp connection ids the viewer may see. `null` = no restriction (admin);
- * `[]` = a member who hasn't connected a number (sees nothing).
+ * WhatsApp connection ids the viewer owns. `[]` = the user hasn't connected a
+ * number (sees nothing). Scoping is per-user for every role — no admin override.
  */
 async function visibleConnectionIds(
   db: ReturnType<typeof tenantDb>,
-  viewer: InboxViewer,
-): Promise<string[] | null> {
-  if (viewer.role !== "MEMBER") return null;
+  userId: string,
+): Promise<string[]> {
   const conns = await db.integrationConnection.findMany({
-    where: { ownerId: viewer.userId, provider: { in: [...WHATSAPP_PROVIDERS] } },
+    where: { ownerId: userId, provider: { in: [...WHATSAPP_PROVIDERS] } },
     select: { id: true },
   });
   return conns.map((c) => c.id);
@@ -34,8 +34,8 @@ export async function canAccessConversation(
     select: { connectionId: true },
   });
   if (!conv) return false;
-  const ids = await visibleConnectionIds(db, viewer);
-  return ids === null || ids.includes(conv.connectionId);
+  const ids = await visibleConnectionIds(db, viewer.userId);
+  return ids.includes(conv.connectionId);
 }
 
 /** True when the viewer may act on this message's conversation. */
@@ -57,10 +57,10 @@ export async function canAccessMessage(
  * linked contact's name. Scoped to the viewer's connected numbers. */
 export async function listConversations(organizationId: string, viewer: InboxViewer) {
   const db = tenantDb(organizationId);
-  const ids = await visibleConnectionIds(db, viewer);
-  if (ids !== null && ids.length === 0) return [];
+  const ids = await visibleConnectionIds(db, viewer.userId);
+  if (ids.length === 0) return [];
   const convos = await db.conversation.findMany({
-    where: ids ? { connectionId: { in: ids } } : {},
+    where: { connectionId: { in: ids } },
     orderBy: [{ pinned: "desc" }, { lastMessageAt: "desc" }, { id: "desc" }],
     take: 200,
     select: {
@@ -161,11 +161,14 @@ export async function getContactPanel(organizationId: string, contactId: string)
   });
 }
 
-/** The conversation linked to a CRM contact, if any (for the contact page). */
-export async function getConversationByContact(organizationId: string, contactId: string) {
+/** The conversation linked to a CRM contact, if any (for the contact page).
+ * Scoped to the viewer's own numbers — a user never sees another user's chat. */
+export async function getConversationByContact(organizationId: string, contactId: string, userId: string) {
   const db = tenantDb(organizationId);
+  const ids = await visibleConnectionIds(db, userId);
+  if (ids.length === 0) return null;
   return db.conversation.findFirst({
-    where: { contactId },
+    where: { contactId, connectionId: { in: ids } },
     orderBy: { lastMessageAt: "desc" },
     select: { id: true, lastMessagePreview: true, lastMessageAt: true },
   });
@@ -174,11 +177,11 @@ export async function getConversationByContact(organizationId: string, contactId
 /** Unread messages across the viewer's conversations (for the nav badge). */
 export async function countUnread(organizationId: string, viewer: InboxViewer): Promise<number> {
   const db = tenantDb(organizationId);
-  const ids = await visibleConnectionIds(db, viewer);
-  if (ids !== null && ids.length === 0) return 0;
+  const ids = await visibleConnectionIds(db, viewer.userId);
+  if (ids.length === 0) return 0;
   const agg = await db.conversation.aggregate({
     _sum: { unreadCount: true },
-    where: ids ? { connectionId: { in: ids } } : {},
+    where: { connectionId: { in: ids } },
   });
   return agg._sum.unreadCount ?? 0;
 }

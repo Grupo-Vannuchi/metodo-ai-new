@@ -31,7 +31,7 @@ export default async function ContactViewPage({
   const canFinance = hasFeature(ctx.organization.plan as PlanKey, "finance");
   const [contact, conversation, rawMembers, tasks, finance] = await Promise.all([
     getContact(ctx.organizationId, id),
-    getConversationByContact(ctx.organizationId, id),
+    getConversationByContact(ctx.organizationId, id, ctx.userId),
     listMembers(ctx.organizationId),
     listTasks(ctx.organizationId, { contactId: id }),
     canFinance ? getEntityFinance(ctx.organizationId, { contactId: id }) : Promise.resolve(null),
