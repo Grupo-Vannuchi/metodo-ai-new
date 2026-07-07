@@ -10,6 +10,8 @@ import {
   Reply,
   FileText,
   Download,
+  LogOut,
+  Plus,
   ArrowLeft,
   FolderPlus,
   Folder,
@@ -44,6 +46,8 @@ import {
   reactToTeamMessage,
   editTeamMessage,
   deleteTeamMessage,
+  createChannel,
+  leaveChannel,
 } from "@/app/actions/team-chat";
 import {
   createTeamFolder,
@@ -134,6 +138,7 @@ export function TeamChatClient({
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [creatingChannel, setCreatingChannel] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [showInfo, setShowInfo] = useState(false);
@@ -148,6 +153,16 @@ export function TeamChatClient({
     setSelectedChatId(existing?.id ?? null);
     if (!existing) setMessages([]);
   }
+
+  // Open a group channel (chatId-based, no single "other user").
+  function selectChannel(chatId: string) {
+    setSelectedUserId(null);
+    setSelectedChatId(chatId);
+    setMessages([]);
+  }
+
+  const selectedChat = chats.find((c) => c.id === selectedChatId) ?? null;
+  const channels = chats.filter((c) => c.isGroup);
 
   const fetchMessages = useCallback(async () => {
     if (!selectedChatId) return;
@@ -215,7 +230,7 @@ export function TeamChatClient({
       return;
     }
 
-    if (!selectedUserId) return;
+    if (!selectedUserId && !selectedChatId) return;
     setSending(true);
     setDraft("");
     const replyId = replyTo?.id;
@@ -236,7 +251,7 @@ export function TeamChatClient({
 
   // Send a file (image/document) in the team chat.
   async function onSendFile(file: File) {
-    if (!selectedUserId || uploading) return;
+    if ((!selectedUserId && !selectedChatId) || uploading) return;
     setUploading(true);
     const body = draft.trim();
     setDraft("");
@@ -244,7 +259,7 @@ export function TeamChatClient({
       const fd = new FormData();
       fd.set("file", file);
       if (selectedChatId) fd.set("chatId", selectedChatId);
-      fd.set("targetUserId", selectedUserId);
+      if (selectedUserId) fd.set("targetUserId", selectedUserId);
       if (body) fd.set("body", body);
       const r = await fetch("/api/inbox/team-messages/media", { method: "POST", body: fd });
       const data = (await r.json().catch(() => ({}))) as { ok?: boolean; chatId?: string };
@@ -279,6 +294,25 @@ export function TeamChatClient({
     if (!(await confirm({ description: t("deleteConfirm"), confirmLabel: t("delete"), variant: "danger" }))) return;
     const r = await deleteTeamMessage(messageId);
     if (r.ok) void fetchMessages();
+  }
+
+  async function leaveTeamChannel(chatId: string) {
+    if (!(await confirm({ description: t("leaveConfirm"), confirmLabel: t("leaveChannel"), variant: "danger" }))) return;
+    const r = await leaveChannel(chatId);
+    if (r.ok) {
+      setSelectedChatId(null);
+      setSelectedUserId(null);
+      void fetchChats();
+    }
+  }
+
+  async function submitChannel(name: string, memberIds: string[]) {
+    const r = await createChannel({ name, memberIds });
+    if (r.ok) {
+      setCreatingChannel(false);
+      await fetchChats();
+      selectChannel(r.chatId);
+    }
   }
 
   // Share a CRM entity: sends a message carrying the attachment (with any draft).
@@ -443,15 +477,26 @@ export function TeamChatClient({
         <div className="flex flex-col gap-2 border-b border-border px-4 py-3">
           <div className="flex items-center justify-between gap-2">
             <h1 className="font-semibold">{t("title")}</h1>
-            <button
-              type="button"
-              onClick={onNewFolder}
-              title={t("newFolder")}
-              aria-label={t("newFolder")}
-              className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <FolderPlus className="size-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setCreatingChannel(true)}
+                title={t("newChannel")}
+                aria-label={t("newChannel")}
+                className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <Plus className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={onNewFolder}
+                title={t("newFolder")}
+                aria-label={t("newFolder")}
+                className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <FolderPlus className="size-4" />
+              </button>
+            </div>
           </div>
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -472,6 +517,44 @@ export function TeamChatClient({
             )
           ) : (
             <>
+              {channels.length > 0 ? (
+                <div>
+                  <div className="border-b border-border bg-muted/30 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {t("channels")}
+                  </div>
+                  {channels.map((c) => {
+                    const active = c.id === selectedChatId;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => selectChannel(c.id)}
+                        className={cn(
+                          "flex w-full items-center gap-3 border-b border-border px-3 py-2.5 text-left transition-colors",
+                          active ? "bg-brand/10" : "hover:bg-muted",
+                        )}
+                      >
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
+                          <Users className="size-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="truncate font-medium">{c.name}</span>
+                            {c.unreadCount > 0 ? (
+                              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-xs font-medium text-brand-foreground">
+                                {c.unreadCount}
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {c.lastMessagePreview ?? t("memberCount", { count: c.memberCount })}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
               {visible.filter((m) => !m.teamFolderId).map(memberRow)}
               {folders.map((f) => {
                 const items = visible.filter((m) => m.teamFolderId === f.id);
@@ -530,42 +613,67 @@ export function TeamChatClient({
       <section
         className={cn(
           "min-w-0 flex-1 flex-col",
-          selectedUserId ? "flex" : "hidden md:flex",
+          selectedUserId || selectedChatId ? "flex" : "hidden md:flex",
         )}
       >
-        {selectedUserId && activeUser ? (
+        {(selectedUserId && activeUser) || selectedChat?.isGroup ? (
           <>
             <header className="flex items-center gap-3 border-b border-border px-4 py-3">
               <button
                 type="button"
-                onClick={() => setSelectedUserId(null)}
+                onClick={() => {
+                  setSelectedUserId(null);
+                  setSelectedChatId(null);
+                }}
                 className="text-muted-foreground hover:text-foreground md:hidden"
                 aria-label={t("back")}
               >
                 <ArrowLeft className="size-5" />
               </button>
-              <Avatar name={activeUser.name} src={activeUser.avatarUrl} className="size-9" />
+              {selectedChat?.isGroup ? (
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
+                  <Users className="size-4" />
+                </span>
+              ) : (
+                <Avatar name={activeUser?.name ?? ""} src={activeUser?.avatarUrl} className="size-9" />
+              )}
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{activeUser.name}</p>
-                <p className="truncate text-xs text-muted-foreground">{activeUser.email}</p>
+                <p className="truncate font-medium">{selectedChat?.isGroup ? selectedChat.name : activeUser?.name}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {selectedChat?.isGroup ? t("memberCount", { count: selectedChat.memberCount }) : activeUser?.email}
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowInfo((v) => !v)}
-                title={t("info")}
-                aria-label={t("info")}
-                className={cn(
-                  "rounded-lg p-1.5 transition-colors hover:bg-muted hover:text-foreground",
-                  showInfo ? "text-brand" : "text-muted-foreground",
-                )}
-              >
-                <Info className="size-4" />
-              </button>
+              {selectedChat?.isGroup ? (
+                <button
+                  type="button"
+                  onClick={() => void leaveTeamChannel(selectedChat.id)}
+                  title={t("leaveChannel")}
+                  aria-label={t("leaveChannel")}
+                  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-red-600"
+                >
+                  <LogOut className="size-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowInfo((v) => !v)}
+                  title={t("info")}
+                  aria-label={t("info")}
+                  className={cn(
+                    "rounded-lg p-1.5 transition-colors hover:bg-muted hover:text-foreground",
+                    showInfo ? "text-brand" : "text-muted-foreground",
+                  )}
+                >
+                  <Info className="size-4" />
+                </button>
+              )}
             </header>
 
             <div ref={scrollRef} className="flex flex-1 flex-col gap-2 overflow-y-auto bg-muted/20 p-4">
               {messages.length === 0 ? (
-                <p className="m-auto text-sm text-muted-foreground">{t("start", { name: activeUser.name })}</p>
+                <p className="m-auto text-sm text-muted-foreground">
+                  {t("start", { name: selectedChat?.isGroup ? (selectedChat.name ?? "") : (activeUser?.name ?? "") })}
+                </p>
               ) : (
                 messages.map((msg) => {
                   const out = msg.senderId === currentUserId;
@@ -920,6 +1028,9 @@ export function TeamChatClient({
       ) : null}
 
       {attachOpen ? <AttachPicker onPick={sendAttachment} onClose={() => setAttachOpen(false)} /> : null}
+      {creatingChannel ? (
+        <CreateChannelModal members={visible} onCreate={submitChannel} onClose={() => setCreatingChannel(false)} />
+      ) : null}
 
       {menu && menuMember
         ? createPortal(
@@ -971,6 +1082,85 @@ export function TeamChatClient({
             document.body,
           )
         : null}
+    </div>
+  );
+}
+
+/** Modal to create a group channel: name + pick members. */
+function CreateChannelModal({
+  members,
+  onCreate,
+  onClose,
+}: {
+  members: { userId: string; name: string; avatarUrl: string | null }[];
+  onCreate: (name: string, memberIds: string[]) => void | Promise<void>;
+  onClose: () => void;
+}) {
+  const t = useTranslations("teamChat");
+  const [name, setName] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+
+  async function submit() {
+    if (!name.trim() || selected.size === 0 || busy) return;
+    setBusy(true);
+    await onCreate(name.trim(), [...selected]);
+    setBusy(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      <button type="button" aria-label={t("cancel")} onClick={onClose} className="absolute inset-0 cursor-default bg-black/50" />
+      <div className="relative flex max-h-[80vh] w-full max-w-sm flex-col rounded-2xl border border-border bg-card p-5 shadow-xl">
+        <h2 className="mb-3 text-base font-semibold">{t("newChannel")}</h2>
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={t("channelName")}
+          maxLength={80}
+          className="mb-3 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus-visible:border-brand focus-visible:outline-none"
+        />
+        <p className="mb-1 text-xs font-medium text-muted-foreground">{t("members")}</p>
+        <div className="mb-4 min-h-0 flex-1 overflow-y-auto rounded-lg border border-border">
+          {members.length === 0 ? (
+            <p className="p-4 text-center text-sm text-muted-foreground">{t("noResults")}</p>
+          ) : (
+            members.map((m) => (
+              <label
+                key={m.userId}
+                className="flex cursor-pointer items-center gap-2 border-b border-border px-3 py-2 text-sm last:border-0 hover:bg-muted"
+              >
+                <input type="checkbox" checked={selected.has(m.userId)} onChange={() => toggle(m.userId)} className="accent-brand" />
+                <Avatar name={m.name} src={m.avatarUrl} className="size-6" />
+                <span className="truncate">{m.name}</span>
+              </label>
+            ))
+          )}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded-lg border border-border px-3 py-1.5 text-sm transition-colors hover:bg-muted">
+            {t("cancel")}
+          </button>
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={!name.trim() || selected.size === 0 || busy}
+            className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {t("createChannel")}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

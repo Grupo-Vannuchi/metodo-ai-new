@@ -1061,8 +1061,13 @@ model TeamChat {
   id                 String    @id @default(cuid())
   organizationId     String
   /// Canonical key for a 1:1 chat ("<orgId>:<sortedUserIdA>:<sortedUserIdB>"),
-  /// unique so a direct chat can be upserted without racing duplicates.
+  /// unique so a direct chat can be upserted without racing duplicates. Null for
+  /// group channels.
   dmKey              String?   @unique
+  /// Group channel name (null = a 1:1 direct message).
+  name               String?
+  isGroup            Boolean   @default(false)
+  createdById        String?
   lastMessageAt      DateTime?
   lastMessagePreview String?
   createdAt          DateTime  @default(now())

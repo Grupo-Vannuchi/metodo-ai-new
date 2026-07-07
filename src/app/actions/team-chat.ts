@@ -214,6 +214,119 @@ export async function editTeamMessage(messageId: string, body: string): Promise<
   }
 }
 
+const createChannelSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  memberIds: z.array(z.string().trim().min(1).max(40)).min(1).max(50),
+});
+
+/** Create a group channel with the caller + the picked members. */
+export async function createChannel(input: unknown): Promise<TeamChatResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+  const parsed = createChannelSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+  const { name, memberIds } = parsed.data;
+  try {
+    // Keep only real org members; always include the creator.
+    const members = await prisma.membership.findMany({
+      where: { organizationId: ctx.organizationId, userId: { in: memberIds } },
+      select: { userId: true },
+    });
+    const ids = new Set(members.map((m) => m.userId));
+    ids.add(ctx.userId);
+
+    const chat = await prisma.teamChat.create({
+      data: {
+        organizationId: ctx.organizationId,
+        name,
+        isGroup: true,
+        createdById: ctx.userId,
+        lastMessageAt: new Date(),
+        participants: { create: [...ids].map((uid) => ({ organizationId: ctx.organizationId, userId: uid })) },
+      },
+      select: { id: true },
+    });
+
+    const others = [...ids].filter((id) => id !== ctx.userId);
+    if (others.length > 0) {
+      await prisma.notification.createMany({
+        data: others.map((uid) => ({
+          organizationId: ctx.organizationId,
+          userId: uid,
+          type: "TEAM_CHANNEL",
+          data: { actor: ctx.user.name, channel: name },
+          link: `/app/inbox?mode=team&chat=${chat.id}`,
+        })),
+      });
+    }
+    revalidatePath("/app/inbox");
+    return { ok: true, chatId: chat.id };
+  } catch (error) {
+    console.error("Failed to create channel", error);
+    return { ok: false, error: "unknown" };
+  }
+}
+
+/** Rename a channel (any participant). */
+export async function renameChannel(chatId: string, name: string): Promise<{ ok: boolean }> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+  const clean = name.trim().slice(0, 80);
+  if (!clean) return { ok: false };
+  try {
+    if (!(await isChatParticipant(ctx.organizationId, chatId, ctx.userId))) return { ok: false };
+    const db = tenantDb(ctx.organizationId);
+    await db.teamChat.updateMany({ where: { id: chatId, isGroup: true }, data: { name: clean } });
+    revalidatePath("/app/inbox");
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to rename channel", error);
+    return { ok: false };
+  }
+}
+
+/** Add members to a channel (any participant). */
+export async function addChannelMembers(chatId: string, memberIds: string[]): Promise<{ ok: boolean }> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+  try {
+    if (!(await isChatParticipant(ctx.organizationId, chatId, ctx.userId))) return { ok: false };
+    const chat = await prisma.teamChat.findFirst({ where: { id: chatId, isGroup: true }, select: { id: true, name: true } });
+    if (!chat) return { ok: false };
+    const members = await prisma.membership.findMany({
+      where: { organizationId: ctx.organizationId, userId: { in: memberIds.slice(0, 50) } },
+      select: { userId: true },
+    });
+    for (const m of members) {
+      await prisma.teamChatParticipant.upsert({
+        where: { chatId_userId: { chatId, userId: m.userId } },
+        create: { organizationId: ctx.organizationId, chatId, userId: m.userId },
+        update: {},
+      });
+    }
+    revalidatePath("/app/inbox");
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to add channel members", error);
+    return { ok: false };
+  }
+}
+
+/** Leave a channel (removes the caller's participation). */
+export async function leaveChannel(chatId: string): Promise<{ ok: boolean }> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+  try {
+    const db = tenantDb(ctx.organizationId);
+    await db.teamChatParticipant.deleteMany({ where: { chatId, userId: ctx.userId } });
+    revalidatePath("/app/inbox");
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to leave channel", error);
+    return { ok: false };
+  }
+}
+
 /** Soft-delete your own team message (clears content + attachments). */
 export async function deleteTeamMessage(messageId: string): Promise<{ ok: boolean }> {
   const ctx = await getOrgContext();

@@ -53,12 +53,15 @@ export type TeamChatSummary = {
   lastMessageAt: Date | null;
   lastMessagePreview: string | null;
   unreadCount: number;
+  isGroup: boolean;
+  memberCount: number;
   otherUserId: string | null;
   name: string | null;
   email: string;
 };
 
-/** The team chats the user participates in, with the other member's info. */
+/** The team chats the user participates in — 1:1 DMs (with the other member's
+ * info) and group channels (with the channel name + member count). */
 export async function listTeamChats(
   organizationId: string,
   userId: string,
@@ -80,11 +83,35 @@ export async function listTeamChats(
       lastMessageAt: chat.lastMessageAt,
       lastMessagePreview: chat.lastMessagePreview,
       unreadCount: mine?.unreadCount ?? 0,
-      otherUserId: other?.id ?? null,
-      name: other?.name ?? null,
-      email: other?.email ?? "",
+      isGroup: chat.isGroup,
+      memberCount: chat.participants.length,
+      otherUserId: chat.isGroup ? null : (other?.id ?? null),
+      name: chat.isGroup ? chat.name : (other?.name ?? null),
+      email: chat.isGroup ? "" : (other?.email ?? ""),
     };
   });
+}
+
+/** Participants of a channel (for the member list / management), if the caller
+ * is in it. */
+export async function getChannelInfo(organizationId: string, chatId: string, userId: string) {
+  const db = tenantDb(organizationId);
+  const chat = await db.teamChat.findFirst({
+    where: { id: chatId, isGroup: true, participants: { some: { userId } } },
+    select: {
+      id: true,
+      name: true,
+      createdById: true,
+      participants: { select: { userId: true, user: { select: { name: true } } } },
+    },
+  });
+  if (!chat) return null;
+  return {
+    id: chat.id,
+    name: chat.name,
+    createdById: chat.createdById,
+    members: chat.participants.map((p) => ({ userId: p.userId, name: p.user.name })),
+  };
 }
 
 /** Whether the user is a participant of the chat (and it belongs to the org). */
