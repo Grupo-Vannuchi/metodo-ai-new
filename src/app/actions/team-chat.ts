@@ -8,6 +8,9 @@ import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateDirectChat, isChatParticipant } from "@/lib/queries/team-chat";
 import { resolveAttachment } from "@/lib/attachables";
+import { deleteMedia } from "@/lib/storage/blob";
+
+type TeamReaction = { emoji: string; userId: string };
 
 export type TeamChatResult =
   | { ok: true; chatId: string }
@@ -20,6 +23,8 @@ const sendSchema = z
     body: z.string().trim().max(4000).optional(),
     attachmentType: z.nativeEnum(TeamChatAttachmentType).optional(),
     attachmentId: z.string().trim().min(1).max(64).optional(),
+    replyToId: z.string().trim().min(1).max(40).optional(),
+    mentions: z.array(z.string().trim().min(1).max(40)).max(30).optional(),
   })
   .refine((d) => Boolean(d.chatId || d.targetUserId), { message: "chat target required" })
   // Either text or an attachment (both ids must come together).
@@ -31,7 +36,7 @@ export async function sendTeamMessage(input: unknown): Promise<TeamChatResult> {
 
   const parsed = sendSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
-  const { chatId: inputChatId, targetUserId, body, attachmentType, attachmentId } = parsed.data;
+  const { chatId: inputChatId, targetUserId, body, attachmentType, attachmentId, replyToId, mentions } = parsed.data;
 
   try {
     const db = tenantDb(ctx.organizationId);
@@ -60,6 +65,23 @@ export async function sendTeamMessage(input: unknown): Promise<TeamChatResult> {
       if (!attachment) return { ok: false, error: "invalid" };
     }
 
+    // Reply must point to a message in this same chat (else drop it).
+    let validReplyToId: string | null = null;
+    if (replyToId) {
+      const rep = await db.teamChatMessage.findFirst({ where: { id: replyToId, chatId }, select: { id: true } });
+      validReplyToId = rep?.id ?? null;
+    }
+
+    // Mentions: keep only real participants of this chat.
+    let mentionedIds: string[] = [];
+    if (mentions && mentions.length > 0) {
+      const parts = await db.teamChatParticipant.findMany({
+        where: { chatId, userId: { in: mentions } },
+        select: { userId: true },
+      });
+      mentionedIds = parts.map((p) => p.userId).filter((id) => id !== ctx.userId);
+    }
+
     const text = body ?? "";
     await db.teamChatMessage.create({
       data: {
@@ -71,6 +93,8 @@ export async function sendTeamMessage(input: unknown): Promise<TeamChatResult> {
         attachmentId: attachment ? attachmentId : null,
         attachmentLabel: attachment?.label ?? null,
         attachmentHref: attachment?.href ?? null,
+        replyToId: validReplyToId,
+        mentions: mentionedIds,
       },
     });
     await db.teamChat.updateMany({
@@ -101,6 +125,19 @@ export async function sendTeamMessage(input: unknown): Promise<TeamChatResult> {
       }
     }
 
+    // Notify @mentioned participants.
+    if (mentionedIds.length > 0) {
+      await db.notification.createMany({
+        data: mentionedIds.map((uid) => ({
+          organizationId: ctx.organizationId,
+          userId: uid,
+          type: "TEAM_MENTION",
+          data: { actor: ctx.user.name, preview: text.slice(0, 120) },
+          link: `/app/inbox?mode=team&chat=${chatId}`,
+        })),
+      });
+    }
+
     revalidatePath("/app/inbox");
     return { ok: true, chatId };
   } catch (error) {
@@ -123,6 +160,92 @@ export async function markTeamChatRead(chatId: string): Promise<{ ok: boolean }>
     return { ok: true };
   } catch (error) {
     console.error("Failed to mark team chat read", error);
+    return { ok: false };
+  }
+}
+
+/** Toggle the caller's emoji reaction on a team message. */
+export async function reactToTeamMessage(messageId: string, emoji: string): Promise<{ ok: boolean }> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+  try {
+    const db = tenantDb(ctx.organizationId);
+    const msg = await db.teamChatMessage.findFirst({
+      where: { id: messageId },
+      select: { id: true, chatId: true, reactions: true },
+    });
+    if (!msg) return { ok: false };
+    if (!(await isChatParticipant(ctx.organizationId, msg.chatId, ctx.userId))) return { ok: false };
+
+    const list: TeamReaction[] = Array.isArray(msg.reactions)
+      ? (msg.reactions.filter((r) => r && typeof (r as TeamReaction).emoji === "string") as TeamReaction[])
+      : [];
+    const mine = list.find((r) => r.userId === ctx.userId);
+    const rest = list.filter((r) => r.userId !== ctx.userId);
+    const next = mine?.emoji === emoji ? rest : [...rest, { emoji, userId: ctx.userId }];
+
+    await db.teamChatMessage.updateMany({ where: { id: messageId }, data: { reactions: next } });
+    revalidatePath("/app/inbox");
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to react to team message", error);
+    return { ok: false };
+  }
+}
+
+/** Edit your own team message (marks it edited). */
+export async function editTeamMessage(messageId: string, body: string): Promise<{ ok: boolean }> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+  const text = body.trim();
+  if (!text || text.length > 4000) return { ok: false };
+  try {
+    const db = tenantDb(ctx.organizationId);
+    const res = await db.teamChatMessage.updateMany({
+      where: { id: messageId, senderId: ctx.userId, deletedAt: null },
+      data: { body: text, editedAt: new Date() },
+    });
+    if (res.count === 0) return { ok: false };
+    revalidatePath("/app/inbox");
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to edit team message", error);
+    return { ok: false };
+  }
+}
+
+/** Soft-delete your own team message (clears content + attachments). */
+export async function deleteTeamMessage(messageId: string): Promise<{ ok: boolean }> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+  try {
+    const db = tenantDb(ctx.organizationId);
+    const msg = await db.teamChatMessage.findFirst({
+      where: { id: messageId, senderId: ctx.userId },
+      select: { id: true, fileUrl: true },
+    });
+    if (!msg) return { ok: false };
+    if (msg.fileUrl) await deleteMedia(msg.fileUrl).catch(() => {});
+    await db.teamChatMessage.updateMany({
+      where: { id: messageId, senderId: ctx.userId },
+      data: {
+        deletedAt: new Date(),
+        body: "",
+        attachmentType: null,
+        attachmentId: null,
+        attachmentLabel: null,
+        attachmentHref: null,
+        fileUrl: null,
+        fileName: null,
+        fileMime: null,
+        fileSize: null,
+        reactions: [],
+      },
+    });
+    revalidatePath("/app/inbox");
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to delete team message", error);
     return { ok: false };
   }
 }

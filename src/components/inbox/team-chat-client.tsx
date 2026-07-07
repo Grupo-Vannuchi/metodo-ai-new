@@ -7,6 +7,9 @@ import {
   Search,
   SendHorizontal,
   Paperclip,
+  Reply,
+  FileText,
+  Download,
   ArrowLeft,
   FolderPlus,
   Folder,
@@ -35,7 +38,13 @@ import { usePrompt } from "@/components/ui/prompt";
 import { Avatar } from "@/components/app/avatar";
 import { Spinner } from "@/components/ui/spinner";
 import { formatBRL } from "@/lib/money";
-import { sendTeamMessage, markTeamChatRead } from "@/app/actions/team-chat";
+import {
+  sendTeamMessage,
+  markTeamChatRead,
+  reactToTeamMessage,
+  editTeamMessage,
+  deleteTeamMessage,
+} from "@/app/actions/team-chat";
 import {
   createTeamFolder,
   renameTeamFolder,
@@ -61,8 +70,19 @@ type Message = {
   attachmentId: string | null;
   attachmentLabel: string | null;
   attachmentHref: string | null;
+  fileUrl?: string | null;
+  fileName?: string | null;
+  fileMime?: string | null;
+  fileSize?: number | null;
+  reactions?: { emoji: string; userId: string }[] | null;
+  editedAt?: string | null;
+  deletedAt?: string | null;
+  replyToId?: string | null;
+  replyTo?: { id: string; senderId: string; body: string; deletedAt: string | null } | null;
   createdAt: string;
 };
+
+const TEAM_EMOJIS = ["👍", "❤️", "😂", "🎉", "✅", "🙏"];
 type Menu = { x: number; y: number; userId: string };
 
 const MENU_ITEM =
@@ -111,6 +131,11 @@ export function TeamChatClient({
   const [closedFolders, setClosedFolders] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<Menu | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [memberInfo, setMemberInfo] = useState<TeamMemberInfo | null>(null);
 
@@ -178,21 +203,82 @@ export function TeamChatClient({
   async function onSend(e?: React.FormEvent) {
     e?.preventDefault();
     const body = draft.trim();
-    if (!body || !selectedUserId || sending) return;
+    if (!body || sending) return;
+
+    // Editing an existing message instead of sending a new one.
+    if (editingId) {
+      const id = editingId;
+      setEditingId(null);
+      setDraft("");
+      const r = await editTeamMessage(id, body);
+      if (r.ok) void fetchMessages();
+      return;
+    }
+
+    if (!selectedUserId) return;
     setSending(true);
     setDraft("");
+    const replyId = replyTo?.id;
+    setReplyTo(null);
     const tempId = `temp-${tempIdRef.current++}`;
     setMessages((prev) => [
       ...prev,
       { id: tempId, senderId: currentUserId, body, attachmentType: null, attachmentId: null, attachmentLabel: null, attachmentHref: null, createdAt: "" },
     ]);
-    const res = await sendTeamMessage({ chatId: selectedChatId ?? undefined, targetUserId: selectedUserId, body });
+    const res = await sendTeamMessage({ chatId: selectedChatId ?? undefined, targetUserId: selectedUserId, body, replyToId: replyId });
     setSending(false);
     if (res.ok) {
       if (res.chatId !== selectedChatId) setSelectedChatId(res.chatId);
       else void fetchMessages();
       void fetchChats();
     }
+  }
+
+  // Send a file (image/document) in the team chat.
+  async function onSendFile(file: File) {
+    if (!selectedUserId || uploading) return;
+    setUploading(true);
+    const body = draft.trim();
+    setDraft("");
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      if (selectedChatId) fd.set("chatId", selectedChatId);
+      fd.set("targetUserId", selectedUserId);
+      if (body) fd.set("body", body);
+      const r = await fetch("/api/inbox/team-messages/media", { method: "POST", body: fd });
+      const data = (await r.json().catch(() => ({}))) as { ok?: boolean; chatId?: string };
+      if (r.ok && data.ok) {
+        if (data.chatId && data.chatId !== selectedChatId) setSelectedChatId(data.chatId);
+        else void fetchMessages();
+        void fetchChats();
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  // Toggle my emoji reaction on a message (optimistic).
+  async function reactTeam(messageId: string, emoji: string) {
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId) return m;
+        const rest = (m.reactions ?? []).filter((r) => r.userId !== currentUserId);
+        const mine = (m.reactions ?? []).find((r) => r.userId === currentUserId);
+        return mine?.emoji === emoji ? { ...m, reactions: rest } : { ...m, reactions: [...rest, { emoji, userId: currentUserId }] };
+      }),
+    );
+    const r = await reactToTeamMessage(messageId, emoji);
+    if (r.ok) void fetchMessages();
+  }
+
+  // Soft-delete my own message.
+  async function removeTeam(messageId: string) {
+    if (!(await confirm({ description: t("deleteConfirm"), confirmLabel: t("delete"), variant: "danger" }))) return;
+    const r = await deleteTeamMessage(messageId);
+    if (r.ok) void fetchMessages();
   }
 
   // Share a CRM entity: sends a message carrying the attachment (with any draft).
@@ -483,48 +569,172 @@ export function TeamChatClient({
               ) : (
                 messages.map((msg) => {
                   const out = msg.senderId === currentUserId;
+                  const deleted = Boolean(msg.deletedAt);
+                  const reactions = msg.reactions ?? [];
                   return (
                     <div
                       key={msg.id}
                       className={cn(
-                        "max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm",
-                        out ? "self-end bg-brand text-brand-foreground" : "self-start bg-card",
+                        "group/tm flex max-w-[75%] flex-col gap-1",
+                        out ? "items-end self-end" : "items-start self-start",
                       )}
                     >
-                      {msg.attachmentType && msg.attachmentHref ? (
-                        (() => {
-                          const Icon = ATTACH_ICONS[msg.attachmentType] ?? Paperclip;
-                          return (
-                            <Link
-                              href={msg.attachmentHref}
-                              className={cn(
-                                "mb-1 flex items-center gap-2 rounded-lg p-2 transition-colors",
-                                out ? "bg-brand-foreground/15 hover:bg-brand-foreground/25" : "bg-muted hover:bg-muted/70",
-                              )}
-                            >
-                              <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-md", out ? "bg-brand-foreground/20" : "bg-brand/10 text-brand")}>
-                                <Icon className="size-4" />
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className={cn("block text-[10px] uppercase tracking-wide", out ? "text-brand-foreground/70" : "text-muted-foreground")}>
-                                  {t(`attachType.${msg.attachmentType}`)}
-                                </span>
-                                <span className="block truncate text-sm font-medium">{msg.attachmentLabel}</span>
-                              </span>
-                            </Link>
-                          );
-                        })()
-                      ) : null}
-                      {msg.body ? <p className="whitespace-pre-wrap break-words">{msg.body}</p> : null}
-                      {msg.createdAt ? (
-                        <span
+                      <div className="relative">
+                        <div
                           className={cn(
-                            "mt-1 flex items-center justify-end text-[10px]",
-                            out ? "text-brand-foreground/70" : "text-muted-foreground",
+                            "rounded-2xl px-3 py-2 text-sm shadow-sm",
+                            out ? "bg-brand text-brand-foreground" : "bg-card",
                           )}
                         >
-                          {fmtTime(msg.createdAt)}
-                        </span>
+                          {deleted ? (
+                            <p className="italic opacity-70">{t("deletedMessage")}</p>
+                          ) : (
+                            <>
+                              {msg.replyTo ? (
+                                <div
+                                  className={cn(
+                                    "mb-1 rounded-md border-l-2 px-2 py-1 text-xs",
+                                    out ? "border-brand-foreground/50 bg-black/10" : "border-brand/60 bg-muted",
+                                  )}
+                                >
+                                  <p className="line-clamp-2 opacity-80">
+                                    {msg.replyTo.deletedAt ? t("deletedMessage") : msg.replyTo.body || t("fileLabel")}
+                                  </p>
+                                </div>
+                              ) : null}
+                              {msg.attachmentType && msg.attachmentHref ? (
+                                (() => {
+                                  const Icon = ATTACH_ICONS[msg.attachmentType] ?? Paperclip;
+                                  return (
+                                    <Link
+                                      href={msg.attachmentHref}
+                                      className={cn(
+                                        "mb-1 flex items-center gap-2 rounded-lg p-2 transition-colors",
+                                        out ? "bg-brand-foreground/15 hover:bg-brand-foreground/25" : "bg-muted hover:bg-muted/70",
+                                      )}
+                                    >
+                                      <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-md", out ? "bg-brand-foreground/20" : "bg-brand/10 text-brand")}>
+                                        <Icon className="size-4" />
+                                      </span>
+                                      <span className="min-w-0 flex-1">
+                                        <span className={cn("block text-[10px] uppercase tracking-wide", out ? "text-brand-foreground/70" : "text-muted-foreground")}>
+                                          {t(`attachType.${msg.attachmentType}`)}
+                                        </span>
+                                        <span className="block truncate text-sm font-medium">{msg.attachmentLabel}</span>
+                                      </span>
+                                    </Link>
+                                  );
+                                })()
+                              ) : null}
+                              {msg.fileUrl ? (
+                                msg.fileMime?.startsWith("image/") ? (
+                                  <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" className="mb-1 block">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={msg.fileUrl} alt={msg.fileName ?? ""} loading="lazy" className="max-h-64 rounded-lg object-cover" />
+                                  </a>
+                                ) : (
+                                  <a
+                                    href={msg.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    download={msg.fileName ?? undefined}
+                                    className={cn(
+                                      "mb-1 flex items-center gap-2 rounded-lg p-2 transition-colors",
+                                      out ? "bg-brand-foreground/15 hover:bg-brand-foreground/25" : "bg-muted hover:bg-muted/70",
+                                    )}
+                                  >
+                                    <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-md", out ? "bg-brand-foreground/20" : "bg-brand/10 text-brand")}>
+                                      <FileText className="size-4" />
+                                    </span>
+                                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{msg.fileName}</span>
+                                    <Download className="size-4 shrink-0 opacity-70" />
+                                  </a>
+                                )
+                              ) : null}
+                              {msg.body ? <p className="whitespace-pre-wrap break-words">{msg.body}</p> : null}
+                              {msg.createdAt ? (
+                                <span
+                                  className={cn(
+                                    "mt-1 flex items-center justify-end gap-1 text-[10px]",
+                                    out ? "text-brand-foreground/70" : "text-muted-foreground",
+                                  )}
+                                >
+                                  {msg.editedAt ? <span>{t("edited")}</span> : null}
+                                  {fmtTime(msg.createdAt)}
+                                </span>
+                              ) : null}
+                            </>
+                          )}
+                        </div>
+
+                        {!deleted && msg.createdAt ? (
+                          <div
+                            className={cn(
+                              "absolute -top-7 z-10 hidden items-center gap-0.5 rounded-full border border-border bg-card px-1 py-0.5 shadow-md group-hover/tm:flex",
+                              out ? "right-0" : "left-0",
+                            )}
+                          >
+                            {TEAM_EMOJIS.map((e) => (
+                              <button
+                                key={e}
+                                type="button"
+                                onClick={() => void reactTeam(msg.id, e)}
+                                aria-label={e}
+                                className="rounded-full px-0.5 text-base leading-none transition-transform hover:scale-125"
+                              >
+                                {e}
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReplyTo(msg);
+                                setEditingId(null);
+                                composerRef.current?.focus();
+                              }}
+                              title={t("reply")}
+                              aria-label={t("reply")}
+                              className="rounded-full px-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                            >
+                              <Reply className="size-4" />
+                            </button>
+                            {out && msg.body ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingId(msg.id);
+                                  setReplyTo(null);
+                                  setDraft(msg.body);
+                                  composerRef.current?.focus();
+                                }}
+                                title={t("edit")}
+                                aria-label={t("edit")}
+                                className="rounded-full px-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                              >
+                                <Pencil className="size-4" />
+                              </button>
+                            ) : null}
+                            {out ? (
+                              <button
+                                type="button"
+                                onClick={() => void removeTeam(msg.id)}
+                                title={t("delete")}
+                                aria-label={t("delete")}
+                                className="rounded-full px-0.5 text-muted-foreground transition-colors hover:text-red-600"
+                              >
+                                <Trash2 className="size-4" />
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {reactions.length > 0 ? (
+                        <div className="flex flex-wrap gap-0.5 rounded-full border border-border bg-card px-1.5 py-0.5 text-xs shadow-sm">
+                          {reactions.map((r, i) => (
+                            <span key={i}>{r.emoji}</span>
+                          ))}
+                        </div>
                       ) : null}
                     </div>
                   );
@@ -532,7 +742,41 @@ export function TeamChatClient({
               )}
             </div>
 
-            <form onSubmit={onSend} className="flex items-end gap-2 border-t border-border p-3">
+            {replyTo || editingId ? (
+              <div className="flex items-center gap-2 border-t border-border bg-muted/30 px-3 pt-2">
+                <div className="min-w-0 flex-1 rounded-md border-l-2 border-brand px-2 py-1 text-xs">
+                  <p className="font-semibold text-brand">{editingId ? t("editing") : t("replyingTo")}</p>
+                  {!editingId && replyTo ? (
+                    <p className="truncate text-muted-foreground">{replyTo.body || t("fileLabel")}</p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReplyTo(null);
+                    setEditingId(null);
+                    setDraft("");
+                  }}
+                  aria-label={t("cancel")}
+                  className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ) : null}
+
+            <form onSubmit={onSend} className={cn("flex items-end gap-2 p-3", replyTo || editingId ? null : "border-t border-border")}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) void onSendFile(f);
+                }}
+              />
               <button
                 type="button"
                 onClick={() => setAttachOpen(true)}
@@ -540,9 +784,20 @@ export function TeamChatClient({
                 aria-label={t("attach")}
                 className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
-                <Paperclip className="size-4" />
+                <FileText className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                title={t("attachFile")}
+                aria-label={t("attachFile")}
+                className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+              >
+                {uploading ? <Spinner className="size-4" /> : <Paperclip className="size-4" />}
               </button>
               <textarea
+                ref={composerRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {

@@ -1107,11 +1107,28 @@ model TeamChatMessage {
   attachmentLabel String?
   attachmentHref  String?
 
+  /// File attachment (image/document): bytes in object storage, metadata here.
+  fileUrl  String?
+  fileName String?
+  fileMime String?
+  fileSize Int?
+
+  /// Reply/quote to another message in this chat.
+  replyToId String?
+  /// Emoji reactions: [{ emoji, userId }].
+  reactions Json @default("[]")
+  /// Mentioned user ids: ["userId", …] (for @mentions + notifications).
+  mentions  Json @default("[]")
+  editedAt  DateTime?
+  deletedAt DateTime?
+
   createdAt DateTime @default(now())
 
-  chat         TeamChat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  chat         TeamChat          @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender       User              @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  replyTo      TeamChatMessage?  @relation("TeamMsgReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies      TeamChatMessage[] @relation("TeamMsgReply")
 
   @@index([chatId, createdAt])
 }
