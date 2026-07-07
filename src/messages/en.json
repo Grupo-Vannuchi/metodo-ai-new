@@ -328,6 +328,10 @@
     },
     "attach": "Attach file",
     "reactionsHint": "Click to remove your reaction",
+    "reply": "Reply",
+    "replyingTo": "Replying",
+    "cancelReply": "Cancel reply",
+    "mediaAttachment": "Media",
     "sendMediaError": {
       "invalid": "Invalid file.",
       "size": "File over 16 MB.",

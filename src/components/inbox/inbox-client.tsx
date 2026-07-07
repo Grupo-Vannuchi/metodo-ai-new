@@ -10,6 +10,8 @@ import {
   Search,
   SendHorizontal,
   Paperclip,
+  Reply,
+  X,
   AlertCircle,
   Info,
   Building2,
@@ -93,6 +95,9 @@ type Message = {
   senderName?: string | null;
   status: string | null;
   reactions?: { emoji: string; fromMe: boolean; senderName?: string | null }[] | null;
+  quotedMessageId?: string | null;
+  quotedBody?: string | null;
+  quotedSender?: string | null;
   timestamp: string | Date;
   mediaUrl?: string | null;
   mediaMime?: string | null;
@@ -147,7 +152,9 @@ export function InboxClient({
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const [showContact, setShowContact] = useState(false);
   const [contactInfo, setContactInfo] = useState<ContactInfo | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
@@ -498,6 +505,8 @@ export function InboxClient({
     setSendError(null);
     setSending(true);
     setDraft("");
+    const replyId = replyTo?.id;
+    setReplyTo(null);
     const temp: Message = {
       id: `temp-${++tempSeq}`,
       direction: "OUTBOUND",
@@ -508,7 +517,7 @@ export function InboxClient({
     };
     setMessages((prev) => [...prev, temp]);
 
-    const r = await sendMessage(selectedId, body);
+    const r = await sendMessage(selectedId, body, replyId);
     setSending(false);
     if (r.ok) {
       void loadConversations(); // the poll replaces the temp with the persisted message
@@ -753,6 +762,17 @@ export function InboxClient({
                           {selected?.isGroup && !out && m.senderName ? (
                             <p className="mb-0.5 text-xs font-semibold text-brand">{m.senderName}</p>
                           ) : null}
+                          {m.quotedBody ? (
+                            <div
+                              className={cn(
+                                "mb-1 rounded-md border-l-2 px-2 py-1 text-xs",
+                                out ? "border-brand-foreground/50 bg-black/10" : "border-brand/60 bg-muted",
+                              )}
+                            >
+                              {m.quotedSender ? <p className="font-semibold">{m.quotedSender}</p> : null}
+                              <p className="line-clamp-2 opacity-80">{m.quotedBody}</p>
+                            </div>
+                          ) : null}
                           {isMedia ? <MessageMedia m={m} out={out} /> : null}
                           {isMedia ? (
                             m.body ? (
@@ -782,6 +802,18 @@ export function InboxClient({
                             out ? "right-0" : "left-0",
                           )}
                         >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReplyTo(m);
+                              composerRef.current?.focus();
+                            }}
+                            aria-label={t("reply")}
+                            title={t("reply")}
+                            className="rounded-full px-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            <Reply className="size-4" />
+                          </button>
                           {QUICK_EMOJIS.map((e) => {
                             const active = reactions.some((r) => r.fromMe && r.emoji === e);
                             return (
@@ -823,7 +855,24 @@ export function InboxClient({
               )}
             </div>
 
-            <form onSubmit={onSend} className="flex items-end gap-2 border-t border-border p-3">
+            {replyTo ? (
+              <div className="flex items-center gap-2 border-t border-border bg-muted/30 px-3 pt-2">
+                <div className="min-w-0 flex-1 rounded-md border-l-2 border-brand px-2 py-1 text-xs">
+                  <p className="font-semibold text-brand">{t("replyingTo")}</p>
+                  <p className="truncate text-muted-foreground">{replyTo.body || t("mediaAttachment")}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReplyTo(null)}
+                  aria-label={t("cancelReply")}
+                  className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ) : null}
+
+            <form onSubmit={onSend} className={cn("flex items-end gap-2 p-3", replyTo ? null : "border-t border-border")}>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -846,6 +895,7 @@ export function InboxClient({
                 {uploading ? <Spinner className="size-4" /> : <Paperclip className="size-4" />}
               </button>
               <textarea
+                ref={composerRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {

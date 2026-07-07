@@ -13,6 +13,13 @@ export type SendInput = {
   subject?: string;
   /** EMAIL sender override (defaults to the connection's fromEmail). */
   from?: string;
+  /** WhatsApp reply/quote: the message being replied to. */
+  quoted?: {
+    messageId: string;
+    remoteJid: string;
+    fromMe: boolean;
+    body: string;
+  };
 };
 
 export type SendResult = {

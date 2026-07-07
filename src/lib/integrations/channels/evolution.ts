@@ -34,6 +34,18 @@ const adapter: ChannelAdapter = {
         body: JSON.stringify({
           number: normalizeWhatsappNumber(input.to),
           text: input.body,
+          ...(input.quoted
+            ? {
+                quoted: {
+                  key: {
+                    id: input.quoted.messageId,
+                    remoteJid: input.quoted.remoteJid,
+                    fromMe: input.quoted.fromMe,
+                  },
+                  message: { conversation: input.quoted.body },
+                },
+              }
+            : {}),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as EvoResponse & Record<string, unknown>;

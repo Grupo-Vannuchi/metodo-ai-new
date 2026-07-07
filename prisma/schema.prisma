@@ -870,6 +870,12 @@ model Message {
   /// Emoji reactions on this message: [{ emoji, fromMe, senderName? }]. One per
   /// participant (WhatsApp semantics) — a new reaction replaces the previous.
   reactions         Json             @default("[]")
+  /// Reply/quote: a snapshot of the message this one replies to (kept as a
+  /// snapshot so it renders even if the original isn't stored). quotedMessageId
+  /// is the quoted message's provider id (for scroll-to), not a FK.
+  quotedMessageId   String?
+  quotedBody        String?
+  quotedSender      String?
   timestamp         DateTime
   createdAt         DateTime         @default(now())
 

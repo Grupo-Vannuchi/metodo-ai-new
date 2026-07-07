@@ -41,6 +41,9 @@ export type ParsedInbound = {
   timestamp: Date;
   /** Present for downloadable media types; null for text/location/unknown. */
   media: InboundMedia | null;
+  /** Reply/quote snapshot: the provider id + text of the quoted message. */
+  quotedMessageId: string | null;
+  quotedBody: string | null;
 };
 
 type Json = Record<string, unknown>;
@@ -56,6 +59,36 @@ const MEDIA: Record<string, InboundType> = {
 
 /** Media types whose bytes we fetch + store (LOCATION carries coords, not bytes). */
 const DOWNLOADABLE = new Set<InboundType>(["IMAGE", "AUDIO", "VIDEO", "DOCUMENT", "STICKER"]);
+
+const QUOTED_MEDIA_LABEL: Record<string, string> = {
+  imageMessage: "📷 Imagem",
+  videoMessage: "🎬 Vídeo",
+  audioMessage: "🎧 Áudio",
+  documentMessage: "📄 Documento",
+  stickerMessage: "Figurinha",
+  locationMessage: "📍 Localização",
+};
+
+/** Extract the quoted-message snapshot from a message's contextInfo (reply). */
+function extractQuoted(message: Json): { quotedMessageId: string | null; quotedBody: string | null } {
+  const candidates = [message.extendedTextMessage, ...Object.keys(MEDIA).map((k) => message[k])];
+  for (const node of candidates) {
+    const ci = (node as Json | undefined)?.contextInfo as Json | undefined;
+    const stanzaId = ci?.stanzaId as string | undefined;
+    if (!stanzaId) continue;
+    const qm = ci?.quotedMessage as Json | undefined;
+    let qbody: string | null = null;
+    if (qm) {
+      if (typeof qm.conversation === "string") qbody = qm.conversation;
+      else if ((qm.extendedTextMessage as Json | undefined)?.text) qbody = String((qm.extendedTextMessage as Json).text);
+      else {
+        for (const mk of Object.keys(MEDIA)) if (qm[mk]) { qbody = QUOTED_MEDIA_LABEL[mk]; break; }
+      }
+    }
+    return { quotedMessageId: stanzaId, quotedBody: (qbody ?? "[mensagem]").slice(0, 300) };
+  }
+  return { quotedMessageId: null, quotedBody: null };
+}
 
 /** Coerce Baileys numeric fields (string | number | long-ish) to a finite int. */
 function num(v: unknown): number | null {
@@ -129,7 +162,22 @@ function parseOne(data: Json): ParsedInbound | null {
   }
 
   const preview = body?.trim() || PREVIEW_FALLBACK[type] || "[mensagem]";
-  return { remoteJid, isGroup, fromMe, pushName, senderName, providerMessageId, type, body, preview, timestamp, media };
+  const quoted = extractQuoted(message);
+  return {
+    remoteJid,
+    isGroup,
+    fromMe,
+    pushName,
+    senderName,
+    providerMessageId,
+    type,
+    body,
+    preview,
+    timestamp,
+    media,
+    quotedMessageId: quoted.quotedMessageId,
+    quotedBody: quoted.quotedBody,
+  };
 }
 
 /** Extract the message rows from a webhook payload (single / array / Baileys). */

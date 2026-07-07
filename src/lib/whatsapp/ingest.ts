@@ -130,6 +130,8 @@ export async function ingestInbound(
       senderName: m.senderName,
       status: m.fromMe ? "SENT" : null,
       timestamp: m.timestamp,
+      quotedMessageId: m.quotedMessageId,
+      quotedBody: m.quotedBody,
       ...(hasMedia
         ? {
             mediaStatus: "PENDING",

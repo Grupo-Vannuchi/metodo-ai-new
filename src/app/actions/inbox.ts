@@ -6,6 +6,7 @@ import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { decryptCredentials } from "@/lib/integrations/crypto";
 import { getChannelAdapter } from "@/lib/integrations/channels";
+import type { SendInput } from "@/lib/integrations/channels/types";
 import { normalizeWhatsappNumber, formatBrPhone, brPhoneKey, looksLikeWhatsappMobile } from "@/lib/phone";
 import { onlyDigits } from "@/lib/cnpj";
 import { getContactRows, getGroupRows } from "@/lib/whatsapp/export";
@@ -33,9 +34,24 @@ export type SendResult =
 
 const MAX_LEN = 4096;
 
+/** Short label for a non-text message when quoted in a reply. */
+const QUOTED_LABEL: Record<string, string> = {
+  IMAGE: "📷 Imagem",
+  VIDEO: "🎬 Vídeo",
+  AUDIO: "🎧 Áudio",
+  DOCUMENT: "📄 Documento",
+  STICKER: "Figurinha",
+  LOCATION: "📍 Localização",
+};
+
 /** Send a text message in a conversation via the Evolution connection it flows
- * through, and persist it as an outbound message. */
-export async function sendMessage(conversationId: string, text: string): Promise<SendResult> {
+ * through, and persist it as an outbound message. `replyToMessageId` quotes an
+ * existing message (WhatsApp reply). */
+export async function sendMessage(
+  conversationId: string,
+  text: string,
+  replyToMessageId?: string,
+): Promise<SendResult> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false, error: "unauthorized" };
 
@@ -71,10 +87,31 @@ export async function sendMessage(conversationId: string, text: string): Promise
       return { ok: false, error: "no_connection" };
     }
 
+    // Resolve the quoted message (must be in this conversation).
+    let quoted: SendInput["quoted"];
+    let quotedSnapshot = { quotedMessageId: null as string | null, quotedBody: null as string | null, quotedSender: null as string | null };
+    if (replyToMessageId) {
+      const rep = await db.message.findFirst({
+        where: { id: replyToMessageId, conversationId },
+        select: { providerMessageId: true, body: true, fromMe: true, senderName: true, type: true },
+      });
+      if (rep) {
+        const qBody = (rep.body?.trim() || QUOTED_LABEL[rep.type] || "[mensagem]").slice(0, 300);
+        quotedSnapshot = {
+          quotedMessageId: rep.providerMessageId,
+          quotedBody: qBody,
+          quotedSender: rep.fromMe ? null : (rep.senderName ?? null),
+        };
+        if (rep.providerMessageId) {
+          quoted = { messageId: rep.providerMessageId, remoteJid: convo.remoteJid, fromMe: rep.fromMe, body: qBody };
+        }
+      }
+    }
+
     // Groups send to the full JID; individuals to the bare number.
     const to = convo.isGroup ? convo.remoteJid : (convo.remoteJid.split("@")[0] ?? "");
     const adapter = getChannelAdapter("WHATSAPP_EVOLUTION");
-    const result = await adapter.send(creds, { to, body: body.slice(0, MAX_LEN) });
+    const result = await adapter.send(creds, { to, body: body.slice(0, MAX_LEN), quoted });
     if (!result.ok) return { ok: false, error: "send_failed" };
 
     await db.message.create({
@@ -88,6 +125,7 @@ export async function sendMessage(conversationId: string, text: string): Promise
         status: "SENT",
         fromMe: true,
         timestamp: new Date(),
+        ...quotedSnapshot,
       },
     });
     await db.conversation.updateMany({
