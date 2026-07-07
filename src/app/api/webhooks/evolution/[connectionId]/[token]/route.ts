@@ -2,8 +2,8 @@ import type { NextRequest } from "next/server";
 import { createHash } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { parseInboundMessages } from "@/lib/whatsapp/inbound";
-import { ingestInbound } from "@/lib/whatsapp/ingest";
+import { parseInboundMessages, parseInboundReactions } from "@/lib/whatsapp/inbound";
+import { ingestInbound, applyInboundReaction } from "@/lib/whatsapp/ingest";
 import { parseDeliveryUpdates } from "@/lib/integrations/webhooks/delivery";
 import {
   applyCampaignDeliveryUpdates,
@@ -74,6 +74,9 @@ export async function POST(
     if (ev.includes("messages.upsert") || ev.includes("messages_upsert")) {
       for (const m of parseInboundMessages(payload)) {
         await ingestInbound(conn.organizationId, conn.id, m);
+      }
+      for (const r of parseInboundReactions(payload)) {
+        await applyInboundReaction(conn.organizationId, conn.id, r);
       }
     } else if (ev.includes("messages.update") || ev.includes("messages_update")) {
       const updates = parseDeliveryUpdates("EVOLUTION", payload);

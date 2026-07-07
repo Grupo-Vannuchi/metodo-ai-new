@@ -2,9 +2,25 @@ import "server-only";
 import type { MessageType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatBrPhone, brPhoneKey } from "@/lib/phone";
-import type { ParsedInbound } from "@/lib/whatsapp/inbound";
+import type { ParsedInbound, InboundReaction } from "@/lib/whatsapp/inbound";
+import { applyReaction } from "@/lib/whatsapp/reactions";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
 import type { WhatsappMediaJob } from "@/lib/whatsapp/media";
+
+/** Apply an inbound emoji reaction to the target message (on this connection). */
+export async function applyInboundReaction(
+  organizationId: string,
+  connectionId: string,
+  r: InboundReaction,
+): Promise<void> {
+  const msg = await prisma.message.findFirst({
+    where: { organizationId, providerMessageId: r.targetProviderMessageId, conversation: { connectionId } },
+    select: { id: true, reactions: true },
+  });
+  if (!msg) return;
+  const reactions = applyReaction(msg.reactions, { emoji: r.emoji, fromMe: r.fromMe, senderName: r.senderName });
+  await prisma.message.update({ where: { id: msg.id }, data: { reactions } });
+}
 
 /**
  * Persist an inbound (or own-phone outbound) WhatsApp message: link the

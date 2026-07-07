@@ -87,6 +87,32 @@ const adapter: ChannelAdapter = {
       return { ok: false, error: e instanceof Error ? e.message : "Erro Evolution" };
     }
   },
+
+  async sendReaction(creds, input) {
+    if (!creds.baseUrl || !creds.apiKey || !creds.instance) {
+      return { ok: false, error: "Conexão Evolution incompleta." };
+    }
+    const url = `${creds.baseUrl.replace(/\/$/, "")}/message/sendReaction/${encodeURIComponent(creds.instance)}`;
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { apikey: creds.apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: { remoteJid: input.remoteJid, fromMe: input.fromMe, id: input.messageId },
+          reaction: input.emoji,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as EvoResponse & Record<string, unknown>;
+      if (!res.ok) {
+        const message = evolutionError(data, res.status);
+        console.error(`[evolution] sendReaction ${res.status}: ${message}`);
+        return { ok: false, error: message };
+      }
+      return { ok: true, providerMessageId: data.key?.id };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Erro Evolution" };
+    }
+  },
 };
 
 export default adapter;

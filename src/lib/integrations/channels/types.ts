@@ -31,9 +31,20 @@ export type SendMediaInput = {
   fileName?: string;
 };
 
+/** React to a message with an emoji (empty string removes the reaction). */
+export type SendReactionInput = {
+  remoteJid: string;
+  fromMe: boolean;
+  /** Provider message id (Baileys key.id) of the target message. */
+  messageId: string;
+  emoji: string;
+};
+
 export interface ChannelAdapter {
   send(creds: ChannelCredentials, input: SendInput): Promise<SendResult>;
   /** Send an image/video/document/audio. Only channels that support it
    * (WhatsApp Evolution) implement this. */
   sendMedia?(creds: ChannelCredentials, input: SendMediaInput): Promise<SendResult>;
+  /** React to a message with an emoji. WhatsApp Evolution only. */
+  sendReaction?(creds: ChannelCredentials, input: SendReactionInput): Promise<SendResult>;
 }

@@ -867,6 +867,9 @@ model Message {
   /// In group chats, the display name of the participant who sent this inbound
   /// message (null for individual chats and own messages).
   senderName        String?
+  /// Emoji reactions on this message: [{ emoji, fromMe, senderName? }]. One per
+  /// participant (WhatsApp semantics) — a new reaction replaces the previous.
+  reactions         Json             @default("[]")
   timestamp         DateTime
   createdAt         DateTime         @default(now())
 

@@ -127,6 +127,7 @@ export async function listMessages(organizationId: string, conversationId: strin
       body: true,
       senderName: true,
       status: true,
+      reactions: true,
       timestamp: true,
       mediaUrl: true,
       mediaMime: true,

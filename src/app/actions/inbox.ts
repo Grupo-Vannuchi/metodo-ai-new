@@ -10,6 +10,7 @@ import { normalizeWhatsappNumber, formatBrPhone, brPhoneKey, looksLikeWhatsappMo
 import { onlyDigits } from "@/lib/cnpj";
 import { getContactRows, getGroupRows } from "@/lib/whatsapp/export";
 import { purgeConversationMedia } from "@/lib/whatsapp/media";
+import { applyReaction, myReaction } from "@/lib/whatsapp/reactions";
 
 /** Reset a conversation's unread counter (called when it's opened). */
 export async function markConversationRead(id: string): Promise<{ ok: boolean }> {
@@ -151,6 +152,58 @@ export async function startConversation(input: {
 }
 
 type Ok = { ok: boolean };
+
+/** React to a message with an emoji (toggles off if it's already your reaction).
+ * Sends to WhatsApp via Evolution and mirrors it locally. Per-user scoped. */
+export async function reactToMessage(messageId: string, emoji: string): Promise<Ok> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+  try {
+    const db = tenantDb(ctx.organizationId);
+    const msg = await db.message.findFirst({
+      where: { id: messageId },
+      select: { id: true, conversationId: true, providerMessageId: true, fromMe: true, reactions: true },
+    });
+    if (!msg) return { ok: false };
+    const convo = await db.conversation.findFirst({
+      where: { id: msg.conversationId },
+      select: { remoteJid: true, connectionId: true },
+    });
+    if (!convo) return { ok: false };
+    // Per-user: only on a number the caller connected.
+    const conn = await db.integrationConnection.findFirst({
+      where: { id: convo.connectionId, ownerId: ctx.userId, provider: "EVOLUTION" },
+      select: { credentialsEnc: true },
+    });
+    if (!conn) return { ok: false };
+
+    // Toggle: reacting with the same emoji removes it.
+    const finalEmoji = myReaction(msg.reactions) === emoji ? "" : emoji;
+
+    if (msg.providerMessageId) {
+      try {
+        const creds = decryptCredentials(conn.credentialsEnc);
+        const adapter = getChannelAdapter("WHATSAPP_EVOLUTION");
+        await adapter.sendReaction?.(creds, {
+          remoteJid: convo.remoteJid,
+          fromMe: msg.fromMe,
+          messageId: msg.providerMessageId,
+          emoji: finalEmoji,
+        });
+      } catch {
+        /* still mirror locally even if the send fails */
+      }
+    }
+
+    const reactions = applyReaction(msg.reactions, { emoji: finalEmoji, fromMe: true });
+    await db.message.updateMany({ where: { id: messageId }, data: { reactions } });
+    revalidatePath("/app/inbox");
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to react to message", error);
+    return { ok: false };
+  }
+}
 
 /** Pin / unpin a conversation (sorts to the top of its list). */
 export async function pinConversation(id: string, pinned: boolean): Promise<Ok> {

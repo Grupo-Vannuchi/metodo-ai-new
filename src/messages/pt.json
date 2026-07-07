@@ -327,6 +327,7 @@
       "send_failed": "Não foi possível enviar. Tente novamente."
     },
     "attach": "Anexar arquivo",
+    "reactionsHint": "Clique para remover sua reação",
     "sendMediaError": {
       "invalid": "Arquivo inválido.",
       "size": "Arquivo acima de 16 MB.",

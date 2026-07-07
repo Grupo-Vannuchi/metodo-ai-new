@@ -38,6 +38,7 @@ import { MessageMedia, MEDIA_TYPES } from "@/components/inbox/message-media";
 import {
   markConversationRead,
   sendMessage,
+  reactToMessage,
   pinConversation,
   renameConversation,
   deleteConversation,
@@ -46,6 +47,9 @@ import {
   renameConversationFolder,
   deleteConversationFolder,
 } from "@/app/actions/inbox";
+
+/** Quick-reaction emojis shown on message hover (WhatsApp's default set). */
+const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 type Folder = { id: string; name: string };
 
@@ -88,6 +92,7 @@ type Message = {
   body: string | null;
   senderName?: string | null;
   status: string | null;
+  reactions?: { emoji: string; fromMe: boolean; senderName?: string | null }[] | null;
   timestamp: string | Date;
   mediaUrl?: string | null;
   mediaMime?: string | null;
@@ -542,6 +547,22 @@ export function InboxClient({
     }
   }
 
+  // React to a message with an emoji (optimistic toggle, then sync).
+  async function react(messageId: string, emoji: string) {
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId) return m;
+        const others = (m.reactions ?? []).filter((r) => !r.fromMe);
+        const mine = (m.reactions ?? []).find((r) => r.fromMe);
+        return mine?.emoji === emoji
+          ? { ...m, reactions: others }
+          : { ...m, reactions: [...others, { emoji, fromMe: true }] };
+      }),
+    );
+    const r = await reactToMessage(messageId, emoji);
+    if (r.ok) void fetchMessages();
+  }
+
   return (
     <div className="flex h-full overflow-hidden rounded-xl border border-border bg-card">
       {/* Conversation list */}
@@ -704,47 +725,98 @@ export function InboxClient({
                   const failed = m.status === "FAILED";
                   const isMedia = MEDIA_TYPES.has(m.type);
                   const bare = m.type === "STICKER"; // stickers render without bubble chrome
+                  const reactions = m.reactions ?? [];
                   return (
                     <div
                       key={m.id}
                       className={cn(
-                        "max-w-[75%] text-sm",
-                        out ? "self-end" : "self-start",
-                        bare
-                          ? null
-                          : cn(
-                              "rounded-2xl px-3 py-2 shadow-sm",
-                              out
-                                ? failed
-                                  ? "border border-red-300 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300"
-                                  : "bg-brand text-brand-foreground"
-                                : "bg-card",
-                            ),
+                        "group/msg flex max-w-[75%] flex-col gap-1",
+                        out ? "items-end self-end" : "items-start self-start",
                       )}
                     >
-                      {selected?.isGroup && !out && m.senderName ? (
-                        <p className="mb-0.5 text-xs font-semibold text-brand">{m.senderName}</p>
+                      <div className="relative">
+                        <div
+                          className={cn(
+                            "text-sm",
+                            bare
+                              ? null
+                              : cn(
+                                  "rounded-2xl px-3 py-2 shadow-sm",
+                                  out
+                                    ? failed
+                                      ? "border border-red-300 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300"
+                                      : "bg-brand text-brand-foreground"
+                                    : "bg-card",
+                                ),
+                          )}
+                        >
+                          {selected?.isGroup && !out && m.senderName ? (
+                            <p className="mb-0.5 text-xs font-semibold text-brand">{m.senderName}</p>
+                          ) : null}
+                          {isMedia ? <MessageMedia m={m} out={out} /> : null}
+                          {isMedia ? (
+                            m.body ? (
+                              <p className="mt-1 whitespace-pre-wrap break-words">{m.body}</p>
+                            ) : null
+                          ) : (
+                            <p className="whitespace-pre-wrap break-words">{m.body ?? ""}</p>
+                          )}
+                          <span
+                            className={cn(
+                              "mt-1 flex items-center justify-end gap-1 text-[10px]",
+                              out && !failed && !bare ? "text-brand-foreground/70" : "text-muted-foreground",
+                            )}
+                          >
+                            {fmtTime(m.timestamp)}
+                            {failed ? <AlertCircle className="size-3 text-red-500" /> : null}
+                            {out && !failed && m.status === "READ" ? <CheckCheck className="size-3" /> : null}
+                            {out && !failed && m.status === "DELIVERED" ? <CheckCheck className="size-3 opacity-70" /> : null}
+                            {out && !failed && (m.status === "SENT" || m.status === "PENDING") ? <Check className="size-3 opacity-70" /> : null}
+                          </span>
+                        </div>
+
+                        {/* Emoji reaction picker — appears on hover. */}
+                        <div
+                          className={cn(
+                            "absolute -top-7 z-10 hidden items-center gap-0.5 rounded-full border border-border bg-card px-1 py-0.5 shadow-md group-hover/msg:flex",
+                            out ? "right-0" : "left-0",
+                          )}
+                        >
+                          {QUICK_EMOJIS.map((e) => {
+                            const active = reactions.some((r) => r.fromMe && r.emoji === e);
+                            return (
+                              <button
+                                key={e}
+                                type="button"
+                                onClick={() => void react(m.id, e)}
+                                aria-label={e}
+                                className={cn(
+                                  "rounded-full px-0.5 text-base leading-none transition-transform hover:scale-125",
+                                  active && "scale-110",
+                                )}
+                              >
+                                {e}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {reactions.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const mine = reactions.find((r) => r.fromMe);
+                            if (mine) void react(m.id, mine.emoji);
+                          }}
+                          title={t("reactionsHint")}
+                          className="flex items-center gap-0.5 rounded-full border border-border bg-card px-1.5 py-0.5 text-xs shadow-sm"
+                        >
+                          {reactions.map((r, i) => (
+                            <span key={i}>{r.emoji}</span>
+                          ))}
+                        </button>
                       ) : null}
-                      {isMedia ? <MessageMedia m={m} out={out} /> : null}
-                      {isMedia ? (
-                        m.body ? (
-                          <p className="mt-1 whitespace-pre-wrap break-words">{m.body}</p>
-                        ) : null
-                      ) : (
-                        <p className="whitespace-pre-wrap break-words">{m.body ?? ""}</p>
-                      )}
-                      <span
-                        className={cn(
-                          "mt-1 flex items-center justify-end gap-1 text-[10px]",
-                          out && !failed && !bare ? "text-brand-foreground/70" : "text-muted-foreground",
-                        )}
-                      >
-                        {fmtTime(m.timestamp)}
-                        {failed ? <AlertCircle className="size-3 text-red-500" /> : null}
-                        {out && !failed && m.status === "READ" ? <CheckCheck className="size-3" /> : null}
-                        {out && !failed && m.status === "DELIVERED" ? <CheckCheck className="size-3 opacity-70" /> : null}
-                        {out && !failed && (m.status === "SENT" || m.status === "PENDING") ? <Check className="size-3 opacity-70" /> : null}
-                      </span>
                     </div>
                   );
                 })

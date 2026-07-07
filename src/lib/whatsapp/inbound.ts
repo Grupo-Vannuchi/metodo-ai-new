@@ -104,6 +104,8 @@ function parseOne(data: Json): ParsedInbound | null {
   const timestamp = tsRaw > 0 ? new Date(tsRaw * 1000) : new Date();
 
   const message = (data.message as Json | undefined) ?? {};
+  // Reactions are handled separately (parseInboundReactions), not as messages.
+  if (message.reactionMessage) return null;
   let type: InboundType = "UNKNOWN";
   let body: string | null = null;
   let media: InboundMedia | null = null;
@@ -130,17 +132,64 @@ function parseOne(data: Json): ParsedInbound | null {
   return { remoteJid, isGroup, fromMe, pushName, senderName, providerMessageId, type, body, preview, timestamp, media };
 }
 
+/** Extract the message rows from a webhook payload (single / array / Baileys). */
+function extractRows(payload: Json): Json[] {
+  const data = payload.data;
+  if (Array.isArray(data)) return data as Json[];
+  if (data && typeof data === "object") {
+    const inner = (data as Json).messages;
+    return Array.isArray(inner) ? (inner as Json[]) : [data as Json];
+  }
+  return [];
+}
+
 /** Parse a webhook payload into inbound messages (handles single / array / Baileys shapes). */
 export function parseInboundMessages(payload: Json): ParsedInbound[] {
-  const data = payload.data;
-  let rows: Json[] = [];
-  if (Array.isArray(data)) {
-    rows = data as Json[];
-  } else if (data && typeof data === "object") {
-    const inner = (data as Json).messages;
-    rows = Array.isArray(inner) ? (inner as Json[]) : [data as Json];
-  }
-  return rows
+  return extractRows(payload)
     .map(parseOne)
     .filter((m): m is ParsedInbound => m !== null);
+}
+
+/** An emoji reaction received via webhook, targeting an existing message. */
+export type InboundReaction = {
+  remoteJid: string;
+  isGroup: boolean;
+  /** Provider message id of the message being reacted to. */
+  targetProviderMessageId: string;
+  /** Emoji, or "" when the reaction was removed. */
+  emoji: string;
+  /** Who reacted: true = us (another device), false = the contact/participant. */
+  fromMe: boolean;
+  senderName: string | null;
+};
+
+function parseOneReaction(data: Json): InboundReaction | null {
+  const key = data.key as Json | undefined;
+  const remoteJid = (key?.remoteJid as string | undefined)?.trim();
+  if (!remoteJid) return null;
+  const isGroup = remoteJid.endsWith("@g.us");
+  if (!isGroup && !remoteJid.endsWith("@s.whatsapp.net")) return null;
+  const message = (data.message as Json | undefined) ?? {};
+  const rm = message.reactionMessage as Json | undefined;
+  if (!rm) return null;
+  const rmKey = rm.key as Json | undefined;
+  const targetProviderMessageId = (rmKey?.id as string | undefined) ?? null;
+  if (!targetProviderMessageId) return null;
+  const fromMe = Boolean(key?.fromMe);
+  const pushName = ((data.pushName as string | undefined) ?? "").trim() || null;
+  return {
+    remoteJid,
+    isGroup,
+    targetProviderMessageId,
+    emoji: typeof rm.text === "string" ? rm.text : "",
+    fromMe,
+    senderName: isGroup && !fromMe ? pushName : null,
+  };
+}
+
+/** Parse emoji reactions out of a webhook payload. */
+export function parseInboundReactions(payload: Json): InboundReaction[] {
+  return extractRows(payload)
+    .map(parseOneReaction)
+    .filter((r): r is InboundReaction => r !== null);
 }
