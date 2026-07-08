@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -23,8 +23,11 @@ import {
   AlignRight,
   Link2,
   RemoveFormatting,
+  Braces,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+export type EditorVariable = { token: string; label: string };
 
 const SWATCHES = ["#18375d", "#0f172a", "#dc2626", "#16a34a", "#d97706", "#64748b"];
 
@@ -59,7 +62,9 @@ function Btn({
 
 const Divider = () => <span className="mx-0.5 h-5 w-px bg-border" />;
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({ editor, variables }: { editor: Editor; variables?: EditorVariable[] }) {
+  const [varOpen, setVarOpen] = useState(false);
+
   const setLink = () => {
     const prev = editor.getAttributes("link").href as string | undefined;
     const url = window.prompt("URL", prev ?? "https://");
@@ -131,6 +136,52 @@ function Toolbar({ editor }: { editor: Editor }) {
       <Btn title="Limpar formatação" onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}>
         <RemoveFormatting className="size-4" />
       </Btn>
+
+      {variables?.length ? (
+        <>
+          <Divider />
+          <div className="relative">
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setVarOpen((o) => !o)}
+              title="Inserir variável"
+              className="flex h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <Braces className="size-4" />
+              Variável
+            </button>
+            {varOpen ? (
+              <>
+                <button
+                  type="button"
+                  aria-hidden
+                  tabIndex={-1}
+                  onClick={() => setVarOpen(false)}
+                  className="fixed inset-0 z-30 cursor-default"
+                />
+                <div className="absolute left-0 z-40 mt-1 max-h-64 w-52 overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-lg">
+                  {variables.map((v) => (
+                    <button
+                      key={v.token}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        editor.chain().focus().insertContent(`{{${v.token}}}`).run();
+                        setVarOpen(false);
+                      }}
+                      className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted"
+                    >
+                      <span>{v.label}</span>
+                      <code className="text-xs text-muted-foreground">{`{{${v.token}}}`}</code>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -145,11 +196,13 @@ export function RichTextEditor({
   onChange,
   placeholder,
   minHeight = "7rem",
+  variables,
 }: {
   value: string;
   onChange: (html: string) => void;
   placeholder?: string;
   minHeight?: string;
+  variables?: EditorVariable[];
 }) {
   const onChangeRef = useRef(onChange);
   useEffect(() => {
@@ -176,7 +229,7 @@ export function RichTextEditor({
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card focus-within:border-brand">
-      {editor ? <Toolbar editor={editor} /> : null}
+      {editor ? <Toolbar editor={editor} variables={variables} /> : null}
       <div style={{ minHeight }} className="overflow-y-auto">
         <EditorContent editor={editor} />
       </div>

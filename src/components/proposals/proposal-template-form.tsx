@@ -2,14 +2,17 @@
 
 import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, Trash2, GripVertical } from "lucide-react";
+import { Plus, Trash2, GripVertical, ChevronUp, ChevronDown, X, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
 import { MoneyInput } from "@/components/ui/money-input";
+import { Spinner } from "@/components/ui/spinner";
 import { RichTextEditor } from "@/components/proposals/rich-text-editor";
+import { TemplateImageField, uploadTemplateImage } from "@/components/proposals/template-image-field";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { formatBRL } from "@/lib/money";
+import { PROPOSAL_VARIABLES } from "@/lib/proposals/variables";
 import { createProposalTemplate, updateProposalTemplate } from "@/app/actions/proposal-templates";
 import type { ProposalTemplateDetail } from "@/lib/queries/proposal-templates";
 import type { ProposalFormOptions } from "@/lib/queries/proposals";
@@ -46,6 +49,7 @@ export function ProposalTemplateForm({
 
   const seq = useRef(0);
   const newKey = (p: string) => `${p}-${seq.current++}`;
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(defaults.name);
   const [city, setCity] = useState(defaults.document.city ?? "");
@@ -55,6 +59,17 @@ export function ProposalTemplateForm({
     defaults.validityDays != null ? String(defaults.validityDays) : "",
   );
   const [discount, setDiscount] = useState(defaults.discount);
+
+  // Document images (uploaded to blob storage; URLs stored in the document JSON).
+  const [coverImageUrl, setCoverImageUrl] = useState(defaults.document.cover?.imageUrl ?? "");
+  const [coverSubtitle, setCoverSubtitle] = useState(defaults.document.cover?.subtitle ?? "");
+  const [headerImageUrl, setHeaderImageUrl] = useState(defaults.document.header?.imageUrl ?? "");
+  const [footerImageUrl, setFooterImageUrl] = useState(defaults.document.footer?.imageUrl ?? "");
+  const [signatureImageUrl, setSignatureImageUrl] = useState(defaults.document.signature?.imageUrl ?? "");
+  const [signatureHtml, setSignatureHtml] = useState(defaults.document.signature?.html ?? "");
+  const [clientLogos, setClientLogos] = useState<string[]>(defaults.document.clientLogos ?? []);
+  const [logosBusy, setLogosBusy] = useState(false);
+  const [dragKey, setDragKey] = useState<string | null>(null);
 
   const [sections, setSections] = useState<SectionRow[]>(() =>
     defaults.document.sections.map((s, i) => ({ key: `s-init-${i}`, title: s.title, html: s.html })),
@@ -98,6 +113,30 @@ export function ProposalTemplateForm({
       [next[i], next[j]] = [next[j], next[i]];
       return next;
     });
+  }
+  /** Drop the dragged section onto `toKey`'s position. */
+  function reorderSection(toKey: string) {
+    setSections((prev) => {
+      if (!dragKey || dragKey === toKey) return prev;
+      const from = prev.findIndex((s) => s.key === dragKey);
+      const to = prev.findIndex((s) => s.key === toKey);
+      if (from < 0 || to < 0) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }
+
+  // ---- Client logos ----
+  async function addLogo(file: File) {
+    setLogosBusy(true);
+    const url = await uploadTemplateImage(file);
+    setLogosBusy(false);
+    if (url) setClientLogos((prev) => [...prev, url].slice(0, 15));
+  }
+  function removeLogo(url: string) {
+    setClientLogos((prev) => prev.filter((u) => u !== url));
   }
 
   // ---- Items ----
@@ -143,11 +182,11 @@ export function ProposalTemplateForm({
       name: name.trim(),
       document: {
         city: city.trim(),
-        cover: defaults.document.cover ?? { imageUrl: "", subtitle: "" },
-        header: { imageUrl: defaults.document.header?.imageUrl ?? "", html: headerHtml },
-        footer: { imageUrl: defaults.document.footer?.imageUrl ?? "", html: footerHtml },
-        signature: defaults.document.signature ?? { imageUrl: "", html: "" },
-        clientLogos: defaults.document.clientLogos ?? [],
+        cover: { imageUrl: coverImageUrl, subtitle: coverSubtitle.trim() },
+        header: { imageUrl: headerImageUrl, html: headerHtml },
+        footer: { imageUrl: footerImageUrl, html: footerHtml },
+        signature: { imageUrl: signatureImageUrl, html: signatureHtml },
+        clientLogos,
         sections: sections
           .filter((s) => s.title.trim() || s.html.trim())
           .map((s, i) => ({ id: `sec-${i}`, title: s.title.trim(), html: s.html })),
@@ -214,6 +253,23 @@ export function ProposalTemplateForm({
         </div>
       </fieldset>
 
+      {/* Cover */}
+      <fieldset className="rounded-xl border border-border bg-card p-5">
+        <legend className="px-1 text-sm font-medium">{t("form.sectionCover")}</legend>
+        <div className="mt-2 grid items-start gap-4 sm:grid-cols-2">
+          <TemplateImageField label={t("form.coverImage")} url={coverImageUrl} onChange={setCoverImageUrl} />
+          <div>
+            <Label htmlFor="coverSubtitle">{t("form.coverSubtitle")}</Label>
+            <Input
+              id="coverSubtitle"
+              value={coverSubtitle}
+              onChange={(e) => setCoverSubtitle(e.target.value)}
+              placeholder={t("form.coverSubtitleHint")}
+            />
+          </div>
+        </div>
+      </fieldset>
+
       {/* Document sections */}
       <fieldset className="rounded-xl border border-border bg-card p-5">
         <legend className="px-1 text-sm font-medium">{t("form.sectionSections")}</legend>
@@ -226,8 +282,30 @@ export function ProposalTemplateForm({
         ) : (
           <div className="mt-3 flex flex-col gap-3">
             {sections.map((s, idx) => (
-              <div key={s.key} className="rounded-lg border border-border p-3">
-                <div className="flex items-center gap-2">
+              <div
+                key={s.key}
+                onDragOver={(e) => {
+                  if (dragKey && dragKey !== s.key) e.preventDefault();
+                }}
+                onDrop={() => {
+                  reorderSection(s.key);
+                  setDragKey(null);
+                }}
+                className={cn(
+                  "rounded-lg border border-border p-3 transition-colors",
+                  dragKey === s.key ? "opacity-50" : "",
+                )}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span
+                    draggable
+                    onDragStart={() => setDragKey(s.key)}
+                    onDragEnd={() => setDragKey(null)}
+                    title={t("form.drag")}
+                    className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
+                  >
+                    <GripVertical className="size-4" />
+                  </span>
                   <div className="flex flex-col">
                     <button
                       type="button"
@@ -236,7 +314,16 @@ export function ProposalTemplateForm({
                       aria-label={t("form.moveUp")}
                       className="text-muted-foreground hover:text-foreground disabled:opacity-30"
                     >
-                      <GripVertical className="size-4" />
+                      <ChevronUp className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveSection(s.key, 1)}
+                      disabled={idx === sections.length - 1}
+                      aria-label={t("form.moveDown")}
+                      className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                    >
+                      <ChevronDown className="size-3.5" />
                     </button>
                   </div>
                   <Input
@@ -259,6 +346,7 @@ export function ProposalTemplateForm({
                     value={s.html}
                     onChange={(html) => patchSection(s.key, { html })}
                     placeholder={t("form.sectionBody")}
+                    variables={PROPOSAL_VARIABLES}
                   />
                 </div>
               </div>
@@ -279,14 +367,76 @@ export function ProposalTemplateForm({
       {/* Header / footer */}
       <fieldset className="rounded-xl border border-border bg-card p-5">
         <legend className="px-1 text-sm font-medium">{t("form.sectionLayout")}</legend>
-        <div className="mt-2 grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label>{t("form.header")}</Label>
-            <RichTextEditor value={headerHtml} onChange={setHeaderHtml} minHeight="5rem" />
+        <div className="mt-2 grid gap-5 sm:grid-cols-2">
+          <div className="flex flex-col gap-3">
+            <TemplateImageField label={t("form.headerImage")} url={headerImageUrl} onChange={setHeaderImageUrl} />
+            <div>
+              <Label>{t("form.header")}</Label>
+              <RichTextEditor value={headerHtml} onChange={setHeaderHtml} minHeight="5rem" variables={PROPOSAL_VARIABLES} />
+            </div>
           </div>
+          <div className="flex flex-col gap-3">
+            <TemplateImageField label={t("form.footerImage")} url={footerImageUrl} onChange={setFooterImageUrl} />
+            <div>
+              <Label>{t("form.footer")}</Label>
+              <RichTextEditor value={footerHtml} onChange={setFooterHtml} minHeight="5rem" variables={PROPOSAL_VARIABLES} />
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      {/* Signature & client logos */}
+      <fieldset className="rounded-xl border border-border bg-card p-5">
+        <legend className="px-1 text-sm font-medium">{t("form.sectionSignature")}</legend>
+        <div className="mt-2 grid items-start gap-4 sm:grid-cols-2">
+          <TemplateImageField label={t("form.signatureImage")} url={signatureImageUrl} onChange={setSignatureImageUrl} />
           <div>
-            <Label>{t("form.footer")}</Label>
-            <RichTextEditor value={footerHtml} onChange={setFooterHtml} minHeight="5rem" />
+            <Label>{t("form.signature")}</Label>
+            <RichTextEditor value={signatureHtml} onChange={setSignatureHtml} minHeight="5rem" variables={PROPOSAL_VARIABLES} />
+          </div>
+        </div>
+        <div className="mt-4">
+          <Label>{t("form.clientLogos")}</Label>
+          <p className="mb-1.5 text-xs text-muted-foreground">{t("form.clientLogosHint")}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            {clientLogos.map((u) => (
+              <div key={u} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={u} alt="" className="h-12 w-auto max-w-28 rounded border border-border object-contain p-1" />
+                <button
+                  type="button"
+                  onClick={() => removeLogo(u)}
+                  aria-label={t("form.removeImage")}
+                  className="absolute -right-1.5 -top-1.5 rounded-full border border-border bg-card p-0.5 text-muted-foreground shadow transition-colors hover:text-red-600"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+            {clientLogos.length < 15 ? (
+              <>
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) void addLogo(f);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => logoInputRef.current?.click()}
+                  disabled={logosBusy}
+                  aria-label={t("form.uploadImage")}
+                  className="flex h-12 w-16 items-center justify-center rounded border border-dashed border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                >
+                  {logosBusy ? <Spinner className="size-4" /> : <ImagePlus className="size-4" />}
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
       </fieldset>
