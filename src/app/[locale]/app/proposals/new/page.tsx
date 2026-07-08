@@ -1,7 +1,9 @@
 import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
 import { proposalFormOptions, proposalPrefillFromOpportunity } from "@/lib/queries/proposals";
+import { listProposalTemplateOptions } from "@/lib/queries/proposal-templates";
 import { ProposalForm, type ProposalFormDefaults } from "@/components/proposals/proposal-form";
+import { ProposalTemplatePicker } from "@/components/proposals/proposal-template-picker";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -20,9 +22,10 @@ export default async function NewProposalPage({
   const t = await getTranslations("proposals");
 
   const oppId = (await searchParams)?.opportunity;
-  const [options, prefill] = await Promise.all([
+  const [options, prefill, templates] = await Promise.all([
     proposalFormOptions(ctx.organizationId),
     oppId ? proposalPrefillFromOpportunity(ctx.organizationId, oppId) : Promise.resolve(null),
+    listProposalTemplateOptions(ctx.organizationId),
   ]);
 
   const defaults: ProposalFormDefaults = {
@@ -61,6 +64,7 @@ export default async function NewProposalPage({
           {t("back")}
         </Link>
       </div>
+      <ProposalTemplatePicker templates={templates} opportunityId={oppId} />
       <ProposalForm defaults={defaults} options={options} />
     </div>
   );

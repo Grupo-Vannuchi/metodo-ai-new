@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
-import { Pencil, Wallet } from "lucide-react";
+import { Pencil, Wallet, LayoutTemplate } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getProposal, listProposalAttachments } from "@/lib/queries/proposals";
 import { hasFeature, type PlanKey } from "@/config/plans";
@@ -189,6 +189,23 @@ export default async function ProposalDetailPage({
           </dl>
         </div>
       </section>
+
+      {proposal.document.sections.length > 0 ? (
+        <section className="rounded-xl border border-brand/30 bg-brand/5 p-5">
+          <h2 className="mb-1.5 flex items-center gap-2 text-sm font-semibold">
+            <LayoutTemplate className="size-4 text-brand" />
+            {t("documentTitle")}
+          </h2>
+          <p className="mb-3 text-xs text-muted-foreground">{t("documentHint")}</p>
+          <ul className="flex flex-wrap gap-1.5">
+            {proposal.document.sections.map((s, i) => (
+              <li key={i} className="rounded-full border border-border bg-card px-2.5 py-1 text-xs">
+                {s.title || t("documentUntitled")}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {proposal.intro ? (
         <section className="rounded-xl border border-border bg-card p-5">

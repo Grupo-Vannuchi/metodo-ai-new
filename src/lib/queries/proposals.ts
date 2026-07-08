@@ -2,6 +2,7 @@ import "server-only";
 import type { ProposalStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { tenantDb } from "@/lib/tenant-db";
+import { parseDocument } from "@/lib/queries/proposal-templates";
 
 export type ProposalStatusFilter = "ALL" | ProposalStatus;
 export type ProposalPeriodFilter = "ALL" | "TODAY" | "7D" | "30D" | "MONTH" | "YEAR";
@@ -109,6 +110,7 @@ export async function getProposal(organizationId: string, id: string) {
     discount: Number(p.discount),
     subtotal: Number(p.subtotal),
     total: Number(p.total),
+    document: parseDocument(p.document),
     ownerName: owner?.name ?? null,
     items: p.items.map((it) => ({
       id: it.id,

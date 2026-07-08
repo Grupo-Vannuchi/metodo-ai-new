@@ -1,4 +1,7 @@
 import "server-only";
+import type { ProposalDocument } from "@/lib/validations/proposal-template";
+import { sanitizeHtml } from "@/lib/proposals/sanitize";
+import { substituteVars } from "@/lib/proposals/variables";
 
 /**
  * Print-optimized HTML for a proposal (A4). Rendered by the export route; the
@@ -168,6 +171,142 @@ export function renderProposalDocument(p: ProposalDoc, opts: { orgName: string; 
         <span>Documento gerado em ${esc(fmtDate(p.createdAt))}</span>
       </div>
     </div>
+  </div>
+  ${autoPrint}
+</body></html>`;
+}
+
+// ------------------------------------------------------------ Rich (builder)
+
+/** Substitute variables into a plain-text field, then escape for HTML. */
+function textVar(value: string, vars: Record<string, string>): string {
+  return esc(substituteVars(value, vars));
+}
+
+/** Substitute variables (values HTML-escaped) into a rich-text field, then
+ * sanitize the whole thing against our allowlist. */
+function htmlVar(value: string, vars: Record<string, string>): string {
+  return sanitizeHtml(substituteVars(value, vars, esc));
+}
+
+/** An image band for the header/footer/signature, if it has content. */
+function bandHtml(
+  band: { imageUrl?: string; html?: string } | undefined,
+  cls: string,
+  vars: Record<string, string>,
+): string {
+  if (!band) return "";
+  const img = band.imageUrl ? `<img src="${esc(band.imageUrl)}" alt="">` : "";
+  const body = band.html ? htmlVar(band.html, vars) : "";
+  if (!img && !body) return "";
+  return `<div class="${cls}">${img}<div class="rt-band-html">${body}</div></div>`;
+}
+
+/**
+ * Render a proposal's rich builder document (cover / header / footer / sections)
+ * to print-ready A4 HTML, resolving {{variables}} from the proposal. Used by the
+ * export route when the proposal carries a non-empty `document`.
+ */
+export function renderProposalBuilderDocument(
+  doc: ProposalDocument,
+  vars: Record<string, string>,
+  opts: { orgName: string; title: string; code: string | null; createdAt: Date; autoPrint?: boolean },
+): string {
+  const docTitle = opts.code ? `${opts.code} — ${opts.title}` : opts.title;
+  const city = doc.city ? substituteVars(doc.city, vars) : "";
+  const dateStr = fmtDate(opts.createdAt);
+  const cityDate = [city, dateStr, opts.code ?? ""].filter(Boolean).map(esc).join(" · ");
+
+  const header = bandHtml(doc.header, "rt-header", vars);
+  const footer = bandHtml(doc.footer, "rt-footer", vars);
+
+  const coverImg = doc.cover?.imageUrl
+    ? `<img class="cover-img" src="${esc(doc.cover.imageUrl)}" alt="">`
+    : "";
+  const subtitle = doc.cover?.subtitle ? `<div class="subtitle">${textVar(doc.cover.subtitle, vars)}</div>` : "";
+
+  const sections = doc.sections
+    .map(
+      (s) => `<section class="doc-section">
+        ${s.title ? `<h2>${textVar(s.title, vars)}</h2>` : ""}
+        <div class="doc-html">${htmlVar(s.html ?? "", vars)}</div>
+      </section>`,
+    )
+    .join("");
+
+  const signature =
+    doc.signature && (doc.signature.imageUrl || doc.signature.html)
+      ? `<div class="signature">${
+          doc.signature.imageUrl ? `<img src="${esc(doc.signature.imageUrl)}" alt="">` : ""
+        }<div>${doc.signature.html ? htmlVar(doc.signature.html, vars) : ""}</div></div>`
+      : "";
+
+  const logos = doc.clientLogos.length
+    ? `<div class="logos">${doc.clientLogos.map((u) => `<img src="${esc(u)}" alt="">`).join("")}</div>`
+    : "";
+
+  const autoPrint = opts.autoPrint
+    ? `<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},250);});</script>`
+    : "";
+
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
+<title>${esc(docTitle)}</title>
+<style>
+  :root{--brand:#18375d;--accent:#2ecc71;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0}
+  *{box-sizing:border-box}
+  body{margin:0;background:#eef2f7;color:var(--ink);font:14px/1.6 Calibri,Segoe UI,Arial,sans-serif}
+  .sheet{max-width:820px;margin:24px auto;background:#fff;box-shadow:0 18px 60px rgba(15,23,42,.12)}
+  img{max-width:100%}
+  .rt-header,.rt-footer{padding:12px 40px;color:var(--muted);font-size:12px;background:#fff}
+  .rt-header{border-bottom:2px solid var(--brand);display:flex;align-items:center;gap:16px}
+  .rt-footer{border-top:1px solid var(--line);text-align:center}
+  .rt-header img,.rt-footer img{max-height:54px;width:auto}
+  .rt-band-html{flex:1}
+  .rt-band-html p{margin:0}
+  .cover{padding:56px 40px;text-align:center;border-bottom:1px solid var(--line)}
+  .cover .org{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--brand);font-weight:800}
+  .cover h1{font-size:30px;color:var(--brand);margin:16px 0 8px;line-height:1.2}
+  .cover .subtitle{color:var(--muted);font-size:15px}
+  .cover .citydate{margin-top:18px;font-size:13px;color:var(--muted)}
+  .cover .cover-img{max-height:280px;margin-top:24px;border-radius:12px}
+  .body{padding:34px 40px 44px}
+  .doc-section{margin-bottom:24px}
+  .doc-section h2{font-size:14px;color:var(--brand);border-bottom:1px solid var(--line);padding-bottom:6px;margin:0 0 12px;text-transform:uppercase;letter-spacing:.04em}
+  .doc-html{font-size:14px;color:#334155}
+  .doc-html p{margin:0 0 8px}
+  .doc-html img{border-radius:8px}
+  .doc-html table{width:100%;border-collapse:collapse}
+  .doc-html td,.doc-html th{border:1px solid var(--line);padding:8px}
+  .signature{margin-top:44px;padding-top:12px}
+  .signature img{max-height:90px;margin-bottom:6px}
+  .logos{margin-top:30px;display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:center}
+  .logos img{max-height:46px;width:auto}
+  @media print{
+    @page{size:A4;margin:22mm 15mm}
+    body{background:#fff}
+    .sheet{max-width:none;margin:0;box-shadow:none}
+    .rt-header{position:fixed;top:0;left:0;right:0}
+    .rt-footer{position:fixed;bottom:0;left:0;right:0}
+    .cover{page-break-after:always}
+    .doc-section{page-break-inside:avoid}
+  }
+</style></head>
+<body>
+  <div class="sheet">
+    ${header}
+    <div class="cover">
+      <div class="org">${esc(opts.orgName)}</div>
+      <h1>${textVar(opts.title, vars)}</h1>
+      ${subtitle}
+      <div class="citydate">${cityDate}</div>
+      ${coverImg}
+    </div>
+    <div class="body">
+      ${sections || `<p class="doc-html">${textVar("", vars)}</p>`}
+      ${signature}
+      ${logos}
+    </div>
+    ${footer}
   </div>
   ${autoPrint}
 </body></html>`;

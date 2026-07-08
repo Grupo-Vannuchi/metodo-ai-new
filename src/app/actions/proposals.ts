@@ -1,10 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { deleteMedia } from "@/lib/storage/blob";
+import { getProposalTemplate } from "@/lib/queries/proposal-templates";
+import { proposalPrefillFromOpportunity } from "@/lib/queries/proposals";
 import {
   proposalSchema,
   updateProposalSchema,
@@ -136,6 +139,88 @@ export async function createProposal(input: ProposalInput): Promise<ProposalActi
     return { ok: true, id: proposal.id };
   } catch (error) {
     console.error("Failed to create proposal", error);
+    return { ok: false, error: "unknown" };
+  }
+}
+
+/**
+ * Create a draft proposal pre-filled from an org template (and, optionally, an
+ * opportunity's client data). The template's rich document is copied verbatim
+ * ({{variables}} intact — they resolve at export), while items/discount/validity
+ * become the proposal's commercial data. Returns the new proposal to open.
+ */
+export async function createProposalFromTemplate(input: {
+  templateId: string;
+  opportunityId?: string;
+}): Promise<ProposalActionResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+
+  try {
+    const org = ctx.organizationId;
+    const template = await getProposalTemplate(org, input.templateId);
+    if (!template) return { ok: false, error: "invalid" };
+
+    const prefill = input.opportunityId
+      ? await proposalPrefillFromOpportunity(org, input.opportunityId)
+      : null;
+
+    const items: ProposalItemInput[] = template.items.map((it) => ({
+      productServiceId: it.productServiceId ?? "",
+      name: it.name,
+      description: it.description ?? "",
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+    }));
+    const { computed, subtotal, discount, total } = computeTotals(items, template.discount);
+
+    const now = new Date();
+    const validUntil =
+      template.validityDays != null ? new Date(now.getTime() + template.validityDays * 86_400_000) : null;
+    const title = (prefill?.title || template.name).slice(0, 200);
+
+    const year = now.getFullYear();
+    const yy = String(year).slice(-2);
+
+    const proposal = await prisma.$transaction(async (tx) => {
+      const last = await tx.proposal.findFirst({
+        where: { organizationId: org, seqYear: year },
+        orderBy: { seqNumber: "desc" },
+        select: { seqNumber: true },
+      });
+      const seqNumber = (last?.seqNumber ?? 0) + 1;
+      const code = `PROP-${String(seqNumber).padStart(4, "0")}/${yy}`;
+      return tx.proposal.create({
+        data: {
+          organizationId: org,
+          code,
+          seqYear: year,
+          seqNumber,
+          title,
+          opportunityId: prefill ? (input.opportunityId ?? null) : null,
+          companyId: prefill?.companyId || null,
+          contactId: prefill?.contactId || null,
+          clientCompany: prefill?.clientCompany || null,
+          clientName: prefill?.clientName || null,
+          clientEmail: prefill?.clientEmail || null,
+          clientPhone: prefill?.clientPhone || null,
+          document: template.document as unknown as Prisma.InputJsonValue,
+          discount,
+          subtotal,
+          total,
+          validUntil,
+          ownerId: ctx.userId,
+          createdById: ctx.userId,
+          items: { create: computed.map((it) => ({ organizationId: org, ...it })) },
+        },
+        select: { id: true },
+      });
+    });
+
+    revalidatePath("/app/proposals");
+    return { ok: true, id: proposal.id };
+  } catch (error) {
+    console.error("Failed to create proposal from template", error);
     return { ok: false, error: "unknown" };
   }
 }

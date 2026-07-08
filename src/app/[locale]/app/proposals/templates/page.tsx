@@ -5,6 +5,7 @@ import { listProposalTemplates } from "@/lib/queries/proposal-templates";
 import { OpenRow } from "@/components/ui/open-row";
 import { buttonVariants } from "@/components/ui/button";
 import { DeleteTemplateButton } from "@/components/proposals/delete-template-button";
+import { UseTemplateButton } from "@/components/proposals/use-template-button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 
@@ -79,6 +80,7 @@ export default async function ProposalTemplatesPage({
                   <td className="px-5 py-3 text-muted-foreground">{fmtDate(tpl.updatedAt)}</td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      <UseTemplateButton id={tpl.id} />
                       <Link
                         href={`/app/proposals/templates/${tpl.id}/edit`}
                         title={t("edit")}

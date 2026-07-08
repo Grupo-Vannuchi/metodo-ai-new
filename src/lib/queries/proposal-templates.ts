@@ -48,6 +48,14 @@ export async function listProposalTemplates(organizationId: string): Promise<Pro
   }));
 }
 
+/** Lightweight {id, name} list for the "generate from template" picker. */
+export async function listProposalTemplateOptions(
+  organizationId: string,
+): Promise<{ id: string; name: string }[]> {
+  const db = tenantDb(organizationId);
+  return db.proposalTemplate.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+}
+
 export type ProposalTemplateDetail = {
   id: string;
   name: string;

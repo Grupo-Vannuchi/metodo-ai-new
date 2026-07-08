@@ -1,6 +1,7 @@
 import { getOrgContext } from "@/lib/tenant";
 import { getProposal } from "@/lib/queries/proposals";
-import { renderProposalDocument } from "@/lib/proposals/document";
+import { renderProposalDocument, renderProposalBuilderDocument } from "@/lib/proposals/document";
+import { buildProposalVars } from "@/lib/proposals/variables";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,10 +20,35 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!proposal) return new Response("Not found", { status: 404 });
 
   const format = new URL(req.url).searchParams.get("format");
-  const html = renderProposalDocument(proposal, {
-    orgName: ctx.organization.name,
-    autoPrint: format === "pdf",
-  });
+  const autoPrint = format === "pdf";
+  const orgName = ctx.organization.name;
+
+  // A proposal generated from a rich template carries a `document`; render that
+  // layout (resolving {{variables}}) instead of the default structured sheet.
+  const html =
+    proposal.document.sections.length > 0
+      ? renderProposalBuilderDocument(
+          proposal.document,
+          buildProposalVars({
+            clientName: proposal.clientName,
+            clientCompany: proposal.clientCompany,
+            clientEmail: proposal.clientEmail,
+            clientPhone: proposal.clientPhone,
+            clientAddress: proposal.clientAddress,
+            city: proposal.document.city,
+            title: proposal.title,
+            code: proposal.code,
+            subtotal: proposal.subtotal,
+            discount: proposal.discount,
+            total: proposal.total,
+            validUntil: proposal.validUntil,
+            date: proposal.createdAt,
+            ownerName: proposal.ownerName,
+            orgName,
+          }),
+          { orgName, title: proposal.title, code: proposal.code, createdAt: proposal.createdAt, autoPrint },
+        )
+      : renderProposalDocument(proposal, { orgName, autoPrint });
 
   if (format === "word") {
     const filename = `${proposal.code ?? "proposta"}.doc`.replace(/[^\w.\-]+/g, "_");
