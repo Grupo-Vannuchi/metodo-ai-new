@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { Plus } from "lucide-react";
+import { Plus, LayoutTemplate } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import {
   listProposals,
@@ -52,10 +52,16 @@ export default async function ProposalsPage({
           <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
           <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
         </div>
-        <Link href="/app/proposals/new" className={buttonVariants()}>
-          <Plus className="size-4" />
-          {t("new")}
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/app/proposals/templates" className={buttonVariants({ variant: "outline" })}>
+            <LayoutTemplate className="size-4" />
+            {t("templates")}
+          </Link>
+          <Link href="/app/proposals/new" className={buttonVariants()}>
+            <Plus className="size-4" />
+            {t("new")}
+          </Link>
+        </div>
       </div>
 
       <ProposalsToolbar status={status} period={period} />

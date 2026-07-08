@@ -327,6 +327,7 @@ model ProductService {
 
   opportunities Opportunity[]
   proposalItems ProposalItem[]
+  templateItems ProposalTemplateItem[]
 
   @@index([organizationId, active])
   @@map("product_services")
@@ -433,6 +434,10 @@ model Proposal {
   intro      String?  @db.Text
   /// Internal notes (never printed).
   notes      String?  @db.Text
+  /// Rich document builder payload (cover/header/footer/sections). When present,
+  /// the PDF/Word export renders this layout instead of the default template.
+  /// Shape validated in src/lib/validations/proposal-template.ts.
+  document   Json?
   validUntil DateTime?
 
   discount Decimal @default(0) @db.Decimal(14, 2)
@@ -499,6 +504,51 @@ model ProposalAttachment {
 
   @@index([organizationId, proposalId])
   @@map("proposal_attachments")
+}
+
+/// A reusable, org-shared proposal template: a rich document blueprint plus
+/// default commercial fields. When a proposal is generated from it, {{variables}}
+/// in the document/text are substituted from the client/opportunity data.
+model ProposalTemplate {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  /// Rich document builder payload (cover/header/footer/signature/logos/sections).
+  /// Shape validated in src/lib/validations/proposal-template.ts.
+  document       Json
+  /// Default validity in days (generated proposal's validUntil = today + N).
+  validityDays   Int?
+  discount       Decimal  @default(0) @db.Decimal(14, 2)
+  ownerId        String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  items ProposalTemplateItem[]
+
+  @@index([organizationId, name])
+  @@map("proposal_templates")
+}
+
+/// A default line item of a proposal template (catalog product/service or free
+/// text). Mirrors ProposalItem, minus the computed total (recomputed on use).
+model ProposalTemplateItem {
+  id               String   @id @default(cuid())
+  organizationId   String
+  templateId       String
+  productServiceId String?
+  name             String
+  description      String?  @db.Text
+  quantity         Decimal  @default(1) @db.Decimal(14, 2)
+  unitPrice        Decimal  @default(0) @db.Decimal(14, 2)
+  order            Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  template       ProposalTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  productService ProductService?  @relation(fields: [productServiceId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, templateId])
+  @@map("proposal_template_items")
 }
 
 // ---------------------------------------------------------------------------
