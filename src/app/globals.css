@@ -221,3 +221,56 @@
 .bg-crossfade {
   transition: opacity 2000ms ease-in-out !important;
 }
+
+/* Tiptap rich-text editor (proposal template builder). The editor content is a
+   `.ProseMirror` div; base typography here, placeholder shown when empty. */
+.ProseMirror {
+  outline: none;
+}
+.ProseMirror p {
+  margin: 0 0 0.5rem;
+}
+.ProseMirror h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0.5rem 0 0.4rem;
+}
+.ProseMirror h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0.5rem 0 0.3rem;
+}
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-left: 1.4rem;
+  margin: 0 0 0.5rem;
+}
+.ProseMirror ul {
+  list-style: disc;
+}
+.ProseMirror ol {
+  list-style: decimal;
+}
+.ProseMirror blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 0.75rem;
+  color: var(--muted-foreground);
+  margin: 0 0 0.5rem;
+}
+.ProseMirror a {
+  color: var(--brand);
+  text-decoration: underline;
+}
+.ProseMirror hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0.75rem 0;
+}
+/* Placeholder for an empty editor (Placeholder extension). */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--muted-foreground);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}

@@ -4,8 +4,9 @@ import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Plus, Trash2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Textarea } from "@/components/ui/field";
+import { Input, Label } from "@/components/ui/field";
 import { MoneyInput } from "@/components/ui/money-input";
+import { RichTextEditor } from "@/components/proposals/rich-text-editor";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { formatBRL } from "@/lib/money";
@@ -253,13 +254,13 @@ export function ProposalTemplateForm({
                     <Trash2 className="size-4" />
                   </button>
                 </div>
-                <Textarea
-                  value={s.html}
-                  onChange={(e) => patchSection(s.key, { html: e.target.value })}
-                  rows={4}
-                  placeholder={t("form.sectionBody")}
-                  className="mt-2"
-                />
+                <div className="mt-2">
+                  <RichTextEditor
+                    value={s.html}
+                    onChange={(html) => patchSection(s.key, { html })}
+                    placeholder={t("form.sectionBody")}
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -280,12 +281,12 @@ export function ProposalTemplateForm({
         <legend className="px-1 text-sm font-medium">{t("form.sectionLayout")}</legend>
         <div className="mt-2 grid gap-4 sm:grid-cols-2">
           <div>
-            <Label htmlFor="headerHtml">{t("form.header")}</Label>
-            <Textarea id="headerHtml" rows={3} value={headerHtml} onChange={(e) => setHeaderHtml(e.target.value)} />
+            <Label>{t("form.header")}</Label>
+            <RichTextEditor value={headerHtml} onChange={setHeaderHtml} minHeight="5rem" />
           </div>
           <div>
-            <Label htmlFor="footerHtml">{t("form.footer")}</Label>
-            <Textarea id="footerHtml" rows={3} value={footerHtml} onChange={(e) => setFooterHtml(e.target.value)} />
+            <Label>{t("form.footer")}</Label>
+            <RichTextEditor value={footerHtml} onChange={setFooterHtml} minHeight="5rem" />
           </div>
         </div>
       </fieldset>
