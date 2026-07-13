@@ -45,10 +45,6 @@ export default async function ProposalTemplatesPage({
         <div className="rounded-xl border border-dashed border-border p-10 text-center">
           <FileText className="mx-auto size-8 text-muted-foreground" />
           <p className="mt-3 text-muted-foreground">{t("empty")}</p>
-          <Link href="/app/proposals/templates/new" className={buttonVariants({ size: "sm" })}>
-            <Plus className="size-4" />
-            {t("new")}
-          </Link>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-card">
