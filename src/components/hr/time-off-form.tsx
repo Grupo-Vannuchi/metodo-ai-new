@@ -57,7 +57,7 @@ export function TimeOffForm({
     <form onSubmit={onSubmit} className="flex flex-col gap-6" noValidate>
       <fieldset className="rounded-xl border border-border bg-card p-5">
         <legend className="px-1 text-sm font-medium">{t("timeOff.form.section")}</legend>
-        <div className="mt-2 grid gap-4 sm:grid-cols-2">
+        <div className="mt-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="sm:col-span-2">
             <Label htmlFor="employeeId">{t("timeOff.form.employee")}</Label>
             <select
@@ -85,11 +85,6 @@ export function TimeOffForm({
               ))}
             </select>
           </div>
-          <div className="flex items-end">
-            <p className="text-sm text-muted-foreground">
-              {days > 0 ? t("timeOff.dayCount", { count: days }) : ""}
-            </p>
-          </div>
           <div>
             <Label htmlFor="startDate">{t("timeOff.form.start")}</Label>
             <Input id="startDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -97,8 +92,11 @@ export function TimeOffForm({
           <div>
             <Label htmlFor="endDate">{t("timeOff.form.end")}</Label>
             <Input id="endDate" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            {days > 0 ? (
+              <p className="mt-1 text-xs text-muted-foreground">{t("timeOff.dayCount", { count: days })}</p>
+            ) : null}
           </div>
-          <div className="sm:col-span-2">
+          <div className="sm:col-span-2 lg:col-span-4">
             <Label htmlFor="reason">{t("timeOff.form.reason")}</Label>
             <Textarea id="reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
           </div>

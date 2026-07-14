@@ -105,7 +105,7 @@ export default async function EmployeeDetailPage({
     );
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -140,7 +140,7 @@ export default async function EmployeeDetailPage({
         <p className="mt-1 text-xs text-muted-foreground">{t("salaryHint")}</p>
       </section>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <section className="rounded-xl border border-border bg-card p-5">
           <h2 className="mb-3 text-sm font-semibold">{t("form.sectionPersonal")}</h2>
           <dl className="flex flex-col gap-1.5">{rows(personal)}</dl>
@@ -149,12 +149,11 @@ export default async function EmployeeDetailPage({
           <h2 className="mb-3 text-sm font-semibold">{t("form.sectionContract")}</h2>
           <dl className="flex flex-col gap-1.5">{rows(contract)}</dl>
         </section>
+        <section className="rounded-xl border border-border bg-card p-5">
+          <h2 className="mb-3 text-sm font-semibold">{t("form.sectionPayment")}</h2>
+          <dl className="flex flex-col gap-1.5">{rows(payment)}</dl>
+        </section>
       </div>
-
-      <section className="rounded-xl border border-border bg-card p-5">
-        <h2 className="mb-3 text-sm font-semibold">{t("form.sectionPayment")}</h2>
-        <dl className="flex flex-col gap-1.5">{rows(payment)}</dl>
-      </section>
 
       {employee.notes ? (
         <section className="rounded-xl border border-border bg-card p-5">

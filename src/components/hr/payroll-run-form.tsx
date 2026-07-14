@@ -61,7 +61,7 @@ export function PayrollRunForm({
     <form onSubmit={onSubmit} className="flex flex-col gap-6" noValidate>
       <fieldset className="rounded-xl border border-border bg-card p-5">
         <legend className="px-1 text-sm font-medium">{t("payroll.form.section")}</legend>
-        <div className="mt-2 grid gap-4 sm:grid-cols-2">
+        <div className="mt-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <Label htmlFor="month">{t("payroll.form.month")}</Label>
             <select id="month" className={selectCls} value={month} onChange={(e) => setMonth(e.target.value)}>
@@ -101,7 +101,7 @@ export function PayrollRunForm({
             </select>
             <p className="mt-1 text-xs text-muted-foreground">{t("payroll.form.categoryHint")}</p>
           </div>
-          <div className="sm:col-span-2">
+          <div className="sm:col-span-2 lg:col-span-4">
             <Label htmlFor="notes">{t("payroll.form.notes")}</Label>
             <Textarea id="notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>

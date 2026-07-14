@@ -59,7 +59,7 @@ export default async function EditEmployeePage({
   };
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight">{t("form.editTitle")}</h1>
         <Link href={`/app/hr/employees/${id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>

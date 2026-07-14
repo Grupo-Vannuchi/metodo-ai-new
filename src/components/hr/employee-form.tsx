@@ -104,8 +104,8 @@ export function EmployeeForm({
       {/* Personal */}
       <fieldset className="rounded-xl border border-border bg-card p-5">
         <legend className="px-1 text-sm font-medium">{t("form.sectionPersonal")}</legend>
-        <div className="mt-2 grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
+        <div className="mt-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="sm:col-span-2 lg:col-span-3">
             <Label htmlFor="name">{t("form.name")}</Label>
             <Input id="name" aria-invalid={Boolean(errors.name)} {...register("name", { required: tv("required") })} />
             {errors.name ? <p className="mt-1 text-sm text-red-500">{errors.name.message}</p> : null}
@@ -177,7 +177,7 @@ export function EmployeeForm({
       {/* Contract */}
       <fieldset className="rounded-xl border border-border bg-card p-5">
         <legend className="px-1 text-sm font-medium">{t("form.sectionContract")}</legend>
-        <div className="mt-2 grid gap-4 sm:grid-cols-2">
+        <div className="mt-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <Label htmlFor="jobRoleId">{t("form.jobRole")}</Label>
             <select id="jobRoleId" className={selectCls} {...register("jobRoleId")}>
@@ -263,7 +263,7 @@ export function EmployeeForm({
       {/* Payment */}
       <fieldset className="rounded-xl border border-border bg-card p-5">
         <legend className="px-1 text-sm font-medium">{t("form.sectionPayment")}</legend>
-        <div className="mt-2 grid gap-4 sm:grid-cols-2">
+        <div className="mt-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <Label htmlFor="bankName">{t("form.bankName")}</Label>
             <Input id="bankName" {...register("bankName")} />
@@ -280,7 +280,7 @@ export function EmployeeForm({
             <Label htmlFor="bankAccount">{t("form.bankAccount")}</Label>
             <Input id="bankAccount" {...register("bankAccount")} />
           </div>
-          <div className="sm:col-span-2">
+          <div className="sm:col-span-2 lg:col-span-3">
             <Label htmlFor="notes">{t("form.notes")}</Label>
             <Textarea id="notes" rows={3} {...register("notes")} />
             <p className="mt-1 text-xs text-muted-foreground">{t("form.notesHint")}</p>
