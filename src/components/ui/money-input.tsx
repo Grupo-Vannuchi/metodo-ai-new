@@ -18,6 +18,7 @@ export function MoneyInput({
   name,
   defaultValue = 0,
   required,
+  disabled,
   className,
   onValueChange,
 }: {
@@ -25,6 +26,7 @@ export function MoneyInput({
   name?: string;
   defaultValue?: number;
   required?: boolean;
+  disabled?: boolean;
   className?: string;
   onValueChange?: (value: number) => void;
 }) {
@@ -49,6 +51,7 @@ export function MoneyInput({
         onChange={(e) => handle(e.target.value)}
         placeholder="0,00"
         required={required}
+        disabled={disabled}
         className={cn("pl-9", className)}
       />
       {name ? <input type="hidden" name={name} value={(cents / 100).toFixed(2)} /> : null}

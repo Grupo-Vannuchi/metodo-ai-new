@@ -1000,6 +1000,10 @@ model FinanceEntry {
   contactId          String?
   companyId          String?
   opportunityId      String?
+  /// Optional HR links (ids only) — set when a payroll run is paid, so a salary
+  /// expense traces back to the employee and to the folha that generated it.
+  employeeId         String?
+  payrollRunId       String?
   /// Installments: entries of the same sale share a group id (NNNN.../uuid),
   /// with their position (installmentNo) out of installmentTotal.
   installmentGroupId String?
@@ -1016,6 +1020,8 @@ model FinanceEntry {
   @@index([organizationId, settledAt])
   @@index([organizationId, opportunityId])
   @@index([organizationId, contactId])
+  @@index([organizationId, employeeId])
+  @@index([organizationId, payrollRunId])
   @@map("finance_entries")
 }
 
@@ -1408,9 +1414,10 @@ model Employee {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  jobRole    JobRole?    @relation(fields: [jobRoleId], references: [id], onDelete: SetNull)
-  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  documents  EmployeeDocument[]
+  jobRole      JobRole?    @relation(fields: [jobRoleId], references: [id], onDelete: SetNull)
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  documents    EmployeeDocument[]
+  payrollItems PayrollItem[]
 
   /// At most one employee per system user, per org.
   @@unique([organizationId, userId])
@@ -1438,4 +1445,98 @@ model EmployeeDocument {
 
   @@index([organizationId, employeeId])
   @@map("employee_documents")
+}
+
+// ---------------------------------------------------------------------------
+// Payroll (folha de pagamento) — the bridge from HR into the finance ledger.
+// Paying a run posts one EXPENSE FinanceEntry per employee, so salaries show up
+// in Fluxo de Caixa and DRE without any re-typing.
+// ---------------------------------------------------------------------------
+
+/// DRAFT = editável; APPROVED = fechada, pronta para pagar; PAID = lançada no
+/// Financeiro (imutável).
+enum PayrollStatus {
+  DRAFT
+  APPROVED
+  PAID
+}
+
+/// EARNING = provento (soma); DEDUCTION = desconto (subtrai).
+enum PayrollLineType {
+  EARNING
+  DEDUCTION
+}
+
+/// One month's payroll (competência ano/mês). Unique per org+month.
+model PayrollRun {
+  id             String        @id @default(cuid())
+  organizationId String
+  year           Int
+  month          Int // 1-12
+  status         PayrollStatus @default(DRAFT)
+  /// Payment date — becomes the generated entries' dueDate/settledAt.
+  payDate        DateTime
+  /// Finance category for the generated expenses (drives the DRE breakdown).
+  categoryId     String?
+  notes          String?
+
+  totalEarnings   Decimal @default(0) @db.Decimal(14, 2)
+  totalDeductions Decimal @default(0) @db.Decimal(14, 2)
+  totalNet        Decimal @default(0) @db.Decimal(14, 2)
+
+  approvedAt  DateTime?
+  paidAt      DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items PayrollItem[]
+
+  @@unique([organizationId, year, month])
+  @@index([organizationId, status])
+  @@map("payroll_runs")
+}
+
+/// One employee's payslip inside a run. Carries name/role snapshots so the
+/// payslip stays stable even if the employee record changes or is deleted.
+model PayrollItem {
+  id             String  @id @default(cuid())
+  organizationId String
+  payrollRunId   String
+  employeeId     String?
+  employeeName   String
+  jobRoleName    String?
+
+  baseSalary      Decimal @default(0) @db.Decimal(12, 2)
+  totalEarnings   Decimal @default(0) @db.Decimal(12, 2)
+  totalDeductions Decimal @default(0) @db.Decimal(12, 2)
+  netPay          Decimal @default(0) @db.Decimal(12, 2)
+
+  /// The FinanceEntry generated for this person when the run was paid.
+  financeEntryId String?
+  createdAt      DateTime @default(now())
+
+  run      PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employee Employee?  @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  lines    PayrollLine[]
+
+  @@unique([payrollRunId, employeeId])
+  @@index([organizationId, employeeId])
+  @@map("payroll_items")
+}
+
+/// A line on a payslip: "Salário base", "Comissão", "INSS", "Vale-transporte"…
+model PayrollLine {
+  id             String          @id @default(cuid())
+  organizationId String
+  payrollItemId  String
+  type           PayrollLineType
+  label          String
+  amount         Decimal         @db.Decimal(12, 2)
+  order          Int             @default(0)
+
+  item PayrollItem @relation(fields: [payrollItemId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, payrollItemId])
+  @@map("payroll_lines")
 }

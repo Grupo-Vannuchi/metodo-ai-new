@@ -562,6 +562,7 @@
     "nav": {
       "overview": "Overview",
       "employees": "Employees",
+      "payroll": "Payroll",
       "catalogs": "Roles and departments"
     },
     "back": "Back",
@@ -689,6 +690,94 @@
       "confirmDelete": "Delete \"{name}\"?",
       "confirmDeleteInUse": "Delete \"{name}\"? {count, plural, one {# employee will be} other {# employees will be}} left without this link.",
       "employeeCount": "{count, plural, =0 {nobody} one {# person} other {# people}}"
+    },
+    "history": {
+      "title": "Payment history",
+      "hint": "Every payslip this person appears in.",
+      "empty": "No payments recorded yet.",
+      "payslip": "Payslip"
+    },
+    "payroll": {
+      "hint": "One run per month. On payment, each employee becomes an expense in Finance.",
+      "new": "New payroll",
+      "newTitle": "New payroll run",
+      "empty": "No payroll runs yet.",
+      "runTitle": "Payroll {competence}",
+      "payDateLabel": "Paid on {date}",
+      "colCompetence": "Period",
+      "colStatus": "Status",
+      "colEmployees": "Employees",
+      "colPayDate": "Pay date",
+      "colNet": "Net",
+      "colEmployee": "Employee",
+      "status": {
+        "DRAFT": "Draft",
+        "APPROVED": "Approved",
+        "PAID": "Paid"
+      },
+      "month": {
+        "1": "January",
+        "2": "February",
+        "3": "March",
+        "4": "April",
+        "5": "May",
+        "6": "June",
+        "7": "July",
+        "8": "August",
+        "9": "September",
+        "10": "October",
+        "11": "November",
+        "12": "December"
+      },
+      "form": {
+        "section": "Period and payment",
+        "month": "Month",
+        "year": "Year",
+        "payDate": "Pay date",
+        "payDateHint": "Becomes the date of the expenses in Finance.",
+        "category": "Category (P&L)",
+        "noCategory": "No category",
+        "categoryHint": "Classifies the generated expenses in the P&L.",
+        "notes": "Notes",
+        "seedHint": "The run starts with one payslip per active employee, seeded with their base salary as an earning. You then adjust each one (bonus, commission, deductions…).",
+        "create": "Create payroll",
+        "creating": "Creating…"
+      },
+      "draftHint": "Draft: click an employee to adjust earnings and deductions. Approve once it is closed.",
+      "approve": "Approve",
+      "reopen": "Reopen",
+      "pay": "Pay",
+      "confirmPay": "Pay this payroll and post {total} of expenses into Finance? One entry per employee. This cannot be undone.",
+      "confirmDelete": "Delete this payroll run? Its payslips will be deleted.",
+      "paidTitle": "Payroll paid on {date}",
+      "paidHint": "The expenses were posted into Finance — one per employee.",
+      "seeInFinance": "See in Finance",
+      "earnings": "Earnings",
+      "deductions": "Deductions",
+      "net": "Net",
+      "totalNet": "Total net",
+      "noLines": "No lines on this payslip.",
+      "lineType": "Type",
+      "lineTypeLabel": {
+        "EARNING": "Earning",
+        "DEDUCTION": "Deduction"
+      },
+      "lineLabel": "Description (e.g. Commission, Tax…)",
+      "addEarning": "Earning",
+      "addDeduction": "Deduction",
+      "removeLine": "Remove line",
+      "saveLines": "Save payslip",
+      "payslipPdf": "Payslip as PDF",
+      "payslipWord": "Payslip as Word",
+      "postedToFinance": "Posted to Finance",
+      "error": {
+        "invalid": "Invalid data.",
+        "unauthorized": "Session expired.",
+        "duplicate": "A payroll for that month already exists.",
+        "locked": "The payroll does not allow this action in its current status.",
+        "no_employees": "No active employees to build the payroll.",
+        "unknown": "Something went wrong."
+      }
     },
     "error": {
       "invalid": "Invalid data.",

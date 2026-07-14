@@ -57,6 +57,9 @@ const TENANT_MODELS = new Set<string>([
   "JobRole",
   "Employee",
   "EmployeeDocument",
+  "PayrollRun",
+  "PayrollItem",
+  "PayrollLine",
 ]);
 
 const WHERE_OPS = new Set<string>([

@@ -562,6 +562,7 @@
     "nav": {
       "overview": "Visão geral",
       "employees": "Funcionários",
+      "payroll": "Folha",
       "catalogs": "Cargos e departamentos"
     },
     "back": "Voltar",
@@ -689,6 +690,94 @@
       "confirmDelete": "Excluir \"{name}\"?",
       "confirmDeleteInUse": "Excluir \"{name}\"? {count, plural, one {# funcionário ficará} other {# funcionários ficarão}} sem este vínculo.",
       "employeeCount": "{count, plural, =0 {ninguém} one {# pessoa} other {# pessoas}}"
+    },
+    "history": {
+      "title": "Histórico de pagamentos",
+      "hint": "Todos os holerites em que esta pessoa aparece.",
+      "empty": "Nenhum pagamento registrado ainda.",
+      "payslip": "Holerite"
+    },
+    "payroll": {
+      "hint": "Uma folha por mês. Ao pagar, cada funcionário vira uma despesa no Financeiro.",
+      "new": "Nova folha",
+      "newTitle": "Nova folha de pagamento",
+      "empty": "Nenhuma folha criada ainda.",
+      "runTitle": "Folha {competence}",
+      "payDateLabel": "Pagamento em {date}",
+      "colCompetence": "Competência",
+      "colStatus": "Situação",
+      "colEmployees": "Funcionários",
+      "colPayDate": "Pagamento",
+      "colNet": "Líquido",
+      "colEmployee": "Funcionário",
+      "status": {
+        "DRAFT": "Rascunho",
+        "APPROVED": "Aprovada",
+        "PAID": "Paga"
+      },
+      "month": {
+        "1": "Janeiro",
+        "2": "Fevereiro",
+        "3": "Março",
+        "4": "Abril",
+        "5": "Maio",
+        "6": "Junho",
+        "7": "Julho",
+        "8": "Agosto",
+        "9": "Setembro",
+        "10": "Outubro",
+        "11": "Novembro",
+        "12": "Dezembro"
+      },
+      "form": {
+        "section": "Competência e pagamento",
+        "month": "Mês",
+        "year": "Ano",
+        "payDate": "Data de pagamento",
+        "payDateHint": "Vira a data das despesas no Financeiro.",
+        "category": "Categoria (DRE)",
+        "noCategory": "Sem categoria",
+        "categoryHint": "Classifica as despesas geradas no DRE.",
+        "notes": "Observações",
+        "seedHint": "A folha já nasce com um holerite por funcionário ativo, com o salário base como provento. Depois você ajusta cada um (bônus, comissão, INSS, VT…).",
+        "create": "Criar folha",
+        "creating": "Criando…"
+      },
+      "draftHint": "Rascunho: clique em um funcionário para ajustar proventos e descontos. Aprove quando estiver fechada.",
+      "approve": "Aprovar",
+      "reopen": "Reabrir",
+      "pay": "Pagar",
+      "confirmPay": "Pagar a folha e lançar {total} em despesas no Financeiro? Um lançamento por funcionário. Esta ação não pode ser desfeita.",
+      "confirmDelete": "Excluir esta folha? Os holerites serão apagados.",
+      "paidTitle": "Folha paga em {date}",
+      "paidHint": "As despesas foram lançadas no Financeiro — uma por funcionário.",
+      "seeInFinance": "Ver no Financeiro",
+      "earnings": "Proventos",
+      "deductions": "Descontos",
+      "net": "Líquido",
+      "totalNet": "Total líquido",
+      "noLines": "Nenhuma linha neste holerite.",
+      "lineType": "Tipo",
+      "lineTypeLabel": {
+        "EARNING": "Provento",
+        "DEDUCTION": "Desconto"
+      },
+      "lineLabel": "Descrição (ex.: Comissão, INSS…)",
+      "addEarning": "Provento",
+      "addDeduction": "Desconto",
+      "removeLine": "Remover linha",
+      "saveLines": "Salvar holerite",
+      "payslipPdf": "Holerite em PDF",
+      "payslipWord": "Holerite em Word",
+      "postedToFinance": "Lançado no Financeiro",
+      "error": {
+        "invalid": "Dados inválidos.",
+        "unauthorized": "Sessão expirada.",
+        "duplicate": "Já existe uma folha para esse mês.",
+        "locked": "A folha não permite esta ação na situação atual.",
+        "no_employees": "Nenhum funcionário ativo para gerar a folha.",
+        "unknown": "Algo deu errado."
+      }
     },
     "error": {
       "invalid": "Dados inválidos.",

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const tabs = [
   { href: "/app/hr", key: "overview" },
   { href: "/app/hr/employees", key: "employees" },
+  { href: "/app/hr/payroll", key: "payroll" },
   { href: "/app/hr/settings", key: "catalogs" },
 ] as const;
 
@@ -15,8 +16,10 @@ export function HrNav() {
   const t = useTranslations("hr");
   const pathname = usePathname();
 
-  // Focused screens (employee detail / form) get their own heading instead.
-  if (pathname.startsWith("/app/hr/employees/")) return null;
+  // Focused screens (employee record, a payroll run) get their own heading.
+  if (pathname.startsWith("/app/hr/employees/") || pathname.startsWith("/app/hr/payroll/")) {
+    return null;
+  }
 
   return (
     <div>
