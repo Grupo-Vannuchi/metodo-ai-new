@@ -10,14 +10,19 @@ import { usePathname, useRouter } from "@/i18n/navigation";
  */
 const TOP_LEVEL = new Set([
   "/app",
+  "/app/my",
+  "/app/feed",
   "/app/contacts",
   "/app/companies",
   "/app/crm",
+  "/app/proposals",
+  "/app/tasks",
   "/app/campaigns",
   "/app/prospecting",
   "/app/connections",
   "/app/inbox",
   "/app/finance",
+  "/app/hr",
   "/app/settings",
 ]);
 

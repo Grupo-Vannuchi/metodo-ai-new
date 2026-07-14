@@ -102,12 +102,6 @@ export default async function PayrollRunPage({
       ) : null}
 
       <PayrollItems items={run.items} editable={run.status === "DRAFT"} />
-
-      <div>
-        <Link href="/app/hr/payroll" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-          {t("back")}
-        </Link>
-      </div>
     </div>
   );
 }

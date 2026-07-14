@@ -251,12 +251,6 @@ export default async function EmployeeDetailPage({
       </section>
 
       <EmployeeDocuments employeeId={employee.id} documents={documents} />
-
-      <div>
-        <Link href="/app/hr/employees" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-          {t("back")}
-        </Link>
-      </div>
     </div>
   );
 }

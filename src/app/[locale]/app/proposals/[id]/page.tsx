@@ -11,7 +11,6 @@ import { DeleteProposalButton } from "@/components/proposals/delete-proposal-but
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { formatBRL } from "@/lib/money";
-import { cn } from "@/lib/utils";
 import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
@@ -222,12 +221,6 @@ export default async function ProposalDetailPage({
       ) : null}
 
       <ProposalAttachments proposalId={proposal.id} attachments={attachments} />
-
-      <div>
-        <Link href="/app/proposals" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-          {t("back")}
-        </Link>
-      </div>
     </div>
   );
 }

@@ -2,8 +2,6 @@ import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
 import { employeeFormOptions } from "@/lib/queries/hr";
 import { EmployeeForm, type EmployeeFormDefaults } from "@/components/hr/employee-form";
-import { buttonVariants } from "@/components/ui/button";
-import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
@@ -51,12 +49,7 @@ export default async function NewEmployeePage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight">{t("form.newTitle")}</h1>
-        <Link href="/app/hr/employees" className={buttonVariants({ variant: "outline", size: "sm" })}>
-          {t("back")}
-        </Link>
-      </div>
+      <h1 className="text-2xl font-bold tracking-tight">{t("form.newTitle")}</h1>
       <EmployeeForm defaults={defaults} options={options} />
     </div>
   );
