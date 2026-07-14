@@ -1614,7 +1614,62 @@
     "when": "Quando",
     "who": "Quem",
     "action": "Ação",
-    "entity": "Entidade"
+    "entity": "Onde",
+    "actions": {
+      "access_template": {
+        "created": "Criou um template de acesso",
+        "updated": "Alterou um template de acesso",
+        "deleted": "Excluiu um template de acesso"
+      },
+      "campaign": {
+        "created": "Criou uma campanha",
+        "updated": "Alterou uma campanha",
+        "started": "Disparou uma campanha"
+      },
+      "connection": {
+        "created": "Conectou uma integração",
+        "updated": "Alterou uma integração",
+        "deleted": "Removeu uma integração"
+      },
+      "extraction": {
+        "started": "Iniciou uma prospecção",
+        "imported": "Importou leads para o CRM",
+        "toFunnel": "Enviou leads para o funil"
+      },
+      "finance": {
+        "entry": {
+          "created": "Criou um lançamento",
+          "updated": "Alterou um lançamento",
+          "deleted": "Excluiu um lançamento",
+          "settled": "Baixou um lançamento (pago/recebido)",
+          "reopened": "Reabriu um lançamento (voltou a pendente)"
+        }
+      },
+      "member": {
+        "invited": "Convidou um membro",
+        "removed": "Removeu um membro da equipe",
+        "left": "Saiu da equipe",
+        "role_changed": "Alterou o papel de um membro",
+        "template_set": "Alterou o acesso de um membro"
+      },
+      "task": {
+        "created": "Criou uma tarefa",
+        "updated": "Alterou uma tarefa",
+        "deleted": "Excluiu uma tarefa"
+      }
+    },
+    "entities": {
+      "AccessTemplate": "Template de acesso",
+      "Campaign": "Campanha",
+      "ExtractionJob": "Prospecção",
+      "FinanceEntry": "Financeiro",
+      "IntegrationConnection": "Conexão",
+      "Invitation": "Convite",
+      "Membership": "Equipe",
+      "Task": "Tarefa",
+      "companies": "Empresas",
+      "contacts": "Contatos"
+    }
   },
   "unsubscribe": {
     "title": "Descadastrar",

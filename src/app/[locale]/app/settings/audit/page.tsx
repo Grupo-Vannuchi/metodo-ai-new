@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { requireOrgContext, hasRole } from "@/lib/tenant";
 import { listAuditLogs } from "@/lib/queries/audit";
+import { toAuditAction, toAuditEntity } from "@/config/audit";
 import { redirect } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 
@@ -45,14 +46,28 @@ export default async function AuditPage({
               </tr>
             </thead>
             <tbody>
-              {logs.map((l) => (
-                <tr key={l.id} className="border-b border-border last:border-0">
-                  <td className="px-5 py-3 text-muted-foreground">{df.format(l.createdAt)}</td>
-                  <td className="px-5 py-3">{l.userName}</td>
-                  <td className="px-5 py-3 font-mono text-xs">{l.action}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{l.entity}</td>
-                </tr>
-              ))}
+              {logs.map((l) => {
+                // Historical rows may carry a code we no longer know — fall back
+                // to showing it raw (in mono) instead of a broken label.
+                const action = toAuditAction(l.action);
+                const entity = toAuditEntity(l.entity);
+                return (
+                  <tr key={l.id} className="border-b border-border last:border-0">
+                    <td className="px-5 py-3 text-muted-foreground">{df.format(l.createdAt)}</td>
+                    <td className="px-5 py-3">{l.userName}</td>
+                    <td className="px-5 py-3">
+                      {action ? (
+                        t(`actions.${action}`)
+                      ) : (
+                        <span className="font-mono text-xs text-muted-foreground">{l.action}</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-muted-foreground">
+                      {entity ? t(`entities.${entity}`) : l.entity}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

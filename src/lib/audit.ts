@@ -2,10 +2,13 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { tenantDb } from "@/lib/tenant-db";
 import type { OrgContext } from "@/lib/tenant";
+import type { AuditAction, AuditEntity } from "@/config/audit";
 
+/** Only known keys are accepted, so every logged action has a human label
+ * (see src/config/audit.ts). */
 export type AuditEntry = {
-  action: string;
-  entity: string;
+  action: AuditAction;
+  entity: AuditEntity;
   entityId?: string;
   meta?: Record<string, unknown>;
 };

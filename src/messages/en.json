@@ -1614,7 +1614,62 @@
     "when": "When",
     "who": "Who",
     "action": "Action",
-    "entity": "Entity"
+    "entity": "Where",
+    "actions": {
+      "access_template": {
+        "created": "Created an access template",
+        "updated": "Changed an access template",
+        "deleted": "Deleted an access template"
+      },
+      "campaign": {
+        "created": "Created a campaign",
+        "updated": "Changed a campaign",
+        "started": "Launched a campaign"
+      },
+      "connection": {
+        "created": "Connected an integration",
+        "updated": "Changed an integration",
+        "deleted": "Removed an integration"
+      },
+      "extraction": {
+        "started": "Started a prospecting run",
+        "imported": "Imported leads into the CRM",
+        "toFunnel": "Sent leads to the funnel"
+      },
+      "finance": {
+        "entry": {
+          "created": "Created an entry",
+          "updated": "Changed an entry",
+          "deleted": "Deleted an entry",
+          "settled": "Settled an entry (paid/received)",
+          "reopened": "Reopened an entry (back to pending)"
+        }
+      },
+      "member": {
+        "invited": "Invited a member",
+        "removed": "Removed a member from the team",
+        "left": "Left the team",
+        "role_changed": "Changed a member's role",
+        "template_set": "Changed a member's access"
+      },
+      "task": {
+        "created": "Created a task",
+        "updated": "Changed a task",
+        "deleted": "Deleted a task"
+      }
+    },
+    "entities": {
+      "AccessTemplate": "Access template",
+      "Campaign": "Campaign",
+      "ExtractionJob": "Prospecting",
+      "FinanceEntry": "Finance",
+      "IntegrationConnection": "Connection",
+      "Invitation": "Invitation",
+      "Membership": "Team",
+      "Task": "Task",
+      "companies": "Companies",
+      "contacts": "Contacts"
+    }
   },
   "unsubscribe": {
     "title": "Unsubscribe",
