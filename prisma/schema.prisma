@@ -1305,3 +1305,137 @@ model PinnedItem {
   @@index([organizationId, userId])
   @@map("pinned_items")
 }
+
+// ---------------------------------------------------------------------------
+// Human Resources (RH) — employees, their contracts and documents. Payroll (and
+// its bridge into the finance ledger) lives in the next section.
+// ---------------------------------------------------------------------------
+
+enum EmployeeStatus {
+  ACTIVE // ativo
+  ON_LEAVE // afastado (férias/licença)
+  TERMINATED // desligado
+}
+
+enum ContractType {
+  CLT
+  PJ
+  INTERN // estágio
+  TEMPORARY // temporário
+  FREELANCER // autônomo
+}
+
+/// A department (org catalog), e.g. "Comercial", "Operações".
+model Department {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  employees Employee[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("departments")
+}
+
+/// A job role / cargo (org catalog), e.g. "Vendedor", "Engenheiro".
+model JobRole {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  employees Employee[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("job_roles")
+}
+
+/// An employee of the organization. Deliberately SEPARATE from User/Membership:
+/// an employee may have no system login (`userId` null), and a user (e.g. an
+/// external admin) need not be an employee. When linked, the id lets HR reach
+/// the person's CRM work (opportunities owned, tasks assigned).
+model Employee {
+  id             String  @id @default(cuid())
+  organizationId String
+  /// Optional link to the system user. Null = doesn't use the app (no seat).
+  userId         String?
+
+  // ── Personal
+  name          String
+  email         String?
+  phone         String?
+  documentType  DocumentType?
+  /// Digits only (normalized); CPF for individuals, CNPJ for PJ.
+  document      String?
+  birthDate     DateTime?
+  avatarUrl     String?
+  addressZip    String?
+  addressStreet String?
+  addressNumber String?
+  addressCity   String?
+  addressState  String?
+
+  // ── Contract
+  jobRoleId         String?
+  departmentId      String?
+  contractType      ContractType   @default(CLT)
+  status            EmployeeStatus @default(ACTIVE)
+  /// Admissão.
+  hiredAt           DateTime
+  /// Fim do período de experiência (drives an alert).
+  probationEndsAt   DateTime?
+  terminatedAt      DateTime?
+  terminationReason String?
+  /// Monthly base salary — the seed of every payroll line.
+  baseSalary        Decimal        @default(0) @db.Decimal(12, 2)
+  weeklyHours       Int?
+
+  // ── Payment details
+  bankName    String?
+  bankBranch  String?
+  bankAccount String?
+  pixKey      String?
+
+  notes       String?  @db.Text
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  jobRole    JobRole?    @relation(fields: [jobRoleId], references: [id], onDelete: SetNull)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  documents  EmployeeDocument[]
+
+  /// At most one employee per system user, per org.
+  @@unique([organizationId, userId])
+  @@index([organizationId, status])
+  @@index([organizationId, departmentId])
+  @@map("employees")
+}
+
+/// A file on an employee's record (contract, ID, medical certificate…). Bytes
+/// live in object storage; only metadata + URL here, mirroring the other
+/// attachment models. `expiresAt` powers the "document expiring" alert.
+model EmployeeDocument {
+  id             String    @id @default(cuid())
+  organizationId String
+  employeeId     String
+  name           String
+  mime           String
+  size           Int
+  url            String
+  expiresAt      DateTime?
+  uploadedById   String?
+  createdAt      DateTime  @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, employeeId])
+  @@map("employee_documents")
+}

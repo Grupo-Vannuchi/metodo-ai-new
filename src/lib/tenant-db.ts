@@ -53,6 +53,10 @@ const TENANT_MODELS = new Set<string>([
   "ProposalAttachment",
   "ProposalTemplate",
   "ProposalTemplateItem",
+  "Department",
+  "JobRole",
+  "Employee",
+  "EmployeeDocument",
 ]);
 
 const WHERE_OPS = new Set<string>([

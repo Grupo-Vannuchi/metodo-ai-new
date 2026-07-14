@@ -18,6 +18,7 @@ export type Feature =
   | "campaigns.scheduling.advanced" // recurrence, time windows, weekdays
   | "prospecting" // Google Places lead extraction (tenant's own key)
   | "finance" // Financeiro: lançamentos, fluxo de caixa, DRE
+  | "hr" // RH: funcionários, folha de pagamento, férias
   | "webhooks.outbound" // outbound webhooks to the customer's systems
   | "sso"; // single sign-on
 
@@ -50,6 +51,8 @@ const PLUS_FEATURES: Feature[] = [
   ...STANDARD_FEATURES,
   "campaigns.scheduling.advanced",
   "finance",
+  // RH shares the Financeiro gate: payroll posts into the finance ledger.
+  "hr",
 ];
 
 const GOLD_FEATURES: Feature[] = [...PLUS_FEATURES];

@@ -19,6 +19,7 @@ export const GATEABLE_SCREENS = [
   "contacts",
   "connections",
   "finance",
+  "hr",
 ] as const;
 
 export type Screen = (typeof GATEABLE_SCREENS)[number];

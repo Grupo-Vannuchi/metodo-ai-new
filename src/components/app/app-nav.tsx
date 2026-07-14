@@ -15,6 +15,7 @@ import {
   Contact,
   Cable,
   Wallet,
+  UsersRound,
   Settings,
   ChevronDown,
   ChevronRight,
@@ -38,9 +39,10 @@ type NavKey =
   | "contacts"
   | "connections"
   | "finance"
+  | "hr"
   | "settings";
 type Item = { href: string; key: NavKey; icon: typeof LayoutDashboard };
-type GroupKey = "general" | "crm" | "comms" | "finance" | "system";
+type GroupKey = "general" | "crm" | "comms" | "finance" | "hr" | "system";
 type Group = { key: GroupKey; items: Item[] };
 
 /** Nav items grouped into collapsible sections. */
@@ -74,6 +76,10 @@ const GROUPS: Group[] = [
   {
     key: "finance",
     items: [{ href: "/app/finance", key: "finance", icon: Wallet }],
+  },
+  {
+    key: "hr",
+    items: [{ href: "/app/hr", key: "hr", icon: UsersRound }],
   },
   {
     key: "system",
