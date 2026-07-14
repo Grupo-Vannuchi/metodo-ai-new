@@ -60,6 +60,7 @@ const TENANT_MODELS = new Set<string>([
   "PayrollRun",
   "PayrollItem",
   "PayrollLine",
+  "TimeOff",
 ]);
 
 const WHERE_OPS = new Set<string>([

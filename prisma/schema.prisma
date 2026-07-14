@@ -1418,6 +1418,7 @@ model Employee {
   department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   documents    EmployeeDocument[]
   payrollItems PayrollItem[]
+  timeOff      TimeOff[]
 
   /// At most one employee per system user, per org.
   @@unique([organizationId, userId])
@@ -1539,4 +1540,51 @@ model PayrollLine {
 
   @@index([organizationId, payrollItemId])
   @@map("payroll_lines")
+}
+
+// ---------------------------------------------------------------------------
+// Time off (férias, licenças, faltas) — request → approval, with notifications.
+// ---------------------------------------------------------------------------
+
+enum TimeOffType {
+  VACATION // férias
+  SICK // atestado / licença médica
+  LEAVE // licença (maternidade, etc.)
+  ABSENCE // falta
+  OTHER
+}
+
+enum TimeOffStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// A time-off request for an employee. Approved entries feed the "who's away"
+/// view; pending ones raise an alert for the managers.
+model TimeOff {
+  id             String        @id @default(cuid())
+  organizationId String
+  employeeId     String
+  type           TimeOffType   @default(VACATION)
+  status         TimeOffStatus @default(PENDING)
+  startDate      DateTime
+  endDate        DateTime
+  /// Inclusive calendar-day span, computed on write.
+  days           Int           @default(0)
+  reason         String?
+  /// Note left by whoever approved/rejected it.
+  decisionNote   String?
+  requestedById  String?
+  decidedById    String?
+  decidedAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([organizationId, employeeId])
+  @@index([organizationId, startDate])
+  @@map("time_off")
 }

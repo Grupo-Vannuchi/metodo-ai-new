@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { tenantDb } from "@/lib/tenant-db";
 import { getAlerts } from "@/lib/queries/notifications";
+import { hrAlertCounts } from "@/lib/queries/time-off";
 import { hasFeature, type PlanKey } from "@/config/plans";
 import { DIGEST_KINDS } from "@/lib/notifications";
 
@@ -25,12 +26,21 @@ export async function GET(req: Request) {
   if (!authorized(req)) return new Response("Unauthorized", { status: 401 });
 
   const memberships = await prisma.membership.findMany({
-    select: { organizationId: true, userId: true, organization: { select: { plan: true } } },
+    select: {
+      organizationId: true,
+      userId: true,
+      role: true,
+      organization: { select: { plan: true } },
+    },
   });
+
+  // HR counters are org-level: compute once per org, not once per member.
+  const hrByOrg = new Map<string, Awaited<ReturnType<typeof hrAlertCounts>>>();
 
   let processed = 0;
   for (const m of memberships) {
-    const hasFinance = hasFeature(m.organization.plan as PlanKey, "finance");
+    const plan = m.organization.plan as PlanKey;
+    const hasFinance = hasFeature(plan, "finance");
     const alerts = await getAlerts(m.organizationId, m.userId, hasFinance);
     const db = tenantDb(m.organizationId);
 
@@ -45,6 +55,23 @@ export async function GET(req: Request) {
       { type: "FINANCE_OVERDUE", count: alerts.financeOverdue, link: "/app/finance/entries" },
       { type: "INBOX_UNREAD", count: alerts.unread, link: "/app/inbox" },
     ].filter((r) => r.count > 0);
+
+    // HR digests go only to the managers (payroll/HR data is sensitive).
+    const isManager = m.role === "OWNER" || m.role === "ADMIN";
+    if (isManager && hasFeature(plan, "hr")) {
+      if (!hrByOrg.has(m.organizationId)) {
+        hrByOrg.set(m.organizationId, await hrAlertCounts(m.organizationId));
+      }
+      const hr = hrByOrg.get(m.organizationId)!;
+      rows.push(
+        ...[
+          { type: "HR_TIMEOFF_PENDING", count: hr.timeOffPending, link: "/app/hr/timeoff" },
+          { type: "HR_BIRTHDAY_TODAY", count: hr.birthdaysToday, link: "/app/hr" },
+          { type: "HR_PROBATION_ENDING", count: hr.probationEnding, link: "/app/hr" },
+          { type: "HR_DOCS_EXPIRING", count: hr.docsExpiring, link: "/app/hr" },
+        ].filter((r) => r.count > 0),
+      );
+    }
 
     if (rows.length > 0) {
       await db.notification.createMany({

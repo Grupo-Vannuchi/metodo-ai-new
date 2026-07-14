@@ -4,6 +4,7 @@ import { Pencil, UserCheck } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getEmployee, listEmployeeDocuments } from "@/lib/queries/hr";
 import { employeePaymentHistory } from "@/lib/queries/payroll";
+import { employeeTimeOff } from "@/lib/queries/time-off";
 import { EmployeeDocuments } from "@/components/hr/employee-documents";
 import { DeleteEmployeeButton } from "@/components/hr/delete-employee-button";
 import { buttonVariants } from "@/components/ui/button";
@@ -27,6 +28,13 @@ const STATUS_PAY_STYLE: Record<string, string> = {
   PAID: "bg-green-500/10 text-green-600",
 };
 
+/** Time-off status pill. */
+const TIMEOFF_STATUS_STYLE: Record<string, string> = {
+  PENDING: "bg-amber-500/10 text-amber-600",
+  APPROVED: "bg-green-500/10 text-green-600",
+  REJECTED: "bg-red-500/10 text-red-600",
+};
+
 export default async function EmployeeDetailPage({
   params,
 }: {
@@ -37,10 +45,11 @@ export default async function EmployeeDetailPage({
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("hr");
 
-  const [employee, documents, payments] = await Promise.all([
+  const [employee, documents, payments, timeOff] = await Promise.all([
     getEmployee(ctx.organizationId, id),
     listEmployeeDocuments(ctx.organizationId, id),
     employeePaymentHistory(ctx.organizationId, id),
+    employeeTimeOff(ctx.organizationId, id),
   ]);
   if (!employee) notFound();
 
@@ -193,6 +202,49 @@ export default async function EmployeeDetailPage({
                     {t("history.payslip")}
                   </a>
                 </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Time off history */}
+      <section className="rounded-xl border border-border bg-card p-5">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">{t("timeOff.title")}</h2>
+          <Link
+            href="/app/hr/timeoff/new"
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            {t("timeOff.new")}
+          </Link>
+        </div>
+        {timeOff.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
+            {t("timeOff.emptyEmployee")}
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {timeOff.map((r) => (
+              <li
+                key={r.id}
+                className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm"
+              >
+                <span className="font-medium">{t(`timeOff.type.${r.type}`)}</span>
+                <span className="tabular-nums text-muted-foreground">
+                  {fmtDate(r.startDate)} — {fmtDate(r.endDate)}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {t("timeOff.dayCount", { count: r.days })}
+                </span>
+                <span
+                  className={cn(
+                    "ml-auto shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
+                    TIMEOFF_STATUS_STYLE[r.status],
+                  )}
+                >
+                  {t(`timeOff.status.${r.status}`)}
+                </span>
               </li>
             ))}
           </ul>

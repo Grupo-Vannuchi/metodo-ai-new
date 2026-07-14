@@ -563,6 +563,7 @@
       "overview": "Visão geral",
       "employees": "Funcionários",
       "payroll": "Folha",
+      "timeOff": "Férias e ausências",
       "catalogs": "Cargos e departamentos"
     },
     "back": "Voltar",
@@ -602,7 +603,8 @@
       "headcount": "Funcionários ativos",
       "monthlyCost": "Custo mensal",
       "hiredThisMonth": "Admissões no mês",
-      "onLeave": "Afastados"
+      "onLeave": "Afastados",
+      "awayToday": "Ausentes hoje"
     },
     "alert": {
       "birthdays": "Aniversariantes do mês",
@@ -611,7 +613,54 @@
       "probation": "Fim de experiência (30 dias)",
       "noProbation": "Nenhum período de experiência terminando.",
       "expiringDocs": "Documentos a vencer (30 dias)",
-      "noExpiringDocs": "Nenhum documento a vencer."
+      "noExpiringDocs": "Nenhum documento a vencer.",
+      "awayToday": "Ausentes hoje",
+      "until": "até {date}"
+    },
+    "timeOff": {
+      "title": "Férias e ausências",
+      "new": "Nova solicitação",
+      "newTitle": "Nova solicitação de ausência",
+      "empty": "Nenhuma solicitação encontrada.",
+      "emptyEmployee": "Nenhuma ausência registrada.",
+      "colEmployee": "Funcionário",
+      "colType": "Tipo",
+      "colPeriod": "Período",
+      "colDays": "Dias",
+      "colStatus": "Situação",
+      "dayCount": "{count, plural, one {# dia} other {# dias}}",
+      "approve": "Aprovar",
+      "reject": "Recusar",
+      "confirmDelete": "Excluir esta solicitação?",
+      "type": {
+        "VACATION": "Férias",
+        "SICK": "Atestado",
+        "LEAVE": "Licença",
+        "ABSENCE": "Falta",
+        "OTHER": "Outro"
+      },
+      "status": {
+        "PENDING": "Pendente",
+        "APPROVED": "Aprovada",
+        "REJECTED": "Recusada"
+      },
+      "form": {
+        "section": "Solicitação",
+        "employee": "Funcionário",
+        "pickEmployee": "Selecione o funcionário…",
+        "type": "Tipo",
+        "start": "Início",
+        "end": "Fim",
+        "reason": "Motivo (opcional)",
+        "submit": "Enviar solicitação",
+        "sending": "Enviando…"
+      },
+      "error": {
+        "invalid": "Dados inválidos. Confira o funcionário e o período.",
+        "unauthorized": "Sessão expirada.",
+        "locked": "Esta solicitação já foi decidida.",
+        "unknown": "Algo deu errado."
+      }
     },
     "form": {
       "newTitle": "Novo funcionário",
@@ -1519,7 +1568,13 @@
       "TEAM_ATTACHMENT": "{actor} te enviou {entity} no chat de equipe",
       "FEED_POST": "{actor} publicou no mural",
       "FEED_MENTION": "{actor} te mencionou num post",
-      "FEED_REACTION": "{actor} reagiu {emoji} ao seu post"
+      "FEED_REACTION": "{actor} reagiu {emoji} ao seu post",
+      "HR_TIMEOFF_PENDING": "{count, plural, one {# solicitação de ausência pendente} other {# solicitações de ausência pendentes}}",
+      "HR_BIRTHDAY_TODAY": "{count, plural, one {# aniversariante hoje} other {# aniversariantes hoje}}",
+      "HR_PROBATION_ENDING": "{count, plural, one {# período de experiência terminando} other {# períodos de experiência terminando}}",
+      "HR_DOCS_EXPIRING": "{count, plural, one {# documento a vencer} other {# documentos a vencer}}",
+      "HR_TIMEOFF_REQUEST": "{actor} solicitou ausência para {name}",
+      "HR_TIMEOFF_DECIDED": "{actor} decidiu sua solicitação de ausência"
     },
     "entity": {
       "TASK": "uma tarefa",
@@ -1620,7 +1675,9 @@
       "FEED_MENTION": "Você foi mencionado",
       "FEED_POST": "Nova publicação no feed",
       "FEED_REACTION": "Reagiram à sua publicação",
-      "TEAM_ATTACHMENT": "Novo anexo na equipe"
+      "TEAM_ATTACHMENT": "Novo anexo na equipe",
+      "HR_TIMEOFF_REQUEST": "Nova solicitação de ausência",
+      "HR_TIMEOFF_DECIDED": "Sua ausência foi decidida"
     }
   },
   "teamChat": {

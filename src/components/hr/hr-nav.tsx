@@ -8,6 +8,7 @@ const tabs = [
   { href: "/app/hr", key: "overview" },
   { href: "/app/hr/employees", key: "employees" },
   { href: "/app/hr/payroll", key: "payroll" },
+  { href: "/app/hr/timeoff", key: "timeOff" },
   { href: "/app/hr/settings", key: "catalogs" },
 ] as const;
 

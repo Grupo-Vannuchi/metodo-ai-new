@@ -563,6 +563,7 @@
       "overview": "Overview",
       "employees": "Employees",
       "payroll": "Payroll",
+      "timeOff": "Time off",
       "catalogs": "Roles and departments"
     },
     "back": "Back",
@@ -602,7 +603,8 @@
       "headcount": "Active employees",
       "monthlyCost": "Monthly cost",
       "hiredThisMonth": "Hired this month",
-      "onLeave": "On leave"
+      "onLeave": "On leave",
+      "awayToday": "Away today"
     },
     "alert": {
       "birthdays": "Birthdays this month",
@@ -611,7 +613,54 @@
       "probation": "Probation ending (30 days)",
       "noProbation": "No probation period ending.",
       "expiringDocs": "Documents expiring (30 days)",
-      "noExpiringDocs": "No documents expiring."
+      "noExpiringDocs": "No documents expiring.",
+      "awayToday": "Away today",
+      "until": "until {date}"
+    },
+    "timeOff": {
+      "title": "Time off",
+      "new": "New request",
+      "newTitle": "New time-off request",
+      "empty": "No requests found.",
+      "emptyEmployee": "No time off recorded.",
+      "colEmployee": "Employee",
+      "colType": "Type",
+      "colPeriod": "Period",
+      "colDays": "Days",
+      "colStatus": "Status",
+      "dayCount": "{count, plural, one {# day} other {# days}}",
+      "approve": "Approve",
+      "reject": "Reject",
+      "confirmDelete": "Delete this request?",
+      "type": {
+        "VACATION": "Vacation",
+        "SICK": "Sick leave",
+        "LEAVE": "Leave",
+        "ABSENCE": "Absence",
+        "OTHER": "Other"
+      },
+      "status": {
+        "PENDING": "Pending",
+        "APPROVED": "Approved",
+        "REJECTED": "Rejected"
+      },
+      "form": {
+        "section": "Request",
+        "employee": "Employee",
+        "pickEmployee": "Select the employee…",
+        "type": "Type",
+        "start": "Start",
+        "end": "End",
+        "reason": "Reason (optional)",
+        "submit": "Send request",
+        "sending": "Sending…"
+      },
+      "error": {
+        "invalid": "Invalid data. Check the employee and the period.",
+        "unauthorized": "Session expired.",
+        "locked": "This request was already decided.",
+        "unknown": "Something went wrong."
+      }
     },
     "form": {
       "newTitle": "New employee",
@@ -1519,7 +1568,13 @@
       "TEAM_ATTACHMENT": "{actor} sent you {entity} in team chat",
       "FEED_POST": "{actor} posted on the wall",
       "FEED_MENTION": "{actor} mentioned you in a post",
-      "FEED_REACTION": "{actor} reacted {emoji} to your post"
+      "FEED_REACTION": "{actor} reacted {emoji} to your post",
+      "HR_TIMEOFF_PENDING": "{count, plural, one {# pending time-off request} other {# pending time-off requests}}",
+      "HR_BIRTHDAY_TODAY": "{count, plural, one {# birthday today} other {# birthdays today}}",
+      "HR_PROBATION_ENDING": "{count, plural, one {# probation period ending} other {# probation periods ending}}",
+      "HR_DOCS_EXPIRING": "{count, plural, one {# document expiring} other {# documents expiring}}",
+      "HR_TIMEOFF_REQUEST": "{actor} requested time off for {name}",
+      "HR_TIMEOFF_DECIDED": "{actor} decided your time-off request"
     },
     "entity": {
       "TASK": "a task",
@@ -1620,7 +1675,9 @@
       "FEED_MENTION": "You were mentioned",
       "FEED_POST": "New feed post",
       "FEED_REACTION": "Reaction to your post",
-      "TEAM_ATTACHMENT": "New team attachment"
+      "TEAM_ATTACHMENT": "New team attachment",
+      "HR_TIMEOFF_REQUEST": "New time-off request",
+      "HR_TIMEOFF_DECIDED": "Your time off was decided"
     }
   },
   "teamChat": {

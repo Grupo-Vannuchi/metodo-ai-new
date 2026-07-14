@@ -1,7 +1,8 @@
 import { getTranslations } from "next-intl/server";
-import { Users, UserMinus, Wallet, UserPlus, Cake, Clock, FileWarning } from "lucide-react";
+import { Users, Wallet, UserPlus, Cake, Clock, FileWarning, Plane } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { hrDashboard } from "@/lib/queries/hr";
+import { awayToday } from "@/lib/queries/time-off";
 import { Link } from "@/i18n/navigation";
 import { formatBRL } from "@/lib/money";
 import { resolveLocale } from "@/i18n/routing";
@@ -41,7 +42,10 @@ export default async function HrOverviewPage({
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("hr");
 
-  const d = await hrDashboard(ctx.organizationId);
+  const [d, away] = await Promise.all([
+    hrDashboard(ctx.organizationId),
+    awayToday(ctx.organizationId),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -49,8 +53,33 @@ export default async function HrOverviewPage({
         <Stat icon={Users} label={t("stat.headcount")} value={String(d.headcount)} />
         <Stat icon={Wallet} label={t("stat.monthlyCost")} value={formatBRL(d.monthlyCost)} accent />
         <Stat icon={UserPlus} label={t("stat.hiredThisMonth")} value={String(d.hiredThisMonth)} />
-        <Stat icon={UserMinus} label={t("stat.onLeave")} value={String(d.onLeave)} />
+        <Stat icon={Plane} label={t("stat.awayToday")} value={String(away.length)} />
       </div>
+
+      {/* Who is away right now */}
+      {away.length > 0 ? (
+        <section className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-5">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+            <Plane className="size-4 text-amber-600" />
+            {t("alert.awayToday")}
+          </h2>
+          <ul className="flex flex-wrap gap-2">
+            {away.map((a) => (
+              <li key={a.id}>
+                <Link
+                  href={`/app/hr/employees/${a.employeeId}`}
+                  className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-sm transition-colors hover:bg-muted"
+                >
+                  <span className="font-medium">{a.employeeName}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {t(`timeOff.type.${a.type}`)} · {t("alert.until", { date: fmtDate(a.endDate) })}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Birthdays */}

@@ -12,6 +12,11 @@ export const DIGEST_KINDS = [
   "OPP_STALE",
   "FINANCE_OVERDUE",
   "INBOX_UNREAD",
+  // HR digests — only sent to OWNER/ADMIN of orgs whose plan includes "hr".
+  "HR_BIRTHDAY_TODAY",
+  "HR_PROBATION_ENDING",
+  "HR_DOCS_EXPIRING",
+  "HR_TIMEOFF_PENDING",
 ] as const;
 
 /** Created once, when the event happens (never by the cron). */
@@ -22,6 +27,8 @@ export const ASSIGN_KINDS = [
   "FEED_POST",
   "FEED_MENTION",
   "FEED_REACTION",
+  "HR_TIMEOFF_REQUEST",
+  "HR_TIMEOFF_DECIDED",
 ] as const;
 
 export type NotificationKind =
@@ -30,11 +37,13 @@ export type NotificationKind =
 
 /** i18n interpolation payload. `count` for digests; `actor`/`title` for
  * assignments; `actor`/`attachmentType` for a team-chat share; `actor`/`emoji`
- * for a feed reaction. */
+ * for a feed reaction; `name`/`decision` for a time-off decision. */
 export type NotificationData = {
   count?: number;
   actor?: string;
   title?: string;
   attachmentType?: string;
   emoji?: string;
+  name?: string;
+  decision?: string;
 };
