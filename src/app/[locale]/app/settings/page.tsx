@@ -5,7 +5,6 @@ import { getUsageSummary, type UsageMetric } from "@/lib/queries/usage";
 import { type PlanKey } from "@/config/plans";
 import { buttonVariants } from "@/components/ui/button";
 import { LeaveTeamButton } from "@/components/app/leave-team-button";
-import { TestEmailButton } from "@/components/settings/test-email-button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
@@ -110,14 +109,6 @@ export default async function SettingsPage({
         ) : null}
         {ctx.role !== "OWNER" ? <LeaveTeamButton /> : null}
       </section>
-
-      {hasRole(ctx.role, "ADMIN") ? (
-        <section className="rounded-xl border border-border bg-card p-5">
-          <h2 className="text-sm font-semibold">{t("email.title")}</h2>
-          <p className="mb-4 mt-1 text-xs text-muted-foreground">{t("email.hint")}</p>
-          <TestEmailButton />
-        </section>
-      ) : null}
     </div>
   );
 }

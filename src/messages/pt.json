@@ -1655,17 +1655,6 @@
     "auditLog": "Registro de auditoria",
     "leaveTeam": "Sair da equipe",
     "leaveTeamConfirm": "Tem certeza que deseja sair desta equipe? Você perderá o acesso e será desconectado.",
-    "email": {
-      "title": "E-mail transacional",
-      "hint": "Convites, verificação e recuperação de senha usam este envio. Dispare um teste para o seu próprio e-mail e confirme que está chegando na caixa de entrada.",
-      "test": "Enviar e-mail de teste",
-      "sent": "Enviado para {to}. Confira a caixa de entrada (e o spam).",
-      "error": {
-        "unauthorized": "Sem permissão.",
-        "not_configured": "E-mail não configurado (falta RESEND_API_KEY / EMAIL_FROM no servidor).",
-        "send_failed": "Não foi possível enviar. Verifique a chave e o domínio no Resend."
-      }
-    },
     "usage": {
       "seats": "Assentos",
       "connections": "Conexões",

@@ -1653,17 +1653,6 @@
     "myProfile": "My profile",
     "manageTeam": "Manage team",
     "auditLog": "Audit log",
-    "email": {
-      "title": "Transactional email",
-      "hint": "Invites, verification and password reset use this sender. Send a test to your own address and confirm it lands in the inbox.",
-      "test": "Send test email",
-      "sent": "Sent to {to}. Check your inbox (and spam).",
-      "error": {
-        "unauthorized": "Not allowed.",
-        "not_configured": "Email not configured (missing RESEND_API_KEY / EMAIL_FROM on the server).",
-        "send_failed": "Could not send. Check the API key and the domain in Resend."
-      }
-    },
     "leaveTeam": "Leave team",
     "leaveTeamConfirm": "Are you sure you want to leave this team? You'll lose access and be signed out.",
     "usage": {
