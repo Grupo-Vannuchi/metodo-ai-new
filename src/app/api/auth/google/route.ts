@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { generateState, generateCodeVerifier } from "arctic";
 import { env } from "@/lib/env";
 import { googleClient, isGoogleConfigured } from "@/lib/oauth/google";
@@ -16,10 +16,11 @@ const COOKIE_OPTS = {
 
 /** Start the Google OAuth flow: stash a state + PKCE verifier in cookies (set on
  * the NextResponse so they reliably persist) and bounce to Google. */
-export async function GET(req: NextRequest) {
+export async function GET() {
   if (!isGoogleConfigured()) {
     console.error("[google-oauth] start: GOOGLE_CLIENT_ID/SECRET not configured");
-    return NextResponse.redirect(new URL("/login?error=google", req.url));
+    // Public site URL, not req.url — the latter is the internal proxy address.
+    return NextResponse.redirect(new URL("/login?error=google", env.NEXT_PUBLIC_SITE_URL));
   }
 
   const state = generateState();
