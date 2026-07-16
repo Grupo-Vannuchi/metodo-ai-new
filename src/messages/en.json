@@ -134,14 +134,19 @@
       "subtitle": "Access your account",
       "submit": "Log in",
       "cta": "Log in",
-      "noAccount": "Don't have an account?"
+      "noAccount": "Don't have an account?",
+      "forgot": "Forgot password",
+      "resend": "Resend confirmation email",
+      "resending": "Sending…",
+      "resent": "We sent a new confirmation email."
     },
     "signup": {
       "title": "Create account",
       "subtitle": "Get started with MétodoAI",
       "submit": "Create account",
       "cta": "Create account",
-      "hasAccount": "Already have an account?"
+      "hasAccount": "Already have an account?",
+      "verifySent": "Account created! We sent a confirmation email to {email}. Confirm it to sign in."
     },
     "invite": {
       "title": "Invitation",
@@ -158,7 +163,39 @@
       "seat_limit": "The organization has reached its seat limit.",
       "rate_limited": "Too many attempts. Wait a minute and try again.",
       "already_in_team": "You already belong to a team. Leave it (in Settings) before accepting this invite.",
+      "email_not_verified": "Confirm your email before signing in. Check your inbox.",
       "generic": "Something went wrong. Please try again."
+    },
+    "verify": {
+      "title": "Confirm email",
+      "subtitle": "Click below to confirm your email and activate access.",
+      "confirm": "Confirm my email",
+      "confirming": "Confirming…",
+      "invalid": "Invalid or expired link.",
+      "backToLogin": "Back to login"
+    },
+    "forgot": {
+      "title": "Reset password",
+      "subtitle": "Enter your email and we'll send a link to reset your password.",
+      "email": "Email",
+      "submit": "Send link",
+      "sending": "Sending…",
+      "sent": "If an account exists for that email, we sent a password reset link.",
+      "backToLogin": "Back to login"
+    },
+    "reset": {
+      "title": "New password",
+      "subtitle": "Choose a new password for your account.",
+      "newPassword": "New password",
+      "hint": "At least 8 characters.",
+      "submit": "Save new password",
+      "saving": "Saving…",
+      "done": "Password changed successfully.",
+      "goToLogin": "Go to login",
+      "error": {
+        "invalid": "Invalid or expired link. Request a new one.",
+        "weak": "The password must be at least 8 characters."
+      }
     }
   },
   "app": {

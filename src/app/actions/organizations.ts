@@ -357,6 +357,8 @@ export async function acceptInvitation(
           name: parsed.data.name,
           email: invitation.email,
           passwordHash,
+          // The invite was e-mailed to this address, so it's already proven.
+          emailVerified: new Date(),
           profile: { create: coreProfileData(parsed.data) },
         },
       });

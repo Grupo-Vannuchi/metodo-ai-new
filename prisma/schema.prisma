@@ -78,6 +78,9 @@ model User {
   email        String   @unique
   name         String
   passwordHash String
+  /// Null until the user confirms their e-mail (login is gated on this). Set
+  /// automatically for invited users (the invite proves the address).
+  emailVerified DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -89,8 +92,34 @@ model User {
   feedPosts            FeedPost[]
   feedMentions         FeedMention[]
   feedReactions        FeedReaction[]
+  authTokens           AuthToken[]
 
   @@map("users")
+}
+
+/// Purpose of a single-use auth token (e-mail confirmation or password reset).
+enum AuthTokenPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+/// A single-use, expiring token for e-mail verification / password reset. Only
+/// the SHA-256 hash of the opaque token is stored (the raw token travels in the
+/// e-mail link), so a DB leak can't be used to verify/reset. Identity-level (not
+/// tenant-scoped) — hangs off the User.
+model AuthToken {
+  id         String           @id @default(cuid())
+  userId     String
+  purpose    AuthTokenPurpose
+  tokenHash  String           @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@map("auth_tokens")
 }
 
 /// Document kind for a user profile. Brazilian individuals use CPF; companies

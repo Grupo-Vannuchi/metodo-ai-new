@@ -134,14 +134,19 @@
       "subtitle": "Acesse sua conta",
       "submit": "Entrar",
       "cta": "Entrar",
-      "noAccount": "Ainda não tem conta?"
+      "noAccount": "Ainda não tem conta?",
+      "forgot": "Esqueci a senha",
+      "resend": "Reenviar e-mail de confirmação",
+      "resending": "Enviando…",
+      "resent": "Enviamos um novo e-mail de confirmação."
     },
     "signup": {
       "title": "Criar conta",
       "subtitle": "Comece a usar o MétodoAI",
       "submit": "Criar conta",
       "cta": "Criar conta",
-      "hasAccount": "Já tem conta?"
+      "hasAccount": "Já tem conta?",
+      "verifySent": "Conta criada! Enviamos um e-mail de confirmação para {email}. Confirme para poder entrar."
     },
     "invite": {
       "title": "Convite",
@@ -158,7 +163,39 @@
       "seat_limit": "A organização atingiu o limite de assentos.",
       "rate_limited": "Muitas tentativas. Aguarde um minuto e tente de novo.",
       "already_in_team": "Você já faz parte de uma equipe. Saia dela (em Configurações) antes de aceitar este convite.",
+      "email_not_verified": "Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada.",
       "generic": "Algo deu errado. Tente novamente."
+    },
+    "verify": {
+      "title": "Confirmar e-mail",
+      "subtitle": "Clique abaixo para confirmar seu e-mail e ativar o acesso.",
+      "confirm": "Confirmar meu e-mail",
+      "confirming": "Confirmando…",
+      "invalid": "Link inválido ou expirado.",
+      "backToLogin": "Voltar ao login"
+    },
+    "forgot": {
+      "title": "Recuperar senha",
+      "subtitle": "Informe seu e-mail e enviaremos um link para redefinir a senha.",
+      "email": "E-mail",
+      "submit": "Enviar link",
+      "sending": "Enviando…",
+      "sent": "Se existe uma conta com esse e-mail, enviamos um link para redefinir a senha.",
+      "backToLogin": "Voltar ao login"
+    },
+    "reset": {
+      "title": "Nova senha",
+      "subtitle": "Escolha uma nova senha para sua conta.",
+      "newPassword": "Nova senha",
+      "hint": "Ao menos 8 caracteres.",
+      "submit": "Salvar nova senha",
+      "saving": "Salvando…",
+      "done": "Senha alterada com sucesso.",
+      "goToLogin": "Ir para o login",
+      "error": {
+        "invalid": "Link inválido ou expirado. Peça um novo.",
+        "weak": "A senha deve ter ao menos 8 caracteres."
+      }
     }
   },
   "app": {
