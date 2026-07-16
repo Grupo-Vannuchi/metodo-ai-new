@@ -12,6 +12,9 @@ import {
   hashInvitationToken,
   INVITATION_TTL_MS,
 } from "@/lib/invitations";
+import { env } from "@/lib/env";
+import { sendEmail } from "@/lib/email/send";
+import { renderInviteEmail } from "@/lib/email/templates";
 import { countMembers } from "@/lib/queries/organizations";
 import { inviteSchema } from "@/lib/validations/organization";
 import { acceptInviteSchema } from "@/lib/validations/auth";
@@ -22,6 +25,30 @@ import { defaultLocale, routing, type Locale } from "@/i18n/routing";
 function localeFrom(formData: FormData): Locale {
   const value = String(formData.get("locale") ?? "");
   return hasLocale(routing.locales, value) ? value : defaultLocale;
+}
+
+/** Human role label for the invite email (emails are Portuguese-first). */
+const inviteRoleLabel = (role: string): string => (role === "ADMIN" ? "Administrador" : "Membro");
+
+/** Send the branded invite email with the accept link. Returns whether it was
+ * sent (best-effort — the caller still keeps the copyable link as a fallback). */
+async function sendInviteEmail(opts: {
+  token: string;
+  email: string;
+  role: string;
+  orgName: string;
+  inviterName: string;
+  expiresAt: Date;
+}): Promise<boolean> {
+  const { subject, html } = renderInviteEmail({
+    orgName: opts.orgName,
+    inviterName: opts.inviterName,
+    roleLabel: inviteRoleLabel(opts.role),
+    acceptUrl: `${env.NEXT_PUBLIC_SITE_URL}/invite/${opts.token}`,
+    expiresLabel: opts.expiresAt.toLocaleDateString("pt-BR"),
+  });
+  const res = await sendEmail({ to: opts.email, subject, html });
+  return res.ok;
 }
 
 /**
@@ -60,6 +87,9 @@ export type InviteState = {
     | "generic"
     | null;
   token?: string;
+  email?: string;
+  /** Whether the invite email actually went out (fallback: copy the link). */
+  emailSent?: boolean;
 };
 
 /**
@@ -89,7 +119,7 @@ export async function inviteMember(
   const members = await countMembers(ctx.organizationId);
   const org = await prisma.organization.findUnique({
     where: { id: ctx.organizationId },
-    select: { seatLimit: true },
+    select: { seatLimit: true, name: true },
   });
   if (org && members >= org.seatLimit) return { error: "seat_limit" };
 
@@ -108,6 +138,7 @@ export async function inviteMember(
   }
 
   const { token, tokenHash } = generateInvitationToken();
+  const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
   try {
     await prisma.invitation.create({
       data: {
@@ -115,7 +146,7 @@ export async function inviteMember(
         email: parsed.data.email,
         role: parsed.data.role,
         tokenHash,
-        expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
+        expiresAt,
       },
     });
   } catch (e) {
@@ -123,13 +154,112 @@ export async function inviteMember(
     return { error: "generic" };
   }
 
+  const emailSent = await sendInviteEmail({
+    token,
+    email: parsed.data.email,
+    role: parsed.data.role,
+    orgName: org?.name ?? ctx.organization.name,
+    inviterName: ctx.user.name,
+    expiresAt,
+  });
+
   await audit(ctx, {
     action: "member.invited",
     entity: "Invitation",
     meta: { email: parsed.data.email, role: parsed.data.role },
   });
   revalidatePath("/app/settings/team");
-  return { error: null, token };
+  return { error: null, token, email: parsed.data.email, emailSent };
+}
+
+export type InvitationActionResult =
+  | { ok: true; emailSent?: boolean }
+  | { ok: false; error: "forbidden" | "not_found" | "unknown" };
+
+/**
+ * Resend a pending invitation (ADMIN+). Rotates the token (the old link stops
+ * working — we only store the hash, so the raw token can't be recovered),
+ * refreshes the expiry, and re-sends the email.
+ */
+export async function resendInvitation(invitationId: string): Promise<InvitationActionResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "forbidden" };
+  try {
+    assertRole(ctx, "ADMIN");
+  } catch {
+    return { ok: false, error: "forbidden" };
+  }
+
+  const invitation = await prisma.invitation.findFirst({
+    where: { id: invitationId, organizationId: ctx.organizationId, acceptedAt: null },
+    select: { id: true, email: true, role: true },
+  });
+  if (!invitation) return { ok: false, error: "not_found" };
+
+  const { token, tokenHash } = generateInvitationToken();
+  const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
+  try {
+    await prisma.invitation.update({
+      where: { id: invitation.id },
+      data: { tokenHash, expiresAt },
+    });
+  } catch (e) {
+    console.error("Resend invite failed", e);
+    return { ok: false, error: "unknown" };
+  }
+
+  const emailSent = await sendInviteEmail({
+    token,
+    email: invitation.email,
+    role: invitation.role,
+    orgName: ctx.organization.name,
+    inviterName: ctx.user.name,
+    expiresAt,
+  });
+
+  await audit(ctx, {
+    action: "member.invited",
+    entity: "Invitation",
+    entityId: invitation.id,
+    meta: { email: invitation.email, resend: true },
+  });
+  revalidatePath("/app/settings/team");
+  return { ok: true, emailSent };
+}
+
+/** Revoke a pending invitation (ADMIN+): its link stops working immediately. */
+export async function revokeInvitation(invitationId: string): Promise<InvitationActionResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "forbidden" };
+  try {
+    assertRole(ctx, "ADMIN");
+  } catch {
+    return { ok: false, error: "forbidden" };
+  }
+
+  const invitation = await prisma.invitation.findFirst({
+    where: { id: invitationId, organizationId: ctx.organizationId, acceptedAt: null },
+    select: { id: true, email: true },
+  });
+  if (!invitation) return { ok: false, error: "not_found" };
+
+  try {
+    await prisma.invitation.deleteMany({
+      where: { id: invitation.id, organizationId: ctx.organizationId },
+    });
+  } catch (e) {
+    console.error("Revoke invite failed", e);
+    return { ok: false, error: "unknown" };
+  }
+
+  await audit(ctx, {
+    action: "member.invite_revoked",
+    entity: "Invitation",
+    entityId: invitation.id,
+    meta: { email: invitation.email },
+  });
+  revalidatePath("/app/settings/team");
+  return { ok: true };
 }
 
 export type AcceptState = {

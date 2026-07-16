@@ -1,9 +1,10 @@
 import { getTranslations } from "next-intl/server";
 import { ShieldCheck } from "lucide-react";
 import { requireOrgContext, hasRole } from "@/lib/tenant";
-import { listMembers } from "@/lib/queries/organizations";
+import { listMembers, listPendingInvitations } from "@/lib/queries/organizations";
 import { accessTemplateOptions } from "@/lib/queries/access-templates";
 import { InviteForm } from "@/components/app/invite-form";
+import { PendingInvitations } from "@/components/app/pending-invitations";
 import { MembersAdmin } from "@/components/app/members-admin";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
@@ -21,9 +22,10 @@ export default async function TeamPage({
   const t = await getTranslations("app.team");
   const isAdmin = hasRole(ctx.role, "ADMIN");
 
-  const [members, templates] = await Promise.all([
+  const [members, templates, pendingInvites] = await Promise.all([
     listMembers(ctx.organizationId),
     isAdmin ? accessTemplateOptions(ctx.organizationId) : Promise.resolve([]),
+    isAdmin ? listPendingInvitations(ctx.organizationId) : Promise.resolve([]),
   ]);
 
   return (
@@ -47,6 +49,8 @@ export default async function TeamPage({
           <InviteForm />
         </section>
       ) : null}
+
+      {isAdmin ? <PendingInvitations invitations={pendingInvites} /> : null}
 
       {isAdmin ? (
         <MembersAdmin

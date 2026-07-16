@@ -55,11 +55,17 @@ export function InviteForm() {
       ) : null}
 
       {inviteUrl ? (
-        <div className="rounded-lg border border-border bg-muted/40 p-3">
-          <p className="text-sm font-medium">{t("inviteCreated")}</p>
-          <code className="mt-1 block break-all text-xs text-muted-foreground">
-            {inviteUrl}
-          </code>
+        <div
+          className={cn(
+            "rounded-lg border p-3",
+            state.emailSent ? "border-green-500/40 bg-green-500/5" : "border-amber-500/40 bg-amber-500/5",
+          )}
+        >
+          <p className="text-sm font-medium">
+            {state.emailSent ? t("inviteSent", { email: state.email ?? "" }) : t("inviteNotSent")}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">{t("inviteLinkFallback")}</p>
+          <code className="mt-1 block break-all text-xs text-muted-foreground">{inviteUrl}</code>
         </div>
       ) : null}
     </form>

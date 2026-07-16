@@ -7,6 +7,28 @@ import { renderEmailLayout, paragraphs } from "@/lib/email/layout";
  * templates are added in their respective phases.
  */
 
+export function renderInviteEmail(opts: {
+  orgName: string;
+  inviterName: string;
+  roleLabel: string;
+  acceptUrl: string;
+  expiresLabel: string;
+}): { subject: string; html: string } {
+  return {
+    subject: `Convite para a equipe ${opts.orgName} no MétodoAI`,
+    html: renderEmailLayout({
+      preview: `${opts.inviterName} convidou você para ${opts.orgName}.`,
+      heading: "Você foi convidado 🎉",
+      bodyHtml: paragraphs(
+        `${opts.inviterName} convidou você para participar da equipe ${opts.orgName} no MétodoAI, como ${opts.roleLabel}.`,
+        `Clique no botão abaixo para aceitar o convite e criar seu acesso.`,
+      ),
+      button: { label: "Aceitar convite", url: opts.acceptUrl },
+      footnote: `O convite expira em ${opts.expiresLabel}. Se você não esperava por ele, pode ignorar este e-mail.`,
+    }),
+  };
+}
+
 export function renderTestEmail(opts: { orgName: string; requestedBy: string }): {
   subject: string;
   html: string;

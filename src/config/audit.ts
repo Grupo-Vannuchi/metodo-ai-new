@@ -30,6 +30,7 @@ export const AUDIT_ACTIONS = [
   "finance.entry.settled",
   "finance.entry.reopened",
   "member.invited",
+  "member.invite_revoked",
   "member.removed",
   "member.left",
   "member.role_changed",

@@ -1,6 +1,28 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { SessionRole } from "@/lib/session";
+import { isInvitationExpired } from "@/lib/invitations";
+
+export type PendingInvitation = {
+  id: string;
+  email: string;
+  role: string;
+  expiresAt: Date;
+  createdAt: Date;
+  expired: boolean;
+};
+
+/** Pending (not-yet-accepted) invitations for the team screen. */
+export async function listPendingInvitations(
+  organizationId: string,
+): Promise<PendingInvitation[]> {
+  const rows = await prisma.invitation.findMany({
+    where: { organizationId, acceptedAt: null },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, email: true, role: true, expiresAt: true, createdAt: true },
+  });
+  return rows.map((r) => ({ ...r, expired: isInvitationExpired(r.expiresAt) }));
+}
 
 export type UserOrganization = {
   id: string;
