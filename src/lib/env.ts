@@ -41,6 +41,11 @@ const serverSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   // Secret guarding the /api/cron/* endpoints (sent as `Authorization: Bearer`).
   CRON_SECRET: z.string().optional(),
+  // Transactional email (Resend, platform key) — verification, invites, reset.
+  // Optional so the app boots without it; `sendEmail` no-ops with a warning.
+  RESEND_API_KEY: z.string().optional(),
+  // Verified sender, e.g. `MétodoAI <nao-responda@metodotia.com>`.
+  EMAIL_FROM: z.string().optional(),
   // Cache / rate-limit (Upstash Redis) — optional until dispatch throttling runs.
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
