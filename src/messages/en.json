@@ -129,6 +129,8 @@
     "name": "Your name",
     "organizationName": "Organization name",
     "submitting": "Please wait…",
+    "continueWithGoogle": "Continue with Google",
+    "or": "or",
     "login": {
       "title": "Log in",
       "subtitle": "Access your account",
@@ -164,6 +166,8 @@
       "rate_limited": "Too many attempts. Wait a minute and try again.",
       "already_in_team": "You already belong to a team. Leave it (in Settings) before accepting this invite.",
       "email_not_verified": "Confirm your email before signing in. Check your inbox.",
+      "google": "Could not sign in with Google. Please try again.",
+      "google_unverified": "Your Google email isn't verified. Use another sign-in method.",
       "generic": "Something went wrong. Please try again."
     },
     "verify": {

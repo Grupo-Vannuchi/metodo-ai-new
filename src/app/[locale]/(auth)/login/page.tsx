@@ -2,6 +2,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { redirect, Link } from "@/i18n/navigation";
 import { getOrgContext } from "@/lib/tenant";
 import { LoginForm } from "@/components/auth/login-form";
+import { GoogleSignInButton } from "@/components/auth/google-signin-button";
 import { Logo } from "@/components/layout/logo";
 import { resolveLocale } from "@/i18n/routing";
 
@@ -9,8 +10,10 @@ export const dynamic = "force-dynamic";
 
 export default async function LoginPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const locale = resolveLocale((await params).locale);
   setRequestLocale(locale);
@@ -18,6 +21,8 @@ export default async function LoginPage({
   if (await getOrgContext()) redirect({ href: "/app", locale });
 
   const t = await getTranslations("auth");
+  const errorKey = (await searchParams)?.error;
+  const oauthError = errorKey === "google_unverified" ? "google_unverified" : errorKey ? "google" : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -26,7 +31,23 @@ export default async function LoginPage({
         <h1 className="text-lg font-semibold">{t("login.title")}</h1>
         <p className="text-sm text-muted-foreground">{t("login.subtitle")}</p>
       </div>
+
+      {oauthError ? (
+        <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-center text-sm text-red-500">
+          {t(`errors.${oauthError}`)}
+        </p>
+      ) : null}
+
+      <GoogleSignInButton />
+
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        {t("or")}
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
       <LoginForm />
+
       <p className="text-center text-sm text-muted-foreground">
         {t("login.noAccount")}{" "}
         <Link href="/signup" className="font-medium text-brand underline underline-offset-4">

@@ -2,6 +2,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { redirect, Link } from "@/i18n/navigation";
 import { getOrgContext } from "@/lib/tenant";
 import { SignupForm } from "@/components/auth/signup-form";
+import { GoogleSignInButton } from "@/components/auth/google-signin-button";
 import { Logo } from "@/components/layout/logo";
 import { resolveLocale } from "@/i18n/routing";
 
@@ -26,6 +27,15 @@ export default async function SignupPage({
         <h1 className="text-lg font-semibold">{t("signup.title")}</h1>
         <p className="text-sm text-muted-foreground">{t("signup.subtitle")}</p>
       </div>
+
+      <GoogleSignInButton />
+
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        {t("or")}
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
       <SignupForm />
       <p className="text-center text-sm text-muted-foreground">
         {t("signup.hasAccount")}{" "}

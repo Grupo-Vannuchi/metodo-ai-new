@@ -46,6 +46,9 @@ const serverSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   // Verified sender, e.g. `MétodoAI <nao-responda@metodotia.com>`.
   EMAIL_FROM: z.string().optional(),
+  // Google OAuth (login com Google) — optional until the feature is enabled.
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
   // Cache / rate-limit (Upstash Redis) — optional until dispatch throttling runs.
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),

@@ -73,6 +73,10 @@ export async function login(
   });
   if (!user) return { error: "invalid" };
 
+  // Accounts created via Google have no password — they must use "Sign in with
+  // Google". Reported as a generic "invalid" so it isn't a hint either way.
+  if (!user.passwordHash) return { error: "invalid" };
+
   const valid = await verifyPassword(parsed.data.password, user.passwordHash);
   if (!valid) return { error: "invalid" };
 

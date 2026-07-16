@@ -77,9 +77,10 @@ model User {
   id           String   @id @default(cuid())
   email        String   @unique
   name         String
-  passwordHash String
+  /// Null for accounts that only sign in via an OAuth provider (e.g. Google).
+  passwordHash String?
   /// Null until the user confirms their e-mail (login is gated on this). Set
-  /// automatically for invited users (the invite proves the address).
+  /// automatically for invited users and OAuth sign-ins (the provider proves it).
   emailVerified DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -93,8 +94,25 @@ model User {
   feedMentions         FeedMention[]
   feedReactions        FeedReaction[]
   authTokens           AuthToken[]
+  accounts             Account[]
 
   @@map("users")
+}
+
+/// A linked external identity (OAuth). A user can have several (Google today,
+/// Microsoft/Apple later) — the pair (provider, providerAccountId) is unique.
+model Account {
+  id                String   @id @default(cuid())
+  userId            String
+  provider          String // e.g. "google"
+  providerAccountId String // the provider's stable user id (Google "sub")
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
 }
 
 /// Purpose of a single-use auth token (e-mail confirmation or password reset).
