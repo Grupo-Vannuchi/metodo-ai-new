@@ -5,6 +5,8 @@ import { env } from "@/lib/env";
 
 export const SESSION_COOKIE = "session";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
+/** Exposed so route handlers can set the session cookie on a NextResponse. */
+export const SESSION_MAX_AGE_SECONDS = MAX_AGE_SECONDS;
 
 export type SessionRole = "OWNER" | "ADMIN" | "MEMBER";
 
@@ -52,6 +54,12 @@ export async function decrypt(
   } catch {
     return null;
   }
+}
+
+/** Sign the session payload into a JWT (without touching cookies) — for route
+ * handlers that set the cookie directly on a NextResponse. */
+export async function sealSession(payload: SessionPayload): Promise<string> {
+  return encrypt(payload);
 }
 
 /** Create the signed session cookie after a successful login. */

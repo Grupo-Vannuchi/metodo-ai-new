@@ -1,5 +1,6 @@
-import { cookies } from "next/headers";
-import { createSession } from "@/lib/session";
+import { NextResponse, type NextRequest } from "next/server";
+import { env } from "@/lib/env";
+import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS, sealSession } from "@/lib/session";
 import {
   googleClient,
   isGoogleConfigured,
@@ -10,45 +11,70 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const to = (location: string) => new Response(null, { status: 302, headers: { Location: location } });
-
 /**
  * Google OAuth callback: validate the state, exchange the code (with the PKCE
- * verifier), resolve the identity to a session and sign the user in. Any failure
- * bounces back to /login with an error.
+ * verifier), resolve the identity to a session and sign the user in — setting
+ * cookies directly on the NextResponse so they persist reliably. Any failure
+ * bounces back to /login with an error (and logs why, for diagnosis).
  */
-export async function GET(req: Request) {
-  if (!isGoogleConfigured()) return to("/login?error=google");
+export async function GET(req: NextRequest) {
+  const fail = (code = "google") => {
+    const res = NextResponse.redirect(new URL(`/login?error=${code}`, req.url));
+    res.cookies.delete("google_oauth_state");
+    res.cookies.delete("google_code_verifier");
+    return res;
+  };
 
-  const params = new URL(req.url).searchParams;
+  if (!isGoogleConfigured()) {
+    console.error("[google-oauth] callback: not configured");
+    return fail();
+  }
+
+  const params = req.nextUrl.searchParams;
   const code = params.get("code");
   const state = params.get("state");
-
-  const jar = await cookies();
-  const storedState = jar.get("google_oauth_state")?.value;
-  const codeVerifier = jar.get("google_code_verifier")?.value;
-  // One-time cookies — drop them whatever happens.
-  jar.delete("google_oauth_state");
-  jar.delete("google_code_verifier");
+  const storedState = req.cookies.get("google_oauth_state")?.value;
+  const codeVerifier = req.cookies.get("google_code_verifier")?.value;
 
   if (!code || !state || !storedState || state !== storedState || !codeVerifier) {
-    return to("/login?error=google");
+    console.error("[google-oauth] state/cookie mismatch", {
+      hasCode: Boolean(code),
+      hasState: Boolean(state),
+      hasStoredState: Boolean(storedState),
+      stateMatches: state === storedState,
+      hasVerifier: Boolean(codeVerifier),
+    });
+    return fail();
   }
 
   try {
     const tokens = await googleClient().validateAuthorizationCode(code, codeVerifier);
     const gu = await fetchGoogleUser(tokens.accessToken());
-    if (!gu) return to("/login?error=google");
+    if (!gu) {
+      console.error("[google-oauth] userinfo fetch failed");
+      return fail();
+    }
 
     const result = await resolveGoogleSession(gu);
     if (!result.ok) {
-      return to(`/login?error=${result.error === "unverified" ? "google_unverified" : "google"}`);
+      console.error("[google-oauth] resolve failed:", result.error);
+      return fail(result.error === "unverified" ? "google_unverified" : "google");
     }
 
-    await createSession(result.session);
-    return to("/app");
+    const token = await sealSession(result.session);
+    const res = NextResponse.redirect(new URL("/app", req.url));
+    res.cookies.set(SESSION_COOKIE, token, {
+      httpOnly: true,
+      secure: env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: SESSION_MAX_AGE_SECONDS,
+    });
+    res.cookies.delete("google_oauth_state");
+    res.cookies.delete("google_code_verifier");
+    return res;
   } catch (e) {
-    console.error("[google-oauth] callback failed", e);
-    return to("/login?error=google");
+    console.error("[google-oauth] token exchange / callback threw:", e);
+    return fail();
   }
 }
