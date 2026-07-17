@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { requireOrgContext, hasRole } from "@/lib/tenant";
 import { listAuditLogs } from "@/lib/queries/audit";
 import { toAuditAction, toAuditEntity } from "@/config/audit";
+import { AuditTable } from "@/components/app/audit-table";
 import { redirect } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 
@@ -23,49 +24,32 @@ export default async function AuditPage({
     timeStyle: "short",
   });
 
+  const rows = logs.map((l) => {
+    // Historical rows may carry a code we no longer know — fall back to showing
+    // it raw (in mono) instead of a broken label.
+    const action = toAuditAction(l.action);
+    const entity = toAuditEntity(l.entity);
+    return {
+      id: l.id,
+      when: df.format(l.createdAt),
+      who: l.userName,
+      action: action ? t(`actions.${action}`) : null,
+      actionRaw: l.action,
+      entity: entity ? t(`entities.${entity}`) : l.entity,
+    };
+  });
+
   return (
     <div className="flex flex-col gap-6">
-      {logs.length === 0 ? (
+      {rows.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
           {t("empty")}
         </p>
       ) : (
-        <div className="glass overflow-x-auto rounded-xl border border-border shadow-sm">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-border text-muted-foreground">
-              <tr>
-                <th className="px-5 py-3 font-medium">{t("when")}</th>
-                <th className="px-5 py-3 font-medium">{t("who")}</th>
-                <th className="px-5 py-3 font-medium">{t("action")}</th>
-                <th className="px-5 py-3 font-medium">{t("entity")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map((l) => {
-                // Historical rows may carry a code we no longer know — fall back
-                // to showing it raw (in mono) instead of a broken label.
-                const action = toAuditAction(l.action);
-                const entity = toAuditEntity(l.entity);
-                return (
-                  <tr key={l.id} className="border-b border-border last:border-0">
-                    <td className="px-5 py-3 text-muted-foreground">{df.format(l.createdAt)}</td>
-                    <td className="px-5 py-3">{l.userName}</td>
-                    <td className="px-5 py-3">
-                      {action ? (
-                        t(`actions.${action}`)
-                      ) : (
-                        <span className="font-mono text-xs text-muted-foreground">{l.action}</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground">
-                      {entity ? t(`entities.${entity}`) : l.entity}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <AuditTable
+          rows={rows}
+          labels={{ when: t("when"), who: t("who"), action: t("action"), entity: t("entity") }}
+        />
       )}
     </div>
   );
