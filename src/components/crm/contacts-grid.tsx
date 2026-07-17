@@ -54,7 +54,7 @@ function ContactList({
   onDelete,
   deleteLabel,
 }: ContactItemProps) {
-  const openOnDblClick = (e: React.MouseEvent, id: string) => {
+  const openCard = (e: React.MouseEvent, id: string) => {
     if ((e.target as HTMLElement).closest("button, a")) return;
     onOpen(id);
   };
@@ -83,8 +83,8 @@ function ContactList({
             draggable
             onDragStart={() => onDragStart(card.id)}
             onDragEnd={onDragEnd}
-            onDoubleClick={(e) => openOnDblClick(e, card.id)}
-            className="flex cursor-grab select-none items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 shadow-sm active:cursor-grabbing"
+            onClick={(e) => openCard(e, card.id)}
+            className="flex cursor-pointer select-none items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 shadow-sm active:cursor-grabbing"
           >
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{card.name}</p>
@@ -112,8 +112,8 @@ function ContactList({
           draggable
           onDragStart={() => onDragStart(card.id)}
           onDragEnd={onDragEnd}
-          onDoubleClick={(e) => openOnDblClick(e, card.id)}
-          className="cursor-grab select-none rounded-lg border border-border bg-card p-3 shadow-sm active:cursor-grabbing"
+          onClick={(e) => openCard(e, card.id)}
+          className="cursor-pointer select-none rounded-lg border border-border bg-card p-3 shadow-sm active:cursor-grabbing"
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">

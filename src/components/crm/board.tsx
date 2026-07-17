@@ -121,13 +121,13 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
                     draggable
                     onDragStart={() => setDragId(card.id)}
                     onDragEnd={() => setDragId(null)}
-                    onDoubleClick={(e) => {
+                    onClick={(e) => {
                       if ((e.target as HTMLElement).closest("button, a")) return;
                       router.push(`/app/crm/${card.id}`);
                     }}
                     title={t("openHint")}
                     className={cn(
-                      "cursor-grab select-none rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing",
+                      "cursor-pointer select-none rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing",
                       card.status === "ON_HOLD" ? "border-amber-400/70" : "border-border",
                     )}
                   >

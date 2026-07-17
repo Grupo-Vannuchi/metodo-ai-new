@@ -128,12 +128,12 @@ export function TasksBoard({ tasks }: { tasks: TaskRow[] }) {
                       draggable
                       onDragStart={() => setDragId(task.id)}
                       onDragEnd={() => setDragId(null)}
-                      onDoubleClick={(e) => {
+                      onClick={(e) => {
                         if ((e.target as HTMLElement).closest("button, a")) return;
                         router.push(`/app/tasks/${task.id}`);
                       }}
                       title={t("openHint")}
-                      className="cursor-grab select-none rounded-lg border border-border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing"
+                      className="cursor-pointer select-none rounded-lg border border-border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing"
                     >
                       <div className="flex items-start gap-2">
                         <button

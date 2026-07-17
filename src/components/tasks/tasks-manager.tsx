@@ -265,12 +265,12 @@ export function TasksManager({
             return (
               <li
                 key={task.id}
-                onDoubleClick={(e) => {
+                onClick={(e) => {
                   if ((e.target as HTMLElement).closest("button, a")) return;
                   router.push(`/app/tasks/${task.id}`);
                 }}
                 title={t("openHint")}
-                className="flex items-start gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:border-brand/40"
+                className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:border-brand/40"
               >
                 <button
                   type="button"

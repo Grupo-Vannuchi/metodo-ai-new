@@ -5,9 +5,9 @@ import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 
 /**
- * A table row (`<tr>`) that opens `href` on double-click. Double-clicks landing
- * on an interactive element inside the row (buttons/links/inputs) are ignored,
- * so row actions keep working.
+ * A table row (`<tr>`) that opens `href` on click. Clicks landing on an
+ * interactive element inside the row (buttons/links/inputs) are ignored, so row
+ * actions keep working.
  */
 export function OpenRow({
   href,
@@ -24,8 +24,8 @@ export function OpenRow({
   return (
     <tr
       title={title}
-      onDoubleClick={(e) => {
-        if ((e.target as HTMLElement).closest("button, a, input, [role='button']")) return;
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("button, a, input, select, textarea, label, [role='button']")) return;
         router.push(href);
       }}
       className={cn("cursor-pointer select-none", className)}
