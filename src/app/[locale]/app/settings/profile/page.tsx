@@ -24,11 +24,7 @@ export default async function ProfilePage({
   }
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
-        <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
-      </div>
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <ProfileClient profile={profile} security={security} />
     </div>
   );

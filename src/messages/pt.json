@@ -1748,7 +1748,24 @@
   },
   "settings": {
     "title": "Configurações",
-    "subtitle": "Organização, plano e uso",
+    "subtitle": "Organização, plano, equipe e preferências",
+    "nav": {
+      "overview": "Visão geral",
+      "profile": "Perfil",
+      "team": "Equipe",
+      "access": "Acesso",
+      "audit": "Auditoria",
+      "plans": "Planos"
+    },
+    "open": "Abrir",
+    "sections": {
+      "title": "Atalhos",
+      "profileDesc": "Seus dados, foto e segurança da conta",
+      "teamDesc": "Convide e gerencie membros e papéis",
+      "accessDesc": "Modelos de acesso por tela para a equipe",
+      "auditDesc": "Histórico de ações da organização",
+      "plansDesc": "Compare planos e faça upgrade"
+    },
     "org": "Organização",
     "plan": "Plano",
     "yourRole": "Seu papel",

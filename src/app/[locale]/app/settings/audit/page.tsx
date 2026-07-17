@@ -25,17 +25,12 @@ export default async function AuditPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
-        <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
-      </div>
-
       {logs.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
           {t("empty")}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-card">
+        <div className="glass overflow-x-auto rounded-xl border border-border shadow-sm">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-border text-muted-foreground">
               <tr>

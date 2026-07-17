@@ -1748,7 +1748,24 @@
   },
   "settings": {
     "title": "Settings",
-    "subtitle": "Organization, plan and usage",
+    "subtitle": "Organization, plan, team and preferences",
+    "nav": {
+      "overview": "Overview",
+      "profile": "Profile",
+      "team": "Team",
+      "access": "Access",
+      "audit": "Audit",
+      "plans": "Plans"
+    },
+    "open": "Open",
+    "sections": {
+      "title": "Shortcuts",
+      "profileDesc": "Your details, photo and account security",
+      "teamDesc": "Invite and manage members and roles",
+      "accessDesc": "Per-screen access templates for the team",
+      "auditDesc": "History of organization actions",
+      "plansDesc": "Compare plans and upgrade"
+    },
     "org": "Organization",
     "plan": "Plan",
     "yourRole": "Your role",

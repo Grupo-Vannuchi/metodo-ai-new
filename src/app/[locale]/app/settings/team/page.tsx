@@ -1,13 +1,10 @@
 import { getTranslations } from "next-intl/server";
-import { ShieldCheck } from "lucide-react";
 import { requireOrgContext, hasRole } from "@/lib/tenant";
 import { listMembers, listPendingInvitations } from "@/lib/queries/organizations";
 import { accessTemplateOptions } from "@/lib/queries/access-templates";
 import { InviteForm } from "@/components/app/invite-form";
 import { PendingInvitations } from "@/components/app/pending-invitations";
 import { MembersAdmin } from "@/components/app/members-admin";
-import { buttonVariants } from "@/components/ui/button";
-import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
@@ -30,21 +27,8 @@ export default async function TeamPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
-          <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        {isAdmin ? (
-          <Link href="/app/settings/access" className={buttonVariants({ variant: "outline", size: "sm" })}>
-            <ShieldCheck className="size-4" />
-            {t("manageTemplates")}
-          </Link>
-        ) : null}
-      </div>
-
       {isAdmin ? (
-        <section className="rounded-xl border border-border bg-card p-5">
+        <section className="glass rounded-xl border border-border p-5 shadow-sm">
           <h2 className="mb-4 text-sm font-semibold">{t("inviteTitle")}</h2>
           <InviteForm />
         </section>
@@ -60,7 +44,7 @@ export default async function TeamPage({
           currentRole={ctx.role}
         />
       ) : (
-        <section className="overflow-x-auto rounded-xl border border-border bg-card">
+        <section className="glass overflow-x-auto rounded-xl border border-border shadow-sm">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-border text-muted-foreground">
               <tr>
