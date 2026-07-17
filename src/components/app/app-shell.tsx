@@ -48,7 +48,10 @@ export async function AppShell({
         <div className="absolute right-[-10rem] top-1/3 hidden size-[28rem] rounded-full bg-accent/10 blur-3xl dark:block" />
       </div>
       <CommandPalette />
-      <aside className="sidebar-brand glass relative z-10 hidden w-64 shrink-0 flex-col border-r border-border p-4 md:flex">
+      {/* Opaque branded surface — NOT glass: a translucent navy washes out over
+          the light canvas and makes its inner boxes (search, org card) read as
+          mismatched tones. */}
+      <aside className="sidebar-brand relative z-10 hidden w-64 shrink-0 flex-col border-r border-border bg-card p-4 md:flex">
         <div className="flex items-center justify-between gap-2 px-1 py-2">
           <Logo onDark className="text-xl" />
           <NotificationBell align="left" />
