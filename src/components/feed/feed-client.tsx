@@ -153,16 +153,21 @@ export function FeedClient({
           <p className="text-sm">{posts.length === 0 ? t("empty") : t("emptyFiltered")}</p>
         </div>
       ) : (
-        filtered.map((post) => (
-          <PostCard
-            key={post.id}
-            post={post}
-            currentUserId={currentUserId}
-            canManage={canPost}
-            setPosts={setPosts}
-            refetch={refetch}
-          />
-        ))
+        // Masonry "wall": fills the full width (matching the dashboard) with a
+        // comfortable column width instead of one stretched column.
+        <div className="columns-1 gap-4 lg:columns-2 2xl:columns-3">
+          {filtered.map((post) => (
+            <div key={post.id} className="mb-4 break-inside-avoid">
+              <PostCard
+                post={post}
+                currentUserId={currentUserId}
+                canManage={canPost}
+                setPosts={setPosts}
+                refetch={refetch}
+              />
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

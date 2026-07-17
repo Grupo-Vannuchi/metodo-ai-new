@@ -34,7 +34,7 @@ export default async function FeedPage({
   const location = [profile?.addressCity, profile?.addressState].filter(Boolean).join(", ") || null;
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <FeedHero
         title={t("title")}
         subtitle={t("subtitle")}
