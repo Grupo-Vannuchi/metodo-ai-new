@@ -49,6 +49,46 @@
   /* Loading indicators. */
   --animate-progress: progress 1.1s ease-in-out infinite;
   --animate-shimmer: shimmer 1.6s infinite;
+  /* Lava-lamp drift for the decorative background blobs. Three slow, distinct
+   * paths so the blobs morph past each other like molten wax. Frozen under
+   * prefers-reduced-motion by the global accessibility reset. */
+  --animate-lava-a: lava-a 26s ease-in-out infinite;
+  --animate-lava-b: lava-b 32s ease-in-out infinite;
+  --animate-lava-c: lava-c 38s ease-in-out infinite;
+
+  @keyframes lava-a {
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+    33% {
+      transform: translate(7rem, 5rem) scale(1.18);
+    }
+    66% {
+      transform: translate(-4rem, 8rem) scale(0.92);
+    }
+  }
+  @keyframes lava-b {
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+    40% {
+      transform: translate(-6rem, -5rem) scale(1.22);
+    }
+    70% {
+      transform: translate(5rem, -8rem) scale(0.9);
+    }
+  }
+  @keyframes lava-c {
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+    50% {
+      transform: translate(-7rem, 4rem) scale(1.25);
+    }
+  }
 
   @keyframes fade-in {
     from {

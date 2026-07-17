@@ -39,13 +39,14 @@ export async function AppShell({
     <div className="relative flex h-screen overflow-hidden bg-muted/40 dark:bg-muted/20">
       {/* Decorative, blurred brand backdrop — gives every screen a sense of depth
           behind the frosted surfaces (and something for the glass to frost over,
-          so the effect reads on a light canvas too). Brand-blue leads; the green
-          accent stays a whisper so it never looks like a stain. aria-hidden. */}
+          so the effect reads on a light canvas too). The blobs drift slowly like
+          a lava lamp. Brand-blue leads; the green accent stays a whisper so it
+          never looks like a stain. Frozen under prefers-reduced-motion. */}
       <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-32 -top-40 size-[34rem] rounded-full bg-brand/12 blur-3xl dark:bg-brand/20" />
-        <div className="absolute bottom-[-12rem] left-1/4 size-[30rem] rounded-full bg-brand/10 blur-3xl dark:bg-brand/[0.12]" />
+        <div className="absolute -left-32 -top-40 size-[34rem] animate-lava-a rounded-full bg-brand/12 blur-3xl will-change-transform dark:bg-brand/20" />
+        <div className="absolute bottom-[-12rem] left-1/4 size-[30rem] animate-lava-b rounded-full bg-brand/10 blur-3xl will-change-transform dark:bg-brand/[0.12]" />
         {/* Green accent stays dark-mode only — in light it read as a stray tint. */}
-        <div className="absolute right-[-10rem] top-1/3 hidden size-[28rem] rounded-full bg-accent/10 blur-3xl dark:block" />
+        <div className="absolute right-[-10rem] top-1/3 hidden size-[28rem] animate-lava-c rounded-full bg-accent/10 blur-3xl will-change-transform dark:block" />
       </div>
       <CommandPalette />
       {/* Opaque branded surface — NOT glass: a translucent navy washes out over
