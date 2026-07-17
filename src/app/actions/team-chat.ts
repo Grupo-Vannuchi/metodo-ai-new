@@ -193,6 +193,27 @@ export async function reactToTeamMessage(messageId: string, emoji: string): Prom
   }
 }
 
+/** Pin/unpin a message to the top of the chat (any participant). */
+export async function pinTeamMessage(messageId: string, pin: boolean): Promise<{ ok: boolean }> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+  try {
+    const db = tenantDb(ctx.organizationId);
+    const msg = await db.teamChatMessage.findFirst({
+      where: { id: messageId, deletedAt: null },
+      select: { id: true, chatId: true },
+    });
+    if (!msg) return { ok: false };
+    if (!(await isChatParticipant(ctx.organizationId, msg.chatId, ctx.userId))) return { ok: false };
+    await db.teamChatMessage.updateMany({ where: { id: messageId }, data: { pinnedAt: pin ? new Date() : null } });
+    revalidatePath("/app/inbox");
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to pin team message", error);
+    return { ok: false };
+  }
+}
+
 /** Edit your own team message (marks it edited). */
 export async function editTeamMessage(messageId: string, body: string): Promise<{ ok: boolean }> {
   const ctx = await getOrgContext();

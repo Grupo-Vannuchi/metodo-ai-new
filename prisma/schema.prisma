@@ -85,6 +85,11 @@ model User {
   /// Null until the user confirms their e-mail (login is gated on this). Set
   /// automatically for invited users and OAuth sign-ins (the provider proves it).
   emailVerified DateTime?
+  /// Presence (team chat): heartbeat timestamp — "online" when recent.
+  lastSeenAt   DateTime?
+  /// Transient typing indicator: which chat the user is typing in, and when.
+  typingChatId String?
+  typingAt     DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -1300,6 +1305,8 @@ model TeamChatMessage {
   mentions  Json @default("[]")
   editedAt  DateTime?
   deletedAt DateTime?
+  /// Pinned to the top of the chat (any participant can pin/unpin).
+  pinnedAt  DateTime?
 
   createdAt DateTime @default(now())
 
@@ -1310,6 +1317,7 @@ model TeamChatMessage {
   replies      TeamChatMessage[] @relation("TeamMsgReply")
 
   @@index([chatId, createdAt])
+  @@index([chatId, pinnedAt])
 }
 
 model TeamChatFolder {

@@ -195,6 +195,7 @@ export async function listTeamChatMessages(
       mentions: true,
       editedAt: true,
       deletedAt: true,
+      pinnedAt: true,
       replyToId: true,
       replyTo: { select: { id: true, senderId: true, body: true, deletedAt: true } },
       createdAt: true,
