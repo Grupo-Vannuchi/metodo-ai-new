@@ -31,6 +31,9 @@ import {
   Mail,
   Phone,
   X,
+  Smile,
+  Bold,
+  Italic,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
@@ -46,6 +49,7 @@ import {
   reactToTeamMessage,
   editTeamMessage,
   deleteTeamMessage,
+  pinTeamMessage,
   createChannel,
   leaveChannel,
 } from "@/app/actions/team-chat";
@@ -82,12 +86,74 @@ type Message = {
   reactions?: { emoji: string; userId: string }[] | null;
   editedAt?: string | null;
   deletedAt?: string | null;
+  pinnedAt?: string | null;
   replyToId?: string | null;
   replyTo?: { id: string; senderId: string; body: string; deletedAt: string | null } | null;
   createdAt: string;
 };
 
 const TEAM_EMOJIS = ["👍", "❤️", "😂", "🎉", "✅", "🙏"];
+/** Emoji palette for the composer picker. */
+const EMOJI_PICKER = [
+  "😀", "😄", "😅", "😂", "🙂", "😉", "😍", "😘", "😎", "🤩",
+  "🤔", "😐", "😴", "😢", "😭", "😡", "😱", "🤯", "🥳", "🤝",
+  "👍", "👎", "👏", "🙌", "🙏", "💪", "✅", "❌", "⚠️", "🔥",
+  "💡", "⭐", "❤️", "🎉", "🚀", "📌", "📎", "📅", "💰", "☕",
+];
+
+/**
+ * Render a message body with lightweight formatting: **bold**, _italic_,
+ * ~~strike~~ and `code`. Optionally highlights a search term. Kept simple and
+ * safe (no HTML) — it tokenizes plain text into styled spans.
+ */
+function renderBody(text: string, term?: string): React.ReactNode {
+  const tokens: React.ReactNode[] = [];
+  const re = /(\*\*[^*]+\*\*|_[^_]+_|~~[^~]+~~|`[^`]+`)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let key = 0;
+  const pushPlain = (s: string) => {
+    if (!s) return;
+    tokens.push(term ? highlight(s, term, key++) : s);
+  };
+  while ((m = re.exec(text)) !== null) {
+    pushPlain(text.slice(last, m.index));
+    const tok = m[0];
+    const inner = tok.slice(tok.startsWith("**") || tok.startsWith("~~") ? 2 : 1, tok.length - (tok.startsWith("**") || tok.startsWith("~~") ? 2 : 1));
+    if (tok.startsWith("**")) tokens.push(<strong key={key++}>{term ? highlight(inner, term, key++) : inner}</strong>);
+    else if (tok.startsWith("~~")) tokens.push(<s key={key++}>{term ? highlight(inner, term, key++) : inner}</s>);
+    else if (tok.startsWith("`")) tokens.push(<code key={key++} className="rounded bg-black/10 px-1 py-0.5 text-[0.85em]">{inner}</code>);
+    else tokens.push(<em key={key++}>{term ? highlight(inner, term, key++) : inner}</em>);
+    last = re.lastIndex;
+  }
+  pushPlain(text.slice(last));
+  return tokens;
+}
+
+/** Wrap occurrences of `term` (case-insensitive) in a highlight mark. */
+function highlight(text: string, term: string, baseKey: number): React.ReactNode {
+  const q = term.trim().toLowerCase();
+  if (!q) return text;
+  const out: React.ReactNode[] = [];
+  const lower = text.toLowerCase();
+  let i = 0;
+  let k = 0;
+  while (i < text.length) {
+    const idx = lower.indexOf(q, i);
+    if (idx < 0) {
+      out.push(text.slice(i));
+      break;
+    }
+    if (idx > i) out.push(text.slice(i, idx));
+    out.push(
+      <mark key={`${baseKey}-${k++}`} className="rounded bg-amber-300/60 text-inherit">
+        {text.slice(idx, idx + q.length)}
+      </mark>,
+    );
+    i = idx + q.length;
+  }
+  return out;
+}
 type Menu = { x: number; y: number; userId: string };
 
 const MENU_ITEM =
@@ -148,6 +214,95 @@ export function TeamChatClient({
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const tempIdRef = useRef(0);
+
+  // Fase 5: message search, pinned, presence/typing, emoji picker.
+  const [msgSearch, setMsgSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [online, setOnline] = useState<Set<string>>(new Set());
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const typingRef = useRef(false);
+  const typingResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Presence + typing heartbeat: refresh who's online and who's typing here.
+  useEffect(() => {
+    let active = true;
+    const beat = async () => {
+      try {
+        const r = await fetch("/api/inbox/team-presence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chatId: selectedChatId, typing: typingRef.current }),
+        });
+        if (active && r.ok) {
+          const d = (await r.json()) as { online?: string[]; typing?: string[] };
+          setOnline(new Set(d.online ?? []));
+          setTypingUsers(d.typing ?? []);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    void beat();
+    const id = setInterval(beat, 4000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [selectedChatId]);
+
+  // Mark "typing" on keystroke; auto-clear after a short idle.
+  function onDraftChange(value: string) {
+    setDraft(value);
+    typingRef.current = true;
+    if (typingResetRef.current) clearTimeout(typingResetRef.current);
+    typingResetRef.current = setTimeout(() => {
+      typingRef.current = false;
+    }, 3000);
+  }
+
+  // Wrap the composer's current selection with formatting markers.
+  function wrapSelection(before: string, after: string) {
+    const el = composerRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? draft.length;
+    const end = el.selectionEnd ?? draft.length;
+    const selected = draft.slice(start, end) || t("formatSample");
+    const next = draft.slice(0, start) + before + selected + after + draft.slice(end);
+    setDraft(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.selectionStart = start + before.length;
+      el.selectionEnd = start + before.length + selected.length;
+    });
+  }
+
+  function insertEmoji(emoji: string) {
+    const el = composerRef.current;
+    const start = el?.selectionStart ?? draft.length;
+    const end = el?.selectionEnd ?? draft.length;
+    setDraft(draft.slice(0, start) + emoji + draft.slice(end));
+    setEmojiOpen(false);
+    requestAnimationFrame(() => {
+      el?.focus();
+      if (el) el.selectionStart = el.selectionEnd = start + emoji.length;
+    });
+  }
+
+  async function pinTeam(id: string, pin: boolean) {
+    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, pinnedAt: pin ? new Date().toISOString() : null } : m)));
+    await pinTeamMessage(id, pin);
+    void fetchMessages();
+  }
+
+  function jumpToMessage(id: string) {
+    const el = document.getElementById(`tm-${id}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("ring-2", "ring-brand");
+      setTimeout(() => el.classList.remove("ring-2", "ring-brand"), 1600);
+    }
+  }
 
   function selectUser(userId: string) {
     setSelectedUserId(userId);
@@ -217,8 +372,17 @@ export function TeamChatClient({
 
   const activeUser = members.find((m) => m.userId === selectedUserId) ?? null;
 
+  // Fase 5 derived: pinned messages, search results, and typing names.
+  const pinned = messages.filter((m) => m.pinnedAt && !m.deletedAt);
+  const searchTerm = msgSearch.trim().toLowerCase();
+  const visibleMessages = searchTerm ? messages.filter((m) => (m.body ?? "").toLowerCase().includes(searchTerm)) : messages;
+  const typingNames = typingUsers
+    .map((id) => members.find((mm) => mm.userId === id)?.name)
+    .filter((n): n is string => Boolean(n));
+
   async function onSend(e?: React.FormEvent) {
     e?.preventDefault();
+    typingRef.current = false;
     const body = draft.trim();
     if (!body || sending) return;
 
@@ -656,14 +820,35 @@ export function TeamChatClient({
                   <Users className="size-4" />
                 </span>
               ) : (
-                <Avatar name={activeUser?.name ?? ""} src={activeUser?.avatarUrl} className="size-9" />
+                <span className="relative shrink-0">
+                  <Avatar name={activeUser?.name ?? ""} src={activeUser?.avatarUrl} className="size-9" />
+                  {activeUser && online.has(activeUser.userId) ? (
+                    <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-card bg-green-500" aria-label={t("online")} />
+                  ) : null}
+                </span>
               )}
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{selectedChat?.isGroup ? selectedChat.name : activeUser?.name}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {selectedChat?.isGroup ? t("memberCount", { count: selectedChat.memberCount }) : activeUser?.email}
+                  {selectedChat?.isGroup
+                    ? t("memberCount", { count: selectedChat.memberCount })
+                    : activeUser && online.has(activeUser.userId)
+                      ? t("online")
+                      : activeUser?.email}
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => setSearchOpen((v) => !v)}
+                title={t("searchMessages")}
+                aria-label={t("searchMessages")}
+                className={cn(
+                  "rounded-lg p-1.5 transition-colors hover:bg-muted hover:text-foreground",
+                  searchOpen ? "text-brand" : "text-muted-foreground",
+                )}
+              >
+                <Search className="size-4" />
+              </button>
               {selectedChat?.isGroup ? (
                 <>
                   <button
@@ -704,21 +889,77 @@ export function TeamChatClient({
               )}
             </header>
 
+            {searchOpen ? (
+              <div className="flex items-center gap-2 border-b border-border bg-muted/20 px-3 py-2">
+                <Search className="size-4 shrink-0 text-muted-foreground" />
+                <input
+                  autoFocus
+                  value={msgSearch}
+                  onChange={(e) => setMsgSearch(e.target.value)}
+                  placeholder={t("searchMessages")}
+                  className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                />
+                {msgSearch.trim() ? (
+                  <span className="shrink-0 text-xs text-muted-foreground">{t("matches", { count: visibleMessages.length })}</span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchOpen(false);
+                    setMsgSearch("");
+                  }}
+                  aria-label={t("cancel")}
+                  className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ) : null}
+
+            {pinned.length > 0 && !searchTerm ? (
+              <div className="flex flex-col gap-1 border-b border-border bg-brand/5 px-3 py-2">
+                {pinned.map((pm) => (
+                  <div key={pm.id} className="flex items-center gap-2 text-xs">
+                    <Pin className="size-3.5 shrink-0 text-brand" />
+                    <button
+                      type="button"
+                      onClick={() => jumpToMessage(pm.id)}
+                      className="min-w-0 flex-1 truncate text-left text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      {pm.body || t("fileLabel")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void pinTeam(pm.id, false)}
+                      aria-label={t("unpin")}
+                      title={t("unpin")}
+                      className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <PinOff className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             <div ref={scrollRef} className="flex flex-1 flex-col gap-2 overflow-y-auto bg-muted/20 p-4">
               {messages.length === 0 ? (
                 <p className="m-auto text-sm text-muted-foreground">
                   {t("start", { name: selectedChat?.isGroup ? (selectedChat.name ?? "") : (activeUser?.name ?? "") })}
                 </p>
+              ) : visibleMessages.length === 0 ? (
+                <p className="m-auto text-sm text-muted-foreground">{t("noMatches")}</p>
               ) : (
-                messages.map((msg) => {
+                visibleMessages.map((msg) => {
                   const out = msg.senderId === currentUserId;
                   const deleted = Boolean(msg.deletedAt);
                   const reactions = msg.reactions ?? [];
                   return (
                     <div
                       key={msg.id}
+                      id={`tm-${msg.id}`}
                       className={cn(
-                        "group/tm flex max-w-[75%] flex-col gap-1",
+                        "group/tm flex max-w-[75%] flex-col gap-1 rounded-2xl transition-shadow",
                         out ? "items-end self-end" : "items-start self-start",
                       )}
                     >
@@ -794,7 +1035,9 @@ export function TeamChatClient({
                                   </a>
                                 )
                               ) : null}
-                              {msg.body ? <p className="whitespace-pre-wrap break-words">{msg.body}</p> : null}
+                              {msg.body ? (
+                                <p className="whitespace-pre-wrap break-words">{renderBody(msg.body, searchTerm || undefined)}</p>
+                              ) : null}
                               {msg.createdAt ? (
                                 <span
                                   className={cn(
@@ -802,6 +1045,7 @@ export function TeamChatClient({
                                     out ? "text-brand-foreground/70" : "text-muted-foreground",
                                   )}
                                 >
+                                  {msg.pinnedAt ? <Pin className="size-2.5" /> : null}
                                   {msg.editedAt ? <span>{t("edited")}</span> : null}
                                   {fmtTime(msg.createdAt)}
                                 </span>
@@ -840,6 +1084,15 @@ export function TeamChatClient({
                               className="rounded-full px-0.5 text-muted-foreground transition-colors hover:text-foreground"
                             >
                               <Reply className="size-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void pinTeam(msg.id, !msg.pinnedAt)}
+                              title={msg.pinnedAt ? t("unpin") : t("pin")}
+                              aria-label={msg.pinnedAt ? t("unpin") : t("pin")}
+                              className={cn("rounded-full px-0.5 transition-colors hover:text-foreground", msg.pinnedAt ? "text-brand" : "text-muted-foreground")}
+                            >
+                              {msg.pinnedAt ? <PinOff className="size-4" /> : <Pin className="size-4" />}
                             </button>
                             {out && msg.body ? (
                               <button
@@ -883,6 +1136,16 @@ export function TeamChatClient({
                   );
                 })
               )}
+              {typingNames.length > 0 && !searchTerm ? (
+                <div className="flex items-center gap-2 self-start rounded-2xl bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm">
+                  <span className="flex gap-0.5">
+                    <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]" />
+                    <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]" />
+                    <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground" />
+                  </span>
+                  {typingNames.length === 1 ? t("typingOne", { name: typingNames[0] }) : t("typingMany", { count: typingNames.length })}
+                </div>
+              ) : null}
             </div>
 
             {replyTo || editingId ? (
@@ -939,10 +1202,54 @@ export function TeamChatClient({
               >
                 {uploading ? <Spinner className="size-4" /> : <Paperclip className="size-4" />}
               </button>
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setEmojiOpen((v) => !v)}
+                  title={t("emoji")}
+                  aria-label={t("emoji")}
+                  className={cn(
+                    "inline-flex size-10 items-center justify-center rounded-lg border border-border bg-muted/50 transition-colors hover:bg-muted hover:text-foreground",
+                    emojiOpen ? "text-brand" : "text-muted-foreground",
+                  )}
+                >
+                  <Smile className="size-4" />
+                </button>
+                {emojiOpen ? (
+                  <>
+                    <button type="button" aria-hidden tabIndex={-1} onClick={() => setEmojiOpen(false)} className="fixed inset-0 z-40 cursor-default" />
+                    <div className="glass-strong absolute bottom-12 left-0 z-50 grid w-64 grid-cols-8 gap-1 rounded-xl border border-border p-2 shadow-xl">
+                      {EMOJI_PICKER.map((e) => (
+                        <button key={e} type="button" onClick={() => insertEmoji(e)} className="rounded-md p-1 text-lg leading-none transition-transform hover:scale-125">
+                          {e}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => wrapSelection("**", "**")}
+                title={t("bold")}
+                aria-label={t("bold")}
+                className="hidden size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:inline-flex"
+              >
+                <Bold className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => wrapSelection("_", "_")}
+                title={t("italic")}
+                aria-label={t("italic")}
+                className="hidden size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:inline-flex"
+              >
+                <Italic className="size-4" />
+              </button>
               <textarea
                 ref={composerRef}
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
+                onChange={(e) => onDraftChange(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
