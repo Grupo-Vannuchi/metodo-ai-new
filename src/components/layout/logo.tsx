@@ -16,8 +16,8 @@ export function Logo({ className, onDark }: { className?: string; onDark?: boole
         <Image
           src="/logo-white.png"
           alt={siteConfig.name}
-          width={1473}
-          height={493}
+          width={944}
+          height={213}
           priority
           className={cn("h-7 w-auto", className)}
         />
@@ -29,16 +29,16 @@ export function Logo({ className, onDark }: { className?: string; onDark?: boole
       <Image
         src="/logo.png"
         alt={siteConfig.name}
-        width={2052}
-        height={722}
+        width={944}
+        height={213}
         priority
         className={cn("h-7 w-auto dark:hidden", className)}
       />
       <Image
         src="/logo-white.png"
         alt={siteConfig.name}
-        width={1473}
-        height={493}
+        width={944}
+        height={213}
         priority
         className={cn("hidden h-7 w-auto dark:block", className)}
       />

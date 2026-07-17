@@ -1,10 +1,11 @@
 import "server-only";
+import { env } from "@/lib/env";
 
 /**
  * Branded HTML shell for transactional emails. Table-based + inline styles (the
- * only thing email clients render reliably), responsive up to 600px, MÉTODO
- * wordmark, brand palette (#18375d / #2ecc71). Every transactional template
- * (verify, invite, reset, welcome) is built on top of this.
+ * only thing email clients render reliably), responsive up to 600px, the MÉTODO
+ * logo (hosted image — data URIs are stripped by Gmail), brand palette
+ * (#18375d / #2ecc71). Every transactional template is built on top of this.
  */
 
 function esc(value: unknown): string {
@@ -30,7 +31,6 @@ export type EmailLayoutInput = {
 
 export function renderEmailLayout(input: EmailLayoutInput): string {
   const brand = "#18375d";
-  const accent = "#2ecc71";
   const ink = "#0f172a";
   const muted = "#64748b";
   const line = "#e2e8f0";
@@ -64,8 +64,8 @@ export function renderEmailLayout(input: EmailLayoutInput): string {
       <table role="presentation" width="600" cellpadding="0" cellspacing="0"
              style="width:600px;max-width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(15,23,42,.08);font-family:Segoe UI,Roboto,Arial,sans-serif;">
         <tr>
-          <td style="background:${brand};padding:22px 32px;">
-            <span style="font-size:20px;font-weight:800;letter-spacing:.14em;color:#ffffff;">MÉTODO<span style="color:${accent};">AI</span></span>
+          <td style="background:${brand};padding:20px 32px;">
+            <img src="${esc(env.NEXT_PUBLIC_SITE_URL)}/logo-white.png" alt="MétodoAI" width="142" height="32" style="display:block;border:0;height:32px;width:142px;" />
           </td>
         </tr>
         <tr>
