@@ -89,7 +89,7 @@ export function PieCard({ models, defaultModel }: { models: string[]; defaultMod
   const total = data.reduce((a, d) => a + d.value, 0);
 
   return (
-    <section className="rounded-xl border border-border bg-card p-5">
+    <section className="glass rounded-xl border border-border p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <ChartPie className="size-4 text-brand" />
