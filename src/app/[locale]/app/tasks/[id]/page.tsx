@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireOrgContext } from "@/lib/tenant";
 import { getTask } from "@/lib/queries/tasks";
 import { TaskDoneButton } from "@/components/tasks/task-done-button";
+import { TaskDetail } from "@/components/tasks/task-detail";
 import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { resolveLocale } from "@/i18n/routing";
@@ -24,23 +25,30 @@ export default async function TaskViewPage({
 
   const done = task.done;
   const overdue = task.overdue;
+  const inProgress = !done && task.status === "IN_PROGRESS";
   const fmt = (d: Date | null) =>
     d ? new Date(d).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 
   const fields = [
+    { label: t("field.status"), value: t(`status.${task.status}`) },
     { label: t("field.type"), value: t(`type.${task.type}`) },
     { label: t("field.priority"), value: t(`priority.${task.priority}`) },
+    { label: t("field.startDate"), value: fmt(task.startDate) },
     { label: t("field.dueDate"), value: fmt(task.dueDate) },
+    { label: t("field.reminder"), value: fmt(task.reminderAt) },
+    { label: t("field.recurrence"), value: t(`recurrence.${task.recurrence}`) },
     { label: t("field.assignee"), value: task.assignedToName ?? "—" },
     { label: t("field.createdBy"), value: task.createdByName ?? "—" },
   ];
 
-  const statusLabel = done ? t("statusDone") : overdue ? t("statusOverdue") : t("statusOpen");
+  const statusLabel = done ? t("statusDone") : overdue ? t("statusOverdue") : inProgress ? t("status.IN_PROGRESS") : t("statusOpen");
   const statusCls = done
     ? "bg-green-500/10 text-green-600"
     : overdue
       ? "bg-red-500/10 text-red-600"
-      : "bg-brand/10 text-brand";
+      : inProgress
+        ? "bg-amber-500/10 text-amber-600"
+        : "bg-brand/10 text-brand";
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
@@ -96,6 +104,14 @@ export default async function TaskViewPage({
           </div>
         ) : null}
       </dl>
+
+      <TaskDetail
+        taskId={task.id}
+        status={task.status as "TODO" | "IN_PROGRESS" | "DONE"}
+        progress={task.progress}
+        checklist={task.checklist}
+        attachments={task.attachments.map((a) => ({ id: a.id, name: a.name, mime: a.mime, size: a.size, url: a.url }))}
+      />
     </div>
   );
 }

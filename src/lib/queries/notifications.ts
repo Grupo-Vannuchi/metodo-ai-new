@@ -8,6 +8,7 @@ const STALE_DAYS = 7;
 export type Alerts = {
   tasksOverdue: number;
   tasksToday: number;
+  tasksReminder: number;
   staleOpps: number;
   financeOverdue: number;
   unread: number;
@@ -41,6 +42,7 @@ export async function getAlerts(
   return {
     tasksOverdue: tasks.overdue,
     tasksToday: tasks.today,
+    tasksReminder: tasks.reminders,
     staleOpps,
     financeOverdue,
     unread,

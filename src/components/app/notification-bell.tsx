@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bell, Clock, CheckSquare, AlertTriangle, Wallet, MessageCircle, UserPlus, Paperclip, Megaphone, AtSign, Smile, Volume2, VolumeX } from "lucide-react";
+import { Bell, Clock, CheckSquare, AlertTriangle, Wallet, MessageCircle, UserPlus, Paperclip, Megaphone, AtSign, Smile, Volume2, VolumeX, AlarmClock } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,7 @@ type Payload = { total: number; items: Item[] };
 const ICONS: Record<string, typeof Bell> = {
   TASK_OVERDUE: Clock,
   TASK_TODAY: CheckSquare,
+  TASK_REMINDER: AlarmClock,
   OPP_STALE: AlertTriangle,
   FINANCE_OVERDUE: Wallet,
   INBOX_UNREAD: MessageCircle,

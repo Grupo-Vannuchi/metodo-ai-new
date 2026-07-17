@@ -11,7 +11,12 @@ export type TaskRow = {
   description: string | null;
   type: string;
   priority: string;
+  status: string;
+  progress: number;
+  recurrence: string;
+  startDate: Date | null;
   dueDate: Date | null;
+  reminderAt: Date | null;
   doneAt: Date | null;
   assignedToId: string | null;
   assignedToName: string | null;
@@ -20,6 +25,9 @@ export type TaskRow = {
   companyId: string | null;
   opportunityId: string | null;
   opportunityTitle: string | null;
+  checklistTotal: number;
+  checklistDone: number;
+  attachmentCount: number;
 };
 
 function startOfToday() {
@@ -77,12 +85,19 @@ export async function listTasks(
       description: true,
       type: true,
       priority: true,
+      status: true,
+      progress: true,
+      recurrence: true,
+      startDate: true,
       dueDate: true,
+      reminderAt: true,
       doneAt: true,
       assignedToId: true,
       contactId: true,
       companyId: true,
       opportunityId: true,
+      checklist: { select: { done: true } },
+      _count: { select: { attachments: true } },
     },
   });
 
@@ -106,31 +121,40 @@ export async function listTasks(
   const cMap = new Map(contacts.map((c) => [c.id, c.name]));
   const oMap = new Map(opps.map((o) => [o.id, o.title]));
 
-  return tasks.map((t) => ({
-    ...t,
-    assignedToName: t.assignedToId ? uMap.get(t.assignedToId) ?? null : null,
-    contactName: t.contactId ? cMap.get(t.contactId) ?? null : null,
-    opportunityTitle: t.opportunityId ? oMap.get(t.opportunityId) ?? null : null,
-  }));
+  return tasks.map((t) => {
+    const { checklist, _count, ...rest } = t;
+    return {
+      ...rest,
+      assignedToName: t.assignedToId ? uMap.get(t.assignedToId) ?? null : null,
+      contactName: t.contactId ? cMap.get(t.contactId) ?? null : null,
+      opportunityTitle: t.opportunityId ? oMap.get(t.opportunityId) ?? null : null,
+      checklistTotal: checklist.length,
+      checklistDone: checklist.filter((c) => c.done).length,
+      attachmentCount: _count.attachments,
+    };
+  });
 }
 
-/** Open-task counters for a user (nav badge + notifications). */
+/** Open-task counters for a user (nav badge + notification digest). `reminders`
+ * counts open tasks whose reminder time has arrived. */
 export async function taskCounts(
   organizationId: string,
   userId: string,
-): Promise<{ overdue: number; today: number; open: number }> {
+): Promise<{ overdue: number; today: number; open: number; reminders: number }> {
   const db = tenantDb(organizationId);
+  const now = new Date();
   const today = startOfToday();
   const tomorrow = startOfTomorrow();
-  const [overdue, todayCount, open] = await Promise.all([
+  const [overdue, todayCount, open, reminders] = await Promise.all([
     db.task.count({ where: { assignedToId: userId, doneAt: null, dueDate: { lt: today } } }),
     db.task.count({ where: { assignedToId: userId, doneAt: null, dueDate: { gte: today, lt: tomorrow } } }),
     db.task.count({ where: { assignedToId: userId, doneAt: null } }),
+    db.task.count({ where: { assignedToId: userId, doneAt: null, reminderAt: { not: null, lte: now } } }),
   ]);
-  return { overdue, today: todayCount, open };
+  return { overdue, today: todayCount, open, reminders };
 }
 
-/** A single task with resolved names, for the read-only view. */
+/** A single task with resolved names, checklist and attachments. */
 export async function getTask(organizationId: string, id: string) {
   const db = tenantDb(organizationId);
   const task = await db.task.findFirst({
@@ -141,7 +165,12 @@ export async function getTask(organizationId: string, id: string) {
       description: true,
       type: true,
       priority: true,
+      status: true,
+      progress: true,
+      recurrence: true,
+      startDate: true,
       dueDate: true,
+      reminderAt: true,
       doneAt: true,
       createdAt: true,
       assignedToId: true,
@@ -149,6 +178,11 @@ export async function getTask(organizationId: string, id: string) {
       contactId: true,
       companyId: true,
       opportunityId: true,
+      checklist: { orderBy: [{ order: "asc" }, { createdAt: "asc" }], select: { id: true, text: true, done: true } },
+      attachments: {
+        orderBy: { createdAt: "desc" },
+        select: { id: true, name: true, mime: true, size: true, url: true, createdAt: true },
+      },
     },
   });
   if (!task) return null;
@@ -171,12 +205,14 @@ export async function getTask(organizationId: string, id: string) {
     ...task,
     done,
     overdue: !done && task.dueDate != null && task.dueDate.getTime() < Date.now(),
+    reminderDue: !done && task.reminderAt != null && task.reminderAt.getTime() <= Date.now(),
     assignedToName: task.assignedToId ? uMap.get(task.assignedToId) ?? null : null,
     createdByName: task.createdById ? uMap.get(task.createdById) ?? null : null,
     contactName: contact?.name ?? null,
     companyName: company?.name ?? null,
     opportunityTitle: opp?.title ?? null,
     opportunityCode: opp?.code ?? null,
+    checklistTotal: task.checklist.length,
+    checklistDone: task.checklist.filter((c) => c.done).length,
   };
 }
-

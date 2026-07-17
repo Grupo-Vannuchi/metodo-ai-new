@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Check, Trash2, Link2 } from "lucide-react";
+import { Check, Trash2, Link2, ListChecks, Paperclip, Repeat } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/ui/confirm";
@@ -148,14 +148,39 @@ export function TasksBoard({ tasks }: { tasks: TaskRow[] }) {
                           {done ? <Check className="size-3.5" /> : null}
                         </button>
                         <div className="min-w-0 flex-1">
-                          <p className={cn("text-sm font-medium", done && "text-muted-foreground line-through")}>
-                            {task.title}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className={cn("text-sm font-medium", done && "text-muted-foreground line-through")}>
+                              {task.title}
+                            </p>
+                            {!done && task.status === "IN_PROGRESS" ? (
+                              <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
+                                {t("status.IN_PROGRESS")}
+                              </span>
+                            ) : null}
+                          </div>
+                          {!done && task.progress > 0 && task.progress < 100 ? (
+                            <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted">
+                              <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${task.progress}%` }} />
+                            </div>
+                          ) : null}
                           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                             {task.dueDate ? (
                               <span className={cn(overdue && "font-medium text-red-600")}>{fmtDate(task.dueDate)}</span>
                             ) : null}
                             <span className="rounded bg-muted px-1.5 py-0.5">{t(`type.${task.type}`)}</span>
+                            {task.checklistTotal > 0 ? (
+                              <span className="inline-flex items-center gap-0.5">
+                                <ListChecks className="size-3" />
+                                {task.checklistDone}/{task.checklistTotal}
+                              </span>
+                            ) : null}
+                            {task.attachmentCount > 0 ? (
+                              <span className="inline-flex items-center gap-0.5">
+                                <Paperclip className="size-3" />
+                                {task.attachmentCount}
+                              </span>
+                            ) : null}
+                            {task.recurrence !== "NONE" ? <Repeat className="size-3" aria-label={t("recurring")} /> : null}
                             {task.assignedToName ? <span>· {task.assignedToName}</span> : null}
                           </div>
                           {task.opportunityId || task.contactId ? (

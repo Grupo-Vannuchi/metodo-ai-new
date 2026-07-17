@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Pencil, Trash2, Plus, X, Link2 } from "lucide-react";
+import { Check, Pencil, Trash2, Plus, X, Link2, ListChecks, Paperclip, Repeat, AlarmClock } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,12 @@ type Tab = "open" | "today" | "overdue" | "upcoming" | "done";
 
 const TYPES = ["CALL", "MEETING", "EMAIL", "WHATSAPP", "FOLLOWUP", "OTHER"] as const;
 const PRIORITIES = ["LOW", "MEDIUM", "HIGH"] as const;
+const STATUSES = ["TODO", "IN_PROGRESS", "DONE"] as const;
+const RECURRENCES = ["NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"] as const;
+
+function reminderDue(d: Date | string | null, done: boolean) {
+  return !done && d != null && new Date(d).getTime() <= Date.now();
+}
 
 const selectCls = cn(
   "h-[42px] w-full rounded-lg border border-border bg-card px-3 text-sm",
@@ -175,8 +181,26 @@ export function TasksManager({
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
+              <Label htmlFor="startDate">{t("field.startDate")}</Label>
+              <Input id="startDate" name="startDate" type="datetime-local" defaultValue={toLocal(editing?.startDate ?? null)} />
+            </div>
+            <div>
               <Label htmlFor="dueDate">{t("field.dueDate")}</Label>
               <Input id="dueDate" name="dueDate" type="datetime-local" defaultValue={toLocal(editing?.dueDate ?? null)} />
+            </div>
+            <div>
+              <Label htmlFor="reminderAt">{t("field.reminder")}</Label>
+              <Input id="reminderAt" name="reminderAt" type="datetime-local" defaultValue={toLocal(editing?.reminderAt ?? null)} />
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <Label htmlFor="status">{t("field.status")}</Label>
+              <select id="status" name="status" defaultValue={editing?.status ?? "TODO"} className={selectCls}>
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>{t(`status.${s}`)}</option>
+                ))}
+              </select>
             </div>
             <div>
               <Label htmlFor="type">{t("field.type")}</Label>
@@ -191,6 +215,14 @@ export function TasksManager({
               <select id="priority" name="priority" defaultValue={editing?.priority ?? "MEDIUM"} className={selectCls}>
                 {PRIORITIES.map((p) => (
                   <option key={p} value={p}>{t(`priority.${p}`)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="recurrence">{t("field.recurrence")}</Label>
+              <select id="recurrence" name="recurrence" defaultValue={editing?.recurrence ?? "NONE"} className={selectCls}>
+                {RECURRENCES.map((r) => (
+                  <option key={r} value={r}>{t(`recurrence.${r}`)}</option>
                 ))}
               </select>
             </div>
@@ -285,9 +317,21 @@ export function TasksManager({
                   {done ? <Check className="size-3.5" /> : null}
                 </button>
                 <div className="min-w-0 flex-1">
-                  <p className={cn("text-sm font-medium", done && "text-muted-foreground line-through")}>
-                    {task.title}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className={cn("text-sm font-medium", done && "text-muted-foreground line-through")}>
+                      {task.title}
+                    </p>
+                    {!done && task.status === "IN_PROGRESS" ? (
+                      <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-600">
+                        {t("status.IN_PROGRESS")}
+                      </span>
+                    ) : null}
+                  </div>
+                  {!done && task.progress > 0 && task.progress < 100 ? (
+                    <div className="mt-1.5 h-1 w-full max-w-48 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${task.progress}%` }} />
+                    </div>
+                  ) : null}
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                     {task.dueDate ? (
                       <span className={cn(overdue && "font-medium text-red-600")}>
@@ -295,6 +339,24 @@ export function TasksManager({
                       </span>
                     ) : null}
                     <span className="rounded bg-muted px-1.5 py-0.5">{t(`type.${task.type}`)}</span>
+                    {task.checklistTotal > 0 ? (
+                      <span className="inline-flex items-center gap-0.5">
+                        <ListChecks className="size-3" />
+                        {t("checklist.count", { done: task.checklistDone, total: task.checklistTotal })}
+                      </span>
+                    ) : null}
+                    {task.attachmentCount > 0 ? (
+                      <span className="inline-flex items-center gap-0.5">
+                        <Paperclip className="size-3" />
+                        {task.attachmentCount}
+                      </span>
+                    ) : null}
+                    {task.recurrence !== "NONE" ? <Repeat className="size-3" aria-label={t("recurring")} /> : null}
+                    {reminderDue(task.reminderAt, done) ? (
+                      <span className="inline-flex items-center gap-0.5 text-amber-600">
+                        <AlarmClock className="size-3" />
+                      </span>
+                    ) : null}
                     {task.assignedToName ? <span>· {task.assignedToName}</span> : null}
                     {!fixed && (task.opportunityTitle || task.contactName) ? (
                       <span className="inline-flex items-center gap-0.5">

@@ -1654,7 +1654,12 @@
       "contact": "Contact",
       "company": "Company",
       "opportunity": "Opportunity",
-      "description": "Notes"
+      "description": "Notes",
+      "startDate": "Start",
+      "reminder": "Reminder",
+      "status": "Status",
+      "recurrence": "Repeat",
+      "progress": "Progress"
     },
     "type": {
       "CALL": "Call",
@@ -1665,6 +1670,41 @@
       "OTHER": "Other"
     },
     "priority": { "LOW": "Low", "MEDIUM": "Medium", "HIGH": "High" },
+    "status": {
+      "TODO": "To do",
+      "IN_PROGRESS": "In progress",
+      "DONE": "Done"
+    },
+    "recurrence": {
+      "NONE": "Don't repeat",
+      "DAILY": "Daily",
+      "WEEKLY": "Weekly",
+      "MONTHLY": "Monthly",
+      "YEARLY": "Yearly"
+    },
+    "recurring": "Recurring",
+    "reminderDue": "Reminder due",
+    "checklist": {
+      "title": "Checklist",
+      "add": "Add item",
+      "placeholder": "New item…",
+      "empty": "No items yet.",
+      "count": "{done}/{total}"
+    },
+    "attachments": {
+      "title": "Attachments",
+      "add": "Attach file",
+      "empty": "No attachments.",
+      "uploading": "Uploading…",
+      "remove": "Remove",
+      "removeConfirm": "Remove this attachment?",
+      "error": {
+        "size": "File too large (max 10 MB).",
+        "type": "File type not allowed.",
+        "count": "Attachment limit reached.",
+        "unknown": "Failed to upload the file."
+      }
+    },
     "error": {
       "unauthorized": "Session expired.",
       "invalid": "Check the fields.",
@@ -1680,6 +1720,7 @@
     "kind": {
       "TASK_OVERDUE": "{count, plural, one {# overdue task} other {# overdue tasks}}",
       "TASK_TODAY": "{count, plural, one {# task due today} other {# tasks due today}}",
+      "TASK_REMINDER": "{count, plural, one {# task reminder} other {# task reminders}}",
       "OPP_STALE": "{count, plural, one {# stale opportunity} other {# stale opportunities}}",
       "FINANCE_OVERDUE": "{count, plural, one {# overdue entry} other {# overdue entries}}",
       "INBOX_UNREAD": "{count, plural, one {# unread conversation} other {# unread conversations}}",

@@ -51,6 +51,7 @@ export async function GET(req: Request) {
     const rows = [
       { type: "TASK_OVERDUE", count: alerts.tasksOverdue, link: "/app/tasks" },
       { type: "TASK_TODAY", count: alerts.tasksToday, link: "/app/tasks" },
+      { type: "TASK_REMINDER", count: alerts.tasksReminder, link: "/app/tasks" },
       { type: "OPP_STALE", count: alerts.staleOpps, link: "/app/crm" },
       { type: "FINANCE_OVERDUE", count: alerts.financeOverdue, link: "/app/finance/entries" },
       { type: "INBOX_UNREAD", count: alerts.unread, link: "/app/inbox" },

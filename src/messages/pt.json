@@ -1654,7 +1654,12 @@
       "contact": "Contato",
       "company": "Empresa",
       "opportunity": "Oportunidade",
-      "description": "Anotações"
+      "description": "Anotações",
+      "startDate": "Início",
+      "reminder": "Lembrete",
+      "status": "Status",
+      "recurrence": "Repetir",
+      "progress": "Progresso"
     },
     "type": {
       "CALL": "Ligação",
@@ -1665,6 +1670,41 @@
       "OTHER": "Outro"
     },
     "priority": { "LOW": "Baixa", "MEDIUM": "Média", "HIGH": "Alta" },
+    "status": {
+      "TODO": "A fazer",
+      "IN_PROGRESS": "Em andamento",
+      "DONE": "Concluída"
+    },
+    "recurrence": {
+      "NONE": "Não repetir",
+      "DAILY": "Diariamente",
+      "WEEKLY": "Semanalmente",
+      "MONTHLY": "Mensalmente",
+      "YEARLY": "Anualmente"
+    },
+    "recurring": "Recorrente",
+    "reminderDue": "Lembrete vencido",
+    "checklist": {
+      "title": "Checklist",
+      "add": "Adicionar item",
+      "placeholder": "Novo item…",
+      "empty": "Nenhum item ainda.",
+      "count": "{done}/{total}"
+    },
+    "attachments": {
+      "title": "Anexos",
+      "add": "Anexar arquivo",
+      "empty": "Nenhum anexo.",
+      "uploading": "Enviando…",
+      "remove": "Remover",
+      "removeConfirm": "Remover este anexo?",
+      "error": {
+        "size": "Arquivo muito grande (máx. 10 MB).",
+        "type": "Tipo de arquivo não permitido.",
+        "count": "Limite de anexos atingido.",
+        "unknown": "Falha ao enviar o arquivo."
+      }
+    },
     "error": {
       "unauthorized": "Sessão expirada.",
       "invalid": "Verifique os campos.",
@@ -1680,6 +1720,7 @@
     "kind": {
       "TASK_OVERDUE": "{count, plural, one {# tarefa atrasada} other {# tarefas atrasadas}}",
       "TASK_TODAY": "{count, plural, one {# tarefa para hoje} other {# tarefas para hoje}}",
+      "TASK_REMINDER": "{count, plural, one {# lembrete de tarefa} other {# lembretes de tarefa}}",
       "OPP_STALE": "{count, plural, one {# oportunidade parada} other {# oportunidades paradas}}",
       "FINANCE_OVERDUE": "{count, plural, one {# lançamento vencido} other {# lançamentos vencidos}}",
       "INBOX_UNREAD": "{count, plural, one {# conversa não lida} other {# conversas não lidas}}",

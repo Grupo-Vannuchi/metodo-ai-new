@@ -37,6 +37,8 @@ const TENANT_MODELS = new Set<string>([
   "Message",
   "FinanceEntry",
   "Task",
+  "TaskChecklistItem",
+  "TaskAttachment",
   "Notification",
   "TeamChat",
   "TeamChatParticipant",

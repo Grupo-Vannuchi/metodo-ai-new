@@ -9,6 +9,7 @@
 export const DIGEST_KINDS = [
   "TASK_OVERDUE",
   "TASK_TODAY",
+  "TASK_REMINDER",
   "OPP_STALE",
   "FINANCE_OVERDUE",
   "INBOX_UNREAD",
@@ -27,6 +28,7 @@ export const ASSIGN_KINDS = [
   "FEED_POST",
   "FEED_MENTION",
   "FEED_REACTION",
+  "FEED_COMMENT",
   "HR_TIMEOFF_REQUEST",
   "HR_TIMEOFF_DECIDED",
 ] as const;
