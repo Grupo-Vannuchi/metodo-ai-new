@@ -45,7 +45,7 @@ export default async function InboxPage({
     <div className="flex flex-col gap-4">
       {/* Tabs + export */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-1 shadow-sm w-fit">
+        <div className="glass flex w-fit items-center gap-2 rounded-lg border border-border p-1 shadow-sm">
           <Link
             href="/app/inbox?mode=whatsapp"
             className={cn(

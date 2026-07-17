@@ -652,7 +652,7 @@ export function TeamChatClient({
   const menuMember = menu ? members.find((m) => m.userId === menu.userId) ?? null : null;
 
   return (
-    <div className="flex h-full overflow-hidden rounded-xl border border-border bg-card">
+    <div className="glass flex h-full overflow-hidden rounded-2xl border border-border shadow-sm">
       <aside
         className={cn(
           "w-full flex-col border-border md:flex md:w-80 md:shrink-0 md:border-r",

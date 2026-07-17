@@ -573,7 +573,7 @@ export function InboxClient({
   }
 
   return (
-    <div className="flex h-full overflow-hidden rounded-xl border border-border bg-card">
+    <div className="glass flex h-full overflow-hidden rounded-2xl border border-border shadow-sm">
       {/* Conversation list */}
       <aside
         className={cn(
