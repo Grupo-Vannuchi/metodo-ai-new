@@ -67,6 +67,9 @@ model Organization {
   feedPostAttachments  FeedPostAttachment[]
   feedMentions         FeedMention[]
   feedReactions        FeedReaction[]
+  feedComments         FeedComment[]
+  feedPollOptions      FeedPollOption[]
+  feedPollVotes        FeedPollVote[]
   pinnedItems          PinnedItem[]
 
   @@map("organizations")
@@ -93,6 +96,8 @@ model User {
   feedPosts            FeedPost[]
   feedMentions         FeedMention[]
   feedReactions        FeedReaction[]
+  feedComments         FeedComment[]
+  feedPollVotes        FeedPollVote[]
   authTokens           AuthToken[]
   accounts             Account[]
 
@@ -1260,22 +1265,96 @@ model TeamChatFolder {
 // Team feed (ephemeral 24h posts by managers, with mentions + reactions)
 // ---------------------------------------------------------------------------
 
+/// Post category on the team wall — drives the badge colour/icon and filtering.
+enum FeedCategory {
+  GENERAL
+  ANNOUNCEMENT
+  NEWS
+  EVENT
+  PRAISE
+}
+
 model FeedPost {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   authorId       String
   body           String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  category       FeedCategory @default(GENERAL)
+  /// Pinned posts sort to the top of the wall and never expire.
+  pinnedAt       DateTime?
+  /// When the post disappears from the wall. Null = permanent (kept in history).
+  /// Set (now + 24h) for ephemeral posts. Pinned posts are always permanent.
+  expiresAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   author       User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
   attachments  FeedPostAttachment[]
   mentions     FeedMention[]
   reactions    FeedReaction[]
+  comments     FeedComment[]
+  pollOptions  FeedPollOption[]
+  pollVotes    FeedPollVote[]
 
   @@index([organizationId, createdAt])
+  @@index([organizationId, pinnedAt])
   @@map("feed_posts")
+}
+
+/// A comment/reply on a wall post (threaded discussion).
+model FeedComment {
+  id             String   @id @default(cuid())
+  organizationId String
+  postId         String
+  authorId       String
+  body           String
+  createdAt      DateTime @default(now())
+
+  post         FeedPost     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author       User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([postId, createdAt])
+  @@map("feed_comments")
+}
+
+/// One option of a poll attached to a wall post. A post is a poll when it has
+/// two or more options.
+model FeedPollOption {
+  id             String @id @default(cuid())
+  organizationId String
+  postId         String
+  text           String
+  order          Int    @default(0)
+
+  post         FeedPost       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  votes        FeedPollVote[]
+
+  @@index([postId])
+  @@map("feed_poll_options")
+}
+
+/// A single-choice poll vote — one per user per post (unique).
+model FeedPollVote {
+  id             String   @id @default(cuid())
+  organizationId String
+  postId         String
+  optionId       String
+  userId         String
+  createdAt      DateTime @default(now())
+
+  post         FeedPost       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  option       FeedPollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([organizationId])
+  @@index([optionId])
+  @@map("feed_poll_votes")
 }
 
 model FeedPostAttachment {

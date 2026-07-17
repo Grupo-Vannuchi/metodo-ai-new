@@ -30,6 +30,7 @@ const ICONS: Record<string, typeof Bell> = {
   FEED_POST: Megaphone,
   FEED_MENTION: AtSign,
   FEED_REACTION: Smile,
+  FEED_COMMENT: MessageCircle,
 };
 const ASSIGN_TYPES = new Set([
   "TASK_ASSIGNED",
@@ -38,6 +39,7 @@ const ASSIGN_TYPES = new Set([
   "FEED_POST",
   "FEED_MENTION",
   "FEED_REACTION",
+  "FEED_COMMENT",
 ]);
 
 /** Notification bell: polls the persisted notifications and localizes each one
