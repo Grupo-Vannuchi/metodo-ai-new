@@ -52,7 +52,7 @@ export async function AppShell({
       {/* Opaque branded surface — NOT glass: a translucent navy washes out over
           the light canvas and makes its inner boxes (search, org card) read as
           mismatched tones. */}
-      <aside className="sidebar-brand relative z-10 hidden w-64 shrink-0 flex-col border-r border-border bg-card p-4 md:flex">
+      <aside className="sidebar-brand relative z-30 hidden w-64 shrink-0 flex-col border-r border-border bg-card p-4 md:flex">
         <div className="flex items-center justify-between gap-2 px-1 py-2">
           <Logo onDark className="text-xl" />
           <NotificationBell align="left" />
