@@ -62,14 +62,26 @@ export default async function DashboardPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
-        <p className="mt-1 text-muted-foreground">{t("welcome", { name: ctx.user.name })}</p>
+      {/* Glass hero with a softly-blurred backdrop photo — sets the tone without
+          hurting readability (the greeting sits on a tinted overlay). */}
+      <div className="glass relative overflow-hidden rounded-2xl border border-border p-6 sm:p-8">
+        {/* eslint-disable-next-line @next/next/no-img-element -- decorative, self-hosted */}
+        <img
+          aria-hidden
+          alt=""
+          src="/backgrounds/office-2.jpg"
+          className="pointer-events-none absolute inset-0 size-full scale-110 object-cover opacity-[0.18] blur-[2px]"
+        />
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-r from-card/85 via-card/60 to-card/20" />
+        <div className="relative">
+          <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
+          <p className="mt-1 text-muted-foreground">{t("welcome", { name: ctx.user.name })}</p>
+        </div>
       </div>
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((k) => (
-          <div key={k.label} className="rounded-xl border border-border bg-card p-5">
+          <div key={k.label} className="hover-lift glass rounded-xl border border-border p-5">
             <div className="flex items-center gap-2 text-muted-foreground">
               <k.icon className="size-4" />
               <span className="text-sm">{k.label}</span>
@@ -82,7 +94,7 @@ export default async function DashboardPage({
 
       <PieCard models={pieModels} defaultModel="opps_by_stage" />
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="glass rounded-xl border border-border p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold">{t("funnelTitle")}</h2>
           <Link
@@ -123,8 +135,8 @@ export default async function DashboardPage({
             key={s.label}
             href={s.href}
             className={cn(
-              "flex items-center justify-between rounded-xl border border-border bg-card p-5",
-              "transition-colors hover:bg-muted/50",
+              "hover-lift glass flex items-center justify-between rounded-xl border border-border p-5",
+              "hover:border-brand/40",
             )}
           >
             <div>

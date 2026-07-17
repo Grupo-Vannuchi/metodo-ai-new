@@ -131,7 +131,7 @@ export function NotificationBell({
           <button type="button" aria-hidden tabIndex={-1} onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
           <div
             className={cn(
-              "absolute z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border bg-card shadow-xl motion-safe:animate-dialog-in",
+              "glass-strong absolute z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border shadow-2xl motion-safe:animate-dialog-in",
               align === "left" ? "left-0" : "right-0",
             )}
           >

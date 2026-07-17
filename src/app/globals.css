@@ -193,6 +193,27 @@
     cursor: not-allowed;
   }
 
+  /* Fluid micro-interactions: a smooth default transition on interactive
+     controls, plus a gentle "press" on click. Utility classes like
+     `transition-colors` live in a higher layer and override this fallback, so
+     this only fills in where a component sets no transition of its own. The
+     press applies to real buttons only (not text links). */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary {
+    transition:
+      transform 0.12s ease,
+      background-color 0.16s ease,
+      color 0.16s ease,
+      box-shadow 0.2s ease,
+      opacity 0.16s ease,
+      border-color 0.16s ease;
+  }
+  button:not(:disabled):active,
+  [role="button"]:not([aria-disabled="true"]):active {
+    transform: scale(0.97);
+  }
+
   /* Accessibility: honor reduced-motion — disable animations/transitions. */
   @media (prefers-reduced-motion: reduce) {
     *,
@@ -235,6 +256,45 @@
    `* { transition-duration: 0.01ms !important }` accessibility reset. */
 .bg-crossfade {
   transition: opacity 2000ms ease-in-out !important;
+}
+
+/*
+ * Glass & motion helpers (design language). Reusable so the frosted look and
+ * hover lift stay consistent instead of being re-typed per component.
+ */
+@layer components {
+  /* Frosted surface: translucent card colour + blur. Falls back to a more
+     opaque fill where backdrop-filter isn't supported, so text stays legible. */
+  .glass {
+    background-color: color-mix(in srgb, var(--color-card) 72%, transparent);
+    backdrop-filter: blur(14px) saturate(1.4);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  }
+  .glass-strong {
+    background-color: color-mix(in srgb, var(--color-card) 86%, transparent);
+    backdrop-filter: blur(22px) saturate(1.5);
+    -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass,
+    .glass-strong {
+      background-color: color-mix(in srgb, var(--color-card) 96%, transparent);
+    }
+  }
+
+  /* Card that lifts and gains shadow on hover — fluid, invites interaction. */
+  .hover-lift {
+    transition:
+      transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.2s ease,
+      border-color 0.2s ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-3px);
+    box-shadow:
+      0 10px 24px -12px rgb(0 0 0 / 0.25),
+      0 4px 8px -6px rgb(0 0 0 / 0.15);
+  }
 }
 
 /* Tiptap rich-text editor (proposal template builder). The editor content is a

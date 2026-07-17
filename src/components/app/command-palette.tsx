@@ -118,8 +118,8 @@ export function CommandPalette() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[14vh]" role="dialog" aria-modal="true">
-      <button type="button" aria-hidden tabIndex={-1} onClick={() => { setOpen(false); reset(); }} className="absolute inset-0 bg-black/50 motion-safe:animate-overlay-in" />
-      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-card shadow-xl motion-safe:animate-dialog-in">
+      <button type="button" aria-hidden tabIndex={-1} onClick={() => { setOpen(false); reset(); }} className="absolute inset-0 bg-black/50 backdrop-blur-sm motion-safe:animate-overlay-in" />
+      <div className="glass-strong relative w-full max-w-lg overflow-hidden rounded-2xl border border-white/15 shadow-2xl motion-safe:animate-dialog-in">
         <div className="flex items-center gap-2 border-b border-border px-4">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input

@@ -36,9 +36,16 @@ export async function AppShell({
   return (
     <RealtimeProvider>
     <NotificationSound />
-    <div className="flex h-screen overflow-hidden bg-muted/20">
+    <div className="relative flex h-screen overflow-hidden bg-muted/20">
+      {/* Decorative, blurred brand backdrop — gives every screen a subtle sense
+          of depth behind the frosted surfaces. Purely aria-hidden. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -left-40 -top-40 size-[32rem] rounded-full bg-brand/10 blur-3xl" />
+        <div className="absolute -bottom-48 right-[-6rem] size-[34rem] rounded-full bg-accent/10 blur-3xl" />
+        <div className="absolute left-1/2 top-1/3 size-[26rem] -translate-x-1/2 rounded-full bg-brand/[0.06] blur-3xl" />
+      </div>
       <CommandPalette />
-      <aside className="sidebar-brand hidden w-64 shrink-0 flex-col border-r border-border bg-card p-4 md:flex">
+      <aside className="sidebar-brand glass relative z-10 hidden w-64 shrink-0 flex-col border-r border-border p-4 md:flex">
         <div className="flex items-center justify-between gap-2 px-1 py-2">
           <Logo onDark className="text-xl" />
           <NotificationBell align="left" />
@@ -77,8 +84,8 @@ export async function AppShell({
         </div>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3 md:hidden">
+      <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="glass-strong flex items-center justify-between border-b border-border px-4 py-3 md:hidden">
           <div className="flex items-center gap-3">
             <MobileNav allowedScreens={navScreens} />
             <Logo className="text-lg" />

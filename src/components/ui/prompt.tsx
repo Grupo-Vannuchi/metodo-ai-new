@@ -83,14 +83,14 @@ export function PromptProvider({ children }: { children: React.ReactNode }) {
             tabIndex={-1}
             aria-label={options.cancelLabel ?? t("cancel")}
             onClick={() => settle(null)}
-            className="absolute inset-0 cursor-default bg-black/50 motion-safe:animate-overlay-in"
+            className="absolute inset-0 cursor-default bg-black/50 backdrop-blur-sm motion-safe:animate-overlay-in"
           />
           <form
             onSubmit={(e) => {
               e.preventDefault();
               submit();
             }}
-            className="relative w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-xl motion-safe:animate-dialog-in"
+            className="glass-strong relative w-full max-w-sm rounded-2xl border border-white/15 p-6 shadow-2xl motion-safe:animate-dialog-in"
           >
             {options.title ? <h2 className="text-base font-semibold">{options.title}</h2> : null}
             {options.label ? (

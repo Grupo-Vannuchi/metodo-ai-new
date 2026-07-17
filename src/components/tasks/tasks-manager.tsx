@@ -270,7 +270,7 @@ export function TasksManager({
                   router.push(`/app/tasks/${task.id}`);
                 }}
                 title={t("openHint")}
-                className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:border-brand/40"
+                className="hover-lift flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-3 hover:border-brand/40"
               >
                 <button
                   type="button"

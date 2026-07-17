@@ -127,7 +127,7 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
                     }}
                     title={t("openHint")}
                     className={cn(
-                      "cursor-pointer select-none rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing",
+                      "hover-lift cursor-pointer select-none rounded-lg border bg-card p-3 shadow-sm active:cursor-grabbing",
                       card.status === "ON_HOLD" ? "border-amber-400/70" : "border-border",
                     )}
                   >

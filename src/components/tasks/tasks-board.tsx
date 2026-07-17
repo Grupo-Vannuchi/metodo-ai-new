@@ -133,7 +133,7 @@ export function TasksBoard({ tasks }: { tasks: TaskRow[] }) {
                         router.push(`/app/tasks/${task.id}`);
                       }}
                       title={t("openHint")}
-                      className="cursor-pointer select-none rounded-lg border border-border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing"
+                      className="hover-lift cursor-pointer select-none rounded-lg border border-border bg-card p-3 shadow-sm active:cursor-grabbing"
                     >
                       <div className="flex items-start gap-2">
                         <button
