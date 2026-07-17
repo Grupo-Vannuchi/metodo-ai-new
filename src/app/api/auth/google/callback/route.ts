@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
-import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS, sealSession } from "@/lib/session";
+import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS, sealSession, getSession } from "@/lib/session";
 import {
   googleClient,
   isGoogleConfigured,
   fetchGoogleUser,
   resolveGoogleSession,
+  linkGoogleAccount,
 } from "@/lib/oauth/google";
 
 export const runtime = "nodejs";
@@ -16,6 +17,14 @@ export const dynamic = "force-dynamic";
  * (0.0.0.0:3000), producing broken redirects. */
 const redirectTo = (path: string) => NextResponse.redirect(new URL(path, env.NEXT_PUBLIC_SITE_URL));
 
+/** Wipe every OAuth round-trip cookie on a response (state, PKCE, link intent). */
+function clearOAuthCookies(res: NextResponse): NextResponse {
+  res.cookies.delete("google_oauth_state");
+  res.cookies.delete("google_code_verifier");
+  res.cookies.delete("google_link_intent");
+  return res;
+}
+
 /**
  * Google OAuth callback: validate the state, exchange the code (with the PKCE
  * verifier), resolve the identity to a session and sign the user in — setting
@@ -23,21 +32,20 @@ const redirectTo = (path: string) => NextResponse.redirect(new URL(path, env.NEX
  * an error (and logs why, for diagnosis).
  */
 export async function GET(req: NextRequest) {
+  // Linking flow (Conectar Google on the profile) vs. sign-in flow.
+  const isLink = req.cookies.get("google_link_intent")?.value === "1";
+  const backOnCancel = isLink ? "/app/settings/profile" : "/login";
+
   const fail = (code = "google") => {
-    const res = redirectTo(`/login?error=${code}`);
-    res.cookies.delete("google_oauth_state");
-    res.cookies.delete("google_code_verifier");
-    return res;
+    const dest = isLink ? `/app/settings/profile?error=${code}` : `/login?error=${code}`;
+    return clearOAuthCookies(redirectTo(dest));
   };
 
   const params = req.nextUrl.searchParams;
 
   // The user dismissed Google's consent screen — not an error, just go back.
   if (params.get("error")) {
-    const res = redirectTo("/login");
-    res.cookies.delete("google_oauth_state");
-    res.cookies.delete("google_code_verifier");
-    return res;
+    return clearOAuthCookies(redirectTo(backOnCancel));
   }
 
   if (!isGoogleConfigured()) {
@@ -69,6 +77,20 @@ export async function GET(req: NextRequest) {
       return fail();
     }
 
+    // Linking flow: attach this Google identity to the already-signed-in user
+    // (no session change). A stale link cookie without a session falls through
+    // to normal sign-in.
+    if (isLink) {
+      const session = await getSession();
+      if (session) {
+        const linked = await linkGoogleAccount(session.userId, gu);
+        const dest = linked.ok
+          ? "/app/settings/profile?linked=google"
+          : "/app/settings/profile?error=google_taken";
+        return clearOAuthCookies(redirectTo(dest));
+      }
+    }
+
     const result = await resolveGoogleSession(gu);
     if (!result.ok) {
       console.error("[google-oauth] resolve failed:", result.error);
@@ -84,9 +106,7 @@ export async function GET(req: NextRequest) {
       path: "/",
       maxAge: SESSION_MAX_AGE_SECONDS,
     });
-    res.cookies.delete("google_oauth_state");
-    res.cookies.delete("google_code_verifier");
-    return res;
+    return clearOAuthCookies(res);
   } catch (e) {
     console.error("[google-oauth] token exchange / callback threw:", e);
     return fail();

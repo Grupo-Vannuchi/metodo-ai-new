@@ -67,6 +67,42 @@ export async function getMyProfile(userId: string): Promise<ProfileView | null> 
   return user ? toView(user) : null;
 }
 
+/** A single linked external identity (OAuth), for the Security tab. */
+export type ConnectedAccount = {
+  id: string;
+  provider: string;
+  createdAt: Date;
+};
+
+/** Sign-in security state: whether a password is set, e-mail verification, and
+ * linked OAuth identities. Feeds the profile's "Segurança" tab. */
+export type AccountSecurity = {
+  hasPassword: boolean;
+  emailVerified: Date | null;
+  accounts: ConnectedAccount[];
+};
+
+/** The signed-in user's sign-in security state (password + e-mail + accounts). */
+export async function getMyAccountSecurity(userId: string): Promise<AccountSecurity | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      passwordHash: true,
+      emailVerified: true,
+      accounts: {
+        select: { id: true, provider: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+  if (!user) return null;
+  return {
+    hasPassword: Boolean(user.passwordHash),
+    emailVerified: user.emailVerified,
+    accounts: user.accounts,
+  };
+}
+
 /**
  * A member's profile, readable by an admin of `organizationId`. The membership
  * join is the security boundary: returns null unless the user belongs to the

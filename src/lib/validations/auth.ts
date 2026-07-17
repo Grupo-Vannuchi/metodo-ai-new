@@ -53,7 +53,18 @@ export const resetPasswordSchema = z.object({
   password: z.string().min(8, "A senha deve ter ao menos 8 caracteres.").max(200),
 });
 
+/**
+ * Changing (or first setting) the password from the profile's Security tab.
+ * `currentPassword` is optional here; the server requires it only when the
+ * account already has a password (Google-only accounts set one without it).
+ */
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().max(200).optional().or(z.literal("")),
+  password: z.string().min(8, "A senha deve ter ao menos 8 caracteres.").max(200),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type SignupInput = z.infer<typeof signupSchema>;
 export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

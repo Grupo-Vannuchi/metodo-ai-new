@@ -25,7 +25,8 @@ export function fullProfileData(input: ProfileInput) {
     ...coreProfileData(input),
     position: blankToNull(input.position),
     birthDate: input.birthDate ? new Date(input.birthDate) : null,
-    avatarUrl: blankToNull(input.avatarUrl),
+    // avatarUrl intentionally omitted — the photo is managed separately, so a
+    // profile save must not clobber (or wipe) an uploaded avatar.
     addressZip: blankToNull(input.addressZip),
     addressStreet: blankToNull(input.addressStreet),
     addressNumber: blankToNull(input.addressNumber),

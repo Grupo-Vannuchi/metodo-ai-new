@@ -46,7 +46,8 @@ export const profileSchema = z
     ...coreProfileShape,
     position: optionalText(120),
     birthDate: optionalText(10), // yyyy-mm-dd from <input type="date">
-    avatarUrl: z.string().trim().url("URL inválida.").max(500).optional().or(z.literal("")),
+    // NB: the avatar is NOT part of this form — it's managed on its own via the
+    // upload route / removeAvatar action, so saving the profile never touches it.
     addressZip: optionalText(12),
     addressStreet: optionalText(160),
     addressNumber: optionalText(20),

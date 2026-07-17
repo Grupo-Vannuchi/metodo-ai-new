@@ -73,6 +73,28 @@ export type ResolveResult =
   | { ok: true; session: SessionPayload }
   | { ok: false; error: "unverified" | "no_membership" };
 
+export type LinkResult = { ok: true } | { ok: false; error: "taken" };
+
+/**
+ * Link a Google identity to an already-signed-in user (the "Conectar Google"
+ * button on the profile). Idempotent when it's already linked to this same
+ * user; refuses when the Google account belongs to someone else. Does not
+ * touch the session — the caller stays logged in as themselves.
+ */
+export async function linkGoogleAccount(userId: string, gu: GoogleUser): Promise<LinkResult> {
+  const existing = await prisma.account.findUnique({
+    where: { provider_providerAccountId: { provider: "google", providerAccountId: gu.sub } },
+    select: { userId: true },
+  });
+  if (existing) {
+    return existing.userId === userId ? { ok: true } : { ok: false, error: "taken" };
+  }
+  await prisma.account.create({
+    data: { userId, provider: "google", providerAccountId: gu.sub },
+  });
+  return { ok: true };
+}
+
 /**
  * Map a Google identity to a session:
  *  1. reuse the already-linked account;
