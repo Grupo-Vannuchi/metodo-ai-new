@@ -147,7 +147,7 @@ export function FeedClient({
   return (
     <div className="flex flex-col gap-5">
       {canPost ? (
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="glass rounded-xl border border-border p-4 shadow-sm">
           <div className="relative">
             <textarea
               ref={textareaRef}
@@ -232,7 +232,7 @@ export function FeedClient({
         posts.map((post) => {
           const canDelete = post.authorId === currentUserId || canPost;
           return (
-            <article key={post.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <article key={post.id} className="glass hover-lift rounded-xl border border-border p-4 shadow-sm">
               <div className="flex items-start gap-3">
                 <Avatar name={post.authorName} src={post.authorAvatar} className="size-9" />
                 <div className="min-w-0 flex-1">

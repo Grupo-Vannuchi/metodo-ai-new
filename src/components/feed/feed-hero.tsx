@@ -16,9 +16,11 @@ const IMAGES = [
 const INTERVAL_MS = 6000;
 
 /** Inviting feed header: corporate stock photos cross-fading in a blurred,
- * brand-tinted banner, with a greeting + the signed-in user's card. */
+ * brand-tinted banner, with the wall title + the signed-in user's card. The
+ * personal greeting lives on the dashboard, so it isn't repeated here. */
 export function FeedHero({
-  greeting,
+  title,
+  subtitle,
   name,
   avatarUrl,
   position,
@@ -26,7 +28,8 @@ export function FeedHero({
   taskStat,
   oppStat,
 }: {
-  greeting: string;
+  title: string;
+  subtitle: string;
   name: string;
   avatarUrl: string | null;
   position: string | null;
@@ -61,7 +64,8 @@ export function FeedHero({
 
       <div className="relative flex items-center justify-between gap-4 p-6 text-brand-foreground">
         <div className="min-w-0">
-          <p className="text-xl font-bold tracking-tight sm:text-2xl">{greeting}</p>
+          <p className="text-xl font-bold tracking-tight sm:text-2xl">{title}</p>
+          <p className="mt-1 max-w-md text-sm text-brand-foreground/80">{subtitle}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-background/15 px-3 py-1 text-xs font-medium backdrop-blur-sm">
               <CheckSquare className="size-3.5" />

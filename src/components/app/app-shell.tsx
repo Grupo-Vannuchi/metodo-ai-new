@@ -36,13 +36,15 @@ export async function AppShell({
   return (
     <RealtimeProvider>
     <NotificationSound />
-    <div className="relative flex h-screen overflow-hidden bg-muted/20">
-      {/* Decorative, blurred brand backdrop — gives every screen a subtle sense
-          of depth behind the frosted surfaces. Purely aria-hidden. */}
+    <div className="relative flex h-screen overflow-hidden bg-muted/40 dark:bg-muted/20">
+      {/* Decorative, blurred brand backdrop — gives every screen a sense of depth
+          behind the frosted surfaces (and something for the glass to frost over,
+          so the effect reads on a light canvas too). Brand-blue leads; the green
+          accent stays a whisper so it never looks like a stain. aria-hidden. */}
       <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-40 -top-40 size-[32rem] rounded-full bg-brand/10 blur-3xl" />
-        <div className="absolute -bottom-48 right-[-6rem] size-[34rem] rounded-full bg-accent/10 blur-3xl" />
-        <div className="absolute left-1/2 top-1/3 size-[26rem] -translate-x-1/2 rounded-full bg-brand/[0.06] blur-3xl" />
+        <div className="absolute -left-32 -top-40 size-[34rem] rounded-full bg-brand/15 blur-3xl dark:bg-brand/20" />
+        <div className="absolute bottom-[-12rem] left-1/4 size-[30rem] rounded-full bg-brand/10 blur-3xl dark:bg-brand/[0.12]" />
+        <div className="absolute right-[-10rem] top-1/3 size-[28rem] rounded-full bg-accent/[0.07] blur-3xl dark:bg-accent/10" />
       </div>
       <CommandPalette />
       <aside className="sidebar-brand glass relative z-10 hidden w-64 shrink-0 flex-col border-r border-border p-4 md:flex">

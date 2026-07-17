@@ -31,15 +31,13 @@ export default async function FeedPage({
   ]);
 
   const canPost = ctx.role === "OWNER" || ctx.role === "ADMIN";
-  const firstName = (profile?.name ?? ctx.user.name).split(/\s+/)[0];
-  const hour = new Date().getHours();
-  const greetKey = hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
   const location = [profile?.addressCity, profile?.addressState].filter(Boolean).join(", ") || null;
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <FeedHero
-        greeting={t(`greeting.${greetKey}`, { name: firstName })}
+        title={t("title")}
+        subtitle={t("subtitle")}
         name={profile?.name ?? ctx.user.name}
         avatarUrl={profile?.avatarUrl ?? null}
         position={profile?.position ?? null}
@@ -47,7 +45,6 @@ export default async function FeedPage({
         taskStat={t("statTasks", { count: taskCount })}
         oppStat={t("statOpps", { count: oppCount })}
       />
-      <p className="-mt-2 text-sm text-muted-foreground">{t("subtitle")}</p>
 
       <FeedClient
         initialPosts={posts}

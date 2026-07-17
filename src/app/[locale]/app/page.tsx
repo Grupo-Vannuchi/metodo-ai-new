@@ -70,9 +70,9 @@ export default async function DashboardPage({
           aria-hidden
           alt=""
           src="/backgrounds/office-2.jpg"
-          className="pointer-events-none absolute inset-0 size-full scale-110 object-cover opacity-[0.18] blur-[2px]"
+          className="pointer-events-none absolute inset-0 size-full scale-110 object-cover opacity-[0.14] blur-[2px] dark:opacity-[0.2]"
         />
-        <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-r from-card/85 via-card/60 to-card/20" />
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-r from-card via-card/80 to-card/40" />
         <div className="relative">
           <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
           <p className="mt-1 text-muted-foreground">{t("welcome", { name: ctx.user.name })}</p>

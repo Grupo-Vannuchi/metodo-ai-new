@@ -121,7 +121,9 @@
      reads calmer/on-brand instead of stark white. Cards stay white to pop. */
   --muted: #eaf0f8;
   --muted-foreground: #55657a;
-  --border: #dce4ef;
+  /* Slightly deeper than the fill so frosted-glass cards keep a crisp edge on a
+     light canvas (glass is nearly invisible when the border is too pale). */
+  --border: #d3ddec;
 }
 
 .dark {
@@ -263,17 +265,20 @@
  * hover lift stay consistent instead of being re-typed per component.
  */
 @layer components {
-  /* Frosted surface: translucent card colour + blur. Falls back to a more
+  /* Frosted surface: translucent card colour + blur, with a faint top highlight
+     that sells the "glass" on both light and dark canvases. Falls back to a more
      opaque fill where backdrop-filter isn't supported, so text stays legible. */
   .glass {
-    background-color: color-mix(in srgb, var(--color-card) 72%, transparent);
-    backdrop-filter: blur(14px) saturate(1.4);
-    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+    background-color: color-mix(in srgb, var(--color-card) 68%, transparent);
+    backdrop-filter: blur(16px) saturate(1.5);
+    -webkit-backdrop-filter: blur(16px) saturate(1.5);
+    box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.14);
   }
   .glass-strong {
-    background-color: color-mix(in srgb, var(--color-card) 86%, transparent);
-    backdrop-filter: blur(22px) saturate(1.5);
-    -webkit-backdrop-filter: blur(22px) saturate(1.5);
+    background-color: color-mix(in srgb, var(--color-card) 84%, transparent);
+    backdrop-filter: blur(24px) saturate(1.6);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.18);
   }
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .glass,
