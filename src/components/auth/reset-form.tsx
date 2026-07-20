@@ -4,13 +4,15 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input, Label } from "@/components/ui/field";
+import { Label } from "@/components/ui/field";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Link } from "@/i18n/navigation";
 import { resetPassword } from "@/app/actions/auth-recovery";
 
 /** Choose a new password from a reset link. */
 export function ResetForm({ token }: { token: string }) {
   const t = useTranslations("auth.reset");
+  const ta = useTranslations("auth");
   const [password, setPassword] = useState("");
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,14 +45,15 @@ export function ResetForm({ token }: { token: string }) {
     >
       <div>
         <Label htmlFor="password">{t("newPassword")}</Label>
-        <Input
+        <PasswordInput
           id="password"
-          type="password"
           autoComplete="new-password"
           required
           minLength={8}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          showLabel={ta("showPassword")}
+          hideLabel={ta("hidePassword")}
         />
         <p className="mt-1 text-xs text-muted-foreground">{t("hint")}</p>
       </div>

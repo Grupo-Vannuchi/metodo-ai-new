@@ -4,6 +4,7 @@ import { useActionState, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Link } from "@/i18n/navigation";
 import { login, type AuthState } from "@/app/actions/auth";
 import { resendVerification } from "@/app/actions/auth-recovery";
@@ -33,12 +34,13 @@ export function LoginForm() {
             {t("login.forgot")}
           </Link>
         </div>
-        <Input
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
           autoComplete="current-password"
           required
+          showLabel={t("showPassword")}
+          hideLabel={t("hidePassword")}
         />
       </div>
 

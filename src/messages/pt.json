@@ -126,6 +126,8 @@
   "auth": {
     "email": "E-mail",
     "password": "Senha",
+    "showPassword": "Mostrar senha",
+    "hidePassword": "Ocultar senha",
     "name": "Seu nome",
     "organizationName": "Nome da organização",
     "submitting": "Aguarde…",

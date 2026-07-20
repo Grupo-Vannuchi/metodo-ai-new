@@ -5,7 +5,8 @@ import { useTranslations } from "next-intl";
 import { KeyRound } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
-import { Input, Label } from "@/components/ui/field";
+import { Label } from "@/components/ui/field";
+import { PasswordInput } from "@/components/ui/password-input";
 import { changePassword } from "@/app/actions/account";
 
 /**
@@ -15,6 +16,7 @@ import { changePassword } from "@/app/actions/account";
  */
 export function ChangePasswordCard({ hasPassword }: { hasPassword: boolean }) {
   const t = useTranslations("profile");
+  const ta = useTranslations("auth");
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -58,17 +60,17 @@ export function ChangePasswordCard({ hasPassword }: { hasPassword: boolean }) {
         {hasPassword ? (
           <div>
             <Label htmlFor="currentPassword">{t("security.currentPassword")}</Label>
-            <Input id="currentPassword" name="currentPassword" type="password" autoComplete="current-password" required />
+            <PasswordInput id="currentPassword" name="currentPassword" autoComplete="current-password" required showLabel={ta("showPassword")} hideLabel={ta("hidePassword")} />
           </div>
         ) : null}
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="password">{t("security.newPassword")}</Label>
-            <Input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />
+            <PasswordInput id="password" name="password" autoComplete="new-password" minLength={8} required showLabel={ta("showPassword")} hideLabel={ta("hidePassword")} />
           </div>
           <div>
             <Label htmlFor="confirm">{t("security.confirmPassword")}</Label>
-            <Input id="confirm" name="confirm" type="password" autoComplete="new-password" minLength={8} required />
+            <PasswordInput id="confirm" name="confirm" autoComplete="new-password" minLength={8} required showLabel={ta("showPassword")} hideLabel={ta("hidePassword")} />
           </div>
         </div>
 

@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Link } from "@/i18n/navigation";
 import { ProfileCoreFields } from "@/components/auth/profile-core-fields";
 import { signup, type AuthState } from "@/app/actions/auth";
@@ -80,13 +81,14 @@ export function SignupForm() {
 
       <div>
         <Label htmlFor="password">{t("password")}</Label>
-        <Input
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
           autoComplete="new-password"
           required
           minLength={8}
+          showLabel={t("showPassword")}
+          hideLabel={t("hidePassword")}
         />
       </div>
 

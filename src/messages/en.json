@@ -126,6 +126,8 @@
   "auth": {
     "email": "Email",
     "password": "Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
     "name": "Your name",
     "organizationName": "Organization name",
     "submitting": "Please wait…",
