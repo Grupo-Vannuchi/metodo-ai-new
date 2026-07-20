@@ -974,6 +974,9 @@
       "deleteFolder": "Delete folder",
       "confirmDeleteFolder": "Delete this folder? Contacts won't be deleted, just unfiled.",
       "dropHere": "Drag contacts here",
+      "openHint": "Double-click to open",
+      "emptyFolder": "Empty folder — drag contacts here.",
+      "folderCount": "{count, plural, =0 {empty} one {# contact} other {# contacts}}",
       "error": {
         "invalid": "Invalid data.",
         "unauthorized": "Session expired.",

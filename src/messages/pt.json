@@ -974,6 +974,9 @@
       "deleteFolder": "Excluir pasta",
       "confirmDeleteFolder": "Excluir esta pasta? Os contatos não serão apagados, apenas ficarão sem pasta.",
       "dropHere": "Arraste contatos para cá",
+      "openHint": "Duplo clique para abrir",
+      "emptyFolder": "Pasta vazia — arraste contatos para cá.",
+      "folderCount": "{count, plural, =0 {vazia} one {# contato} other {# contatos}}",
       "error": {
         "invalid": "Dados inválidos.",
         "unauthorized": "Sessão expirada.",
