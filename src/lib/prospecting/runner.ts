@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { decryptCredentials } from "@/lib/integrations/crypto";
 import { searchPlacesPage, buildPlacesQuery, type PlaceResult } from "@/lib/prospecting/places";
 import { enrichFromWebsite, type SiteContacts } from "@/lib/prospecting/scrape";
+import { env } from "@/lib/env";
 
 /**
  * Extraction job runner. Processes ONE Google Places page per batch (≤20
@@ -83,19 +84,25 @@ async function failJob(jobId: string, error: string): Promise<void> {
   });
 }
 
-/** Resolve the tenant's own Google Places API key (BYO). */
+/**
+ * Resolve the Google Places API key. A tenant's own key (BYO connection) wins
+ * when configured; otherwise fall back to the shared platform key
+ * (`GOOGLE_PLACES_API_KEY`) so tenants can prospect without bringing a key.
+ */
 async function resolveGoogleKey(organizationId: string): Promise<string | null> {
   const conn = await prisma.integrationConnection.findFirst({
     where: { organizationId, provider: "GOOGLE" },
     orderBy: { createdAt: "desc" },
   });
-  if (!conn) return null;
-  try {
-    const key = decryptCredentials(conn.credentialsEnc).apiKey?.trim();
-    return key || null;
-  } catch {
-    return null;
+  if (conn) {
+    try {
+      const key = decryptCredentials(conn.credentialsEnc).apiKey?.trim();
+      if (key) return key;
+    } catch {
+      /* fall through to the platform key */
+    }
   }
+  return env.GOOGLE_PLACES_API_KEY?.trim() || null;
 }
 
 export async function runExtractionBatch(jobId: string): Promise<{ done: boolean }> {

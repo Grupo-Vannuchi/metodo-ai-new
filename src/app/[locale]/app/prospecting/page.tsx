@@ -5,6 +5,7 @@ import { listExtractionJobs } from "@/lib/queries/extractions";
 import { listConnections } from "@/lib/queries/connections";
 import { getUsageSummary } from "@/lib/queries/usage";
 import { type PlanKey } from "@/config/plans";
+import { env } from "@/lib/env";
 import { NewExtraction } from "@/components/prospecting/new-extraction";
 import { deleteExtraction } from "@/app/actions/extractions";
 import { DeleteButton } from "@/components/crm/delete-button";
@@ -47,7 +48,8 @@ export default async function ProspectingPage({
     listConnections(ctx.organizationId),
     getUsageSummary(ctx.organizationId, ctx.organization.plan as PlanKey),
   ]);
-  const hasGoogle = connections.some((c) => c.provider === "GOOGLE");
+  // A tenant's own Google key OR the shared platform key both enable prospecting.
+  const hasGoogle = connections.some((c) => c.provider === "GOOGLE") || Boolean(env.GOOGLE_PLACES_API_KEY);
   const { prospecting: leads, searches } = usage;
   const leadsReached = leads.limit !== null && leads.used >= leads.limit;
   const searchesReached = searches.limit !== null && searches.used >= searches.limit;

@@ -49,6 +49,16 @@ const serverSchema = z.object({
   // Google OAuth (login com Google) — optional until the feature is enabled.
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  // Platform WhatsApp (Evolution API) — one shared server used by every tenant,
+  // with a unique per-user instance. Lets users connect via QR without their own
+  // keys. Optional so the app boots without it; the one-click flow no-ops.
+  EVOLUTION_API_URL: z.string().url().optional(),
+  EVOLUTION_API_KEY: z.string().optional(),
+  // Legacy single default instance (pre-multi-user); no longer required.
+  EVOLUTION_INSTANCE: z.string().optional(),
+  // Platform Google Places key (prospecting) — a single shared key so tenants
+  // don't have to bring their own. Falls back to a per-tenant key when unset.
+  GOOGLE_PLACES_API_KEY: z.string().optional(),
   // Cache / rate-limit (Upstash Redis) — optional until dispatch throttling runs.
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),

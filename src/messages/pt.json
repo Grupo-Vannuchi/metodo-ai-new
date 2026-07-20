@@ -1240,6 +1240,12 @@
     "evo": {
       "title": "Conexão do WhatsApp",
       "idleHint": "Conecte seu WhatsApp escaneando um QR code.",
+      "quickTitle": "Meu WhatsApp",
+      "quickHint": "Conecte seu número via QR — sem precisar de chave nenhuma. Cada pessoa conecta o seu, com a conversa só sua.",
+      "quickConnected": "Seu WhatsApp está conectado. As conversas aparecem em Conversas.",
+      "openInbox": "Abrir conversas",
+      "notConfigured": "A conexão de WhatsApp da plataforma ainda não foi configurada pelo administrador.",
+      "genericError": "Não foi possível conectar agora. Tente novamente.",
       "connect": "Conectar WhatsApp",
       "scanHint": "Abra o WhatsApp > Aparelhos conectados > Conectar e escaneie:",
       "pairingCode": "Código de pareamento",

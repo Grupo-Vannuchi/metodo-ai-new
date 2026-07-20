@@ -5,7 +5,8 @@ import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
-import { decryptCredentials } from "@/lib/integrations/crypto";
+import { decryptCredentials, encryptCredentials } from "@/lib/integrations/crypto";
+import { resolveEvoCreds } from "@/lib/integrations/evolution-creds";
 import {
   createInstance,
   connect,
@@ -43,7 +44,8 @@ async function ensureWebhookToken(connectionId: string): Promise<string> {
   return token;
 }
 
-/** Load + decrypt an EVOLUTION connection's credentials, scoped to the org. */
+/** Load + decrypt an EVOLUTION connection's credentials, scoped to the org.
+ * Platform connections resolve the base URL + key from env (see resolveEvoCreds). */
 async function loadEvoCreds(
   organizationId: string,
   id: string,
@@ -55,12 +57,56 @@ async function loadEvoCreds(
   });
   if (!conn) return null;
   try {
-    const c = decryptCredentials(conn.credentialsEnc);
-    if (!c.baseUrl || !c.apiKey || !c.instance) return null;
-    return { baseUrl: c.baseUrl, apiKey: c.apiKey, instance: c.instance };
+    return resolveEvoCreds(decryptCredentials(conn.credentialsEnc));
   } catch {
     return null;
   }
+}
+
+export type ProvisionResult =
+  | { ok: true; connectionId: string; qrBase64?: string; pairingCode?: string }
+  | { ok: false; error: string };
+
+/**
+ * One-click "Connect WhatsApp": using the shared platform Evolution server, get
+ * (or create) the current user's own WhatsApp connection — a unique instance
+ * owned by them — then create the instance, wire the webhook and return a QR to
+ * scan. No API keys required; each user gets an isolated number (the inbox is
+ * already scoped per owner). BYO connections keep working via the advanced flow.
+ */
+export async function connectWhatsapp(): Promise<ProvisionResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!(env.EVOLUTION_API_URL && env.EVOLUTION_API_KEY)) return { ok: false, error: "platform_not_configured" };
+
+  const db = tenantDb(ctx.organizationId);
+
+  // Reuse the caller's existing WhatsApp connection, or provision a fresh one.
+  let conn = await db.integrationConnection.findFirst({
+    where: { provider: "EVOLUTION", ownerId: ctx.userId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+
+  if (!conn) {
+    const instance = `metodoai_${randomBytes(9).toString("hex")}`;
+    conn = await db.integrationConnection.create({
+      data: {
+        organizationId: ctx.organizationId,
+        ownerId: ctx.userId,
+        provider: "EVOLUTION",
+        label: "WhatsApp",
+        // Only the instance is stored; base URL + key come from the platform env.
+        credentialsEnc: encryptCredentials({ instance }),
+        status: "INACTIVE",
+      },
+      select: { id: true },
+    });
+  }
+
+  const r = await connectEvolution(conn.id);
+  if (!r.ok) return { ok: false, error: r.error ?? "unknown" };
+  return { ok: true, connectionId: conn.id, qrBase64: r.qrBase64, pairingCode: r.pairingCode };
 }
 
 export type EvolutionConnectResult = {

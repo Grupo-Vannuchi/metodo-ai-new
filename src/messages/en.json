@@ -1240,6 +1240,12 @@
     "evo": {
       "title": "WhatsApp connection",
       "idleHint": "Connect your WhatsApp by scanning a QR code.",
+      "quickTitle": "My WhatsApp",
+      "quickHint": "Connect your number via QR — no keys needed. Everyone connects their own, and the conversations stay yours.",
+      "quickConnected": "Your WhatsApp is connected. Conversations show up in Inbox.",
+      "openInbox": "Open conversations",
+      "notConfigured": "The platform WhatsApp connection hasn't been set up by the admin yet.",
+      "genericError": "Couldn't connect right now. Please try again.",
       "connect": "Connect WhatsApp",
       "scanHint": "Open WhatsApp > Linked devices > Link a device and scan:",
       "pairingCode": "Pairing code",
