@@ -269,12 +269,16 @@ model Company {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  folderId String?
+
   contacts      Contact[]
   opportunities Opportunity[]
   proposals     Proposal[]
+  folder        CompanyFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, name])
   @@index([organizationId, cnpj])
+  @@index([organizationId, folderId])
   @@map("companies")
 }
 
@@ -320,6 +324,21 @@ model ContactFolder {
 
   @@index([organizationId, order])
   @@map("contact_folders")
+}
+
+/// A user-defined folder to organize companies (drag-and-drop explorer).
+model CompanyFolder {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  companies Company[]
+
+  @@index([organizationId, order])
+  @@map("company_folders")
 }
 
 /// A sales pipeline (a board). Each org gets a default one.

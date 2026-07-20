@@ -18,6 +18,7 @@ import { prisma } from "@/lib/prisma";
 const TENANT_MODELS = new Set<string>([
   "AccessTemplate",
   "Company",
+  "CompanyFolder",
   "Contact",
   "ContactFolder",
   "Pipeline",
