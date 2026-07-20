@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import { Camera, Trash2, ZoomIn } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
@@ -241,7 +242,8 @@ export function AvatarUploader({ name, initialUrl }: { name: string; initialUrl:
         onChange={pickFile}
       />
 
-      {img ? (
+      {img && typeof document !== "undefined"
+        ? createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
           <button
             type="button"
@@ -299,8 +301,10 @@ export function AvatarUploader({ name, initialUrl }: { name: string; initialUrl:
               </Button>
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
