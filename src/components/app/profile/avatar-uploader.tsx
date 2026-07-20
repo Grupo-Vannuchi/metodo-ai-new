@@ -36,9 +36,12 @@ export function AvatarUploader({ name, initialUrl }: { name: string; initialUrl:
   const drag = useRef<{ x: number; y: number } | null>(null);
 
   const draw = useCallback(
-    (canvas: HTMLCanvasElement, size: number, image: HTMLImageElement, z: number) => {
+    (canvas: HTMLCanvasElement, size: number, image: HTMLImageElement, z: number, ratio: number) => {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
+      // Map the internal CSS-unit coordinate space onto the (possibly
+      // higher-res) backing store so the crop stays crisp on retina screens.
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       const nW = image.naturalWidth;
       const nH = image.naturalHeight;
       const baseScale = size / Math.min(nW, nH); // "cover" the square
@@ -48,6 +51,7 @@ export function AvatarUploader({ name, initialUrl }: { name: string; initialUrl:
       const dx = (size - dispW) / 2 + offset.current.x * k;
       const dy = (size - dispH) / 2 + offset.current.y * k;
       ctx.clearRect(0, 0, size, size);
+      ctx.imageSmoothingQuality = "high";
       ctx.drawImage(image, dx, dy, dispW, dispH);
     },
     [],
@@ -65,15 +69,33 @@ export function AvatarUploader({ name, initialUrl }: { name: string; initialUrl:
 
   const render = useCallback(() => {
     const canvas = canvasRef.current;
-    if (canvas && img) {
-      clampOffset(img, zoom);
-      draw(canvas, VIEW, img, zoom);
+    if (!canvas || !img) return;
+    const ratio = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
+    const backing = Math.round(VIEW * ratio);
+    if (canvas.width !== backing || canvas.height !== backing) {
+      canvas.width = backing;
+      canvas.height = backing;
     }
+    clampOffset(img, zoom);
+    draw(canvas, VIEW, img, zoom, ratio);
   }, [img, zoom, draw, clampOffset]);
 
   useEffect(() => {
     render();
   }, [render]);
+
+  // Wheel-to-zoom over the crop area (a natural "resize" gesture). Attached as a
+  // non-passive listener so we can stop the page from scrolling underneath.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !img) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setZoom((z) => Number(Math.min(3, Math.max(1, z - e.deltaY * 0.0015)).toFixed(3)));
+    };
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+  }, [img]);
 
   function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
     setError(null);
@@ -99,8 +121,13 @@ export function AvatarUploader({ name, initialUrl }: { name: string; initialUrl:
   }
   function onPointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
     if (!drag.current || !img) return;
-    offset.current.x += e.clientX - drag.current.x;
-    offset.current.y += e.clientY - drag.current.y;
+    // Map the on-screen cursor delta into the internal VIEW coordinate space:
+    // the canvas may be displayed smaller than VIEW (narrow modal, browser
+    // zoom), so a raw 1:1 delta would lag the cursor and feel "stuck".
+    const rect = e.currentTarget.getBoundingClientRect();
+    const scale = rect.width ? VIEW / rect.width : 1;
+    offset.current.x += (e.clientX - drag.current.x) * scale;
+    offset.current.y += (e.clientY - drag.current.y) * scale;
     drag.current = { x: e.clientX, y: e.clientY };
     render();
   }
@@ -121,7 +148,7 @@ export function AvatarUploader({ name, initialUrl }: { name: string; initialUrl:
       const out = document.createElement("canvas");
       out.width = OUT;
       out.height = OUT;
-      draw(out, OUT, img, zoom);
+      draw(out, OUT, img, zoom, 1);
       const blob: Blob | null = await new Promise((resolve) =>
         out.toBlob((b) => resolve(b), "image/webp", 0.9),
       );
@@ -217,26 +244,24 @@ export function AvatarUploader({ name, initialUrl }: { name: string; initialUrl:
             <h2 className="text-base font-semibold">{t("photo.cropTitle")}</h2>
             <p className="mt-1 text-xs text-muted-foreground">{t("photo.cropHint")}</p>
 
-            <div className="mx-auto mt-4 select-none" style={{ width: VIEW, maxWidth: "100%" }}>
-              <div className="relative overflow-hidden rounded-xl bg-black/80" style={{ width: VIEW, height: VIEW }}>
-                <canvas
-                  ref={canvasRef}
-                  width={VIEW}
-                  height={VIEW}
-                  onPointerDown={onPointerDown}
-                  onPointerMove={onPointerMove}
-                  onPointerUp={onPointerUp}
-                  onPointerCancel={onPointerUp}
-                  className="cursor-grab touch-none active:cursor-grabbing"
-                  style={{ width: VIEW, height: VIEW }}
-                />
-                {/* Circular crop guide (darkens outside, ring inside). */}
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 rounded-full border-2 border-white/80"
-                  style={{ boxShadow: "0 0 0 9999px rgba(0,0,0,0.5)" }}
-                />
-              </div>
+            <div
+              className="relative mx-auto mt-4 aspect-square w-full select-none overflow-hidden rounded-xl bg-black/80"
+              style={{ maxWidth: VIEW }}
+            >
+              <canvas
+                ref={canvasRef}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+                className="absolute inset-0 h-full w-full cursor-grab touch-none active:cursor-grabbing"
+              />
+              {/* Circular crop guide (darkens outside, ring inside). */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 rounded-full border-2 border-white/80"
+                style={{ boxShadow: "0 0 0 9999px rgba(0,0,0,0.5)" }}
+              />
             </div>
 
             <div className="mt-4 flex items-center gap-3">
