@@ -109,9 +109,7 @@ export default async function InboxPage({
       </div>
 
       {showConnect ? (
-        <div className="mx-auto w-full max-w-xl">
-          <WhatsappQuickConnect initialActive={false} />
-        </div>
+        <WhatsappQuickConnect initialActive={false} />
       ) : (
         <div className="h-[calc(100dvh-14rem)]">
           {mode === "whatsapp" ? (
