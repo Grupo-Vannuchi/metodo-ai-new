@@ -41,6 +41,26 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
     ],
   },
+  /**
+   * Cache policy — fixes the "broken landing on some devices after a deploy".
+   *
+   * Next already serves the hashed build assets under `/_next/*` immutably, so we
+   * leave those alone. Everything else (HTML documents, RSC payloads, public
+   * files) is served with `no-cache`, so the browser / LiteSpeed proxy MUST
+   * revalidate before reuse — this way a stale HTML page can never keep pointing
+   * at a CSS/font chunk that a newer build already removed (which is what left
+   * the page unstyled: generic font, loose images, broken layout). `no-cache`
+   * still allows cheap 304s for unchanged files, so repeat visits aren't slower.
+   */
+  async headers() {
+    return [
+      {
+        // Everything except Next's own (already immutably-cached) build assets.
+        source: "/((?!_next/).*)",
+        headers: [{ key: "Cache-Control", value: "no-cache" }],
+      },
+    ];
+  },
 };
 
 export default withNextIntl(nextConfig);
