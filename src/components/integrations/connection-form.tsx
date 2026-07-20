@@ -16,6 +16,12 @@ type FormValues = {
   credentials: Record<string, string>;
 };
 
+/** Providers that are now automatic (platform-managed) and no longer need a
+ * manual "new connection": WhatsApp (one-click Evolution) and Google Places
+ * (platform key). They're hidden from the provider picker. */
+const AUTOMATIC_PROVIDERS = new Set<IntegrationProviderKey>(["EVOLUTION", "GOOGLE"]);
+const MANUAL_KEYS = PROVIDER_KEYS.filter((k) => !AUTOMATIC_PROVIDERS.has(k));
+
 export function ConnectionForm() {
   const t = useTranslations("connections");
   const tv = useTranslations("validation");
@@ -28,7 +34,7 @@ export function ConnectionForm() {
     watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    defaultValues: { provider: PROVIDER_KEYS[0], label: "", credentials: {} },
+    defaultValues: { provider: MANUAL_KEYS[0], label: "", credentials: {} },
   });
 
   const provider = watch("provider");
@@ -66,7 +72,7 @@ export function ConnectionForm() {
           <div>
             <Label htmlFor="provider">{t("provider")}</Label>
             <select id="provider" className={selectCls} {...register("provider")}>
-              {PROVIDER_KEYS.map((key) => (
+              {MANUAL_KEYS.map((key) => (
                 <option key={key} value={key}>{PROVIDERS[key].label}</option>
               ))}
             </select>
