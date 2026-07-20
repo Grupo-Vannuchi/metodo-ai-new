@@ -1918,6 +1918,8 @@
   },
   "teamChat": {
     "tab": "Equipe",
+    "inboxTitle": "Conversas",
+    "inboxSubtitle": "WhatsApp e chat interno da equipe, num só lugar.",
     "title": "Membros da equipe",
     "back": "Voltar",
     "search": "Buscar…",

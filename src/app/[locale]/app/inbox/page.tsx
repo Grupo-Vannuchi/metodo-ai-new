@@ -8,7 +8,7 @@ import { ExportMenu } from "@/components/inbox/export-menu";
 import { resolveLocale } from "@/i18n/routing";
 import { listTeamChats, listTeamMembers, listTeamChatFolders } from "@/lib/queries/team-chat";
 import { Link } from "@/i18n/navigation";
-import { MessageCircle, Users } from "lucide-react";
+import { MessageCircle, Users, MessagesSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -43,34 +43,55 @@ export default async function InboxPage({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Tabs + export */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="glass flex w-fit items-center gap-2 rounded-lg border border-border p-1 shadow-sm">
-          <Link
-            href="/app/inbox?mode=whatsapp"
-            className={cn(
-              "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors",
-              mode === "whatsapp" ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:bg-muted"
-            )}
-          >
-            <MessageCircle className="size-4" />
-            WhatsApp
-          </Link>
-          <Link
-            href="/app/inbox?mode=team"
-            className={cn(
-              "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors",
-              mode === "team" ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:bg-muted"
-            )}
-          >
-            <Users className="size-4" />
-            {t("tab")}
-          </Link>
+      {/* Glass header — same language as Settings / dashboard. */}
+      <div className="glass relative overflow-hidden rounded-2xl border border-border p-4 shadow-sm sm:p-5">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-70"
+          style={{
+            background:
+              "radial-gradient(110% 110% at 100% 0%, color-mix(in srgb, var(--brand) 13%, transparent), transparent 55%)",
+          }}
+        />
+        <div className="relative flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
+              <MessagesSquare className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{t("inboxTitle")}</h1>
+              <p className="truncate text-sm text-muted-foreground">{t("inboxSubtitle")}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex w-fit items-center gap-1 rounded-lg border border-border bg-muted/40 p-1">
+              <Link
+                href="/app/inbox?mode=whatsapp"
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                  mode === "whatsapp" ? "bg-brand text-brand-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <MessageCircle className="size-4" />
+                WhatsApp
+              </Link>
+              <Link
+                href="/app/inbox?mode=team"
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                  mode === "team" ? "bg-brand text-brand-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Users className="size-4" />
+                {t("tab")}
+              </Link>
+            </div>
+            {mode === "whatsapp" ? <ExportMenu groups={exportGroups} /> : null}
+          </div>
         </div>
-        {mode === "whatsapp" ? <ExportMenu groups={exportGroups} /> : null}
       </div>
 
-      <div className="h-[calc(100dvh-11rem)]">
+      <div className="h-[calc(100dvh-14rem)]">
         {mode === "whatsapp" ? (
           <InboxClient
             initial={conversations}
