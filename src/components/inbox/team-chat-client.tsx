@@ -221,8 +221,27 @@ export function TeamChatClient({
   const [online, setOnline] = useState<Set<string>>(new Set());
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  // Right-click context menu for a message (WhatsApp/Teams-style): reactions +
+  // actions. Rendered in a portal so it never clips or gets overlapped.
+  const [msgMenu, setMsgMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const typingRef = useRef(false);
   const typingResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function openMsgMenu(e: React.MouseEvent, id: string) {
+    e.preventDefault();
+    const x = Math.min(e.clientX, window.innerWidth - 232);
+    const y = Math.min(e.clientY, window.innerHeight - 280);
+    setMsgMenu({ x, y, id });
+  }
+
+  useEffect(() => {
+    if (!msgMenu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMsgMenu(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [msgMenu]);
 
   // Presence + typing heartbeat: refresh who's online and who's typing here.
   useEffect(() => {
@@ -650,6 +669,7 @@ export function TeamChatClient({
   }
 
   const menuMember = menu ? members.find((m) => m.userId === menu.userId) ?? null : null;
+  const menuMsg = msgMenu ? messages.find((m) => m.id === msgMenu.id) ?? null : null;
 
   return (
     <div className="glass flex h-full overflow-hidden rounded-2xl border border-border shadow-sm">
@@ -958,8 +978,9 @@ export function TeamChatClient({
                     <div
                       key={msg.id}
                       id={`tm-${msg.id}`}
+                      onContextMenu={deleted ? undefined : (e) => openMsgMenu(e, msg.id)}
                       className={cn(
-                        "group/tm flex max-w-[75%] flex-col gap-1 rounded-2xl transition-shadow",
+                        "flex max-w-[75%] flex-col gap-1 rounded-2xl transition-shadow",
                         out ? "items-end self-end" : "items-start self-start",
                       )}
                     >
@@ -1054,75 +1075,6 @@ export function TeamChatClient({
                           )}
                         </div>
 
-                        {!deleted && msg.createdAt ? (
-                          <div
-                            className={cn(
-                              "absolute -top-7 z-10 hidden items-center gap-0.5 rounded-full border border-border bg-card px-1 py-0.5 shadow-md group-hover/tm:flex",
-                              out ? "right-0" : "left-0",
-                            )}
-                          >
-                            {TEAM_EMOJIS.map((e) => (
-                              <button
-                                key={e}
-                                type="button"
-                                onClick={() => void reactTeam(msg.id, e)}
-                                aria-label={e}
-                                className="rounded-full px-0.5 text-base leading-none transition-transform hover:scale-125"
-                              >
-                                {e}
-                              </button>
-                            ))}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setReplyTo(msg);
-                                setEditingId(null);
-                                composerRef.current?.focus();
-                              }}
-                              title={t("reply")}
-                              aria-label={t("reply")}
-                              className="rounded-full px-0.5 text-muted-foreground transition-colors hover:text-foreground"
-                            >
-                              <Reply className="size-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void pinTeam(msg.id, !msg.pinnedAt)}
-                              title={msg.pinnedAt ? t("unpin") : t("pin")}
-                              aria-label={msg.pinnedAt ? t("unpin") : t("pin")}
-                              className={cn("rounded-full px-0.5 transition-colors hover:text-foreground", msg.pinnedAt ? "text-brand" : "text-muted-foreground")}
-                            >
-                              {msg.pinnedAt ? <PinOff className="size-4" /> : <Pin className="size-4" />}
-                            </button>
-                            {out && msg.body ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingId(msg.id);
-                                  setReplyTo(null);
-                                  setDraft(msg.body);
-                                  composerRef.current?.focus();
-                                }}
-                                title={t("edit")}
-                                aria-label={t("edit")}
-                                className="rounded-full px-0.5 text-muted-foreground transition-colors hover:text-foreground"
-                              >
-                                <Pencil className="size-4" />
-                              </button>
-                            ) : null}
-                            {out ? (
-                              <button
-                                type="button"
-                                onClick={() => void removeTeam(msg.id)}
-                                title={t("delete")}
-                                aria-label={t("delete")}
-                                className="rounded-full px-0.5 text-muted-foreground transition-colors hover:text-red-600"
-                              >
-                                <Trash2 className="size-4" />
-                              </button>
-                            ) : null}
-                          </div>
-                        ) : null}
                       </div>
 
                       {reactions.length > 0 ? (
@@ -1504,6 +1456,102 @@ export function TeamChatClient({
                     {t("newFolderMove")}
                   </button>
                 </div>
+              </div>
+            </>,
+            document.body,
+          )
+        : null}
+
+      {/* Message context menu (right-click): reactions + actions. Portaled to
+          the body so it never clips or gets overlapped by the chat frame. */}
+      {msgMenu && menuMsg
+        ? createPortal(
+            <>
+              <button
+                type="button"
+                aria-hidden
+                tabIndex={-1}
+                onClick={() => setMsgMenu(null)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setMsgMenu(null);
+                }}
+                className="fixed inset-0 z-40 cursor-default"
+              />
+              <div
+                style={{ left: msgMenu.x, top: msgMenu.y }}
+                className="glass-strong fixed z-50 w-56 overflow-hidden rounded-xl border border-border py-1 text-sm shadow-xl motion-safe:animate-dialog-in"
+              >
+                <div className="flex items-center justify-between px-2 py-1.5">
+                  {TEAM_EMOJIS.map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      onClick={() => {
+                        void reactTeam(menuMsg.id, e);
+                        setMsgMenu(null);
+                      }}
+                      aria-label={e}
+                      className="rounded-full p-1 text-lg leading-none transition-transform hover:scale-125"
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+                <div className="my-1 border-t border-border" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReplyTo(menuMsg);
+                    setEditingId(null);
+                    setMsgMenu(null);
+                    composerRef.current?.focus();
+                  }}
+                  className={MENU_ITEM}
+                >
+                  <Reply className="size-4" />
+                  {t("reply")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void pinTeam(menuMsg.id, !menuMsg.pinnedAt);
+                    setMsgMenu(null);
+                  }}
+                  className={MENU_ITEM}
+                >
+                  {menuMsg.pinnedAt ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+                  {menuMsg.pinnedAt ? t("unpin") : t("pin")}
+                </button>
+                {menuMsg.senderId === currentUserId && menuMsg.body ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingId(menuMsg.id);
+                      setReplyTo(null);
+                      setDraft(menuMsg.body);
+                      setMsgMenu(null);
+                      composerRef.current?.focus();
+                    }}
+                    className={MENU_ITEM}
+                  >
+                    <Pencil className="size-4" />
+                    {t("edit")}
+                  </button>
+                ) : null}
+                {menuMsg.senderId === currentUserId ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void removeTeam(menuMsg.id);
+                      setMsgMenu(null);
+                    }}
+                    className={cn(MENU_ITEM, "text-red-600")}
+                  >
+                    <Trash2 className="size-4" />
+                    {t("delete")}
+                  </button>
+                ) : null}
               </div>
             </>,
             document.body,

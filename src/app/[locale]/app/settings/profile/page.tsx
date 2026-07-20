@@ -23,9 +23,5 @@ export default async function ProfilePage({
     return <p className="text-muted-foreground">{t("notFound")}</p>;
   }
 
-  return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <ProfileClient profile={profile} security={security} />
-    </div>
-  );
+  return <ProfileClient profile={profile} security={security} />;
 }

@@ -98,8 +98,8 @@ export default async function EmployeeDetailPage({
         .filter(([, v]) => v)
         .map(([label, v]) => (
           <div key={label} className="flex gap-2 text-sm">
-            <dt className="min-w-28 shrink-0 text-muted-foreground">{label}</dt>
-            <dd className="font-medium">{v}</dd>
+            <dt className="w-28 shrink-0 text-muted-foreground">{label}</dt>
+            <dd className="min-w-0 flex-1 break-words font-medium">{v}</dd>
           </div>
         ))
     );

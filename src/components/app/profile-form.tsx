@@ -185,7 +185,7 @@ export function ProfileClient({ profile, security }: { profile: ProfileView; sec
       </form>
 
       {/* Security: photo lives in the header; here go password + linked accounts. */}
-      <div className={cn("flex flex-col gap-5", tab !== "security" && "hidden")}>
+      <div className={cn("grid items-start gap-5 lg:grid-cols-2", tab !== "security" && "hidden")}>
         <ChangePasswordCard hasPassword={security.hasPassword} />
         <ConnectedAccountsCard
           email={profile.email}
