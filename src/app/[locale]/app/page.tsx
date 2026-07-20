@@ -79,7 +79,7 @@ export default async function DashboardPage({
         </div>
       </div>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="stagger-children grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((k) => (
           <div key={k.label} className="hover-lift glass rounded-xl border border-border p-5 shadow-sm">
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -129,7 +129,7 @@ export default async function DashboardPage({
         )}
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="stagger-children grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {secondary.map((s) => (
           <Link
             key={s.label}

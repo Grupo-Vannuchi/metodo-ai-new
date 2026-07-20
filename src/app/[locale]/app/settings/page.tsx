@@ -65,7 +65,7 @@ export default async function SettingsPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <section className="grid gap-4 sm:grid-cols-3">
+      <section className="stagger-children grid gap-4 sm:grid-cols-3">
         {stats.map((s) => (
           <div key={s.label} className="glass rounded-xl border border-border p-5 shadow-sm">
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -95,7 +95,7 @@ export default async function SettingsPage({
 
       <section>
         <h2 className="mb-3 text-sm font-semibold">{t("sections.title")}</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="stagger-children grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {shortcuts.map((s) => (
             <Link
               key={s.href}
