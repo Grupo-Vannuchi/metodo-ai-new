@@ -31,6 +31,11 @@ export function AvatarUploader({ name, initialUrl }: { name: string; initialUrl:
   // Crop-modal state.
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [zoom, setZoom] = useState(1);
+  // Smallest allowed zoom for the current image. At zoom 1 the image just
+  // "covers" the circle (fills it, sides cropped); `minZoom` lets it shrink
+  // until the WHOLE image fits inside the frame — so a wide logo isn't trapped
+  // showing only its middle. Recomputed per image (1 for a square).
+  const [minZoom, setMinZoom] = useState(1);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const offset = useRef({ x: 0, y: 0 });
   const drag = useRef<{ x: number; y: number } | null>(null);
@@ -91,11 +96,11 @@ export function AvatarUploader({ name, initialUrl }: { name: string; initialUrl:
     if (!canvas || !img) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      setZoom((z) => Number(Math.min(3, Math.max(1, z - e.deltaY * 0.0015)).toFixed(3)));
+      setZoom((z) => Number(Math.min(3, Math.max(minZoom, z - e.deltaY * 0.0015)).toFixed(3)));
     };
     canvas.addEventListener("wheel", onWheel, { passive: false });
     return () => canvas.removeEventListener("wheel", onWheel);
-  }, [img]);
+  }, [img, minZoom]);
 
   function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
     setError(null);
@@ -108,7 +113,12 @@ export function AvatarUploader({ name, initialUrl }: { name: string; initialUrl:
     const image = new Image();
     image.onload = () => {
       offset.current = { x: 0, y: 0 };
-      setZoom(1);
+      // fit-vs-cover ratio: 1 for a square, <1 the more oblong the image is.
+      const ratio = Math.min(image.naturalWidth, image.naturalHeight) / Math.max(image.naturalWidth, image.naturalHeight);
+      setMinZoom(ratio);
+      // Oblong images (logos/banners) open showing the whole thing; near-square
+      // photos open "covering" the circle, the usual polished default.
+      setZoom(ratio < 0.6 ? ratio : 1);
       setImg(image);
     };
     image.onerror = () => setError(t("photo.errorType"));
@@ -268,7 +278,7 @@ export function AvatarUploader({ name, initialUrl }: { name: string; initialUrl:
               <ZoomIn className="size-4 shrink-0 text-muted-foreground" />
               <input
                 type="range"
-                min={1}
+                min={minZoom}
                 max={3}
                 step={0.01}
                 value={zoom}
