@@ -76,7 +76,9 @@ export function FolderExplorer<T extends { id: string }>({
   const [view, setView] = useState<"grid" | "list">("grid");
   const [dragId, setDragId] = useState<string | null>(null);
   const [overTile, setOverTile] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  // `undefined` = no folder open (closed); `null` = the "unfiled" folder is open;
+  // a string = that folder is open. Double-click toggles open/closed.
+  const [openId, setOpenId] = useState<string | null | undefined>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
@@ -94,7 +96,8 @@ export function FolderExplorer<T extends { id: string }>({
   const keyOf = (id: string | null) => id ?? "__root__";
   const root = cols.find((c) => c.id === null) ?? { id: null, name: "", items: [] as T[] };
   const folders = cols.filter((c) => c.id !== null);
-  const openCol = cols.find((c) => c.id === openId) ?? root;
+  // When closed (openId === undefined) nothing is shown below the tiles.
+  const openCol = openId === undefined ? undefined : cols.find((c) => c.id === openId) ?? undefined;
 
   function onDrop(toId: string | null) {
     setOverTile(null);
@@ -150,7 +153,7 @@ export function FolderExplorer<T extends { id: string }>({
 
   async function del(id: string) {
     if (!(await confirm({ description: labels.confirmDeleteFolder, confirmLabel: labels.deleteFolder, variant: "danger" }))) return;
-    if (openId === id) setOpenId(null);
+    if (openId === id) setOpenId(undefined);
     start(async () => {
       await onDeleteFolder(id);
       router.refresh();
@@ -173,7 +176,8 @@ export function FolderExplorer<T extends { id: string }>({
         onDrop={() => onDrop(id)}
         onClick={() => setSelectedId(id)}
         onDoubleClick={() => {
-          setOpenId(id);
+          // Toggle: double-clicking an already-open folder closes it.
+          setOpenId((cur) => (cur === id ? undefined : id));
           setSelectedId(id);
         }}
         title={labels.openHint}
@@ -289,27 +293,33 @@ export function FolderExplorer<T extends { id: string }>({
         {folders.map((col) => renderTile({ id: col.id, name: col.name, count: col.items.length, canManage: true }))}
       </div>
 
-      {/* Content of the opened folder */}
-      <section
-        onDragOver={(e) => {
-          e.preventDefault();
-          setOverTile(keyOf(openCol.id));
-        }}
-        onDragLeave={() => setOverTile((c) => (c === keyOf(openCol.id) ? null : c))}
-        onDrop={() => onDrop(openCol.id)}
-        className={cn("glass rounded-xl border p-4 shadow-sm transition-colors", overTile === keyOf(openCol.id) ? "border-brand" : "border-border")}
-      >
-        <div className="mb-3 flex items-center gap-2">
-          {openCol.id === null ? <Inbox className="size-4 text-muted-foreground" /> : <FolderOpen className="size-4 text-brand" />}
-          <h2 className="text-sm font-semibold">{openCol.id === null ? labels.unfiled : openCol.name}</h2>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{labels.folderCount(openCol.items.length)}</span>
-        </div>
-        {openCol.items.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border px-3 py-8 text-center text-sm text-muted-foreground">{labels.emptyFolder}</p>
-        ) : (
-          renderItems({ items: openCol.items, view, onDragStart: setDragId, onDragEnd: () => setDragId(null) })
-        )}
-      </section>
+      {/* Content of the opened folder — nothing shown when all are closed. */}
+      {openCol ? (
+        <section
+          onDragOver={(e) => {
+            e.preventDefault();
+            setOverTile(keyOf(openCol.id));
+          }}
+          onDragLeave={() => setOverTile((c) => (c === keyOf(openCol.id) ? null : c))}
+          onDrop={() => onDrop(openCol.id)}
+          className={cn("glass rounded-xl border p-4 shadow-sm transition-colors", overTile === keyOf(openCol.id) ? "border-brand" : "border-border")}
+        >
+          <div className="mb-3 flex items-center gap-2">
+            {openCol.id === null ? <Inbox className="size-4 text-muted-foreground" /> : <FolderOpen className="size-4 text-brand" />}
+            <h2 className="text-sm font-semibold">{openCol.id === null ? labels.unfiled : openCol.name}</h2>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{labels.folderCount(openCol.items.length)}</span>
+          </div>
+          {openCol.items.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border px-3 py-8 text-center text-sm text-muted-foreground">{labels.emptyFolder}</p>
+          ) : (
+            renderItems({ items: openCol.items, view, onDragStart: setDragId, onDragEnd: () => setDragId(null) })
+          )}
+        </section>
+      ) : (
+        <p className="rounded-xl border border-dashed border-border px-3 py-10 text-center text-sm text-muted-foreground">
+          {labels.openHint}
+        </p>
+      )}
     </div>
   );
 }
