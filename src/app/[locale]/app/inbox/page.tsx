@@ -1,15 +1,18 @@
 import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
 import { requireScreen } from "@/lib/access";
+import { prisma } from "@/lib/prisma";
 import { listConversations, listConversationFolders } from "@/lib/queries/inbox";
 import { InboxClient } from "@/components/inbox/inbox-client";
 import { TeamChatClient } from "@/components/inbox/team-chat-client";
 import { ExportMenu } from "@/components/inbox/export-menu";
+import { WhatsappQuickConnect } from "@/components/integrations/whatsapp-quick-connect";
 import { resolveLocale } from "@/i18n/routing";
 import { listTeamChats, listTeamMembers, listTeamChatFolders } from "@/lib/queries/team-chat";
 import { Link } from "@/i18n/navigation";
 import { MessageCircle, Users, MessagesSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +43,20 @@ export default async function InboxPage({
   const exportGroups = conversations
     .filter((c) => c.isGroup)
     .map((c) => ({ id: c.id, name: c.customName || c.name || "Grupo" }));
+
+  // One-click WhatsApp lives here in Conversas. Show the connect card when the
+  // caller hasn't linked their own number yet (platform Evolution configured).
+  const platformWhatsapp = Boolean(env.EVOLUTION_API_URL && env.EVOLUTION_API_KEY);
+  const myWhatsappActive =
+    mode === "whatsapp" && platformWhatsapp
+      ? Boolean(
+          await prisma.integrationConnection.findFirst({
+            where: { organizationId: ctx.organizationId, provider: "EVOLUTION", ownerId: ctx.userId, status: "ACTIVE" },
+            select: { id: true },
+          }),
+        )
+      : false;
+  const showConnect = mode === "whatsapp" && platformWhatsapp && !myWhatsappActive;
 
   return (
     <div className="flex flex-col gap-4">
@@ -91,23 +108,29 @@ export default async function InboxPage({
         </div>
       </div>
 
-      <div className="h-[calc(100dvh-14rem)]">
-        {mode === "whatsapp" ? (
-          <InboxClient
-            initial={conversations}
-            initialFolders={folders}
-            initialSelectedId={c ?? null}
-          />
-        ) : (
-          <TeamChatClient
-            members={teamMembers}
-            folders={teamFolders}
-            initialChats={teamChats}
-            initialSelectedId={chat ?? null}
-            currentUserId={ctx.userId}
-          />
-        )}
-      </div>
+      {showConnect ? (
+        <div className="mx-auto w-full max-w-xl">
+          <WhatsappQuickConnect initialActive={false} />
+        </div>
+      ) : (
+        <div className="h-[calc(100dvh-14rem)]">
+          {mode === "whatsapp" ? (
+            <InboxClient
+              initial={conversations}
+              initialFolders={folders}
+              initialSelectedId={c ?? null}
+            />
+          ) : (
+            <TeamChatClient
+              members={teamMembers}
+              folders={teamFolders}
+              initialChats={teamChats}
+              initialSelectedId={chat ?? null}
+              currentUserId={ctx.userId}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

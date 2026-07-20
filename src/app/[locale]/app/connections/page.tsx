@@ -1,19 +1,16 @@
 import { getTranslations } from "next-intl/server";
 import { Plus } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
-import { prisma } from "@/lib/prisma";
 import { listConnections } from "@/lib/queries/connections";
 import { listMembers } from "@/lib/queries/organizations";
 import { deleteConnection } from "@/app/actions/connections";
 import { DeleteButton } from "@/components/crm/delete-button";
 import { TestButton } from "@/components/integrations/test-button";
-import { WhatsappQuickConnect } from "@/components/integrations/whatsapp-quick-connect";
 import { buttonVariants } from "@/components/ui/button";
 import { PROVIDERS, type IntegrationProviderKey } from "@/lib/integrations/registry";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
-import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -42,18 +39,6 @@ export default async function ConnectionsPage({
   const members = canSeeAll ? await listMembers(ctx.organizationId) : [];
   const ownerName = new Map(members.map((m) => [m.userId, m.name]));
 
-  // One-click WhatsApp (platform Evolution): show it when the platform is
-  // configured. `initialActive` = the caller already has a live WhatsApp.
-  const platformWhatsapp = Boolean(env.EVOLUTION_API_URL && env.EVOLUTION_API_KEY);
-  const myWhatsappActive = platformWhatsapp
-    ? Boolean(
-        await prisma.integrationConnection.findFirst({
-          where: { organizationId: ctx.organizationId, provider: "EVOLUTION", ownerId: ctx.userId, status: "ACTIVE" },
-          select: { id: true },
-        }),
-      )
-    : false;
-
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -61,13 +46,11 @@ export default async function ConnectionsPage({
           <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
           <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
         </div>
-        <Link href="/app/connections/new" className={buttonVariants({ variant: "outline" })}>
+        <Link href="/app/connections/new" className={buttonVariants()}>
           <Plus className="size-4" />
           {t("new")}
         </Link>
       </div>
-
-      {platformWhatsapp ? <WhatsappQuickConnect initialActive={myWhatsappActive} /> : null}
 
       {connections.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
