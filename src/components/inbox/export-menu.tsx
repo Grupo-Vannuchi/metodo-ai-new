@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { Download, FileText, FileSpreadsheet, FileType, UserPlus, Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -11,23 +12,50 @@ type Group = { id: string; name: string };
 /**
  * Export the WhatsApp contact list, or a group's members, as PDF / Word / XML.
  * Triggers a download from /api/inbox/export. Lives at the top of the inbox.
+ *
+ * The dropdown is rendered through a portal to <body>: the menu sits inside the
+ * inbox's glass header, which has `overflow-hidden` + `backdrop-filter` — both
+ * would clip (and re-anchor) a normal absolute/fixed child, hiding the menu.
+ * Portaling escapes that; we position it under the button via a measured rect.
  */
 export function ExportMenu({ groups }: { groups: Group[] }) {
   const t = useTranslations("inbox");
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const [target, setTarget] = useState("contacts");
   const [importing, startImport] = useTransition();
   const [importMsg, setImportMsg] = useState<string | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  function place() {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 8, right: window.innerWidth - r.right });
+  }
+
+  function toggle() {
+    if (!open) place();
+    setOpen((o) => !o);
+  }
 
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (btnRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
+    // A scroll/resize would leave the fixed menu detached from the button.
+    const onMove = () => setOpen(false);
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("resize", onMove);
+      window.removeEventListener("scroll", onMove, true);
+    };
   }, [open]);
 
   function download(format: "pdf" | "doc" | "xlsx") {
@@ -65,59 +93,67 @@ export function ExportMenu({ groups }: { groups: Group[] }) {
   }
 
   return (
-    <div ref={ref} className="relative">
+    <>
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
         className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:text-foreground"
       >
         <Download className="size-4" />
         {t("export.button")}
       </button>
 
-      {open ? (
-        <div className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-border bg-card p-3 shadow-lg">
-          <label className="text-xs font-medium text-muted-foreground">{t("export.target")}</label>
-          <select
-            value={target}
-            onChange={(e) => setTarget(e.target.value)}
-            className="mt-1 h-9 w-full rounded-md border border-border bg-card px-2 text-sm focus-visible:border-brand focus-visible:outline-none"
-          >
-            <option value="contacts">{t("export.allContacts")}</option>
-            {groups.length ? (
-              <optgroup label={t("export.groups")}>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-          </select>
-
-          <p className="mt-3 text-xs font-medium text-muted-foreground">{t("export.format")}</p>
-          <div className="mt-1 grid grid-cols-3 gap-2">
-            <FormatBtn icon={FileText} label="PDF" onClick={() => download("pdf")} />
-            <FormatBtn icon={FileSpreadsheet} label="Excel" onClick={() => download("xlsx")} />
-            <FormatBtn icon={FileType} label="Word" onClick={() => download("doc")} />
-          </div>
-
-          <div className="mt-3 border-t border-border pt-3">
-            <p className="text-xs font-medium text-muted-foreground">{t("export.crmTitle")}</p>
-            <button
-              type="button"
-              onClick={importToCrm}
-              disabled={importing}
-              className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
+      {open && pos && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={menuRef}
+              style={{ position: "fixed", top: pos.top, right: pos.right }}
+              className="z-50 w-64 rounded-xl border border-border bg-card p-3 shadow-lg"
             >
-              {importing ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
-              {t("export.toCrm")}
-            </button>
-            {importMsg ? <p className="mt-2 text-xs text-muted-foreground">{importMsg}</p> : null}
-          </div>
-        </div>
-      ) : null}
-    </div>
+              <label className="text-xs font-medium text-muted-foreground">{t("export.target")}</label>
+              <select
+                value={target}
+                onChange={(e) => setTarget(e.target.value)}
+                className="mt-1 h-9 w-full rounded-md border border-border bg-card px-2 text-sm focus-visible:border-brand focus-visible:outline-none"
+              >
+                <option value="contacts">{t("export.allContacts")}</option>
+                {groups.length ? (
+                  <optgroup label={t("export.groups")}>
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+              </select>
+
+              <p className="mt-3 text-xs font-medium text-muted-foreground">{t("export.format")}</p>
+              <div className="mt-1 grid grid-cols-3 gap-2">
+                <FormatBtn icon={FileText} label="PDF" onClick={() => download("pdf")} />
+                <FormatBtn icon={FileSpreadsheet} label="Excel" onClick={() => download("xlsx")} />
+                <FormatBtn icon={FileType} label="Word" onClick={() => download("doc")} />
+              </div>
+
+              <div className="mt-3 border-t border-border pt-3">
+                <p className="text-xs font-medium text-muted-foreground">{t("export.crmTitle")}</p>
+                <button
+                  type="button"
+                  onClick={importToCrm}
+                  disabled={importing}
+                  className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  {importing ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
+                  {t("export.toCrm")}
+                </button>
+                {importMsg ? <p className="mt-2 text-xs text-muted-foreground">{importMsg}</p> : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
 
