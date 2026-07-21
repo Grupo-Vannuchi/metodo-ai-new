@@ -8,6 +8,7 @@ import { planConfig, assertFeature, type PlanKey } from "@/config/plans";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
 import { runExtractionToCompletion, MAX_TOTAL } from "@/lib/prospecting/runner";
 import { countLeadsSince, countJobsSince } from "@/lib/queries/extractions";
+import { env } from "@/lib/env";
 import { createOpportunity } from "@/app/actions/opportunities";
 import { formatBrPhone } from "@/lib/phone";
 import { extractionSchema, type ExtractionInput } from "@/lib/validations/extraction";
@@ -33,8 +34,8 @@ function startOfMonth(): Date {
   return new Date(now.getFullYear(), now.getMonth(), 1);
 }
 
-/** Start a prospecting run. Requires the tenant's own Google connection (BYO key)
- * and respects the plan's monthly lead quota. */
+/** Start a prospecting run. Uses the platform Google Places key by default (or a
+ * tenant's own BYO key) and respects the plan's monthly lead quota. */
 export async function startExtraction(input: ExtractionInput): Promise<ExtractionResult> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false, error: "unauthorized" };
@@ -52,12 +53,18 @@ export async function startExtraction(input: ExtractionInput): Promise<Extractio
   try {
     const db = tenantDb(ctx.organizationId);
 
-    // BYO key: the tenant must have connected their own Google Places API key.
-    const conn = await db.integrationConnection.findFirst({
-      where: { provider: "GOOGLE" },
-      select: { id: true },
-    });
-    if (!conn) return { ok: false, error: "no_connection" };
+    // Google Places is usable when EITHER the platform key is configured
+    // (`GOOGLE_PLACES_API_KEY`, the default for every tenant) OR the tenant
+    // brought their own key (advanced BYO connection). This mirrors
+    // `resolveGoogleKey` in the runner, so the pre-check can't reject a run the
+    // runner would happily execute.
+    if (!env.GOOGLE_PLACES_API_KEY) {
+      const conn = await db.integrationConnection.findFirst({
+        where: { provider: "GOOGLE" },
+        select: { id: true },
+      });
+      if (!conn) return { ok: false, error: "no_connection" };
+    }
 
     const cfg = planConfig(plan);
     const monthStart = startOfMonth();
