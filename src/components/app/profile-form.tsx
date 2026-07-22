@@ -192,6 +192,7 @@ export function ProfileClient({ profile, security }: { profile: ProfileView; sec
           emailVerified={security.emailVerified}
           hasPassword={security.hasPassword}
           accounts={security.accounts}
+          providers={security.providers}
         />
       </div>
     </div>

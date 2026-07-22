@@ -2,7 +2,9 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { redirect, Link } from "@/i18n/navigation";
 import { getOrgContext } from "@/lib/tenant";
 import { LoginForm } from "@/components/auth/login-form";
-import { GoogleSignInButton } from "@/components/auth/google-signin-button";
+import { OAuthButtons } from "@/components/auth/oauth-buttons";
+import { configuredProviders } from "@/lib/oauth/providers";
+import { parseOAuthError } from "@/lib/oauth/shared";
 import { Logo } from "@/components/layout/logo";
 import { resolveLocale } from "@/i18n/routing";
 
@@ -21,8 +23,8 @@ export default async function LoginPage({
   if (await getOrgContext()) redirect({ href: "/app", locale });
 
   const t = await getTranslations("auth");
-  const errorKey = (await searchParams)?.error;
-  const oauthError = errorKey === "google_unverified" ? "google_unverified" : errorKey ? "google" : null;
+  const oauthError = parseOAuthError((await searchParams)?.error);
+  const hasOAuth = configuredProviders().length > 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -34,17 +36,20 @@ export default async function LoginPage({
 
       {oauthError ? (
         <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-center text-sm text-red-500">
-          {t(`errors.${oauthError}`)}
+          {t(`errors.${oauthError.key}`, { provider: oauthError.provider })}
         </p>
       ) : null}
 
-      <GoogleSignInButton />
-
-      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-        <span className="h-px flex-1 bg-border" />
-        {t("or")}
-        <span className="h-px flex-1 bg-border" />
-      </div>
+      {hasOAuth ? (
+        <>
+          <OAuthButtons />
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            {t("or")}
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      ) : null}
 
       <LoginForm />
 

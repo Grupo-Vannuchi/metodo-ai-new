@@ -46,9 +46,18 @@ const serverSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   // Verified sender, e.g. `MétodoAI <nao-responda@metodotia.com>`.
   EMAIL_FROM: z.string().optional(),
-  // Google OAuth (login com Google) — optional until the feature is enabled.
+  // Social sign-in. Each provider is independent: the button only shows up once
+  // its id + secret are present, so you can enable them one at a time. The
+  // redirect URI to register is `${NEXT_PUBLIC_SITE_URL}/api/auth/<provider>/callback`.
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  MICROSOFT_CLIENT_ID: z.string().optional(),
+  MICROSOFT_CLIENT_SECRET: z.string().optional(),
+  // Entra tenant: "common" (work/school + personal), "organizations" (work only),
+  // or a specific tenant id. Defaults to "common".
+  MICROSOFT_TENANT_ID: z.string().optional(),
+  LINKEDIN_CLIENT_ID: z.string().optional(),
+  LINKEDIN_CLIENT_SECRET: z.string().optional(),
   // Platform WhatsApp (Evolution API) — one shared server used by every tenant,
   // with a unique per-user instance. Lets users connect via QR without their own
   // keys. Optional so the app boots without it; the one-click flow no-ops.

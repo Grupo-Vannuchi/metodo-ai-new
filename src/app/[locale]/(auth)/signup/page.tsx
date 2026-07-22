@@ -2,7 +2,8 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { redirect, Link } from "@/i18n/navigation";
 import { getOrgContext } from "@/lib/tenant";
 import { SignupForm } from "@/components/auth/signup-form";
-import { GoogleSignInButton } from "@/components/auth/google-signin-button";
+import { OAuthButtons } from "@/components/auth/oauth-buttons";
+import { configuredProviders } from "@/lib/oauth/providers";
 import { Logo } from "@/components/layout/logo";
 import { resolveLocale } from "@/i18n/routing";
 
@@ -28,13 +29,16 @@ export default async function SignupPage({
         <p className="text-sm text-muted-foreground">{t("signup.subtitle")}</p>
       </div>
 
-      <GoogleSignInButton />
-
-      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-        <span className="h-px flex-1 bg-border" />
-        {t("or")}
-        <span className="h-px flex-1 bg-border" />
-      </div>
+      {configuredProviders().length > 0 ? (
+        <>
+          <OAuthButtons />
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            {t("or")}
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      ) : null}
 
       <SignupForm />
       <p className="text-center text-sm text-muted-foreground">

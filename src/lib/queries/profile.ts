@@ -1,5 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { configuredProviders } from "@/lib/oauth/providers";
+import type { OAuthProvider } from "@/lib/oauth/shared";
 
 /** Profile + identity fields for the profile tab / admin view. */
 export type ProfileView = {
@@ -80,6 +82,8 @@ export type AccountSecurity = {
   hasPassword: boolean;
   emailVerified: Date | null;
   accounts: ConnectedAccount[];
+  /** Providers offered for linking — only those with credentials configured. */
+  providers: OAuthProvider[];
 };
 
 /** The signed-in user's sign-in security state (password + e-mail + accounts). */
@@ -100,6 +104,7 @@ export async function getMyAccountSecurity(userId: string): Promise<AccountSecur
     hasPassword: Boolean(user.passwordHash),
     emailVerified: user.emailVerified,
     accounts: user.accounts,
+    providers: configuredProviders(),
   };
 }
 

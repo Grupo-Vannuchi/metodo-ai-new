@@ -131,7 +131,7 @@
     "name": "Seu nome",
     "organizationName": "Nome da organização",
     "submitting": "Aguarde…",
-    "continueWithGoogle": "Entrar com Google",
+    "continueWith": "Entrar com {provider}",
     "or": "ou",
     "login": {
       "title": "Entrar",
@@ -168,8 +168,8 @@
       "rate_limited": "Muitas tentativas. Aguarde um minuto e tente de novo.",
       "already_in_team": "Você já faz parte de uma equipe. Saia dela (em Configurações) antes de aceitar este convite.",
       "email_not_verified": "Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada.",
-      "google": "Não foi possível entrar com o Google. Tente novamente.",
-      "google_unverified": "Seu e-mail do Google não está verificado. Use outra forma de acesso.",
+      "oauth": "Não foi possível entrar com {provider}. Tente novamente.",
+      "oauth_unverified": "Seu e-mail no {provider} não está verificado. Use outra forma de acesso.",
       "generic": "Algo deu errado. Tente novamente."
     },
     "verify": {
