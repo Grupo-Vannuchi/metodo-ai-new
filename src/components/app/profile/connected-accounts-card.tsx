@@ -132,7 +132,6 @@ export function ConnectedAccountsCard({
               // Full-page navigation to the OAuth API route (not a Next page) — a
               // plain anchor, like the sign-in buttons. `intent=link` attaches the
               // identity to the current user instead of logging in.
-              // eslint-disable-next-line @next/next/no-html-link-for-pages
               <a
                 href={`/api/auth/${provider}?intent=link`}
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
