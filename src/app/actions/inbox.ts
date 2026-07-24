@@ -10,6 +10,7 @@ import type { SendInput } from "@/lib/integrations/channels/types";
 import { normalizeWhatsappNumber, formatBrPhone, brPhoneKey, looksLikeWhatsappMobile } from "@/lib/phone";
 import { onlyDigits } from "@/lib/cnpj";
 import { getContactRows, getGroupRows } from "@/lib/whatsapp/export";
+import { ensureContactFolder, lazyFolder, whatsappFolderName } from "@/lib/crm/import-folders";
 import { purgeConversationMedia } from "@/lib/whatsapp/media";
 import { applyReaction, myReaction } from "@/lib/whatsapp/reactions";
 
@@ -379,16 +380,23 @@ export async function importWhatsappContactsToCrm(
 
   try {
     let rows: { name: string; number: string }[];
+    let batchLabel: string;
     if (target.type === "group") {
       const group = await getGroupRows(ctx.organizationId, target.conversationId, ctx.userId);
       if (!group) return { ok: false, error: "not_found" };
       // Groups expose numbers, not names — use the number as the contact name.
       rows = group.rows.map((r) => ({ name: r.number, number: r.number }));
+      batchLabel = group.title;
     } else {
       rows = await getContactRows(ctx.organizationId, ctx.userId);
+      batchLabel = "Contatos";
     }
 
     const db = tenantDb(ctx.organizationId);
+    // This import's own folder, created only once a contact is actually filed —
+    // a run where everything is a duplicate leaves no empty folder behind.
+    const folderName = whatsappFolderName(batchLabel, new Date());
+    const folder = lazyFolder(() => ensureContactFolder(db, ctx.organizationId, folderName));
     const seen = new Set<string>();
     let created = 0;
     let skipped = 0;
@@ -423,6 +431,7 @@ export async function importWhatsappContactsToCrm(
           phone,
           tags: ["whatsapp"],
           source: "whatsapp-import",
+          folderId: await folder(),
         },
       });
       created++;

@@ -12,6 +12,12 @@ import { env } from "@/lib/env";
 import { createOpportunity } from "@/app/actions/opportunities";
 import { formatBrPhone } from "@/lib/phone";
 import { extractionSchema, type ExtractionInput } from "@/lib/validations/extraction";
+import {
+  ensureCompanyFolder,
+  ensureContactFolder,
+  lazyFolder,
+  prospectingFolderName,
+} from "@/lib/crm/import-folders";
 
 export type ExtractionResult =
   | { ok: true; id: string }
@@ -155,13 +161,45 @@ type LeadRow = {
   linkedin: string | null;
 };
 
+/** Folders this import batch files new records into (created on first use). */
+type ImportFolders = {
+  company: () => Promise<string>;
+  contact: () => Promise<string>;
+};
+
+/** Per-job import folders, named after the extraction that produced the leads.
+ * Falls back to the job id when the job row is somehow gone, so an import can
+ * still be filed rather than failing. */
+async function jobFolders(
+  db: ReturnType<typeof tenantDb>,
+  organizationId: string,
+  jobId: string,
+): Promise<ImportFolders> {
+  const job = await db.extractionJob.findFirst({
+    where: { id: jobId },
+    select: { query: true, createdAt: true },
+  });
+  const name = job
+    ? prospectingFolderName(job.query, job.createdAt)
+    : `Prospecção · ${jobId}`;
+  return {
+    company: lazyFolder(() => ensureCompanyFolder(db, organizationId, name)),
+    contact: lazyFolder(() => ensureContactFolder(db, organizationId, name)),
+  };
+}
+
 /** Import a single lead into the CRM: dedupes a company by name (creating it if
  * needed) and ensures a reachable contact. Returns the resolved ids + a label,
- * and marks the lead imported. Shared by importLeads and sendLeadsToFunnel. */
+ * and marks the lead imported. Shared by importLeads and sendLeadsToFunnel.
+ *
+ * Records created here are filed into this batch's folders. A company that
+ * already existed keeps whatever folder it's in — re-filing it would drag an
+ * established record out of the user's own organization. */
 async function importLeadCore(
   db: ReturnType<typeof tenantDb>,
   organizationId: string,
   lead: LeadRow,
+  folders: ImportFolders,
 ): Promise<{ companyId: string; contactId: string | null; name: string }> {
   const name = (lead.name ?? "").trim() || (lead.website ?? "").trim() || "Empresa";
 
@@ -178,6 +216,7 @@ async function importLeadCore(
         address: lead.address ? { street: lead.address } : {},
         notes: buildNotes(lead) || null,
         source: "extractor:google",
+        folderId: await folders.company(),
       },
       select: { id: true },
     });
@@ -201,6 +240,7 @@ async function importLeadCore(
         email: lead.email,
         tags: ["prospecção"],
         source: "extractor:google",
+        folderId: await folders.contact(),
       },
       select: { id: true },
     });
@@ -231,7 +271,8 @@ export async function importLeads(jobId: string, leadIds: string[]): Promise<Imp
       where: { jobId, id: { in: leadIds }, importedAt: null },
     });
 
-    for (const lead of leads) await importLeadCore(db, ctx.organizationId, lead);
+    const folders = await jobFolders(db, ctx.organizationId, jobId);
+    for (const lead of leads) await importLeadCore(db, ctx.organizationId, lead, folders);
     const imported = leads.length;
 
     await audit(ctx, {
@@ -288,9 +329,10 @@ export async function sendLeadsToFunnel(
       where: { jobId, id: { in: leadIds }, importedAt: null },
     });
 
+    const folders = await jobFolders(db, ctx.organizationId, jobId);
     let sent = 0;
     for (const lead of leads) {
-      const { companyId, contactId, name } = await importLeadCore(db, ctx.organizationId, lead);
+      const { companyId, contactId, name } = await importLeadCore(db, ctx.organizationId, lead, folders);
       const res = await createOpportunity({
         title: name,
         value: baseValue,
