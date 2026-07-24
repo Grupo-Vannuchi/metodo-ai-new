@@ -172,6 +172,7 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
 
   return (
     <FolderExplorer<ContactCard>
+      storageKey="contacts"
       columns={cols}
       labels={labels}
       onCreateFolder={(name) => createFolder({ name })}

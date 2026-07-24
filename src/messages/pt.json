@@ -1159,6 +1159,8 @@
       "create": "Criar funil",
       "creating": "Criando…",
       "isDefault": "Padrão",
+      "cancel": "Cancelar",
+      "renameHint": "Clique para abrir · duplo clique para renomear",
       "makeDefault": "Tornar padrão",
       "stageCount": "{n} estágios",
       "save": "Salvar",

@@ -1,10 +1,17 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { useSessionState } from "@/lib/use-session-state";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
+/**
+ * List pager. The page you're on is remembered for the session per list, so
+ * returning to that list (without an explicit `?page`) resumes where you were
+ * instead of snapping back to the first page.
+ */
 export function Pagination({ total, pageSize }: { total: number; pageSize: number }) {
   const t = useTranslations("pagination");
   const router = useRouter();
@@ -14,6 +21,28 @@ export function Pagination({ total, pageSize }: { total: number; pageSize: numbe
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const raw = Number(searchParams.get("page")) || 1;
   const currentPage = Math.min(Math.max(1, raw), totalPages);
+
+  // Hooks must run before the early return below, or their order would change
+  // between renders.
+  const hasPageParam = searchParams.get("page") !== null;
+  const [storedPage, setStoredPage, hydrated] = useSessionState<number>(`page:${pathname}`, 1);
+  const restored = useRef(false);
+
+  // Remember the page whenever it's explicit in the URL.
+  useEffect(() => {
+    if (hasPageParam) setStoredPage(currentPage);
+  }, [hasPageParam, currentPage, setStoredPage]);
+
+  // Landing on the list with no page in the URL → jump back to the remembered
+  // one. Runs once, and `replace` keeps it out of the back-button history.
+  useEffect(() => {
+    if (!hydrated || restored.current) return;
+    restored.current = true;
+    if (hasPageParam || storedPage <= 1 || storedPage > totalPages) return;
+    const params = new URLSearchParams(searchParams);
+    params.set("page", String(storedPage));
+    router.replace(`${pathname}?${params.toString()}`);
+  }, [hydrated, hasPageParam, storedPage, totalPages, pathname, router, searchParams]);
 
   if (totalPages <= 1) return null;
 

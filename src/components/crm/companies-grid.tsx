@@ -176,6 +176,7 @@ export function CompaniesGrid({ columns }: { columns: CompanyColumn[] }) {
 
   return (
     <FolderExplorer<CompanyCard>
+      storageKey="companies"
       columns={cols}
       labels={labels}
       onCreateFolder={(name) => createCompanyFolder({ name })}

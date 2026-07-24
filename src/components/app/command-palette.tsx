@@ -148,16 +148,28 @@ export function CommandPalette() {
                   onClick={() => go(r)}
                   onMouseEnter={() => setActive(i)}
                   className={cn(
-                    "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors",
+                    "flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors",
                     i === active ? "bg-muted" : "hover:bg-muted",
                   )}
                 >
-                  <Icon className="size-4 shrink-0 text-muted-foreground" />
+                  <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate">{r.title}</span>
+                    <span className="block truncate font-medium">{r.title}</span>
                     {r.subtitle ? <span className="block truncate text-xs text-muted-foreground">{r.subtitle}</span> : null}
+                    {r.meta.length > 0 ? (
+                      <span className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-muted-foreground">
+                        {r.meta.map((m, mi) => (
+                          <span key={m} className="flex items-center gap-1.5">
+                            {mi > 0 ? <span aria-hidden className="text-muted-foreground/40">•</span> : null}
+                            <span className="truncate">{m}</span>
+                          </span>
+                        ))}
+                      </span>
+                    ) : null}
                   </span>
-                  <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{t(`type.${r.type}`)}</span>
+                  <span className="mt-0.5 shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {t(`type.${r.type}`)}
+                  </span>
                 </button>
               );
             })

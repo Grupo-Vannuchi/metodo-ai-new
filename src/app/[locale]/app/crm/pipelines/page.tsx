@@ -1,9 +1,8 @@
 import { getTranslations } from "next-intl/server";
-import { Star, ChevronRight } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { listPipelines } from "@/lib/queries/pipelines";
 import { NewPipelineForm } from "@/components/crm/new-pipeline-form";
-import { Link } from "@/i18n/navigation";
+import { PipelineRow } from "@/components/crm/pipeline-row";
 import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
@@ -35,25 +34,13 @@ export default async function PipelinesPage({
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-card">
           {pipelines.map((p) => (
-            <Link
+            <PipelineRow
               key={p.id}
-              href={`/app/crm/pipelines/${p.id}`}
-              className="flex items-center justify-between border-b border-border px-5 py-4 transition-colors last:border-0 hover:bg-muted/40"
-            >
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{p.name}</span>
-                {p.isDefault ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">
-                    <Star className="size-3" />
-                    {t("isDefault")}
-                  </span>
-                ) : null}
-              </div>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span>{t("stageCount", { n: p._count.stages })}</span>
-                <ChevronRight className="size-4" />
-              </div>
-            </Link>
+              id={p.id}
+              name={p.name}
+              isDefault={p.isDefault}
+              stageCount={p._count.stages}
+            />
           ))}
         </div>
       )}

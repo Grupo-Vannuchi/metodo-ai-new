@@ -1159,6 +1159,8 @@
       "create": "Create funnel",
       "creating": "Creating…",
       "isDefault": "Default",
+      "cancel": "Cancel",
+      "renameHint": "Click to open · double-click to rename",
       "makeDefault": "Make default",
       "stageCount": "{n} stages",
       "save": "Save",

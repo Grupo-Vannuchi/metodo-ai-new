@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
+import { useSessionState } from "@/lib/use-session-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { useConfirm } from "@/components/ui/confirm";
@@ -52,8 +53,13 @@ type RenderItemsArgs<T> = {
  * opened folder's contents below. The entity supplies the item rendering
  * (`renderItems`) and the folder mutations; this owns the shell + drag state.
  * Used by Contacts, Companies, and any future entity with folders.
+ *
+ * Every folder starts closed; the open one and the grid/list choice are then
+ * remembered for the session under `storageKey`, so coming back to the screen
+ * lands you where you left off instead of resetting.
  */
 export function FolderExplorer<T extends { id: string }>({
+  storageKey,
   columns,
   labels,
   onCreateFolder,
@@ -62,6 +68,8 @@ export function FolderExplorer<T extends { id: string }>({
   onMoveItem,
   renderItems,
 }: {
+  /** Distinguishes this explorer's session memory (e.g. "contacts"). */
+  storageKey: string;
   columns: FolderColumn<T>[];
   labels: ExplorerLabels;
   onCreateFolder: (name: string) => Promise<unknown> | void;
@@ -73,12 +81,16 @@ export function FolderExplorer<T extends { id: string }>({
   const router = useRouter();
   const confirm = useConfirm();
   const [cols, setCols] = useState(columns);
-  const [view, setView] = useState<"grid" | "list">("grid");
+  const [view, setView] = useSessionState<"grid" | "list">(`explorer:${storageKey}:view`, "grid");
   const [dragId, setDragId] = useState<string | null>(null);
   const [overTile, setOverTile] = useState<string | null>(null);
   // `undefined` = no folder open (closed); `null` = the "unfiled" folder is open;
-  // a string = that folder is open. Double-click toggles open/closed.
-  const [openId, setOpenId] = useState<string | null | undefined>(null);
+  // a string = that folder is open. Double-click toggles open/closed. Starts
+  // closed, then the session's last open folder (if any) is restored on mount.
+  const [openId, setOpenId] = useSessionState<string | null | undefined>(
+    `explorer:${storageKey}:open`,
+    undefined,
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
