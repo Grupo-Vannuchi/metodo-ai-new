@@ -1012,6 +1012,8 @@
       "creating": "Criando…",
       "cancel": "Cancelar",
       "emptyColumn": "Arraste cards para cá",
+      "renameStage": "Nome do estágio",
+      "renameStageHint": "Duplo clique para renomear",
       "columnTotal": "Total: {total}",
       "open": "Abrir",
       "openHint": "Clique para abrir",

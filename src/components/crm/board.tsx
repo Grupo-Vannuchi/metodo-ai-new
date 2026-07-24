@@ -5,8 +5,10 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { moveOpportunity } from "@/app/actions/opportunities";
+import { updateStage } from "@/app/actions/pipelines";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { useRealtime } from "@/components/app/realtime-provider";
+import { Input } from "@/components/ui/field";
 import type { BoardColumn } from "@/lib/queries/crm";
 
 const brl = new Intl.NumberFormat("pt-BR", {
@@ -20,6 +22,9 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
   const [cols, setCols] = useState(columns);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
+  // Stage being renamed inline (double-click on its name) + the draft value.
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const [, start] = useTransition();
 
   // Adopt fresh server data when the prop changes (after router.refresh
@@ -72,6 +77,21 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
     });
   }
 
+  /** Commit an inline stage rename (optimistic, then reconcile with the server).
+   * `probability` is sent unchanged — the action writes both fields, so leaving
+   * it out would silently reset the stage's probability to 0. */
+  function saveRename(col: BoardColumn) {
+    const name = renameValue.trim();
+    setRenamingId(null);
+    if (!name || name === col.name) return;
+
+    setCols((prev) => prev.map((c) => (c.id === col.id ? { ...c, name } : c)));
+    start(async () => {
+      await updateStage(col.id, { name, probability: col.probability });
+      router.refresh();
+    });
+  }
+
   const lastIndex = cols.length - 1;
 
   return (
@@ -95,11 +115,42 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
                 <div className={cn("h-0.5 flex-1 bg-border", i === lastIndex && "opacity-0")} />
               </div>
 
-              <div className="mb-3 mt-2 flex items-center justify-center gap-2 text-center">
-                <span className="text-sm font-semibold">{col.name}</span>
-                <span className="rounded-full bg-card px-2 py-0.5 text-xs text-muted-foreground">
-                  {col.cards.length}
-                </span>
+              <div className="mb-3 mt-2 flex items-center justify-center gap-2 px-2 text-center">
+                {renamingId === col.id ? (
+                  <form
+                    className="w-full"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      saveRename(col);
+                    }}
+                  >
+                    <Input
+                      autoFocus
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onBlur={() => saveRename(col)}
+                      onKeyDown={(e) => e.key === "Escape" && setRenamingId(null)}
+                      aria-label={t("renameStage")}
+                      className="h-7 px-2 text-center text-sm font-semibold"
+                    />
+                  </form>
+                ) : (
+                  <>
+                    <span
+                      onDoubleClick={() => {
+                        setRenameValue(col.name);
+                        setRenamingId(col.id);
+                      }}
+                      title={t("renameStageHint")}
+                      className="cursor-text select-none truncate text-sm font-semibold transition-colors hover:text-brand"
+                    >
+                      {col.name}
+                    </span>
+                    <span className="shrink-0 rounded-full bg-card px-2 py-0.5 text-xs text-muted-foreground">
+                      {col.cards.length}
+                    </span>
+                  </>
+                )}
               </div>
 
               {/* Tall droppable card area (inset so columns don't touch). */}

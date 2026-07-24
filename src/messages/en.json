@@ -1012,6 +1012,8 @@
       "creating": "Creating…",
       "cancel": "Cancel",
       "emptyColumn": "Drag cards here",
+      "renameStage": "Stage name",
+      "renameStageHint": "Double-click to rename",
       "columnTotal": "Total: {total}",
       "open": "Open",
       "openHint": "Click to open",
