@@ -358,6 +358,12 @@
     "search": "Search conversation…",
     "noResults": "No conversations found.",
     "composerPlaceholder": "Type a message…",
+    "quickReplies": {
+      "button": "Quick replies",
+      "title": "Quick replies",
+      "empty": "No quick replies yet.",
+      "manage": "Manage"
+    },
     "send": "Send",
     "viewContact": "View contact",
     "contactInfo": "Contact details",

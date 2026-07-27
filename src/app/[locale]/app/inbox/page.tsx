@@ -3,6 +3,7 @@ import { requireOrgContext } from "@/lib/tenant";
 import { requireScreen } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { listConversations, listConversationFolders } from "@/lib/queries/inbox";
+import { listQuickReplies } from "@/lib/queries/quick-replies";
 import { InboxClient } from "@/components/inbox/inbox-client";
 import { TeamChatClient } from "@/components/inbox/team-chat-client";
 import { ExportMenu } from "@/components/inbox/export-menu";
@@ -30,7 +31,7 @@ export default async function InboxPage({
 
   const { c, chat, mode = "whatsapp" } = await searchParams;
 
-  const [conversations, folders, teamMembers, teamChats, teamFolders] = await Promise.all([
+  const [conversations, folders, teamMembers, teamChats, teamFolders, quickReplies] = await Promise.all([
     mode === "whatsapp"
       ? listConversations(ctx.organizationId, { userId: ctx.userId, role: ctx.role })
       : Promise.resolve([]),
@@ -38,6 +39,7 @@ export default async function InboxPage({
     mode === "team" ? listTeamMembers(ctx.organizationId) : Promise.resolve([]),
     mode === "team" ? listTeamChats(ctx.organizationId, ctx.userId) : Promise.resolve([]),
     mode === "team" ? listTeamChatFolders(ctx.organizationId) : Promise.resolve([]),
+    mode === "whatsapp" ? listQuickReplies(ctx.organizationId) : Promise.resolve([]),
   ]);
 
   const exportGroups = conversations
@@ -117,6 +119,7 @@ export default async function InboxPage({
               initial={conversations}
               initialFolders={folders}
               initialSelectedId={c ?? null}
+              quickReplies={quickReplies}
             />
           ) : (
             <TeamChatClient

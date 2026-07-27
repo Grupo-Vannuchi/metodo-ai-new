@@ -37,6 +37,8 @@ import { usePrompt } from "@/components/ui/prompt";
 import { Avatar } from "@/components/app/avatar";
 import { useRealtime } from "@/components/app/realtime-provider";
 import { MessageMedia, MEDIA_TYPES } from "@/components/inbox/message-media";
+import { QuickReplies } from "@/components/inbox/quick-replies";
+import type { QuickReply } from "@/lib/queries/quick-replies";
 import {
   markConversationRead,
   sendMessage,
@@ -135,10 +137,12 @@ export function InboxClient({
   initial,
   initialFolders,
   initialSelectedId,
+  quickReplies = [],
 }: {
   initial: Conversation[];
   initialFolders: Folder[];
   initialSelectedId?: string | null;
+  quickReplies?: QuickReply[];
 }) {
   const t = useTranslations("inbox");
   const confirm = useConfirm();
@@ -357,6 +361,18 @@ export function InboxClient({
   }, [showContact, selectedId, conversations]);
 
   const selected = conversations.find((c) => c.id === selectedId) ?? null;
+
+  /** Insert a canned reply into the composer, resolving {nome}/{primeiro_nome}
+   * against the open conversation. Appends to whatever is already typed. */
+  function insertQuickReply(body: string) {
+    const name = selected ? displayName(selected) : "";
+    const first = name.trim().split(/\s+/)[0] ?? "";
+    const rendered = body
+      .replace(/\{\s*(nome|name)\s*\}/gi, name)
+      .replace(/\{\s*(primeiro[_ ]?nome|first[_ ]?name)\s*\}/gi, first);
+    setDraft((prev) => (prev.trim() ? `${prev}\n${rendered}` : rendered));
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }
 
   const filtered = search.trim()
     ? conversations.filter((c) => {
@@ -894,6 +910,7 @@ export function InboxClient({
               >
                 {uploading ? <Spinner className="size-4" /> : <Paperclip className="size-4" />}
               </button>
+              <QuickReplies replies={quickReplies} onPick={insertQuickReply} />
               <textarea
                 ref={composerRef}
                 value={draft}

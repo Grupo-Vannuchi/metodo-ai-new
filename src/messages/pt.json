@@ -358,6 +358,12 @@
     "search": "Buscar conversa…",
     "noResults": "Nenhuma conversa encontrada.",
     "composerPlaceholder": "Escreva uma mensagem…",
+    "quickReplies": {
+      "button": "Respostas rápidas",
+      "title": "Respostas rápidas",
+      "empty": "Nenhuma resposta rápida ainda.",
+      "manage": "Gerenciar"
+    },
     "send": "Enviar",
     "viewContact": "Ver contato",
     "contactInfo": "Dados do contato",
