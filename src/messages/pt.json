@@ -212,6 +212,7 @@
       "crm": "Funil",
       "proposals": "Propostas",
       "tasks": "Tarefas",
+      "goals": "Metas",
       "automations": "Automações",
       "prospecting": "Prospecção",
       "campaigns": "Campanhas",
@@ -984,7 +985,14 @@
       "save": "Salvar",
       "cancel": "Cancelar",
       "empty": "Nenhum membro na equipe ainda.",
-      "readOnly": "Somente administradores podem definir metas."
+      "readOnly": "Somente administradores podem definir metas.",
+      "prevMonth": "Mês anterior",
+      "nextMonth": "Próximo mês",
+      "chooseMonth": "Escolher mês",
+      "teamTarget": "Meta da equipe",
+      "teamAchieved": "Realizado da equipe",
+      "attainment": "Atingimento",
+      "gap": "Faltam"
     },
     "reports": {
       "title": "Relatórios de vendas",

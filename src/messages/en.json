@@ -212,6 +212,7 @@
       "crm": "Pipeline",
       "proposals": "Proposals",
       "tasks": "Tasks",
+      "goals": "Goals",
       "automations": "Automations",
       "prospecting": "Prospecting",
       "campaigns": "Campaigns",
@@ -984,7 +985,14 @@
       "save": "Save",
       "cancel": "Cancel",
       "empty": "No team members yet.",
-      "readOnly": "Only admins can set goals."
+      "readOnly": "Only admins can set goals.",
+      "prevMonth": "Previous month",
+      "nextMonth": "Next month",
+      "chooseMonth": "Choose month",
+      "teamTarget": "Team target",
+      "teamAchieved": "Team achieved",
+      "attainment": "Attainment",
+      "gap": "Remaining"
     },
     "reports": {
       "title": "Sales reports",

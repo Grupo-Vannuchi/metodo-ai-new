@@ -18,6 +18,7 @@ import {
   UsersRound,
   Settings,
   Workflow,
+  Target,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
@@ -42,6 +43,7 @@ type NavKey =
   | "finance"
   | "hr"
   | "automations"
+  | "goals"
   | "settings";
 type Item = { href: string; key: NavKey; icon: typeof LayoutDashboard };
 type GroupKey = "general" | "crm" | "comms" | "finance" | "hr" | "system";
@@ -65,6 +67,7 @@ const GROUPS: Group[] = [
       { href: "/app/contacts", key: "contacts", icon: Contact },
       { href: "/app/companies", key: "companies", icon: Building2 },
       { href: "/app/tasks", key: "tasks", icon: CheckSquare },
+      { href: "/app/goals", key: "goals", icon: Target },
       { href: "/app/automations", key: "automations", icon: Workflow },
     ],
   },
@@ -105,8 +108,8 @@ export function AppNav({ allowedScreens }: { allowedScreens: string[] }) {
   const canShow = (key: NavKey) =>
     ALWAYS_SHOWN.includes(key) ||
     allowedScreens.includes(key) ||
-    // Automations act on the CRM funnel — show them wherever the CRM is allowed.
-    (key === "automations" && allowedScreens.includes("crm"));
+    // Automations + goals act on the CRM funnel — show wherever the CRM is allowed.
+    ((key === "automations" || key === "goals") && allowedScreens.includes("crm"));
   const isActive = (href: string) => (href === "/app" ? pathname === "/app" : pathname.startsWith(href));
 
   // Live unread badge for the inbox item — pushed by the realtime stream.

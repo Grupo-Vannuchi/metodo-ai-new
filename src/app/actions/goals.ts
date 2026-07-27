@@ -31,7 +31,7 @@ export async function setGoal(input: {
       create: { organizationId: ctx.organizationId, userId, month, targetValue: target },
       update: { targetValue: target },
     });
-    revalidatePath("/app/hr/goals");
+    revalidatePath("/app/goals");
     return { ok: true };
   } catch (error) {
     console.error("setGoal failed", error);
