@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { Pencil, Wallet, FileText } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getOpportunity, listOpportunityAttachments } from "@/lib/queries/crm";
+import { getOpportunityTimeline } from "@/lib/queries/timeline";
+import { OpportunityTimeline } from "@/components/crm/opportunity-timeline";
 import { listMembers } from "@/lib/queries/organizations";
 import { listTasks } from "@/lib/queries/tasks";
 import { entriesForOpportunity } from "@/lib/queries/finance";
@@ -33,12 +35,13 @@ export default async function OpportunityViewPage({
   const tf = await getTranslations("finance");
   const canFinance = hasFeature(ctx.organization.plan as PlanKey, "finance");
 
-  const [opp, rawMembers, tasks, entries, attachments] = await Promise.all([
+  const [opp, rawMembers, tasks, entries, attachments, timeline] = await Promise.all([
     getOpportunity(ctx.organizationId, id),
     listMembers(ctx.organizationId),
     listTasks(ctx.organizationId, { opportunityId: id }),
     canFinance ? entriesForOpportunity(ctx.organizationId, id) : Promise.resolve([]),
     listOpportunityAttachments(ctx.organizationId, id),
+    getOpportunityTimeline(ctx.organizationId, id),
   ]);
   // Anyone can assign a task to any member (users hand tasks to each other).
   const members = rawMembers;
@@ -188,6 +191,8 @@ export default async function OpportunityViewPage({
           currentUserId={ctx.userId}
         />
       </section>
+
+      <OpportunityTimeline events={timeline} locale={locale} />
     </div>
   );
 }

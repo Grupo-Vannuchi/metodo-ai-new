@@ -1215,6 +1215,20 @@
       }
     },
     "opportunity": {
+      "timeline": {
+        "title": "Linha do tempo",
+        "empty": "Sem atividades ainda.",
+        "type": {
+          "created": "Oportunidade criada",
+          "proposal": "Proposta",
+          "task": "Tarefa criada",
+          "task_done": "Tarefa concluída",
+          "attachment": "Anexo adicionado",
+          "won": "Ganha",
+          "lost": "Perdida",
+          "canceled": "Cancelada"
+        }
+      },
       "back": "Voltar",
       "editTitle": "Editar oportunidade",
       "edit": "Editar",

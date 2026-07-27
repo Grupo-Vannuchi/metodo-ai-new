@@ -1215,6 +1215,20 @@
       }
     },
     "opportunity": {
+      "timeline": {
+        "title": "Timeline",
+        "empty": "No activity yet.",
+        "type": {
+          "created": "Opportunity created",
+          "proposal": "Proposal",
+          "task": "Task created",
+          "task_done": "Task completed",
+          "attachment": "Attachment added",
+          "won": "Won",
+          "lost": "Lost",
+          "canceled": "Canceled"
+        }
+      },
       "back": "Back",
       "editTitle": "Edit opportunity",
       "edit": "Edit",
