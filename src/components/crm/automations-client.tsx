@@ -346,8 +346,8 @@ export function AutomationsClient({
                 </div>
                 {canEdit ? (
                   <div className="flex shrink-0 items-center gap-1">
-                    <button type="button" role="switch" aria-checked={rule.enabled} onClick={() => toggle(rule.id, !rule.enabled)} disabled={pending} className={cn("relative h-5 w-9 rounded-full transition-colors", rule.enabled ? "bg-brand" : "bg-muted")} aria-label={t("enabled")}>
-                      <span className={cn("absolute top-0.5 size-4 rounded-full bg-white transition-transform", rule.enabled ? "translate-x-4" : "translate-x-0.5")} />
+                    <button type="button" role="switch" aria-checked={rule.enabled} onClick={() => toggle(rule.id, !rule.enabled)} disabled={pending} className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", rule.enabled ? "bg-brand" : "bg-muted")} aria-label={t("enabled")}>
+                      <span className={cn("absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform", rule.enabled ? "translate-x-4" : "translate-x-0")} />
                     </button>
                     <button type="button" onClick={() => open(rule)} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={t("edit")}><Pencil className="size-4" /></button>
                     <button type="button" onClick={() => remove(rule.id)} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-red-600" aria-label={t("delete")}><Trash2 className="size-4" /></button>
