@@ -914,6 +914,45 @@
       "deleted": "Deleted",
       "deletedN": "{count} items deleted"
     },
+    "automations": {
+      "title": "Automations",
+      "subtitle": "\"When something happens → do this\" rules for the funnel.",
+      "back": "Back to funnel",
+      "newRule": "New rule",
+      "name": "Rule name",
+      "namePlaceholder": "e.g. Welcome when entering Negotiation",
+      "when": "When",
+      "then": "Do",
+      "stage": "Stage",
+      "chooseStage": "Choose a stage…",
+      "taskTitlePlaceholder": "Task title",
+      "noTemplates": "No WhatsApp templates",
+      "removeAction": "Remove action",
+      "enabled": "Enabled",
+      "edit": "Edit",
+      "delete": "Delete",
+      "save": "Save",
+      "cancel": "Cancel",
+      "confirmDelete": "Delete this rule?",
+      "empty": "No automations yet. Create the first one above.",
+      "readOnly": "Only admins can edit automations.",
+      "trigger": {
+        "stage_entered": "Enters a stage",
+        "opportunity_won": "Opportunity won",
+        "opportunity_lost": "Opportunity lost"
+      },
+      "action": {
+        "create_task": "Create task",
+        "notify_owner": "Notify owner",
+        "send_whatsapp": "Send WhatsApp"
+      },
+      "err": {
+        "invalid": "Fill in the name, trigger and at least one action.",
+        "forbidden": "Not allowed.",
+        "unauthorized": "Session expired.",
+        "unknown": "Something went wrong."
+      }
+    },
     "goals": {
       "title": "Goals",
       "subtitle": "Won-value target per salesperson — {month}.",
@@ -1145,6 +1184,7 @@
       "closedLink": "Closed",
       "reportsLink": "Reports",
       "goalsLink": "Goals",
+      "automationsLink": "Automations",
       "back": "Back to funnel",
       "noStages": "This funnel has no stages.",
       "pipelineLabel": "Funnel",

@@ -378,6 +378,27 @@ model Goal {
   @@map("goals")
 }
 
+/// A "when X → do Y" rule for the CRM. Fires when an opportunity enters a stage
+/// or is won/lost, then runs its ordered actions (create task, notify owner,
+/// send a WhatsApp template). Scoped by a bare `organizationId` scalar.
+model AutomationRule {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  enabled        Boolean  @default(true)
+  /// "stage_entered" | "opportunity_won" | "opportunity_lost"
+  trigger        String
+  /// The stage that fires a "stage_entered" rule (null for won/lost).
+  triggerStageId String?
+  /// Ordered actions: [{ type, ...config }].
+  actions        Json     @default("[]")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, trigger, enabled])
+  @@map("automation_rules")
+}
+
 /// A sales pipeline (a board). Each org gets a default one.
 model Pipeline {
   id             String   @id @default(cuid())

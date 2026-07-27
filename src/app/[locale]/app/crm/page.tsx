@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { getTranslations } from "next-intl/server";
-import { Settings2, Plus, Package, Archive, BarChart3, Target } from "lucide-react";
+import { Settings2, Plus, Package, Archive, BarChart3, Target, Workflow } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import {
   getBoard,
@@ -97,6 +97,10 @@ export default async function CrmPage({
           <Link href="/app/crm/goals" className={buttonVariants({ variant: "outline" })}>
             <Target className="size-4" />
             {t("goalsLink")}
+          </Link>
+          <Link href="/app/crm/automations" className={buttonVariants({ variant: "outline" })}>
+            <Workflow className="size-4" />
+            {t("automationsLink")}
           </Link>
           <Link href="/app/crm/closed" className={buttonVariants({ variant: "outline" })}>
             <Archive className="size-4" />

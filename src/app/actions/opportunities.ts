@@ -5,6 +5,7 @@ import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { deleteMedia } from "@/lib/storage/blob";
+import { runAutomations } from "@/lib/automation/engine";
 import {
   opportunitySchema,
   moveOpportunitySchema,
@@ -151,7 +152,7 @@ export async function moveOpportunity(
     const [opp, stage] = await Promise.all([
       db.opportunity.findFirst({
         where: { id: parsed.data.opportunityId },
-        select: { id: true },
+        select: { id: true, stageId: true },
       }),
       db.stage.findFirst({
         where: { id: parsed.data.toStageId },
@@ -165,6 +166,10 @@ export async function moveOpportunity(
       where: { id: opp.id },
       data: { stageId: stage.id, pipelineId: stage.pipelineId, order },
     });
+    // Automations: fire only when the stage actually changed (not on reorder).
+    if (opp.stageId !== stage.id) {
+      await runAutomations(ctx.organizationId, { type: "stage_entered", opportunityId: opp.id, stageId: stage.id }, ctx.user.name);
+    }
     revalidatePath("/app/crm");
     return { ok: true };
   } catch (error) {
@@ -189,7 +194,7 @@ export async function updateOpportunity(
     const db = tenantDb(org);
     const [stage, current] = await Promise.all([
       db.stage.findFirst({ where: { id: parsed.data.stageId }, select: { id: true, pipelineId: true } }),
-      db.opportunity.findFirst({ where: { id }, select: { closedAt: true, ownerId: true } }),
+      db.opportunity.findFirst({ where: { id }, select: { closedAt: true, ownerId: true, status: true, stageId: true } }),
     ]);
     if (!stage || !current) return { ok: false, error: "invalid" };
 
@@ -240,6 +245,15 @@ export async function updateOpportunity(
       });
     }
 
+    // Automations: won/lost transitions, or moving between open stages.
+    if (status === "WON" && current.status !== "WON") {
+      await runAutomations(org, { type: "opportunity_won", opportunityId: id }, ctx.user.name);
+    } else if (status === "LOST" && current.status !== "LOST") {
+      await runAutomations(org, { type: "opportunity_lost", opportunityId: id }, ctx.user.name);
+    } else if (stage.id !== current.stageId && (status === "OPEN" || status === "ON_HOLD")) {
+      await runAutomations(org, { type: "stage_entered", opportunityId: id, stageId: stage.id }, ctx.user.name);
+    }
+
     revalidatePath("/app/crm");
     return { ok: true, id };
   } catch (error) {
@@ -271,7 +285,7 @@ export async function setOpportunityStatus(
 
   try {
     const db = tenantDb(ctx.organizationId);
-    const current = await db.opportunity.findFirst({ where: { id }, select: { closedAt: true } });
+    const current = await db.opportunity.findFirst({ where: { id }, select: { closedAt: true, status: true } });
     if (!current) return { ok: false, error: "unknown" };
 
     const closedAt = status === "OPEN" || status === "ON_HOLD" ? null : (current.closedAt ?? new Date());
@@ -282,6 +296,13 @@ export async function setOpportunityStatus(
       data: { status, closedAt, outcomeReason: finalReason },
     });
     if (res.count === 0) return { ok: false, error: "unknown" };
+
+    // Automations: fire on the transition into WON / LOST (not on re-saves).
+    if (status === "WON" && current.status !== "WON") {
+      await runAutomations(ctx.organizationId, { type: "opportunity_won", opportunityId: id }, ctx.user.name);
+    } else if (status === "LOST" && current.status !== "LOST") {
+      await runAutomations(ctx.organizationId, { type: "opportunity_lost", opportunityId: id }, ctx.user.name);
+    }
 
     revalidatePath("/app/crm");
     revalidatePath(`/app/crm/${id}`);

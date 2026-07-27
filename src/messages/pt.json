@@ -914,6 +914,45 @@
       "deleted": "Excluído",
       "deletedN": "{count} itens excluídos"
     },
+    "automations": {
+      "title": "Automações",
+      "subtitle": "Regras \"quando algo acontece → faça isto\" no funil.",
+      "back": "Voltar ao funil",
+      "newRule": "Nova regra",
+      "name": "Nome da regra",
+      "namePlaceholder": "Ex.: Boas-vindas ao entrar em Negociação",
+      "when": "Quando",
+      "then": "Faça",
+      "stage": "Estágio",
+      "chooseStage": "Escolha o estágio…",
+      "taskTitlePlaceholder": "Título da tarefa",
+      "noTemplates": "Nenhum template de WhatsApp",
+      "removeAction": "Remover ação",
+      "enabled": "Ativa",
+      "edit": "Editar",
+      "delete": "Excluir",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "confirmDelete": "Excluir esta regra?",
+      "empty": "Nenhuma automação ainda. Crie a primeira acima.",
+      "readOnly": "Somente administradores podem editar automações.",
+      "trigger": {
+        "stage_entered": "Entrar em um estágio",
+        "opportunity_won": "Oportunidade ganha",
+        "opportunity_lost": "Oportunidade perdida"
+      },
+      "action": {
+        "create_task": "Criar tarefa",
+        "notify_owner": "Notificar responsável",
+        "send_whatsapp": "Enviar WhatsApp"
+      },
+      "err": {
+        "invalid": "Preencha o nome, o gatilho e ao menos uma ação.",
+        "forbidden": "Sem permissão.",
+        "unauthorized": "Sessão expirada.",
+        "unknown": "Algo deu errado."
+      }
+    },
     "goals": {
       "title": "Metas",
       "subtitle": "Meta de valor ganho por vendedor — {month}.",
@@ -1145,6 +1184,7 @@
       "closedLink": "Fechadas",
       "reportsLink": "Relatórios",
       "goalsLink": "Metas",
+      "automationsLink": "Automações",
       "back": "Voltar ao funil",
       "noStages": "Este funil não tem estágios.",
       "pipelineLabel": "Funil",
