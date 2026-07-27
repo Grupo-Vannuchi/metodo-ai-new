@@ -4,6 +4,7 @@ import { requireOrgContext } from "@/lib/tenant";
 import { getCompaniesBoard } from "@/lib/queries/company-folders";
 import { ExportButton } from "@/components/ui/export-button";
 import { CompaniesGrid } from "@/components/crm/companies-grid";
+import { CsvImport } from "@/components/crm/csv-import";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -30,6 +31,7 @@ export default async function CompaniesPage({
           <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
         </div>
         <div className="flex items-center gap-2">
+          <CsvImport entity="companies" />
           <ExportButton endpoint="/api/crm/export" params={{ entity: "companies" }} label={t("export")} />
           <Link href="/app/companies/new" className={buttonVariants()}>
             <Plus className="size-4" />

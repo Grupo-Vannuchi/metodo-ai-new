@@ -900,6 +900,43 @@
       "delete": "Excluir",
       "confirmDelete": "Tem certeza que deseja excluir?"
     },
+    "import": {
+      "button": "Importar CSV",
+      "title": "Importar de planilha (CSV)",
+      "hint": "Selecione um arquivo .csv exportado da sua planilha. A primeira linha deve ser o cabeçalho das colunas.",
+      "choose": "Escolher arquivo…",
+      "parseError": "Não consegui ler este arquivo. Confira se é um CSV válido.",
+      "noRows": "Nenhuma linha encontrada no arquivo.",
+      "mapTitle": "confira as colunas",
+      "ignore": "— ignorar —",
+      "rowsFound": "{n} linha(s)",
+      "previewTitle": "Prévia ({n} de {total})",
+      "needName": "Mapeie ao menos a coluna de nome.",
+      "importBtn": "Importar {n}",
+      "importing": "Importando…",
+      "done": "{created} importado(s), {skipped} ignorado(s) (duplicados ou vazios).",
+      "cancel": "Cancelar",
+      "close": "Fechar",
+      "fields": {
+        "name": "Nome",
+        "email": "E-mail",
+        "phone": "Telefone",
+        "role": "Cargo",
+        "company": "Empresa",
+        "tags": "Tags",
+        "cnpj": "CNPJ",
+        "website": "Site",
+        "city": "Cidade",
+        "uf": "UF",
+        "notes": "Notas"
+      },
+      "err": {
+        "unauthorized": "Sessão expirada.",
+        "empty": "Nenhuma linha para importar.",
+        "too_many": "Máximo de 5000 linhas por importação.",
+        "unknown": "Falha ao importar. Tente novamente."
+      }
+    },
     "companies": {
       "title": "Empresas",
       "subtitle": "Contas e prospects do seu CRM",

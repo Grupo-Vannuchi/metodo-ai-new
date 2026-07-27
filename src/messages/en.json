@@ -900,6 +900,43 @@
       "delete": "Delete",
       "confirmDelete": "Are you sure you want to delete?"
     },
+    "import": {
+      "button": "Import CSV",
+      "title": "Import from spreadsheet (CSV)",
+      "hint": "Pick a .csv file exported from your spreadsheet. The first row must be the column headers.",
+      "choose": "Choose file…",
+      "parseError": "Couldn't read this file. Check that it's a valid CSV.",
+      "noRows": "No rows found in the file.",
+      "mapTitle": "check the columns",
+      "ignore": "— ignore —",
+      "rowsFound": "{n} row(s)",
+      "previewTitle": "Preview ({n} of {total})",
+      "needName": "Map at least the name column.",
+      "importBtn": "Import {n}",
+      "importing": "Importing…",
+      "done": "{created} imported, {skipped} skipped (duplicates or empty).",
+      "cancel": "Cancel",
+      "close": "Close",
+      "fields": {
+        "name": "Name",
+        "email": "Email",
+        "phone": "Phone",
+        "role": "Role",
+        "company": "Company",
+        "tags": "Tags",
+        "cnpj": "Tax ID",
+        "website": "Website",
+        "city": "City",
+        "uf": "State",
+        "notes": "Notes"
+      },
+      "err": {
+        "unauthorized": "Session expired.",
+        "empty": "No rows to import.",
+        "too_many": "Maximum 5000 rows per import.",
+        "unknown": "Import failed. Please try again."
+      }
+    },
     "companies": {
       "title": "Companies",
       "subtitle": "Accounts and prospects in your CRM",
