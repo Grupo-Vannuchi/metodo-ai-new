@@ -37,6 +37,7 @@ export type ExplorerLabels = {
   deleteFolder: string;
   confirmDeleteFolder: string;
   save: string;
+  selectAll: string;
   folderCount: (count: number) => string;
 };
 
@@ -45,6 +46,17 @@ type RenderItemsArgs<T> = {
   view: "grid" | "list";
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
+  /** Multi-select support for the caller's item renderer. */
+  selected: Set<string>;
+  onToggleSelect: (id: string) => void;
+};
+
+/** Context handed to the bulk-action bar shown while a selection is active. */
+export type BulkContext = {
+  ids: string[];
+  /** Folders in this explorer (excluding "unfiled"), for a move-to-folder menu. */
+  folders: { id: string; name: string }[];
+  clear: () => void;
 };
 
 /**
@@ -67,6 +79,7 @@ export function FolderExplorer<T extends { id: string }>({
   onDeleteFolder,
   onMoveItem,
   renderItems,
+  renderBulkBar,
 }: {
   /** Distinguishes this explorer's session memory (e.g. "contacts"). */
   storageKey: string;
@@ -77,6 +90,8 @@ export function FolderExplorer<T extends { id: string }>({
   onDeleteFolder: (id: string) => Promise<unknown> | void;
   onMoveItem: (itemId: string, folderId: string | null) => Promise<unknown> | void;
   renderItems: (args: RenderItemsArgs<T>) => React.ReactNode;
+  /** Optional bulk-action bar, shown while items are selected. */
+  renderBulkBar?: (ctx: BulkContext) => React.ReactNode;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -92,6 +107,8 @@ export function FolderExplorer<T extends { id: string }>({
     undefined,
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Multi-select within the open folder (for bulk actions).
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -105,11 +122,34 @@ export function FolderExplorer<T extends { id: string }>({
     setCols(columns);
   }
 
+  // A selection only makes sense within the folder that's open, so switching
+  // folders (or closing) clears it — acting on hidden items would surprise.
+  const [prevOpen, setPrevOpen] = useState(openId);
+  if (prevOpen !== openId) {
+    setPrevOpen(openId);
+    if (selected.size) setSelected(new Set());
+  }
+
   const keyOf = (id: string | null) => id ?? "__root__";
   const root = cols.find((c) => c.id === null) ?? { id: null, name: "", items: [] as T[] };
   const folders = cols.filter((c) => c.id !== null);
   // When closed (openId === undefined) nothing is shown below the tiles.
   const openCol = openId === undefined ? undefined : cols.find((c) => c.id === openId) ?? undefined;
+
+  const clearSelection = () => setSelected(new Set());
+  const toggleSelect = (id: string) =>
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const folderItemIds = openCol ? openCol.items.map((i) => i.id) : [];
+  const allSelected = folderItemIds.length > 0 && folderItemIds.every((id) => selected.has(id));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(folderItemIds));
+  // Drop ids that vanished after a refresh (deleted/moved out) so the bar count
+  // stays honest.
+  const selectedIds = folderItemIds.filter((id) => selected.has(id));
 
   function onDrop(toId: string | null) {
     setOverTile(null);
@@ -317,14 +357,43 @@ export function FolderExplorer<T extends { id: string }>({
           className={cn("glass rounded-xl border p-4 shadow-sm transition-colors", overTile === keyOf(openCol.id) ? "border-brand" : "border-border")}
         >
           <div className="mb-3 flex items-center gap-2">
+            {renderBulkBar && openCol.items.length > 0 ? (
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAll}
+                aria-label={labels.selectAll}
+                title={labels.selectAll}
+                className="size-4 shrink-0 cursor-pointer accent-[var(--brand)]"
+              />
+            ) : null}
             {openCol.id === null ? <Inbox className="size-4 text-muted-foreground" /> : <FolderOpen className="size-4 text-brand" />}
             <h2 className="text-sm font-semibold">{openCol.id === null ? labels.unfiled : openCol.name}</h2>
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{labels.folderCount(openCol.items.length)}</span>
           </div>
+
+          {/* Bulk-action bar — only while a selection is active. */}
+          {renderBulkBar && selectedIds.length > 0 ? (
+            <div className="mb-3">
+              {renderBulkBar({
+                ids: selectedIds,
+                folders: folders.map((f) => ({ id: f.id as string, name: f.name })),
+                clear: clearSelection,
+              })}
+            </div>
+          ) : null}
+
           {openCol.items.length === 0 ? (
             <p className="rounded-lg border border-dashed border-border px-3 py-8 text-center text-sm text-muted-foreground">{labels.emptyFolder}</p>
           ) : (
-            renderItems({ items: openCol.items, view, onDragStart: setDragId, onDragEnd: () => setDragId(null) })
+            renderItems({
+              items: openCol.items,
+              view,
+              onDragStart: setDragId,
+              onDragEnd: () => setDragId(null),
+              selected,
+              onToggleSelect: toggleSelect,
+            })
           )}
         </section>
       ) : (

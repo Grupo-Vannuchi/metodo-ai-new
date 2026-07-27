@@ -898,7 +898,20 @@
     "common": {
       "edit": "Edit",
       "delete": "Delete",
-      "confirmDelete": "Are you sure you want to delete?"
+      "confirmDelete": "Are you sure you want to delete?",
+      "select": "Select",
+      "selectAll": "Select all"
+    },
+    "bulk": {
+      "selected": "{count} selected",
+      "moveTo": "Move to…",
+      "unfiled": "No folder",
+      "tag": "Tag",
+      "addTag": "Apply",
+      "tagPlaceholder": "New tag",
+      "delete": "Delete",
+      "confirmDelete": "Delete {count} item(s)? This can't be undone.",
+      "clear": "Clear selection"
     },
     "import": {
       "button": "Import CSV",

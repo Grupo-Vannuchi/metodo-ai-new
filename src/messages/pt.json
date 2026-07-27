@@ -898,7 +898,20 @@
     "common": {
       "edit": "Editar",
       "delete": "Excluir",
-      "confirmDelete": "Tem certeza que deseja excluir?"
+      "confirmDelete": "Tem certeza que deseja excluir?",
+      "select": "Selecionar",
+      "selectAll": "Selecionar tudo"
+    },
+    "bulk": {
+      "selected": "{count} selecionado(s)",
+      "moveTo": "Mover para…",
+      "unfiled": "Sem pasta",
+      "tag": "Marcar",
+      "addTag": "Aplicar",
+      "tagPlaceholder": "Nova tag",
+      "delete": "Excluir",
+      "confirmDelete": "Excluir {count} item(ns)? Esta ação não pode ser desfeita.",
+      "clear": "Limpar seleção"
     },
     "import": {
       "button": "Importar CSV",

@@ -4,16 +4,19 @@ import { useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { Trash2, Phone, Mail, MapPin, Building2 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
+import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/ui/confirm";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { FolderExplorer, type FolderColumn, type ExplorerLabels } from "@/components/crm/folder-explorer";
+import { BulkBar } from "@/components/crm/bulk-bar";
 import { createCompanyFolder, renameCompanyFolder, deleteCompanyFolder, moveCompanyToFolder } from "@/app/actions/company-folders";
 import { deleteCompany } from "@/app/actions/companies";
+import { bulkDeleteCompanies, bulkMoveCompanies } from "@/app/actions/bulk";
 import type { CompanyCard, CompanyColumn } from "@/lib/queries/company-folders";
 
 const GRID_CLS = "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]";
 
-type ListLabels = { name: string; cnpj: string; city: string; email: string };
+type ListLabels = { name: string; cnpj: string; city: string; email: string; select: string };
 
 /** A folder's companies as summary cards (grid) or a detailed list. */
 function CompanyList({
@@ -25,6 +28,8 @@ function CompanyList({
   onDelete,
   deleteLabel,
   labels,
+  selected,
+  onToggleSelect,
 }: {
   companies: CompanyCard[];
   view: "grid" | "list";
@@ -34,11 +39,23 @@ function CompanyList({
   onDelete: (id: string) => void;
   deleteLabel: string;
   labels: ListLabels;
+  selected: Set<string>;
+  onToggleSelect: (id: string) => void;
 }) {
   const openCard = (e: React.MouseEvent, id: string) => {
-    if ((e.target as HTMLElement).closest("button, a")) return;
+    if ((e.target as HTMLElement).closest("button, a, input")) return;
     onOpen(id);
   };
+  const checkbox = (id: string) => (
+    <input
+      type="checkbox"
+      checked={selected.has(id)}
+      onChange={() => onToggleSelect(id)}
+      onClick={(e) => e.stopPropagation()}
+      aria-label={labels.select}
+      className="size-4 shrink-0 cursor-pointer accent-[var(--brand)]"
+    />
+  );
   const actions = (card: CompanyCard) => (
     <div className="flex shrink-0 items-center" onPointerDown={(e) => e.stopPropagation()}>
       {card.phone ? <StartChatButton phone={card.phone} name={card.name} iconOnly /> : null}
@@ -71,8 +88,12 @@ function CompanyList({
               onDragStart={() => onDragStart(card.id)}
               onDragEnd={onDragEnd}
               onClick={(e) => openCard(e, card.id)}
-              className="flex cursor-pointer select-none items-center gap-3 border-b border-border px-3 py-2 transition-colors last:border-0 hover:bg-muted/40 active:cursor-grabbing"
+              className={cn(
+                "flex cursor-pointer select-none items-center gap-3 border-b border-border px-3 py-2 transition-colors last:border-0 hover:bg-muted/40 active:cursor-grabbing",
+                selected.has(card.id) && "bg-brand/5",
+              )}
             >
+              {checkbox(card.id)}
               <div className="flex min-w-0 flex-1 items-center gap-2.5">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
                   <Building2 className="size-4" />
@@ -99,9 +120,13 @@ function CompanyList({
           onDragStart={() => onDragStart(card.id)}
           onDragEnd={onDragEnd}
           onClick={(e) => openCard(e, card.id)}
-          className="hover-lift cursor-pointer select-none rounded-xl border border-border bg-card p-3 shadow-sm active:cursor-grabbing"
+          className={cn(
+            "hover-lift cursor-pointer select-none rounded-xl border bg-card p-3 shadow-sm active:cursor-grabbing",
+            selected.has(card.id) ? "border-brand ring-1 ring-brand" : "border-border",
+          )}
         >
           <div className="flex items-start gap-3">
+            <div className="pt-0.5">{checkbox(card.id)}</div>
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
               <Building2 className="size-5" />
             </span>
@@ -162,9 +187,10 @@ export function CompaniesGrid({ columns }: { columns: CompanyColumn[] }) {
     deleteFolder: t("deleteFolder"),
     confirmDeleteFolder: t("confirmDeleteFolder"),
     save: t("save"),
+    selectAll: tc("selectAll"),
     folderCount: (count) => t("folderCount", { count }),
   };
-  const listLabels: ListLabels = { name: t("name"), cnpj: t("cnpj"), city: t("city"), email: t("email") };
+  const listLabels: ListLabels = { name: t("name"), cnpj: t("cnpj"), city: t("city"), email: t("email"), select: tc("select") };
 
   async function onDeleteCompany(id: string) {
     if (!(await confirm({ description: tc("confirmDelete"), confirmLabel: tc("delete"), variant: "danger" }))) return;
@@ -183,7 +209,7 @@ export function CompaniesGrid({ columns }: { columns: CompanyColumn[] }) {
       onRenameFolder={(id, name) => renameCompanyFolder(id, { name })}
       onDeleteFolder={(id) => deleteCompanyFolder(id)}
       onMoveItem={(id, folderId) => moveCompanyToFolder(id, folderId)}
-      renderItems={({ items, view, onDragStart, onDragEnd }) => (
+      renderItems={({ items, view, onDragStart, onDragEnd, selected, onToggleSelect }) => (
         <CompanyList
           companies={items}
           view={view}
@@ -193,6 +219,25 @@ export function CompaniesGrid({ columns }: { columns: CompanyColumn[] }) {
           onDelete={onDeleteCompany}
           deleteLabel={tc("delete")}
           labels={listLabels}
+          selected={selected}
+          onToggleSelect={onToggleSelect}
+        />
+      )}
+      renderBulkBar={({ ids, folders, clear }) => (
+        <BulkBar
+          count={ids.length}
+          folders={folders}
+          onMove={async (folderId) => {
+            await bulkMoveCompanies(ids, folderId);
+            clear();
+            router.refresh();
+          }}
+          onDelete={async () => {
+            await bulkDeleteCompanies(ids);
+            clear();
+            router.refresh();
+          }}
+          onClear={clear}
         />
       )}
     />

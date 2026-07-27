@@ -4,17 +4,20 @@ import { useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { Trash2, Phone, Mail, Building2 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
+import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/app/avatar";
 import { useConfirm } from "@/components/ui/confirm";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { FolderExplorer, type FolderColumn, type ExplorerLabels } from "@/components/crm/folder-explorer";
+import { BulkBar } from "@/components/crm/bulk-bar";
 import { createFolder, renameFolder, deleteFolder, moveContactToFolder } from "@/app/actions/contact-folders";
 import { deleteContact } from "@/app/actions/contacts";
+import { bulkDeleteContacts, bulkMoveContacts, bulkTagContacts } from "@/app/actions/bulk";
 import type { ContactCard, ContactColumn } from "@/lib/queries/contact-folders";
 
 const GRID_CLS = "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]";
 
-type ListLabels = { name: string; company: string; phone: string; email: string };
+type ListLabels = { name: string; company: string; phone: string; email: string; select: string };
 
 /** A folder's contacts as summary cards (grid) or a detailed list. */
 function ContactList({
@@ -26,6 +29,8 @@ function ContactList({
   onDelete,
   deleteLabel,
   labels,
+  selected,
+  onToggleSelect,
 }: {
   contacts: ContactCard[];
   view: "grid" | "list";
@@ -35,11 +40,23 @@ function ContactList({
   onDelete: (id: string) => void;
   deleteLabel: string;
   labels: ListLabels;
+  selected: Set<string>;
+  onToggleSelect: (id: string) => void;
 }) {
   const openCard = (e: React.MouseEvent, id: string) => {
-    if ((e.target as HTMLElement).closest("button, a")) return;
+    if ((e.target as HTMLElement).closest("button, a, input")) return;
     onOpen(id);
   };
+  const checkbox = (id: string) => (
+    <input
+      type="checkbox"
+      checked={selected.has(id)}
+      onChange={() => onToggleSelect(id)}
+      onClick={(e) => e.stopPropagation()}
+      aria-label={labels.select}
+      className="size-4 shrink-0 cursor-pointer accent-[var(--brand)]"
+    />
+  );
   const actions = (card: ContactCard) => (
     <div className="flex shrink-0 items-center" onPointerDown={(e) => e.stopPropagation()}>
       {card.phone ? <StartChatButton phone={card.phone} name={card.name} contactId={card.id} iconOnly /> : null}
@@ -72,8 +89,12 @@ function ContactList({
               onDragStart={() => onDragStart(card.id)}
               onDragEnd={onDragEnd}
               onClick={(e) => openCard(e, card.id)}
-              className="flex cursor-pointer select-none items-center gap-3 border-b border-border px-3 py-2 transition-colors last:border-0 hover:bg-muted/40 active:cursor-grabbing"
+              className={cn(
+                "flex cursor-pointer select-none items-center gap-3 border-b border-border px-3 py-2 transition-colors last:border-0 hover:bg-muted/40 active:cursor-grabbing",
+                selected.has(card.id) && "bg-brand/5",
+              )}
             >
+              {checkbox(card.id)}
               <div className="flex min-w-0 flex-1 items-center gap-2.5">
                 <Avatar name={card.name} className="size-8 shrink-0 text-xs" />
                 <span className="truncate text-sm font-medium">{card.name}</span>
@@ -98,9 +119,13 @@ function ContactList({
           onDragStart={() => onDragStart(card.id)}
           onDragEnd={onDragEnd}
           onClick={(e) => openCard(e, card.id)}
-          className="hover-lift cursor-pointer select-none rounded-xl border border-border bg-card p-3 shadow-sm active:cursor-grabbing"
+          className={cn(
+            "hover-lift cursor-pointer select-none rounded-xl border bg-card p-3 shadow-sm active:cursor-grabbing",
+            selected.has(card.id) ? "border-brand ring-1 ring-brand" : "border-border",
+          )}
         >
           <div className="flex items-start gap-3">
+            <div className="pt-0.5">{checkbox(card.id)}</div>
             <Avatar name={card.name} className="size-10 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{card.name}</p>
@@ -158,9 +183,10 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
     deleteFolder: t("deleteFolder"),
     confirmDeleteFolder: t("confirmDeleteFolder"),
     save: t("save"),
+    selectAll: tc("selectAll"),
     folderCount: (count) => t("folderCount", { count }),
   };
-  const listLabels: ListLabels = { name: t("name"), company: t("company"), phone: t("phone"), email: t("email") };
+  const listLabels: ListLabels = { name: t("name"), company: t("company"), phone: t("phone"), email: t("email"), select: tc("select") };
 
   async function onDeleteContact(id: string) {
     if (!(await confirm({ description: tc("confirmDelete"), confirmLabel: tc("delete"), variant: "danger" }))) return;
@@ -179,7 +205,7 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
       onRenameFolder={(id, name) => renameFolder(id, { name })}
       onDeleteFolder={(id) => deleteFolder(id)}
       onMoveItem={(id, folderId) => moveContactToFolder(id, folderId)}
-      renderItems={({ items, view, onDragStart, onDragEnd }) => (
+      renderItems={({ items, view, onDragStart, onDragEnd, selected, onToggleSelect }) => (
         <ContactList
           contacts={items}
           view={view}
@@ -189,6 +215,30 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
           onDelete={onDeleteContact}
           deleteLabel={tc("delete")}
           labels={listLabels}
+          selected={selected}
+          onToggleSelect={onToggleSelect}
+        />
+      )}
+      renderBulkBar={({ ids, folders, clear }) => (
+        <BulkBar
+          count={ids.length}
+          folders={folders}
+          onMove={async (folderId) => {
+            await bulkMoveContacts(ids, folderId);
+            clear();
+            router.refresh();
+          }}
+          onTag={async (tag) => {
+            await bulkTagContacts(ids, tag);
+            clear();
+            router.refresh();
+          }}
+          onDelete={async () => {
+            await bulkDeleteContacts(ids);
+            clear();
+            router.refresh();
+          }}
+          onClear={clear}
         />
       )}
     />
