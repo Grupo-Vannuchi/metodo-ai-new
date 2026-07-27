@@ -10,14 +10,14 @@ import { useUndo } from "@/components/ui/undo";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { FolderExplorer, type FolderColumn, type ExplorerLabels } from "@/components/crm/folder-explorer";
 import { BulkBar } from "@/components/crm/bulk-bar";
-import { createFolder, renameFolder, deleteFolder, moveContactToFolder } from "@/app/actions/contact-folders";
+import { createFolder, renameFolder, deleteFolder } from "@/app/actions/contact-folders";
 import { deleteContact } from "@/app/actions/contacts";
 import { bulkDeleteContacts, bulkMoveContacts, bulkTagContacts } from "@/app/actions/bulk";
 import type { ContactCard, ContactColumn } from "@/lib/queries/contact-folders";
 
 const GRID_CLS = "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]";
 
-type ListLabels = { name: string; company: string; phone: string; email: string; select: string };
+type ListLabels = { name: string; company: string; phone: string; email: string };
 
 /** A folder's contacts as summary cards (grid) or a detailed list. */
 function ContactList({
@@ -30,7 +30,6 @@ function ContactList({
   deleteLabel,
   labels,
   selected,
-  onToggleSelect,
 }: {
   contacts: ContactCard[];
   view: "grid" | "list";
@@ -41,22 +40,11 @@ function ContactList({
   deleteLabel: string;
   labels: ListLabels;
   selected: Set<string>;
-  onToggleSelect: (id: string) => void;
 }) {
   const openCard = (e: React.MouseEvent, id: string) => {
-    if ((e.target as HTMLElement).closest("button, a, input")) return;
+    if ((e.target as HTMLElement).closest("button, a")) return;
     onOpen(id);
   };
-  const checkbox = (id: string) => (
-    <input
-      type="checkbox"
-      checked={selected.has(id)}
-      onChange={() => onToggleSelect(id)}
-      onClick={(e) => e.stopPropagation()}
-      aria-label={labels.select}
-      className="size-4 shrink-0 cursor-pointer accent-[var(--brand)]"
-    />
-  );
   const actions = (card: ContactCard) => (
     <div className="flex shrink-0 items-center" onPointerDown={(e) => e.stopPropagation()}>
       {card.phone ? <StartChatButton phone={card.phone} name={card.name} contactId={card.id} iconOnly /> : null}
@@ -95,7 +83,6 @@ function ContactList({
                 selected.has(card.id) && "bg-brand/5",
               )}
             >
-              {checkbox(card.id)}
               <div className="flex min-w-0 flex-1 items-center gap-2.5">
                 <Avatar name={card.name} className="size-8 shrink-0 text-xs" />
                 <span className="truncate text-sm font-medium">{card.name}</span>
@@ -127,7 +114,6 @@ function ContactList({
           )}
         >
           <div className="flex items-start gap-3">
-            <div className="pt-0.5">{checkbox(card.id)}</div>
             <Avatar name={card.name} className="size-10 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{card.name}</p>
@@ -220,7 +206,7 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
     dragHint: tc("dragHint"),
     folderCount: (count) => t("folderCount", { count }),
   };
-  const listLabels: ListLabels = { name: t("name"), company: t("company"), phone: t("phone"), email: t("email"), select: tc("select") };
+  const listLabels: ListLabels = { name: t("name"), company: t("company"), phone: t("phone"), email: t("email") };
 
   const onDeleteContact = (id: string) => deleteWithUndo([id], () => deleteContact(id));
 
@@ -232,8 +218,8 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
       onCreateFolder={(name) => createFolder({ name })}
       onRenameFolder={(id, name) => renameFolder(id, { name })}
       onDeleteFolder={(id) => deleteFolder(id)}
-      onMoveItem={(id, folderId) => moveContactToFolder(id, folderId)}
-      renderItems={({ items, view, onDragStart, onDragEnd, selected, onToggleSelect }) => (
+      onMoveItems={(ids, folderId) => bulkMoveContacts(ids, folderId)}
+      renderItems={({ items, view, onDragStart, onDragEnd, selected }) => (
         <ContactList
           contacts={items}
           view={view}
@@ -244,7 +230,6 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
           deleteLabel={tc("delete")}
           labels={listLabels}
           selected={selected}
-          onToggleSelect={onToggleSelect}
         />
       )}
       renderBulkBar={({ ids, folders, clear }) => (

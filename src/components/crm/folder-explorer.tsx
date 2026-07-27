@@ -46,9 +46,9 @@ type RenderItemsArgs<T> = {
   view: "grid" | "list";
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
-  /** Multi-select support for the caller's item renderer. */
+  /** Which items are currently selected (for highlighting). Selection itself is
+   *  driven by the marquee, not per-item controls. */
   selected: Set<string>;
-  onToggleSelect: (id: string) => void;
 };
 
 /** Context handed to the bulk-action bar shown while a selection is active. */
@@ -77,7 +77,7 @@ export function FolderExplorer<T extends { id: string }>({
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
-  onMoveItem,
+  onMoveItems,
   renderItems,
   renderBulkBar,
 }: {
@@ -88,7 +88,8 @@ export function FolderExplorer<T extends { id: string }>({
   onCreateFolder: (name: string) => Promise<unknown> | void;
   onRenameFolder: (id: string, name: string) => Promise<unknown> | void;
   onDeleteFolder: (id: string) => Promise<unknown> | void;
-  onMoveItem: (itemId: string, folderId: string | null) => Promise<unknown> | void;
+  /** Move one or many items to a folder (`null` = unfiled) in a single call. */
+  onMoveItems: (itemIds: string[], folderId: string | null) => Promise<unknown> | void;
   renderItems: (args: RenderItemsArgs<T>) => React.ReactNode;
   /** Optional bulk-action bar, shown while items are selected. */
   renderBulkBar?: (ctx: BulkContext) => React.ReactNode;
@@ -137,13 +138,6 @@ export function FolderExplorer<T extends { id: string }>({
   const openCol = openId === undefined ? undefined : cols.find((c) => c.id === openId) ?? undefined;
 
   const clearSelection = () => setSelected(new Set());
-  const toggleSelect = (id: string) =>
-    setSelected((s) => {
-      const n = new Set(s);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
-    });
   const folderItemIds = openCol ? openCol.items.map((i) => i.id) : [];
   // Drop ids that vanished after a refresh (deleted/moved out) so the bar count
   // stays honest.
@@ -210,31 +204,37 @@ export function FolderExplorer<T extends { id: string }>({
 
   function onDrop(toId: string | null) {
     setOverTile(null);
-    const id = dragId;
+    const draggedId = dragId;
     setDragId(null);
-    if (!id) return;
+    if (!draggedId) return;
 
-    let from: string | null | undefined;
-    let item: T | undefined;
+    // Dragging a selected item moves the WHOLE selection; dragging an unselected
+    // one moves just it (and clears any stale selection).
+    const ids = selected.has(draggedId) ? [...selectedIds] : [draggedId];
+
+    // Gather the items that actually change folder (skip any already in target).
+    const moving: T[] = [];
+    const movingIds = new Set<string>();
     for (const c of cols) {
-      const found = c.items.find((x) => x.id === id);
-      if (found) {
-        from = c.id;
-        item = found;
-        break;
+      if (c.id === toId) continue;
+      for (const it of c.items) {
+        if (ids.includes(it.id)) {
+          moving.push(it);
+          movingIds.add(it.id);
+        }
       }
     }
-    if (!item || from === toId) return;
+    clearSelection();
+    if (moving.length === 0) return;
 
     setCols((prevCols) =>
       prevCols.map((c) => {
-        if (c.id === from) return { ...c, items: c.items.filter((x) => x.id !== id) };
-        if (c.id === toId) return { ...c, items: [item!, ...c.items] };
-        return c;
+        if (c.id === toId) return { ...c, items: [...moving, ...c.items] };
+        return { ...c, items: c.items.filter((x) => !movingIds.has(x.id)) };
       }),
     );
     start(async () => {
-      await onMoveItem(id, toId);
+      await onMoveItems([...movingIds], toId);
       router.refresh();
     });
   }
@@ -457,7 +457,6 @@ export function FolderExplorer<T extends { id: string }>({
               onDragStart: setDragId,
               onDragEnd: () => setDragId(null),
               selected,
-              onToggleSelect: toggleSelect,
             })
           )}
         </section>

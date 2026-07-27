@@ -9,14 +9,14 @@ import { useUndo } from "@/components/ui/undo";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { FolderExplorer, type FolderColumn, type ExplorerLabels } from "@/components/crm/folder-explorer";
 import { BulkBar } from "@/components/crm/bulk-bar";
-import { createCompanyFolder, renameCompanyFolder, deleteCompanyFolder, moveCompanyToFolder } from "@/app/actions/company-folders";
+import { createCompanyFolder, renameCompanyFolder, deleteCompanyFolder } from "@/app/actions/company-folders";
 import { deleteCompany } from "@/app/actions/companies";
 import { bulkDeleteCompanies, bulkMoveCompanies } from "@/app/actions/bulk";
 import type { CompanyCard, CompanyColumn } from "@/lib/queries/company-folders";
 
 const GRID_CLS = "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]";
 
-type ListLabels = { name: string; cnpj: string; city: string; email: string; select: string };
+type ListLabels = { name: string; cnpj: string; city: string; email: string };
 
 /** A folder's companies as summary cards (grid) or a detailed list. */
 function CompanyList({
@@ -29,7 +29,6 @@ function CompanyList({
   deleteLabel,
   labels,
   selected,
-  onToggleSelect,
 }: {
   companies: CompanyCard[];
   view: "grid" | "list";
@@ -40,22 +39,11 @@ function CompanyList({
   deleteLabel: string;
   labels: ListLabels;
   selected: Set<string>;
-  onToggleSelect: (id: string) => void;
 }) {
   const openCard = (e: React.MouseEvent, id: string) => {
-    if ((e.target as HTMLElement).closest("button, a, input")) return;
+    if ((e.target as HTMLElement).closest("button, a")) return;
     onOpen(id);
   };
-  const checkbox = (id: string) => (
-    <input
-      type="checkbox"
-      checked={selected.has(id)}
-      onChange={() => onToggleSelect(id)}
-      onClick={(e) => e.stopPropagation()}
-      aria-label={labels.select}
-      className="size-4 shrink-0 cursor-pointer accent-[var(--brand)]"
-    />
-  );
   const actions = (card: CompanyCard) => (
     <div className="flex shrink-0 items-center" onPointerDown={(e) => e.stopPropagation()}>
       {card.phone ? <StartChatButton phone={card.phone} name={card.name} iconOnly /> : null}
@@ -94,7 +82,6 @@ function CompanyList({
                 selected.has(card.id) && "bg-brand/5",
               )}
             >
-              {checkbox(card.id)}
               <div className="flex min-w-0 flex-1 items-center gap-2.5">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
                   <Building2 className="size-4" />
@@ -128,7 +115,6 @@ function CompanyList({
           )}
         >
           <div className="flex items-start gap-3">
-            <div className="pt-0.5">{checkbox(card.id)}</div>
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
               <Building2 className="size-5" />
             </span>
@@ -221,7 +207,7 @@ export function CompaniesGrid({ columns }: { columns: CompanyColumn[] }) {
     dragHint: tc("dragHint"),
     folderCount: (count) => t("folderCount", { count }),
   };
-  const listLabels: ListLabels = { name: t("name"), cnpj: t("cnpj"), city: t("city"), email: t("email"), select: tc("select") };
+  const listLabels: ListLabels = { name: t("name"), cnpj: t("cnpj"), city: t("city"), email: t("email") };
 
   const onDeleteCompany = (id: string) => deleteWithUndo([id], () => deleteCompany(id));
 
@@ -233,8 +219,8 @@ export function CompaniesGrid({ columns }: { columns: CompanyColumn[] }) {
       onCreateFolder={(name) => createCompanyFolder({ name })}
       onRenameFolder={(id, name) => renameCompanyFolder(id, { name })}
       onDeleteFolder={(id) => deleteCompanyFolder(id)}
-      onMoveItem={(id, folderId) => moveCompanyToFolder(id, folderId)}
-      renderItems={({ items, view, onDragStart, onDragEnd, selected, onToggleSelect }) => (
+      onMoveItems={(ids, folderId) => bulkMoveCompanies(ids, folderId)}
+      renderItems={({ items, view, onDragStart, onDragEnd, selected }) => (
         <CompanyList
           companies={items}
           view={view}
@@ -245,7 +231,6 @@ export function CompaniesGrid({ columns }: { columns: CompanyColumn[] }) {
           deleteLabel={tc("delete")}
           labels={listLabels}
           selected={selected}
-          onToggleSelect={onToggleSelect}
         />
       )}
       renderBulkBar={({ ids, folders, clear }) => (
