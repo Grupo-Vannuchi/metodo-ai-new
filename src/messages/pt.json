@@ -914,6 +914,19 @@
       "deleted": "Excluído",
       "deletedN": "{count} itens excluídos"
     },
+    "goals": {
+      "title": "Metas",
+      "subtitle": "Meta de valor ganho por vendedor — {month}.",
+      "back": "Voltar ao funil",
+      "member": "Vendedor",
+      "target": "Meta",
+      "achieved": "Realizado",
+      "progress": "Progresso",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "empty": "Nenhum membro na equipe ainda.",
+      "readOnly": "Somente administradores podem definir metas."
+    },
     "reports": {
       "title": "Relatórios de vendas",
       "subtitle": "Taxa de ganho, ticket médio, ciclo de vendas e motivos de perda.",
@@ -1131,6 +1144,7 @@
       "productsLink": "Produtos e serviços",
       "closedLink": "Fechadas",
       "reportsLink": "Relatórios",
+      "goalsLink": "Metas",
       "back": "Voltar ao funil",
       "noStages": "Este funil não tem estágios.",
       "pipelineLabel": "Funil",

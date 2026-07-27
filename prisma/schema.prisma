@@ -361,6 +361,23 @@ model SavedView {
   @@map("saved_views")
 }
 
+/// A salesperson's monthly target (won value). Progress is computed against the
+/// WON opportunities they own that closed in the month. Scoped by a bare
+/// `organizationId` scalar, like the folder/view models.
+model Goal {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  /// The month the target applies to, "YYYY-MM".
+  month          String
+  targetValue    Decimal  @default(0) @db.Decimal(14, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, userId, month])
+  @@map("goals")
+}
+
 /// A sales pipeline (a board). Each org gets a default one.
 model Pipeline {
   id             String   @id @default(cuid())

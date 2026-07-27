@@ -914,6 +914,19 @@
       "deleted": "Deleted",
       "deletedN": "{count} items deleted"
     },
+    "goals": {
+      "title": "Goals",
+      "subtitle": "Won-value target per salesperson — {month}.",
+      "back": "Back to funnel",
+      "member": "Salesperson",
+      "target": "Target",
+      "achieved": "Achieved",
+      "progress": "Progress",
+      "save": "Save",
+      "cancel": "Cancel",
+      "empty": "No team members yet.",
+      "readOnly": "Only admins can set goals."
+    },
     "reports": {
       "title": "Sales reports",
       "subtitle": "Win rate, average ticket, sales cycle and loss reasons.",
@@ -1131,6 +1144,7 @@
       "productsLink": "Products & services",
       "closedLink": "Closed",
       "reportsLink": "Reports",
+      "goalsLink": "Goals",
       "back": "Back to funnel",
       "noStages": "This funnel has no stages.",
       "pipelineLabel": "Funnel",
