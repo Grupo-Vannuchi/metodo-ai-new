@@ -894,13 +894,18 @@
       "unknown": "Something went wrong."
     }
   },
+  "undo": {
+    "action": "Undo"
+  },
   "crm": {
     "common": {
       "edit": "Edit",
       "delete": "Delete",
       "confirmDelete": "Are you sure you want to delete?",
       "select": "Select",
-      "selectAll": "Select all"
+      "selectAll": "Select all",
+      "deleted": "Deleted",
+      "deletedN": "{count} items deleted"
     },
     "dupes": {
       "button": "Duplicates",

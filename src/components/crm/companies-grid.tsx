@@ -1,11 +1,11 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Trash2, Phone, Mail, MapPin, Building2 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
-import { useConfirm } from "@/components/ui/confirm";
+import { useUndo } from "@/components/ui/undo";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { FolderExplorer, type FolderColumn, type ExplorerLabels } from "@/components/crm/folder-explorer";
 import { BulkBar } from "@/components/crm/bulk-bar";
@@ -168,10 +168,39 @@ export function CompaniesGrid({ columns }: { columns: CompanyColumn[] }) {
   const t = useTranslations("crm.companies");
   const tc = useTranslations("crm.common");
   const router = useRouter();
-  const confirm = useConfirm();
-  const [, start] = useTransition();
+  const undo = useUndo();
 
-  const cols: FolderColumn<CompanyCard>[] = columns.map((c) => ({ id: c.id, name: c.name, items: c.companies }));
+  // Ids hidden optimistically while an undoable delete is pending (see contacts-grid).
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [prevColumns, setPrevColumns] = useState(columns);
+  if (prevColumns !== columns) {
+    setPrevColumns(columns);
+    const present = new Set(columns.flatMap((c) => c.companies.map((x) => x.id)));
+    setHidden((prev) => new Set([...prev].filter((id) => present.has(id))));
+  }
+
+  const cols: FolderColumn<CompanyCard>[] = columns.map((c) => ({
+    id: c.id,
+    name: c.name,
+    items: c.companies.filter((x) => !hidden.has(x.id)),
+  }));
+
+  function deleteWithUndo(ids: string[], commit: () => Promise<unknown>) {
+    setHidden((prev) => new Set([...prev, ...ids]));
+    undo({
+      message: ids.length === 1 ? tc("deleted") : tc("deletedN", { count: ids.length }),
+      commit: async () => {
+        await commit();
+        router.refresh();
+      },
+      onUndo: () =>
+        setHidden((prev) => {
+          const n = new Set(prev);
+          ids.forEach((id) => n.delete(id));
+          return n;
+        }),
+    });
+  }
 
   const labels: ExplorerLabels = {
     newFolder: t("newFolder"),
@@ -192,13 +221,7 @@ export function CompaniesGrid({ columns }: { columns: CompanyColumn[] }) {
   };
   const listLabels: ListLabels = { name: t("name"), cnpj: t("cnpj"), city: t("city"), email: t("email"), select: tc("select") };
 
-  async function onDeleteCompany(id: string) {
-    if (!(await confirm({ description: tc("confirmDelete"), confirmLabel: tc("delete"), variant: "danger" }))) return;
-    start(async () => {
-      await deleteCompany(id);
-      router.refresh();
-    });
-  }
+  const onDeleteCompany = (id: string) => deleteWithUndo([id], () => deleteCompany(id));
 
   return (
     <FolderExplorer<CompanyCard>
@@ -233,9 +256,8 @@ export function CompaniesGrid({ columns }: { columns: CompanyColumn[] }) {
             router.refresh();
           }}
           onDelete={async () => {
-            await bulkDeleteCompanies(ids);
             clear();
-            router.refresh();
+            deleteWithUndo(ids, () => bulkDeleteCompanies(ids));
           }}
           onClear={clear}
         />

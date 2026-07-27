@@ -99,6 +99,16 @@
     }
   }
 
+  /* Undo-toast countdown bar: drains left→right over the grace period. */
+  @keyframes undo-drain {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
+    }
+  }
+
   @keyframes fade-in-up {
     from {
       opacity: 0;

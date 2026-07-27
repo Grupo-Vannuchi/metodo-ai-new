@@ -4,13 +4,13 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { FolderInput, Tag, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useConfirm } from "@/components/ui/confirm";
 
 /**
  * Action bar shown by the folder explorer while items are selected. Presentational:
  * the parent grid supplies the async handlers (which run the bulk server action,
- * refresh, and clear the selection). Delete is confirmed here so every caller
- * gets the guard for free. `onTag` is optional — companies don't have tags.
+ * refresh, and clear the selection). Delete goes through the grid's undo flow (a
+ * grace period + "Undo" toast), so there's no confirm here. `onTag` is optional —
+ * companies don't have tags.
  */
 export function BulkBar({
   count,
@@ -28,7 +28,6 @@ export function BulkBar({
   onClear: () => void;
 }) {
   const t = useTranslations("crm.bulk");
-  const confirm = useConfirm();
   const [pending, start] = useTransition();
   const [tag, setTag] = useState("");
   const [taggingOpen, setTaggingOpen] = useState(false);
@@ -49,13 +48,7 @@ export function BulkBar({
     });
   }
 
-  async function del() {
-    const ok = await confirm({
-      description: t("confirmDelete", { count }),
-      confirmLabel: t("delete"),
-      variant: "danger",
-    });
-    if (!ok) return;
+  function del() {
     start(async () => {
       await onDelete();
     });

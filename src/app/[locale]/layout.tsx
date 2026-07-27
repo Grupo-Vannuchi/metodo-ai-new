@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { ThemeStyle } from "@/components/theme-style";
 import { ConfirmProvider } from "@/components/ui/confirm";
 import { PromptProvider } from "@/components/ui/prompt";
+import { UndoProvider } from "@/components/ui/undo";
 import { siteConfig } from "@/config/site";
 import { env } from "@/lib/env";
 import { locales, routing, resolveLocale } from "@/i18n/routing";
@@ -82,7 +83,9 @@ export default async function LocaleLayout({
         </Script>
         <NextIntlClientProvider>
           <ConfirmProvider>
-            <PromptProvider>{children}</PromptProvider>
+            <UndoProvider>
+              <PromptProvider>{children}</PromptProvider>
+            </UndoProvider>
           </ConfirmProvider>
         </NextIntlClientProvider>
       </body>

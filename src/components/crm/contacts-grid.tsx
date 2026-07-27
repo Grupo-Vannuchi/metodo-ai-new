@@ -1,12 +1,12 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Trash2, Phone, Mail, Building2 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/app/avatar";
-import { useConfirm } from "@/components/ui/confirm";
+import { useUndo } from "@/components/ui/undo";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { FolderExplorer, type FolderColumn, type ExplorerLabels } from "@/components/crm/folder-explorer";
 import { BulkBar } from "@/components/crm/bulk-bar";
@@ -164,10 +164,42 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
   const t = useTranslations("crm.contacts");
   const tc = useTranslations("crm.common");
   const router = useRouter();
-  const confirm = useConfirm();
-  const [, start] = useTransition();
+  const undo = useUndo();
 
-  const cols: FolderColumn<ContactCard>[] = columns.map((c) => ({ id: c.id, name: c.name, items: c.contacts }));
+  // Ids hidden optimistically while an undoable delete is pending. Reconciled
+  // against fresh server data: keep only ids still present (i.e. not yet
+  // committed), drop the rest.
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [prevColumns, setPrevColumns] = useState(columns);
+  if (prevColumns !== columns) {
+    setPrevColumns(columns);
+    const present = new Set(columns.flatMap((c) => c.contacts.map((x) => x.id)));
+    setHidden((prev) => new Set([...prev].filter((id) => present.has(id))));
+  }
+
+  const cols: FolderColumn<ContactCard>[] = columns.map((c) => ({
+    id: c.id,
+    name: c.name,
+    items: c.contacts.filter((x) => !hidden.has(x.id)),
+  }));
+
+  /** Hide now, delete after the undo grace period; restore on undo. */
+  function deleteWithUndo(ids: string[], commit: () => Promise<unknown>) {
+    setHidden((prev) => new Set([...prev, ...ids]));
+    undo({
+      message: ids.length === 1 ? tc("deleted") : tc("deletedN", { count: ids.length }),
+      commit: async () => {
+        await commit();
+        router.refresh();
+      },
+      onUndo: () =>
+        setHidden((prev) => {
+          const n = new Set(prev);
+          ids.forEach((id) => n.delete(id));
+          return n;
+        }),
+    });
+  }
 
   const labels: ExplorerLabels = {
     newFolder: t("newFolder"),
@@ -188,13 +220,7 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
   };
   const listLabels: ListLabels = { name: t("name"), company: t("company"), phone: t("phone"), email: t("email"), select: tc("select") };
 
-  async function onDeleteContact(id: string) {
-    if (!(await confirm({ description: tc("confirmDelete"), confirmLabel: tc("delete"), variant: "danger" }))) return;
-    start(async () => {
-      await deleteContact(id);
-      router.refresh();
-    });
-  }
+  const onDeleteContact = (id: string) => deleteWithUndo([id], () => deleteContact(id));
 
   return (
     <FolderExplorer<ContactCard>
@@ -234,9 +260,8 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
             router.refresh();
           }}
           onDelete={async () => {
-            await bulkDeleteContacts(ids);
             clear();
-            router.refresh();
+            deleteWithUndo(ids, () => bulkDeleteContacts(ids));
           }}
           onClear={clear}
         />

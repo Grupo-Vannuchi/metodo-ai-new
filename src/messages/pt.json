@@ -894,13 +894,18 @@
       "unknown": "Algo deu errado."
     }
   },
+  "undo": {
+    "action": "Desfazer"
+  },
   "crm": {
     "common": {
       "edit": "Editar",
       "delete": "Excluir",
       "confirmDelete": "Tem certeza que deseja excluir?",
       "select": "Selecionar",
-      "selectAll": "Selecionar tudo"
+      "selectAll": "Selecionar tudo",
+      "deleted": "Excluído",
+      "deletedN": "{count} itens excluídos"
     },
     "dupes": {
       "button": "Duplicados",
