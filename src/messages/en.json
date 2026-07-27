@@ -212,6 +212,7 @@
       "crm": "Pipeline",
       "proposals": "Proposals",
       "tasks": "Tasks",
+      "automations": "Automations",
       "prospecting": "Prospecting",
       "campaigns": "Campaigns",
       "inbox": "Inbox",
@@ -627,6 +628,7 @@
     "nav": {
       "overview": "Overview",
       "employees": "Employees",
+      "goals": "Goals",
       "payroll": "Payroll",
       "timeOff": "Time off",
       "catalogs": "Roles and departments"
@@ -936,10 +938,14 @@
       "confirmDelete": "Delete this rule?",
       "empty": "No automations yet. Create the first one above.",
       "readOnly": "Only admins can edit automations.",
+      "triggerLabel": "Trigger",
+      "addStep": "Add step",
       "trigger": {
+        "opportunity_created": "Opportunity created",
         "stage_entered": "Enters a stage",
         "opportunity_won": "Opportunity won",
-        "opportunity_lost": "Opportunity lost"
+        "opportunity_lost": "Opportunity lost",
+        "task_completed": "Task completed"
       },
       "action": {
         "create_task": "Create task",

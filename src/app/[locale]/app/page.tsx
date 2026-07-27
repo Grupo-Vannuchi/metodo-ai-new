@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getDashboardInsights } from "@/lib/queries/insights";
+import { getSalesReport } from "@/lib/queries/sales-report";
 import { PIE_MODELS, PIE_FINANCE_MODELS } from "@/lib/queries/dashboard";
 import { hasFeature, type PlanKey } from "@/config/plans";
 import { PieCard } from "@/components/dashboard/pie-card";
@@ -28,13 +29,19 @@ export default async function DashboardPage({
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("app.dashboard");
+  const tr = await getTranslations("crm.reports");
 
-  const ins = await getDashboardInsights(ctx.organizationId);
+  const [ins, report] = await Promise.all([
+    getDashboardInsights(ctx.organizationId),
+    getSalesReport(ctx.organizationId, "MONTH"),
+  ]);
   const brl = new Intl.NumberFormat(locale === "pt" ? "pt-BR" : "en-US", {
     style: "currency",
     currency: "BRL",
     maximumFractionDigits: 0,
   });
+  const pct = (n: number) => `${Math.round(n * 100)}%`;
+  const maxReason = Math.max(1, ...report.lossReasons.map((l) => l.count));
   const maxStageValue = Math.max(1, ...ins.stages.map((s) => s.value));
 
   const pieModels: string[] = [
@@ -127,6 +134,44 @@ export default async function DashboardPage({
             ))}
           </ul>
         )}
+      </section>
+
+      {/* Sales performance this month (moved here from a separate report page). */}
+      <section className="glass rounded-xl border border-border p-5 shadow-sm">
+        <h2 className="mb-4 text-sm font-semibold">{tr("title")}</h2>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: tr("winRate"), value: pct(report.winRate), hint: tr("wonLost", { won: report.won, lost: report.lost }) },
+              { label: tr("avgTicket"), value: brl.format(report.avgTicket) },
+              { label: tr("avgCycle"), value: report.avgCycleDays === null ? "—" : tr("days", { n: report.avgCycleDays }) },
+            ].map((k) => (
+              <div key={k.label} className="rounded-lg border border-border bg-card p-3">
+                <p className="text-xs text-muted-foreground">{k.label}</p>
+                <p className="mt-1 text-lg font-bold">{k.value}</p>
+                {k.hint ? <p className="mt-0.5 text-[11px] text-muted-foreground">{k.hint}</p> : null}
+              </div>
+            ))}
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-medium text-muted-foreground">{tr("lossReasonsTitle")}</p>
+            {report.lossReasons.length === 0 ? (
+              <p className="py-4 text-center text-xs text-muted-foreground">{tr("noReasons")}</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {report.lossReasons.slice(0, 5).map((l) => (
+                  <li key={l.reason} className="flex items-center gap-2">
+                    <span className="w-28 shrink-0 truncate text-xs" title={l.reason}>{l.reason}</span>
+                    <div className="h-4 flex-1 overflow-hidden rounded-md bg-muted">
+                      <div className="h-full rounded-md bg-red-500/70" style={{ width: `${Math.max(6, (l.count / maxReason) * 100)}%` }} />
+                    </div>
+                    <span className="w-6 shrink-0 text-right text-xs text-muted-foreground">{l.count}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       </section>
 
       <section className="stagger-children grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

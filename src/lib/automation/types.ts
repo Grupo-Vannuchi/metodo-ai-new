@@ -3,8 +3,19 @@
  * and the engine can share the shapes.
  */
 
-export const TRIGGERS = ["stage_entered", "opportunity_won", "opportunity_lost"] as const;
+export const TRIGGERS = [
+  "opportunity_created",
+  "stage_entered",
+  "opportunity_won",
+  "opportunity_lost",
+  "task_completed",
+] as const;
 export type TriggerType = (typeof TRIGGERS)[number];
+
+/** Triggers whose editor needs a stage picker. */
+export function triggerNeedsStage(t: TriggerType): boolean {
+  return t === "stage_entered";
+}
 
 export const ACTION_TYPES = ["create_task", "notify_owner", "send_whatsapp"] as const;
 export type ActionType = (typeof ACTION_TYPES)[number];

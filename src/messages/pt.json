@@ -212,6 +212,7 @@
       "crm": "Funil",
       "proposals": "Propostas",
       "tasks": "Tarefas",
+      "automations": "Automações",
       "prospecting": "Prospecção",
       "campaigns": "Campanhas",
       "inbox": "Conversas",
@@ -627,6 +628,7 @@
     "nav": {
       "overview": "Visão geral",
       "employees": "Funcionários",
+      "goals": "Metas",
       "payroll": "Folha",
       "timeOff": "Férias e ausências",
       "catalogs": "Cargos e departamentos"
@@ -936,10 +938,14 @@
       "confirmDelete": "Excluir esta regra?",
       "empty": "Nenhuma automação ainda. Crie a primeira acima.",
       "readOnly": "Somente administradores podem editar automações.",
+      "triggerLabel": "Gatilho",
+      "addStep": "Adicionar passo",
       "trigger": {
+        "opportunity_created": "Oportunidade criada",
         "stage_entered": "Entrar em um estágio",
         "opportunity_won": "Oportunidade ganha",
-        "opportunity_lost": "Oportunidade perdida"
+        "opportunity_lost": "Oportunidade perdida",
+        "task_completed": "Tarefa concluída"
       },
       "action": {
         "create_task": "Criar tarefa",

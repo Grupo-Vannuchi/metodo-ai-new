@@ -1,15 +1,13 @@
 import { getTranslations } from "next-intl/server";
-import { ArrowLeft, Target } from "lucide-react";
-import { requireOrgContext } from "@/lib/tenant";
-import { hasRole } from "@/lib/tenant";
+import { requireOrgContext, hasRole } from "@/lib/tenant";
 import { getGoals, currentMonth } from "@/lib/queries/goals";
 import { GoalsClient } from "@/components/crm/goals-client";
-import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
 
-export default async function GoalsPage({
+/** Sales targets, under People (HR) — managed by the gestor (OWNER/ADMIN). */
+export default async function HrGoalsPage({
   params,
   searchParams,
 }: {
@@ -31,20 +29,10 @@ export default async function GoalsPage({
   );
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <Link href="/app/crm" className="text-muted-foreground transition-colors hover:text-foreground" aria-label={t("back")}>
-              <ArrowLeft className="size-5" />
-            </Link>
-            <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-              <Target className="size-6 text-brand" />
-              {t("title")}
-            </h1>
-          </div>
-          <p className="mt-1 text-muted-foreground">{t("subtitle", { month: label })}</p>
-        </div>
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2 className="text-lg font-semibold">{t("title")}</h2>
+        <p className="text-sm text-muted-foreground">{t("subtitle", { month: label })}</p>
       </div>
 
       {rows.length === 0 ? (

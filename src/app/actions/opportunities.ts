@@ -129,6 +129,8 @@ export async function createOpportunity(
       });
     }
 
+    await runAutomations(org, { type: "opportunity_created", opportunityId: opp.id }, ctx.user.name);
+
     revalidatePath("/app/crm");
     return { ok: true, id: opp.id };
   } catch (error) {

@@ -6,6 +6,7 @@ import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
 import { deleteMedia } from "@/lib/storage/blob";
+import { runAutomations } from "@/lib/automation/engine";
 import { taskSchema, checklistTextSchema } from "@/lib/validations/task";
 
 export type TaskResult =
@@ -269,6 +270,9 @@ export async function updateTask(id: string, formData: FormData): Promise<TaskRe
 
     // Completing a recurring task via the form spawns the next occurrence.
     if (!wasDone && data.status === "DONE") await spawnNextOccurrence(db, current);
+    if (!wasDone && data.status === "DONE" && current.opportunityId) {
+      await runAutomations(ctx.organizationId, { type: "task_completed", opportunityId: current.opportunityId }, ctx.user.name);
+    }
 
     if (data.assignedToId && data.assignedToId !== current.assignedToId && data.assignedToId !== ctx.userId) {
       await notifyAssignee(db, ctx.organizationId, data.assignedToId, ctx.user.name, data.title, id);
@@ -299,6 +303,9 @@ export async function toggleTask(id: string, done: boolean): Promise<TaskResult>
         : { doneAt: null, status: "TODO", progress: 0 },
     });
     if (done && current.doneAt == null) await spawnNextOccurrence(db, current);
+    if (done && current.doneAt == null && current.opportunityId) {
+      await runAutomations(ctx.organizationId, { type: "task_completed", opportunityId: current.opportunityId }, ctx.user.name);
+    }
     revalidate();
     return { ok: true };
   } catch (error) {
@@ -326,6 +333,9 @@ export async function setTaskStatus(id: string, status: TaskStatus): Promise<Tas
           : { status, doneAt: null, progress: 0 };
     await db.task.updateMany({ where: { id }, data });
     if (isDone && current.doneAt == null) await spawnNextOccurrence(db, current);
+    if (isDone && current.doneAt == null && current.opportunityId) {
+      await runAutomations(ctx.organizationId, { type: "task_completed", opportunityId: current.opportunityId }, ctx.user.name);
+    }
     revalidate();
     return { ok: true };
   } catch (error) {

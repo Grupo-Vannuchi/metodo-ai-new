@@ -14,9 +14,11 @@ import { parseActions, type RuleAction } from "@/lib/automation/types";
  */
 
 export type AutomationEvent =
+  | { type: "opportunity_created"; opportunityId: string }
   | { type: "stage_entered"; opportunityId: string; stageId: string }
   | { type: "opportunity_won"; opportunityId: string }
-  | { type: "opportunity_lost"; opportunityId: string };
+  | { type: "opportunity_lost"; opportunityId: string }
+  | { type: "task_completed"; opportunityId: string };
 
 type Db = ReturnType<typeof tenantDb>;
 type Opp = {

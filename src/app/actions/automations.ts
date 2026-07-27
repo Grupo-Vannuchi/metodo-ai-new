@@ -45,7 +45,7 @@ export async function createRule(input: RuleInput): Promise<RuleResult> {
       data: { organizationId: g.ctx.organizationId, ...data, actions: data.actions },
       select: { id: true },
     });
-    revalidatePath("/app/crm/automations");
+    revalidatePath("/app/automations");
     return { ok: true, id: rule.id };
   } catch (e) {
     console.error("createRule failed", e);
@@ -62,7 +62,7 @@ export async function updateRule(id: string, input: RuleInput): Promise<RuleResu
     const db = tenantDb(g.ctx.organizationId);
     const res = await db.automationRule.updateMany({ where: { id }, data: { ...data, actions: data.actions } });
     if (res.count === 0) return { ok: false, error: "unknown" };
-    revalidatePath("/app/crm/automations");
+    revalidatePath("/app/automations");
     return { ok: true, id };
   } catch (e) {
     console.error("updateRule failed", e);
@@ -76,7 +76,7 @@ export async function toggleRule(id: string, enabled: boolean): Promise<{ ok: bo
   try {
     const db = tenantDb(g.ctx.organizationId);
     await db.automationRule.updateMany({ where: { id }, data: { enabled } });
-    revalidatePath("/app/crm/automations");
+    revalidatePath("/app/automations");
     return { ok: true };
   } catch (e) {
     console.error("toggleRule failed", e);
@@ -90,7 +90,7 @@ export async function deleteRule(id: string): Promise<{ ok: boolean }> {
   try {
     const db = tenantDb(g.ctx.organizationId);
     await db.automationRule.deleteMany({ where: { id } });
-    revalidatePath("/app/crm/automations");
+    revalidatePath("/app/automations");
     return { ok: true };
   } catch (e) {
     console.error("deleteRule failed", e);
