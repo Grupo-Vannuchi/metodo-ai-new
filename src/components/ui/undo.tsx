@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Undo2 } from "lucide-react";
+import { useRouter } from "@/i18n/navigation";
 
 /**
  * Undoable destructive actions (Gmail-style). Instead of confirming up front,
@@ -31,6 +32,54 @@ export function useUndo(): UndoFn {
   const ctx = useContext(UndoContext);
   if (!ctx) throw new Error("useUndo must be used within <UndoProvider>");
   return ctx;
+}
+
+type UndoDeleteOptions = {
+  /** The real server delete, run after the grace period. */
+  action: () => Promise<unknown>;
+  /** An element inside the row to hide optimistically; the row is its nearest
+   *  `[data-undo-row]`, `<tr>` or `<li>` ancestor. Omit to skip the hide. */
+  rowFrom?: HTMLElement | null;
+  message?: string;
+  /** Run after the delete commits (e.g. navigate away). */
+  after?: () => void;
+  onUndo?: () => void;
+};
+
+/**
+ * One-call undoable delete for the whole app: hides the row now, defers the
+ * server delete behind the "Undo" toast, and restores the row if undone. Any
+ * delete button can adopt it — no per-list state needed.
+ *
+ * The optimistic hide is a plain DOM `display:none` because the surrounding list
+ * is usually a Server Component that won't re-render until the commit's
+ * `router.refresh()` removes the row for real — so nothing fights the inline
+ * style during the grace window.
+ */
+export function useUndoableDelete() {
+  const undo = useUndo();
+  const router = useRouter();
+  const t = useTranslations("crm.common");
+  return useCallback(
+    ({ action, rowFrom, message, after, onUndo }: UndoDeleteOptions) => {
+      const row = (rowFrom?.closest("[data-undo-row], tr, li") as HTMLElement | null) ?? null;
+      const prevDisplay = row?.style.display ?? "";
+      if (row) row.style.display = "none";
+      undo({
+        message: message ?? t("deleted"),
+        commit: async () => {
+          await action();
+          after?.();
+          router.refresh();
+        },
+        onUndo: () => {
+          if (row) row.style.display = prevDisplay;
+          onUndo?.();
+        },
+      });
+    },
+    [undo, router, t],
+  );
 }
 
 const DEFAULT_DELAY = 6000;
