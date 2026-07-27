@@ -908,6 +908,27 @@
       "deleted": "Excluído",
       "deletedN": "{count} itens excluídos"
     },
+    "reports": {
+      "title": "Relatórios de vendas",
+      "subtitle": "Taxa de ganho, ticket médio, ciclo de vendas e motivos de perda.",
+      "back": "Voltar ao funil",
+      "winRate": "Taxa de ganho",
+      "wonLost": "{won} ganhas · {lost} perdidas",
+      "wonValue": "Valor ganho",
+      "avgTicket": "Ticket médio",
+      "avgCycle": "Ciclo de vendas",
+      "days": "{n} dias",
+      "funnelTitle": "Funil atual (aberto por estágio)",
+      "lossReasonsTitle": "Motivos de perda",
+      "empty": "Sem dados no período.",
+      "noReasons": "Nenhum motivo registrado no período.",
+      "period": {
+        "30D": "30 dias",
+        "MONTH": "Este mês",
+        "YEAR": "Este ano",
+        "ALL": "Tudo"
+      }
+    },
     "dupes": {
       "button": "Duplicados",
       "title": "Mesclar duplicados",
@@ -1103,6 +1124,7 @@
       "managePipelines": "Gerenciar funis",
       "productsLink": "Produtos e serviços",
       "closedLink": "Fechadas",
+      "reportsLink": "Relatórios",
       "back": "Voltar ao funil",
       "noStages": "Este funil não tem estágios.",
       "pipelineLabel": "Funil",

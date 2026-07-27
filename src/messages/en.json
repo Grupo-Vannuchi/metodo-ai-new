@@ -908,6 +908,27 @@
       "deleted": "Deleted",
       "deletedN": "{count} items deleted"
     },
+    "reports": {
+      "title": "Sales reports",
+      "subtitle": "Win rate, average ticket, sales cycle and loss reasons.",
+      "back": "Back to funnel",
+      "winRate": "Win rate",
+      "wonLost": "{won} won · {lost} lost",
+      "wonValue": "Won value",
+      "avgTicket": "Average ticket",
+      "avgCycle": "Sales cycle",
+      "days": "{n} days",
+      "funnelTitle": "Current funnel (open by stage)",
+      "lossReasonsTitle": "Loss reasons",
+      "empty": "No data in this period.",
+      "noReasons": "No reasons recorded in this period.",
+      "period": {
+        "30D": "30 days",
+        "MONTH": "This month",
+        "YEAR": "This year",
+        "ALL": "All"
+      }
+    },
     "dupes": {
       "button": "Duplicates",
       "title": "Merge duplicates",
@@ -1103,6 +1124,7 @@
       "managePipelines": "Manage funnels",
       "productsLink": "Products & services",
       "closedLink": "Closed",
+      "reportsLink": "Reports",
       "back": "Back to funnel",
       "noStages": "This funnel has no stages.",
       "pipelineLabel": "Funnel",
