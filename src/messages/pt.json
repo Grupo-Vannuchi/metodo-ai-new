@@ -902,6 +902,23 @@
       "select": "Selecionar",
       "selectAll": "Selecionar tudo"
     },
+    "dupes": {
+      "button": "Duplicados",
+      "title": "Mesclar duplicados",
+      "hint": "Escolha qual registro manter em cada grupo; os demais serão mesclados nele (dados, negócios, conversas e tarefas migram para o escolhido).",
+      "none": "Nenhum duplicado encontrado.",
+      "keep": "Manter",
+      "deals": "{n} negócio(s)",
+      "mergeBtn": "Mesclar {n}",
+      "merging": "Mesclando…",
+      "close": "Fechar",
+      "by": {
+        "phone": "Mesmo telefone",
+        "email": "Mesmo e-mail",
+        "cnpj": "Mesmo CNPJ",
+        "name": "Mesmo nome"
+      }
+    },
     "bulk": {
       "selected": "{count} selecionado(s)",
       "moveTo": "Mover para…",

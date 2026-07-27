@@ -902,6 +902,23 @@
       "select": "Select",
       "selectAll": "Select all"
     },
+    "dupes": {
+      "button": "Duplicates",
+      "title": "Merge duplicates",
+      "hint": "Pick which record to keep in each group; the others are merged into it (data, deals, conversations and tasks move to the one you keep).",
+      "none": "No duplicates found.",
+      "keep": "Keep",
+      "deals": "{n} deal(s)",
+      "mergeBtn": "Merge {n}",
+      "merging": "Merging…",
+      "close": "Close",
+      "by": {
+        "phone": "Same phone",
+        "email": "Same email",
+        "cnpj": "Same tax ID",
+        "name": "Same name"
+      }
+    },
     "bulk": {
       "selected": "{count} selected",
       "moveTo": "Move to…",
