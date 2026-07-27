@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { Workflow } from "lucide-react";
-import { requireOrgContext, hasRole } from "@/lib/tenant";
+import { requireOrgContext } from "@/lib/tenant";
 import { requireScreen } from "@/lib/access";
 import { listAutomationRules } from "@/lib/queries/automations";
 import { listPipelinesWithStages } from "@/lib/queries/pipelines";
@@ -26,7 +26,8 @@ export default async function AutomationsPage({ params }: { params: Promise<{ lo
   ]);
 
   const stages = pipelines.flatMap((p) => p.stages.map((s) => ({ id: s.id, name: s.name, pipeline: p.name })));
-  const canEdit = hasRole(ctx.role, "ADMIN");
+  // Any member who can reach this page can manage automations.
+  const canEdit = true;
 
   return (
     <div className="flex flex-col gap-6">

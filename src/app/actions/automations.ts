@@ -1,11 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getOrgContext, hasRole } from "@/lib/tenant";
+import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { isTrigger, parseActions, parseConfig } from "@/lib/automation/types";
 
-export type RuleResult = { ok: true; id: string } | { ok: false; error: "unauthorized" | "forbidden" | "invalid" | "unknown" };
+export type RuleResult = { ok: true; id: string } | { ok: false; error: "unauthorized" | "invalid" | "unknown" };
 
 type RuleInput = {
   name: string;
@@ -16,12 +16,12 @@ type RuleInput = {
 };
 
 type OrgCtx = NonNullable<Awaited<ReturnType<typeof getOrgContext>>>;
-type Guard = { error: "unauthorized" | "forbidden" } | { ctx: OrgCtx };
+type Guard = { error: "unauthorized" } | { ctx: OrgCtx };
 
+// Any member of the org (with CRM access to reach the page) can manage rules.
 async function guard(): Promise<Guard> {
   const ctx = await getOrgContext();
   if (!ctx) return { error: "unauthorized" };
-  if (!hasRole(ctx.role, "ADMIN")) return { error: "forbidden" };
   return { ctx };
 }
 
