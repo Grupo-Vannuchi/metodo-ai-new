@@ -392,6 +392,8 @@ model AutomationRule {
   triggerStageId String?
   /// Ordered actions: [{ type, ...config }].
   actions        Json     @default("[]")
+  /// Editor + logic extras: { minValue?, layout?: { trigger, actions[] } }.
+  config         Json     @default("{}")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

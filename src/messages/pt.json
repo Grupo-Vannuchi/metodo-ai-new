@@ -940,6 +940,18 @@
       "readOnly": "Somente administradores podem editar automações.",
       "triggerLabel": "Gatilho",
       "addStep": "Adicionar passo",
+      "minValue": "Só se o valor for ≥",
+      "minValuePlaceholder": "Qualquer valor",
+      "inspectorHint": "Selecione um bloco para configurar.",
+      "taskTitle": "Título da tarefa",
+      "taskDescription": "Descrição",
+      "priority": "Prioridade",
+      "dueInDays": "Vencimento (dias)",
+      "message": "Mensagem",
+      "messagePlaceholder": "Mensagem da notificação (opcional)",
+      "owner": "Responsável",
+      "chooseOwner": "Escolha o responsável…",
+      "prio": { "LOW": "Baixa", "MEDIUM": "Média", "HIGH": "Alta" },
       "trigger": {
         "opportunity_created": "Oportunidade criada",
         "stage_entered": "Entrar em um estágio",
@@ -950,7 +962,9 @@
       "action": {
         "create_task": "Criar tarefa",
         "notify_owner": "Notificar responsável",
-        "send_whatsapp": "Enviar WhatsApp"
+        "send_whatsapp": "Enviar WhatsApp",
+        "move_stage": "Mover de estágio",
+        "set_owner": "Definir responsável"
       },
       "err": {
         "invalid": "Preencha o nome, o gatilho e ao menos uma ação.",

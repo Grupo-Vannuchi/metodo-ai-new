@@ -940,6 +940,18 @@
       "readOnly": "Only admins can edit automations.",
       "triggerLabel": "Trigger",
       "addStep": "Add step",
+      "minValue": "Only if value ≥",
+      "minValuePlaceholder": "Any value",
+      "inspectorHint": "Select a block to configure it.",
+      "taskTitle": "Task title",
+      "taskDescription": "Description",
+      "priority": "Priority",
+      "dueInDays": "Due (days)",
+      "message": "Message",
+      "messagePlaceholder": "Notification message (optional)",
+      "owner": "Owner",
+      "chooseOwner": "Choose the owner…",
+      "prio": { "LOW": "Low", "MEDIUM": "Medium", "HIGH": "High" },
       "trigger": {
         "opportunity_created": "Opportunity created",
         "stage_entered": "Enters a stage",
@@ -950,7 +962,9 @@
       "action": {
         "create_task": "Create task",
         "notify_owner": "Notify owner",
-        "send_whatsapp": "Send WhatsApp"
+        "send_whatsapp": "Send WhatsApp",
+        "move_stage": "Move stage",
+        "set_owner": "Set owner"
       },
       "err": {
         "invalid": "Fill in the name, trigger and at least one action.",

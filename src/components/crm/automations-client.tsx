@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, Trash2, Pencil, Zap, X, CheckSquare, Bell, MessageCircle, ArrowDown } from "lucide-react";
+import { Plus, Trash2, Pencil, Zap, X, CheckSquare, Bell, MessageCircle, ArrowRightLeft, UserCog } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
@@ -13,97 +13,108 @@ import {
   ACTION_TYPES,
   triggerNeedsStage,
   type RuleAction,
+  type RuleConfig,
   type TriggerType,
   type ActionType,
+  type NodePos,
 } from "@/lib/automation/types";
 import type { AutomationRuleView } from "@/lib/queries/automations";
 import { createRule, updateRule, deleteRule, toggleRule } from "@/app/actions/automations";
 
 type Stage = { id: string; name: string; pipeline: string };
 type Template = { id: string; name: string };
-type Draft = { id: string | null; name: string; trigger: TriggerType; triggerStageId: string; actions: RuleAction[] };
+type Member = { id: string; name: string };
+type Layout = { trigger?: NodePos; actions?: NodePos[] };
+type Draft = {
+  id: string | null;
+  name: string;
+  trigger: TriggerType;
+  triggerStageId: string;
+  minValue: string;
+  actions: RuleAction[];
+  layout: Layout;
+};
+/** "trigger" or an action index. */
+type Selection = "trigger" | number | null;
 
-const emptyDraft = (): Draft => ({ id: null, name: "", trigger: "stage_entered", triggerStageId: "", actions: [] });
+const NODE_W = 216;
+const emptyDraft = (): Draft => ({ id: null, name: "", trigger: "stage_entered", triggerStageId: "", minValue: "", actions: [], layout: {} });
 
 const ACTION_ICON: Record<ActionType, typeof CheckSquare> = {
   create_task: CheckSquare,
   notify_owner: Bell,
   send_whatsapp: MessageCircle,
+  move_stage: ArrowRightLeft,
+  set_owner: UserCog,
 };
 
-/** A connected node in the flow (n8n-style). */
-function Node({
-  tone,
-  icon: Icon,
-  label,
-  children,
-  onRemove,
-  removeLabel,
-}: {
-  tone: string;
-  icon: typeof Zap;
-  label: string;
-  children?: React.ReactNode;
-  onRemove?: () => void;
-  removeLabel?: string;
-}) {
-  return (
-    <div className="relative w-full max-w-md rounded-xl border border-border bg-card shadow-sm">
-      <div className={cn("flex items-center gap-2 rounded-t-xl px-3 py-2", tone)}>
-        <Icon className="size-4" />
-        <span className="text-sm font-semibold">{label}</span>
-        {onRemove ? (
-          <button type="button" onClick={onRemove} aria-label={removeLabel} className="ml-auto rounded-md p-0.5 hover:bg-black/10">
-            <X className="size-4" />
-          </button>
-        ) : null}
-      </div>
-      {children ? <div className="p-3">{children}</div> : null}
-    </div>
-  );
-}
-
-/** The little wire between two nodes. */
-function Connector() {
-  return (
-    <div className="flex flex-col items-center py-1" aria-hidden>
-      <div className="h-4 w-px bg-border" />
-      <ArrowDown className="size-3.5 text-muted-foreground" />
-      <div className="h-1 w-px bg-border" />
-    </div>
-  );
+function newAction(type: ActionType, firstTemplate?: string, firstStage?: string, firstMember?: string): RuleAction {
+  switch (type) {
+    case "create_task": return { type, title: "", priority: "MEDIUM" };
+    case "notify_owner": return { type };
+    case "send_whatsapp": return { type, templateId: firstTemplate ?? "" };
+    case "move_stage": return { type, stageId: firstStage ?? "" };
+    case "set_owner": return { type, userId: firstMember ?? "" };
+  }
 }
 
 export function AutomationsClient({
   rules,
   stages,
   templates,
+  members,
   canEdit,
 }: {
   rules: AutomationRuleView[];
   stages: Stage[];
   templates: Template[];
+  members: Member[];
   canEdit: boolean;
 }) {
   const t = useTranslations("crm.automations");
   const router = useRouter();
   const confirm = useConfirm();
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [selected, setSelected] = useState<Selection>("trigger");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   const stageName = (id: string | null) => stages.find((s) => s.id === id)?.name ?? "—";
   const templateName = (id: string) => templates.find((x) => x.id === id)?.name ?? id;
+  const memberName = (id: string) => members.find((x) => x.id === id)?.name ?? id;
 
   function actionSummary(a: RuleAction) {
     if (a.type === "create_task") return t("action.create_task") + (a.title ? `: ${a.title}` : "");
     if (a.type === "notify_owner") return t("action.notify_owner");
-    return `${t("action.send_whatsapp")}: ${templateName(a.templateId)}`;
+    if (a.type === "send_whatsapp") return `${t("action.send_whatsapp")}: ${templateName(a.templateId)}`;
+    if (a.type === "move_stage") return `${t("action.move_stage")}: ${stageName(a.stageId)}`;
+    return `${t("action.set_owner")}: ${memberName(a.userId)}`;
   }
 
-  function edit(rule: AutomationRuleView) {
+  // ── Draft helpers ──────────────────────────────────────────────────────────
+  function open(rule?: AutomationRuleView) {
     setError(null);
-    setDraft({ id: rule.id, name: rule.name, trigger: rule.trigger, triggerStageId: rule.triggerStageId ?? "", actions: rule.actions });
+    setSelected("trigger");
+    if (rule) {
+      setDraft({
+        id: rule.id,
+        name: rule.name,
+        trigger: rule.trigger,
+        triggerStageId: rule.triggerStageId ?? "",
+        minValue: rule.config.minValue ? String(rule.config.minValue) : "",
+        actions: rule.actions,
+        layout: rule.config.layout ?? {},
+      });
+    } else {
+      setDraft(emptyDraft());
+    }
+  }
+
+  function posOf(key: "trigger" | number): NodePos {
+    if (!draft) return { x: 0, y: 0 };
+    if (key === "trigger") return draft.layout.trigger ?? { x: 24, y: 24 };
+    return draft.layout.actions?.[key] ?? { x: 24 + ((key + 1) % 3) * (NODE_W + 24), y: 24 + Math.floor((key + 1) / 3 + 1) * 130 };
   }
 
   function patchAction(i: number, next: RuleAction) {
@@ -113,10 +124,52 @@ export function AutomationsClient({
   function addAction(type: ActionType) {
     setDraft((d) => {
       if (!d) return d;
-      const a: RuleAction =
-        type === "create_task" ? { type, title: "" } : type === "notify_owner" ? { type } : { type, templateId: templates[0]?.id ?? "" };
-      return { ...d, actions: [...d.actions, a] };
+      const idx = d.actions.length;
+      const actions = [...d.actions, newAction(type, templates[0]?.id, stages[0]?.id, members[0]?.id)];
+      const layoutActions = [...(d.layout.actions ?? [])];
+      layoutActions[idx] = posOf(idx);
+      return { ...d, actions, layout: { ...d.layout, actions: layoutActions } };
     });
+    setSelected(draft ? draft.actions.length : null);
+  }
+
+  function removeAction(i: number) {
+    setDraft((d) => {
+      if (!d) return d;
+      return {
+        ...d,
+        actions: d.actions.filter((_, j) => j !== i),
+        layout: { ...d.layout, actions: (d.layout.actions ?? []).filter((_, j) => j !== i) },
+      };
+    });
+    setSelected("trigger");
+  }
+
+  // ── Dragging ───────────────────────────────────────────────────────────────
+  function startDrag(key: "trigger" | number, e: React.MouseEvent) {
+    if (!canEdit) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const start0 = posOf(key);
+    const offX = e.clientX - rect.left - start0.x;
+    const offY = e.clientY - rect.top - start0.y;
+    const onMove = (ev: MouseEvent) => {
+      const x = Math.max(0, ev.clientX - rect.left - offX);
+      const y = Math.max(0, ev.clientY - rect.top - offY);
+      setDraft((d) => {
+        if (!d) return d;
+        if (key === "trigger") return { ...d, layout: { ...d.layout, trigger: { x, y } } };
+        const arr = [...(d.layout.actions ?? [])];
+        arr[key] = { x, y };
+        return { ...d, layout: { ...d.layout, actions: arr } };
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   }
 
   function save() {
@@ -124,141 +177,151 @@ export function AutomationsClient({
     setError(null);
     if (!draft.name.trim() || draft.actions.length === 0) return setError(t("err.invalid"));
     if (triggerNeedsStage(draft.trigger) && !draft.triggerStageId) return setError(t("err.invalid"));
-    const payload = { name: draft.name, trigger: draft.trigger, triggerStageId: draft.triggerStageId, actions: draft.actions };
+    const config: RuleConfig = {
+      minValue: draft.minValue ? Number(draft.minValue.replace(/[^\d.,]/g, "").replace(/\./g, "").replace(",", ".")) : undefined,
+      layout: draft.layout,
+    };
+    const payload = { name: draft.name, trigger: draft.trigger, triggerStageId: draft.triggerStageId, actions: draft.actions, config };
     start(async () => {
       const r = draft.id ? await updateRule(draft.id, payload) : await createRule(payload);
       if (r.ok) {
         setDraft(null);
         router.refresh();
-      } else {
-        setError(t(`err.${r.error}`));
-      }
+      } else setError(t(`err.${r.error}`));
     });
   }
 
   function remove(id: string) {
     confirm({ description: t("confirmDelete"), confirmLabel: t("delete"), variant: "danger" }).then((ok) => {
       if (!ok) return;
-      start(async () => {
-        await deleteRule(id);
-        router.refresh();
-      });
+      start(async () => { await deleteRule(id); router.refresh(); });
     });
   }
+  const toggle = (id: string, enabled: boolean) => start(async () => { await toggleRule(id, enabled); router.refresh(); });
 
-  const toggle = (id: string, enabled: boolean) =>
-    start(async () => {
-      await toggleRule(id, enabled);
-      router.refresh();
-    });
+  // Connector line between two node centers.
+  const center = (key: "trigger" | number) => {
+    const p = posOf(key);
+    return { x: p.x + NODE_W / 2, y: p.y + 34 };
+  };
 
   return (
     <div className="flex flex-col gap-4">
       {canEdit ? (
         <div>
-          <Button type="button" variant="outline" size="sm" onClick={() => { setError(null); setDraft(emptyDraft()); }} disabled={!!draft}>
+          <Button type="button" variant="outline" size="sm" onClick={() => open()} disabled={!!draft}>
             <Plus className="size-4" />
             {t("newRule")}
           </Button>
         </div>
       ) : null}
 
-      {/* Editor: a vertical flow of connected blocks (n8n style). */}
+      {/* ── Canvas editor ─────────────────────────────────────────────────── */}
       {draft ? (
-        <div className="rounded-2xl border border-brand/40 bg-brand/5 p-4">
-          <Input
-            value={draft.name}
-            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            placeholder={t("namePlaceholder")}
-            className="mb-4 font-medium"
-          />
-
-          <div className="flex flex-col items-center">
-            {/* Trigger node */}
-            <Node tone="bg-brand/10 text-brand" icon={Zap} label={t("triggerLabel")}>
-              <select
-                value={draft.trigger}
-                onChange={(e) => setDraft({ ...draft, trigger: e.target.value as TriggerType })}
-                className="h-9 w-full rounded-lg border border-border bg-card px-2 text-sm focus-visible:border-brand focus-visible:outline-none"
-              >
-                {TRIGGERS.map((tr) => (
-                  <option key={tr} value={tr}>{t(`trigger.${tr}`)}</option>
-                ))}
-              </select>
-              {triggerNeedsStage(draft.trigger) ? (
-                <select
-                  value={draft.triggerStageId}
-                  onChange={(e) => setDraft({ ...draft, triggerStageId: e.target.value })}
-                  className="mt-2 h-9 w-full rounded-lg border border-border bg-card px-2 text-sm focus-visible:border-brand focus-visible:outline-none"
-                >
-                  <option value="">{t("chooseStage")}</option>
-                  {stages.map((s) => (
-                    <option key={s.id} value={s.id}>{s.pipeline} · {s.name}</option>
-                  ))}
-                </select>
-              ) : null}
-            </Node>
-
-            {/* Action nodes */}
-            {draft.actions.map((a, i) => (
-              <div key={i} className="flex w-full flex-col items-center">
-                <Connector />
-                <Node
-                  tone="bg-muted text-foreground"
-                  icon={ACTION_ICON[a.type]}
-                  label={t(`action.${a.type}`)}
-                  onRemove={() => setDraft({ ...draft, actions: draft.actions.filter((_, j) => j !== i) })}
-                  removeLabel={t("removeAction")}
-                >
-                  {a.type === "create_task" ? (
-                    <Input value={a.title} onChange={(e) => patchAction(i, { ...a, title: e.target.value })} placeholder={t("taskTitlePlaceholder")} className="h-9" />
-                  ) : null}
-                  {a.type === "send_whatsapp" ? (
-                    <select
-                      value={a.templateId}
-                      onChange={(e) => patchAction(i, { ...a, templateId: e.target.value })}
-                      className="h-9 w-full rounded-lg border border-border bg-card px-2 text-sm focus-visible:border-brand focus-visible:outline-none"
-                    >
-                      {templates.length === 0 ? <option value="">{t("noTemplates")}</option> : null}
-                      {templates.map((tpl) => (
-                        <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
-                      ))}
-                    </select>
-                  ) : null}
-                  {a.type === "notify_owner" ? <p className="text-xs text-muted-foreground">{t("action.notify_owner")}</p> : null}
-                </Node>
-              </div>
-            ))}
-
-            {/* Add-step */}
-            <Connector />
-            <div className="flex flex-wrap justify-center gap-2">
+        <div className="rounded-2xl border border-brand/40 bg-brand/5 p-3">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder={t("namePlaceholder")} className="max-w-xs font-medium" />
+            <div className="ml-auto flex items-center gap-1">
               {ACTION_TYPES.map((type) => {
                 const Icon = ACTION_ICON[type];
                 return (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => addAction(type)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border bg-card px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-brand hover:text-foreground"
-                  >
+                  <button key={type} type="button" onClick={() => addAction(type)} title={t(`action.${type}`)} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border bg-card px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-brand hover:text-foreground">
                     <Icon className="size-3.5" />
-                    {t(`action.${type}`)}
+                    <Plus className="size-3" />
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {error ? <p className="mt-4 text-center text-sm text-red-500">{error}</p> : null}
-          <div className="mt-4 flex justify-end gap-2">
+          <div className="grid gap-3 lg:grid-cols-[1fr_18rem]">
+            {/* Canvas */}
+            <div
+              ref={canvasRef}
+              className="relative h-[26rem] overflow-auto rounded-xl border border-border"
+              style={{ backgroundColor: "var(--color-card)", backgroundImage: "radial-gradient(var(--color-border) 1px, transparent 1px)", backgroundSize: "18px 18px" }}
+              onMouseDown={(e) => { if (e.target === e.currentTarget) setSelected(null); }}
+            >
+              {/* Wires */}
+              <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
+                {draft.actions.map((_, i) => {
+                  const from = i === 0 ? center("trigger") : center(i - 1);
+                  const to = center(i);
+                  return <path key={i} d={`M ${from.x} ${from.y} C ${from.x} ${(from.y + to.y) / 2}, ${to.x} ${(from.y + to.y) / 2}, ${to.x} ${to.y}`} fill="none" stroke="var(--color-brand)" strokeOpacity="0.5" strokeWidth="2" />;
+                })}
+              </svg>
+
+              {/* Trigger node */}
+              <CanvasNode
+                pos={posOf("trigger")}
+                selected={selected === "trigger"}
+                tone="bg-brand/10 text-brand"
+                icon={Zap}
+                label={t("triggerLabel")}
+                summary={t(`trigger.${draft.trigger}`) + (triggerNeedsStage(draft.trigger) ? ` · ${stageName(draft.triggerStageId)}` : "")}
+                onSelect={() => setSelected("trigger")}
+                onDragStart={(e) => startDrag("trigger", e)}
+              />
+
+              {/* Action nodes */}
+              {draft.actions.map((a, i) => (
+                <CanvasNode
+                  key={i}
+                  pos={posOf(i)}
+                  selected={selected === i}
+                  tone="bg-muted text-foreground"
+                  icon={ACTION_ICON[a.type]}
+                  label={t(`action.${a.type}`)}
+                  summary={actionSummary(a)}
+                  onSelect={() => setSelected(i)}
+                  onDragStart={(e) => startDrag(i, e)}
+                  onRemove={() => removeAction(i)}
+                  removeLabel={t("removeAction")}
+                />
+              ))}
+            </div>
+
+            {/* Inspector */}
+            <div className="rounded-xl border border-border bg-card p-3">
+              {selected === "trigger" ? (
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("triggerLabel")}</p>
+                  <Field label={t("when")}>
+                    <Select value={draft.trigger} onChange={(v) => setDraft({ ...draft, trigger: v as TriggerType })} options={TRIGGERS.map((tr) => ({ value: tr, label: t(`trigger.${tr}`) }))} />
+                  </Field>
+                  {triggerNeedsStage(draft.trigger) ? (
+                    <Field label={t("stage")}>
+                      <Select value={draft.triggerStageId} onChange={(v) => setDraft({ ...draft, triggerStageId: v })} placeholder={t("chooseStage")} options={stages.map((s) => ({ value: s.id, label: `${s.pipeline} · ${s.name}` }))} />
+                    </Field>
+                  ) : null}
+                  <Field label={t("minValue")}>
+                    <Input value={draft.minValue} onChange={(e) => setDraft({ ...draft, minValue: e.target.value })} placeholder={t("minValuePlaceholder")} inputMode="numeric" className="h-9" />
+                  </Field>
+                </div>
+              ) : typeof selected === "number" && draft.actions[selected] ? (
+                <ActionInspector
+                  action={draft.actions[selected]}
+                  onChange={(next) => patchAction(selected, next)}
+                  templates={templates}
+                  stages={stages}
+                  members={members}
+                  t={t}
+                />
+              ) : (
+                <p className="py-8 text-center text-xs text-muted-foreground">{t("inspectorHint")}</p>
+              )}
+            </div>
+          </div>
+
+          {error ? <p className="mt-3 text-center text-sm text-red-500">{error}</p> : null}
+          <div className="mt-3 flex justify-end gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => setDraft(null)} disabled={pending}>{t("cancel")}</Button>
             <Button type="button" size="sm" onClick={save} disabled={pending}>{t("save")}</Button>
           </div>
         </div>
       ) : null}
 
-      {/* Rule list — each rule as a compact left-to-right flow. */}
+      {/* ── Rule list ─────────────────────────────────────────────────────── */}
       {rules.length === 0 && !draft ? (
         <p className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">{t("empty")}</p>
       ) : (
@@ -270,39 +333,24 @@ export function AutomationsClient({
                   <div className="flex items-center gap-2">
                     <Zap className="size-4 shrink-0 text-brand" />
                     <h3 className="truncate font-medium">{rule.name}</h3>
+                    {rule.config.minValue ? <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">≥ {rule.config.minValue}</span> : null}
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
                     <span className="rounded-md bg-brand/10 px-2 py-0.5 font-medium text-brand">
-                      {t(`trigger.${rule.trigger}`)}
-                      {triggerNeedsStage(rule.trigger) ? ` · ${stageName(rule.triggerStageId)}` : ""}
+                      {t(`trigger.${rule.trigger}`)}{triggerNeedsStage(rule.trigger) ? ` · ${stageName(rule.triggerStageId)}` : ""}
                     </span>
                     {rule.actions.map((a, i) => (
-                      <span key={i} className="flex items-center gap-1.5 text-muted-foreground">
-                        <ArrowDown className="size-3 -rotate-90" />
-                        <span className="rounded-md bg-muted px-2 py-0.5">{actionSummary(a)}</span>
-                      </span>
+                      <span key={i} className="rounded-md bg-muted px-2 py-0.5 text-muted-foreground">→ {actionSummary(a)}</span>
                     ))}
                   </div>
                 </div>
                 {canEdit ? (
                   <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={rule.enabled}
-                      onClick={() => toggle(rule.id, !rule.enabled)}
-                      disabled={pending}
-                      className={cn("relative h-5 w-9 rounded-full transition-colors", rule.enabled ? "bg-brand" : "bg-muted")}
-                      aria-label={t("enabled")}
-                    >
+                    <button type="button" role="switch" aria-checked={rule.enabled} onClick={() => toggle(rule.id, !rule.enabled)} disabled={pending} className={cn("relative h-5 w-9 rounded-full transition-colors", rule.enabled ? "bg-brand" : "bg-muted")} aria-label={t("enabled")}>
                       <span className={cn("absolute top-0.5 size-4 rounded-full bg-white transition-transform", rule.enabled ? "translate-x-4" : "translate-x-0.5")} />
                     </button>
-                    <button type="button" onClick={() => edit(rule)} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={t("edit")}>
-                      <Pencil className="size-4" />
-                    </button>
-                    <button type="button" onClick={() => remove(rule.id)} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-red-600" aria-label={t("delete")}>
-                      <Trash2 className="size-4" />
-                    </button>
+                    <button type="button" onClick={() => open(rule)} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={t("edit")}><Pencil className="size-4" /></button>
+                    <button type="button" onClick={() => remove(rule.id)} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-red-600" aria-label={t("delete")}><Trash2 className="size-4" /></button>
                   </div>
                 ) : null}
               </div>
@@ -310,6 +358,100 @@ export function AutomationsClient({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Presentational pieces ──────────────────────────────────────────────────
+
+function CanvasNode({
+  pos, selected, tone, icon: Icon, label, summary, onSelect, onDragStart, onRemove, removeLabel,
+}: {
+  pos: NodePos; selected: boolean; tone: string; icon: typeof Zap; label: string; summary: string;
+  onSelect: () => void; onDragStart: (e: React.MouseEvent) => void; onRemove?: () => void; removeLabel?: string;
+}) {
+  return (
+    <div
+      onMouseDown={onSelect}
+      className={cn("absolute rounded-xl border bg-card shadow-sm", selected ? "border-brand ring-2 ring-brand/40" : "border-border")}
+      style={{ left: pos.x, top: pos.y, width: NODE_W }}
+    >
+      <div className={cn("flex cursor-grab items-center gap-2 rounded-t-xl px-3 py-2 active:cursor-grabbing", tone)} onMouseDown={onDragStart}>
+        <Icon className="size-4" />
+        <span className="truncate text-sm font-semibold">{label}</span>
+        {onRemove ? (
+          <button type="button" onMouseDown={(e) => e.stopPropagation()} onClick={onRemove} aria-label={removeLabel} className="ml-auto rounded p-0.5 hover:bg-black/10"><X className="size-3.5" /></button>
+        ) : null}
+      </div>
+      <p className="truncate px-3 py-2 text-xs text-muted-foreground">{summary}</p>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Select({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; placeholder?: string }) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="h-9 rounded-lg border border-border bg-card px-2 text-sm focus-visible:border-brand focus-visible:outline-none">
+      {placeholder ? <option value="">{placeholder}</option> : null}
+      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  );
+}
+
+function ActionInspector({
+  action, onChange, templates, stages, members, t,
+}: {
+  action: RuleAction; onChange: (a: RuleAction) => void; templates: Template[]; stages: Stage[]; members: Member[];
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t(`action.${action.type}`)}</p>
+
+      {action.type === "create_task" ? (
+        <>
+          <Field label={t("taskTitle")}><Input value={action.title} onChange={(e) => onChange({ ...action, title: e.target.value })} placeholder={t("taskTitlePlaceholder")} className="h-9" /></Field>
+          <Field label={t("taskDescription")}>
+            <textarea value={action.description ?? ""} onChange={(e) => onChange({ ...action, description: e.target.value })} rows={2} className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none" />
+          </Field>
+          <Field label={t("priority")}>
+            <Select value={action.priority ?? "MEDIUM"} onChange={(v) => onChange({ ...action, priority: v as "LOW" | "MEDIUM" | "HIGH" })} options={["LOW", "MEDIUM", "HIGH"].map((p) => ({ value: p, label: t(`prio.${p}`) }))} />
+          </Field>
+          <Field label={t("dueInDays")}><Input value={action.dueInDays?.toString() ?? ""} onChange={(e) => onChange({ ...action, dueInDays: e.target.value ? Number(e.target.value) : undefined })} inputMode="numeric" placeholder="0" className="h-9" /></Field>
+        </>
+      ) : null}
+
+      {action.type === "notify_owner" ? (
+        <Field label={t("message")}>
+          <textarea value={action.message ?? ""} onChange={(e) => onChange({ ...action, message: e.target.value })} rows={3} placeholder={t("messagePlaceholder")} className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none" />
+        </Field>
+      ) : null}
+
+      {action.type === "send_whatsapp" ? (
+        <Field label={t("action.send_whatsapp")}>
+          <Select value={action.templateId} onChange={(v) => onChange({ ...action, templateId: v })} placeholder={templates.length === 0 ? t("noTemplates") : undefined} options={templates.map((x) => ({ value: x.id, label: x.name }))} />
+        </Field>
+      ) : null}
+
+      {action.type === "move_stage" ? (
+        <Field label={t("stage")}>
+          <Select value={action.stageId} onChange={(v) => onChange({ ...action, stageId: v })} placeholder={t("chooseStage")} options={stages.map((s) => ({ value: s.id, label: `${s.pipeline} · ${s.name}` }))} />
+        </Field>
+      ) : null}
+
+      {action.type === "set_owner" ? (
+        <Field label={t("owner")}>
+          <Select value={action.userId} onChange={(v) => onChange({ ...action, userId: v })} placeholder={t("chooseOwner")} options={members.map((m) => ({ value: m.id, label: m.name }))} />
+        </Field>
+      ) : null}
     </div>
   );
 }

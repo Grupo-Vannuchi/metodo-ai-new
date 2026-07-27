@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getOrgContext, hasRole } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
-import { isTrigger, parseActions } from "@/lib/automation/types";
+import { isTrigger, parseActions, parseConfig } from "@/lib/automation/types";
 
 export type RuleResult = { ok: true; id: string } | { ok: false; error: "unauthorized" | "forbidden" | "invalid" | "unknown" };
 
@@ -12,6 +12,7 @@ type RuleInput = {
   trigger: string;
   triggerStageId?: string | null;
   actions: unknown;
+  config?: unknown;
 };
 
 type OrgCtx = NonNullable<Awaited<ReturnType<typeof getOrgContext>>>;
@@ -28,10 +29,11 @@ function normalize(input: RuleInput) {
   const name = (input.name ?? "").trim().slice(0, 120);
   const trigger = (input.trigger ?? "").trim();
   const actions = parseActions(input.actions);
+  const config = parseConfig(input.config);
   if (!name || !isTrigger(trigger) || actions.length === 0) return null;
   const triggerStageId = trigger === "stage_entered" ? (input.triggerStageId ?? "").trim() || null : null;
   if (trigger === "stage_entered" && !triggerStageId) return null;
-  return { name, trigger, triggerStageId, actions };
+  return { name, trigger, triggerStageId, actions, config };
 }
 
 export async function createRule(input: RuleInput): Promise<RuleResult> {

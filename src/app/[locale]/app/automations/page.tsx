@@ -5,6 +5,7 @@ import { requireScreen } from "@/lib/access";
 import { listAutomationRules } from "@/lib/queries/automations";
 import { listPipelinesWithStages } from "@/lib/queries/pipelines";
 import { listQuickReplies } from "@/lib/queries/quick-replies";
+import { listTeamMembers } from "@/lib/queries/team-chat";
 import { AutomationsClient } from "@/components/crm/automations-client";
 import { resolveLocale } from "@/i18n/routing";
 
@@ -17,10 +18,11 @@ export default async function AutomationsPage({ params }: { params: Promise<{ lo
   await requireScreen(ctx, "crm", locale);
   const t = await getTranslations("crm.automations");
 
-  const [rules, pipelines, templates] = await Promise.all([
+  const [rules, pipelines, templates, members] = await Promise.all([
     listAutomationRules(ctx.organizationId),
     listPipelinesWithStages(ctx.organizationId),
     listQuickReplies(ctx.organizationId),
+    listTeamMembers(ctx.organizationId),
   ]);
 
   const stages = pipelines.flatMap((p) => p.stages.map((s) => ({ id: s.id, name: s.name, pipeline: p.name })));
@@ -40,6 +42,7 @@ export default async function AutomationsPage({ params }: { params: Promise<{ lo
         rules={rules}
         stages={stages}
         templates={templates.map((x) => ({ id: x.id, name: x.name }))}
+        members={members.map((m) => ({ id: m.userId, name: m.name }))}
         canEdit={canEdit}
       />
 

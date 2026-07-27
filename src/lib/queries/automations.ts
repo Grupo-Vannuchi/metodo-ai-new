@@ -1,6 +1,6 @@
 import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
-import { parseActions, type RuleAction, type TriggerType } from "@/lib/automation/types";
+import { parseActions, parseConfig, type RuleAction, type RuleConfig, type TriggerType } from "@/lib/automation/types";
 
 export type AutomationRuleView = {
   id: string;
@@ -9,6 +9,7 @@ export type AutomationRuleView = {
   trigger: TriggerType;
   triggerStageId: string | null;
   actions: RuleAction[];
+  config: RuleConfig;
 };
 
 /** All automation rules for the org, newest first. */
@@ -16,7 +17,7 @@ export async function listAutomationRules(organizationId: string): Promise<Autom
   const db = tenantDb(organizationId);
   const rows = await db.automationRule.findMany({
     orderBy: { createdAt: "desc" },
-    select: { id: true, name: true, enabled: true, trigger: true, triggerStageId: true, actions: true },
+    select: { id: true, name: true, enabled: true, trigger: true, triggerStageId: true, actions: true, config: true },
   });
   return rows.map((r) => ({
     id: r.id,
@@ -25,5 +26,6 @@ export async function listAutomationRules(organizationId: string): Promise<Autom
     trigger: r.trigger as TriggerType,
     triggerStageId: r.triggerStageId,
     actions: parseActions(r.actions),
+    config: parseConfig(r.config),
   }));
 }
