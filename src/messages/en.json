@@ -904,6 +904,7 @@
       "confirmDelete": "Are you sure you want to delete?",
       "select": "Select",
       "selectAll": "Select all",
+      "dragHint": "Drag to select",
       "deleted": "Deleted",
       "deletedN": "{count} items deleted"
     },

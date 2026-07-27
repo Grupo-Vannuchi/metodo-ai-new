@@ -85,6 +85,7 @@ function ContactList({
           {contacts.map((card) => (
             <div
               key={card.id}
+              data-select-id={card.id}
               draggable
               onDragStart={() => onDragStart(card.id)}
               onDragEnd={onDragEnd}
@@ -115,6 +116,7 @@ function ContactList({
       {contacts.map((card) => (
         <div
           key={card.id}
+          data-select-id={card.id}
           draggable
           onDragStart={() => onDragStart(card.id)}
           onDragEnd={onDragEnd}
@@ -215,7 +217,7 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
     deleteFolder: t("deleteFolder"),
     confirmDeleteFolder: t("confirmDeleteFolder"),
     save: t("save"),
-    selectAll: tc("selectAll"),
+    dragHint: tc("dragHint"),
     folderCount: (count) => t("folderCount", { count }),
   };
   const listLabels: ListLabels = { name: t("name"), company: t("company"), phone: t("phone"), email: t("email"), select: tc("select") };

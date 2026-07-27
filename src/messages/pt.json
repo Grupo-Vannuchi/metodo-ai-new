@@ -904,6 +904,7 @@
       "confirmDelete": "Tem certeza que deseja excluir?",
       "select": "Selecionar",
       "selectAll": "Selecionar tudo",
+      "dragHint": "Arraste para selecionar",
       "deleted": "Excluído",
       "deletedN": "{count} itens excluídos"
     },

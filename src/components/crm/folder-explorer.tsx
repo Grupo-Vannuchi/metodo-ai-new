@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   Pencil,
   Trash2,
@@ -37,7 +37,7 @@ export type ExplorerLabels = {
   deleteFolder: string;
   confirmDeleteFolder: string;
   save: string;
-  selectAll: string;
+  dragHint: string;
   folderCount: (count: number) => string;
 };
 
@@ -145,11 +145,68 @@ export function FolderExplorer<T extends { id: string }>({
       return n;
     });
   const folderItemIds = openCol ? openCol.items.map((i) => i.id) : [];
-  const allSelected = folderItemIds.length > 0 && folderItemIds.every((id) => selected.has(id));
-  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(folderItemIds));
   // Drop ids that vanished after a refresh (deleted/moved out) so the bar count
   // stays honest.
   const selectedIds = folderItemIds.filter((id) => selected.has(id));
+
+  // ── Marquee (rubber-band) selection ───────────────────────────────────────
+  // Drag a box over the open folder's items to select them — no per-item click
+  // needed. Starts only on empty space (not on an item/control), so it never
+  // fights an item's own drag-to-folder.
+  const sectionRef = useRef<HTMLElement>(null);
+  const marqueeBase = useRef<Set<string>>(new Set());
+  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+
+  function hitTest(box: { x: number; y: number; w: number; h: number }): string[] {
+    const section = sectionRef.current;
+    if (!section) return [];
+    const sr = section.getBoundingClientRect();
+    const hits: string[] = [];
+    section.querySelectorAll<HTMLElement>("[data-select-id]").forEach((el) => {
+      const r = el.getBoundingClientRect();
+      const x0 = r.left - sr.left;
+      const y0 = r.top - sr.top;
+      if (x0 < box.x + box.w && x0 + r.width > box.x && y0 < box.y + box.h && y0 + r.height > box.y) {
+        const id = el.getAttribute("data-select-id");
+        if (id) hits.push(id);
+      }
+    });
+    return hits;
+  }
+
+  function onMarqueeDown(e: React.MouseEvent) {
+    // Left button only, on empty space, and only when bulk actions are enabled.
+    if (e.button !== 0 || !renderBulkBar) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("[data-select-id], button, a, input, select, label")) return;
+    const section = sectionRef.current;
+    if (!section) return;
+    const sr = section.getBoundingClientRect();
+    const anchor = { x: e.clientX - sr.left, y: e.clientY - sr.top };
+    marqueeBase.current = e.shiftKey ? new Set(selected) : new Set();
+    if (!e.shiftKey) setSelected(new Set());
+
+    const onMove = (ev: MouseEvent) => {
+      const rect = section.getBoundingClientRect();
+      const cx = ev.clientX - rect.left;
+      const cy = ev.clientY - rect.top;
+      const box = {
+        x: Math.min(anchor.x, cx),
+        y: Math.min(anchor.y, cy),
+        w: Math.abs(cx - anchor.x),
+        h: Math.abs(cy - anchor.y),
+      };
+      setMarquee(box);
+      setSelected(new Set([...marqueeBase.current, ...hitTest(box)]));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      setMarquee(null);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
 
   function onDrop(toId: string | null) {
     setOverTile(null);
@@ -348,29 +405,37 @@ export function FolderExplorer<T extends { id: string }>({
       {/* Content of the opened folder — nothing shown when all are closed. */}
       {openCol ? (
         <section
+          ref={sectionRef}
+          onMouseDown={onMarqueeDown}
           onDragOver={(e) => {
             e.preventDefault();
             setOverTile(keyOf(openCol.id));
           }}
           onDragLeave={() => setOverTile((c) => (c === keyOf(openCol.id) ? null : c))}
           onDrop={() => onDrop(openCol.id)}
-          className={cn("glass rounded-xl border p-4 shadow-sm transition-colors", overTile === keyOf(openCol.id) ? "border-brand" : "border-border")}
+          className={cn(
+            "glass relative rounded-xl border p-4 shadow-sm transition-colors",
+            marquee && "select-none",
+            overTile === keyOf(openCol.id) ? "border-brand" : "border-border",
+          )}
         >
           <div className="mb-3 flex items-center gap-2">
-            {renderBulkBar && openCol.items.length > 0 ? (
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={toggleAll}
-                aria-label={labels.selectAll}
-                title={labels.selectAll}
-                className="size-4 shrink-0 cursor-pointer accent-[var(--brand)]"
-              />
-            ) : null}
             {openCol.id === null ? <Inbox className="size-4 text-muted-foreground" /> : <FolderOpen className="size-4 text-brand" />}
             <h2 className="text-sm font-semibold">{openCol.id === null ? labels.unfiled : openCol.name}</h2>
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{labels.folderCount(openCol.items.length)}</span>
+            {renderBulkBar && openCol.items.length > 0 ? (
+              <span className="ml-1 hidden text-xs text-muted-foreground sm:inline">{labels.dragHint}</span>
+            ) : null}
           </div>
+
+          {/* The rubber-band rectangle. */}
+          {marquee ? (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute z-10 rounded-sm border border-brand bg-brand/10"
+              style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }}
+            />
+          ) : null}
 
           {/* Bulk-action bar — only while a selection is active. */}
           {renderBulkBar && selectedIds.length > 0 ? (

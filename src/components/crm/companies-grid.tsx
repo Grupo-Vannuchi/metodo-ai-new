@@ -84,6 +84,7 @@ function CompanyList({
           {companies.map((card) => (
             <div
               key={card.id}
+              data-select-id={card.id}
               draggable
               onDragStart={() => onDragStart(card.id)}
               onDragEnd={onDragEnd}
@@ -116,6 +117,7 @@ function CompanyList({
       {companies.map((card) => (
         <div
           key={card.id}
+          data-select-id={card.id}
           draggable
           onDragStart={() => onDragStart(card.id)}
           onDragEnd={onDragEnd}
@@ -216,7 +218,7 @@ export function CompaniesGrid({ columns }: { columns: CompanyColumn[] }) {
     deleteFolder: t("deleteFolder"),
     confirmDeleteFolder: t("confirmDeleteFolder"),
     save: t("save"),
-    selectAll: tc("selectAll"),
+    dragHint: tc("dragHint"),
     folderCount: (count) => t("folderCount", { count }),
   };
   const listLabels: ListLabels = { name: t("name"), cnpj: t("cnpj"), city: t("city"), email: t("email"), select: tc("select") };
