@@ -22,6 +22,7 @@ const TENANT_MODELS = new Set<string>([
   "Contact",
   "ContactFolder",
   "Pipeline",
+  "SavedView",
   "Stage",
   "Opportunity",
   "ProductService",

@@ -1081,6 +1081,14 @@
       "emptyColumn": "Arraste cards para cá",
       "renameStage": "Nome do estágio",
       "renameStageHint": "Duplo clique para renomear",
+      "views": {
+        "button": "Visões",
+        "empty": "Nenhuma visão salva.",
+        "saveCurrent": "Salvar visão atual",
+        "namePlaceholder": "Nome da visão",
+        "save": "Salvar",
+        "remove": "Remover visão"
+      },
       "columnTotal": "Total: {total}",
       "open": "Abrir",
       "openHint": "Clique para abrir",

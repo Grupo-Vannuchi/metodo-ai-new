@@ -10,8 +10,10 @@ import {
   type BoardPeriodFilter,
 } from "@/lib/queries/crm";
 import { pipelineOptions } from "@/lib/queries/pipelines";
+import { listSavedViews } from "@/lib/queries/saved-views";
 import { Board } from "@/components/crm/board";
 import { BoardToolbar } from "@/components/crm/board-toolbar";
+import { SavedViews } from "@/components/crm/saved-views";
 import { OpportunityList, type OpportunityRow } from "@/components/crm/opportunity-list";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
@@ -41,9 +43,10 @@ export default async function CrmPage({
   const cookiePid = (await cookies()).get("crm_pipeline")?.value;
   const requestedPid = sp?.pipeline || cookiePid || undefined;
 
-  const [board, pipelines] = await Promise.all([
+  const [board, pipelines, savedViews] = await Promise.all([
     getBoard(ctx.organizationId, requestedPid, mine ? ctx.userId : undefined, { status, period }),
     pipelineOptions(ctx.organizationId),
+    listSavedViews(ctx.organizationId, ctx.userId, "crm"),
   ]);
 
   if (!board) {
@@ -64,6 +67,17 @@ export default async function CrmPage({
     view === "list"
       ? board.columns.flatMap((c) => c.cards.map((card) => ({ ...card, stageName: c.name })))
       : [];
+
+  // The querystring for the filters currently in effect — what "save view" stores.
+  const currentQuery = (() => {
+    const p = new URLSearchParams();
+    if (board.pipelineId) p.set("pipeline", board.pipelineId);
+    if (mine) p.set("owner", "me");
+    if (status !== "ACTIVE") p.set("status", status);
+    if (period !== "ALL") p.set("period", period);
+    if (view !== "kanban") p.set("view", view);
+    return p.toString();
+  })();
 
   return (
     // Fixed-height page so the board fills the viewport and its horizontal
@@ -95,10 +109,13 @@ export default async function CrmPage({
         </div>
       </div>
 
-      <BoardToolbar
-        pipelines={pipelines}
-        current={{ pipelineId: board.pipelineId, owner: mine ? "me" : "all", status, period, view }}
-      />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <BoardToolbar
+          pipelines={pipelines}
+          current={{ pipelineId: board.pipelineId, owner: mine ? "me" : "all", status, period, view }}
+        />
+        <SavedViews current={currentQuery} views={savedViews} />
+      </div>
 
       {view === "list" ? <OpportunityList rows={rows} /> : <Board columns={board.columns} />}
     </div>

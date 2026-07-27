@@ -1081,6 +1081,14 @@
       "emptyColumn": "Drag cards here",
       "renameStage": "Stage name",
       "renameStageHint": "Double-click to rename",
+      "views": {
+        "button": "Views",
+        "empty": "No saved views.",
+        "saveCurrent": "Save current view",
+        "namePlaceholder": "View name",
+        "save": "Save",
+        "remove": "Remove view"
+      },
       "columnTotal": "Total: {total}",
       "open": "Open",
       "openHint": "Click to open",

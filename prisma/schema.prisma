@@ -341,6 +341,26 @@ model CompanyFolder {
   @@map("company_folders")
 }
 
+/// A named, per-user preset of the CRM board's filters (funnel, owner, status,
+/// period, view). Stored as the board's query string so applying one is just a
+/// navigation. Scoped by a bare `organizationId` scalar, like the folder models.
+model SavedView {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  /// Which screen the preset belongs to (e.g. "crm"), so one table can serve
+  /// more boards later.
+  scope          String   @default("crm")
+  name           String
+  /// The board query string, e.g. "pipeline=abc&owner=me&status=WON".
+  query          String
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, userId, scope, order])
+  @@map("saved_views")
+}
+
 /// A sales pipeline (a board). Each org gets a default one.
 model Pipeline {
   id             String   @id @default(cuid())
