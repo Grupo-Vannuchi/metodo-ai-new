@@ -935,6 +935,7 @@
       "removeAction": "Remover ação",
       "enabled": "Ativa",
       "edit": "Editar",
+      "openHint": "Duplo clique para abrir",
       "delete": "Excluir",
       "save": "Salvar",
       "cancel": "Cancelar",

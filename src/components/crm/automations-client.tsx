@@ -436,7 +436,21 @@ export function AutomationsClient({
       ) : (
         <div className="stagger-children flex flex-col gap-2">
           {rules.map((rule) => (
-            <div key={rule.id} className={cn("hover-lift glass rounded-xl border border-border p-4 shadow-sm", !rule.enabled && "opacity-60")}>
+            <div
+              key={rule.id}
+              onDoubleClick={(e) => {
+                // Match the rest of the CRM: double-click the card to open it.
+                // Ignore double-clicks landing on the inline controls.
+                if (!canEdit || (e.target as HTMLElement).closest("button, a")) return;
+                open(rule);
+              }}
+              title={canEdit ? t("openHint") : undefined}
+              className={cn(
+                "hover-lift glass rounded-xl border border-border p-4 shadow-sm",
+                canEdit && "cursor-pointer select-none",
+                !rule.enabled && "opacity-60",
+              )}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
