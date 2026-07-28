@@ -232,6 +232,8 @@
         "system": "Sistema"
       },
       "signOut": "Sair",
+      "collapseSidebar": "Recolher menu",
+      "expandSidebar": "Expandir menu",
       "menu": "Abrir menu",
       "close": "Fechar menu",
       "back": "Voltar"
@@ -941,6 +943,9 @@
       "readOnly": "Somente administradores podem editar automações.",
       "triggerLabel": "Gatilho",
       "addStep": "Adicionar passo",
+      "zoomIn": "Aproximar",
+      "zoomOut": "Afastar",
+      "zoomReset": "Restaurar zoom",
       "minValue": "Só se o valor for ≥",
       "minValuePlaceholder": "Qualquer valor",
       "inspectorHint": "Selecione um bloco para configurar.",

@@ -232,6 +232,8 @@
         "system": "System"
       },
       "signOut": "Sign out",
+      "collapseSidebar": "Collapse menu",
+      "expandSidebar": "Expand menu",
       "menu": "Open menu",
       "close": "Close menu",
       "back": "Back"
@@ -941,6 +943,9 @@
       "readOnly": "Only admins can edit automations.",
       "triggerLabel": "Trigger",
       "addStep": "Add step",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "zoomReset": "Reset zoom",
       "minValue": "Only if value ≥",
       "minValuePlaceholder": "Any value",
       "inspectorHint": "Select a block to configure it.",

@@ -99,7 +99,7 @@ const GROUPS: Group[] = [
 /** Screens that are never gated by access templates. */
 const ALWAYS_SHOWN: NavKey[] = ["dashboard", "my", "settings"];
 
-export function AppNav({ allowedScreens }: { allowedScreens: string[] }) {
+export function AppNav({ allowedScreens, collapsed = false }: { allowedScreens: string[]; collapsed?: boolean }) {
   const t = useTranslations("app.nav");
   const pathname = usePathname();
   const [unread, setUnread] = useState(0);
@@ -149,6 +149,32 @@ export function AppNav({ allowedScreens }: { allowedScreens: string[] }) {
       else n.add(key);
       return n;
     });
+  }
+
+  // Collapsed: a flat rail of icon-only links (no group headers), with tooltips.
+  if (collapsed) {
+    const items = GROUPS.flatMap((g) => g.items).filter((i) => canShow(i.key));
+    return (
+      <nav className="flex flex-col items-center gap-1">
+        {items.map(({ href, key, icon: Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            title={t(key)}
+            aria-label={t(key)}
+            className={cn(
+              "relative flex size-10 items-center justify-center rounded-lg transition-colors",
+              isActive(href) ? "bg-brand/10 text-brand" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <Icon className="size-5" />
+            {key === "inbox" && unread > 0 ? (
+              <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-brand ring-2 ring-card" />
+            ) : null}
+          </Link>
+        ))}
+      </nav>
+    );
   }
 
   return (

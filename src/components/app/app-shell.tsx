@@ -1,10 +1,11 @@
+import { cookies } from "next/headers";
 import { getTranslations } from "next-intl/server";
 import { LogOut } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { AppNav } from "@/components/app/app-nav";
 import { MobileNav } from "@/components/app/mobile-nav";
 import { NotificationBell } from "@/components/app/notification-bell";
+import { Sidebar } from "@/components/app/sidebar";
 import { NotificationSound } from "@/components/app/notification-sound";
 import { CommandPalette } from "@/components/app/command-palette";
 import { RealtimeProvider } from "@/components/app/realtime-provider";
@@ -33,6 +34,8 @@ export async function AppShell({
     (s) => s !== "finance" || hasFeature(ctx.organization.plan as PlanKey, "finance"),
   );
 
+  const collapsed = (await cookies()).get("sidebar_collapsed")?.value === "1";
+
   return (
     <RealtimeProvider>
     <NotificationSound />
@@ -51,45 +54,16 @@ export async function AppShell({
       <CommandPalette />
       {/* Opaque branded surface — NOT glass: a translucent navy washes out over
           the light canvas and makes its inner boxes (search, org card) read as
-          mismatched tones. */}
-      <aside className="sidebar-brand relative z-30 hidden w-64 shrink-0 flex-col border-r border-border bg-card p-4 md:flex">
-        <div className="flex items-center justify-between gap-2 px-1 py-2">
-          <Logo onDark className="text-xl" />
-          <NotificationBell align="left" />
-        </div>
-
-        <div className="mt-4 rounded-lg border border-border bg-muted/40 px-3 py-2">
-          <p className="truncate text-sm font-medium">{ctx.organization.name}</p>
-          <p className="text-xs text-muted-foreground">{ctx.organization.plan}</p>
-        </div>
-
-        <div className="mt-4">
-          <SearchTrigger variant="box" />
-        </div>
-
-        <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
-          <AppNav allowedScreens={navScreens} />
-        </div>
-
-        <div className="flex flex-col gap-2 border-t border-border pt-3">
-          <div className="flex items-center justify-between gap-2 px-3 py-1">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{ctx.user.name}</p>
-              <p className="truncate text-xs text-muted-foreground">{ctx.user.email}</p>
-            </div>
-            <ThemeToggle className="shrink-0" />
-          </div>
-          <form action={logout.bind(null, locale)}>
-            <button
-              type="submit"
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <LogOut className="size-4" />
-              {t("signOut")}
-            </button>
-          </form>
-        </div>
-      </aside>
+          mismatched tones. Collapsible to an icon rail. */}
+      <Sidebar
+        orgName={ctx.organization.name}
+        plan={ctx.organization.plan}
+        userName={ctx.user.name}
+        userEmail={ctx.user.email}
+        navScreens={navScreens}
+        logoutAction={logout.bind(null, locale)}
+        initialCollapsed={collapsed}
+      />
 
       <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="glass-strong flex items-center justify-between border-b border-border px-4 py-3 md:hidden">

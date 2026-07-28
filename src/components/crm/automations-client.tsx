@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import {
   Plus, Trash2, Pencil, Zap, X, CheckSquare, Bell, BellPlus, MessageCircle, Mail,
-  ArrowRightLeft, UserCog, CalendarClock, Tag, Wallet, Webhook,
+  ArrowRightLeft, UserCog, CalendarClock, Tag, Wallet, Webhook, ZoomIn, ZoomOut, Maximize2,
 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
@@ -95,7 +95,9 @@ export function AutomationsClient({
   const [selected, setSelected] = useState<Selection>("trigger");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const zoomBy = (d: number) => setZoom((z) => Math.max(0.4, Math.min(1.6, Math.round((z + d) * 10) / 10)));
 
   const stageName = (id: string | null) => stages.find((s) => s.id === id)?.name ?? "—";
   const templateName = (id: string) => templates.find((x) => x.id === id)?.name ?? id;
@@ -174,14 +176,22 @@ export function AutomationsClient({
   // ── Dragging ───────────────────────────────────────────────────────────────
   function startDrag(key: "trigger" | number, e: React.MouseEvent) {
     if (!canEdit) return;
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
+    const el = canvasRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    // Screen point → unscaled canvas coordinate (account for zoom + scroll).
+    const toCanvas = (cx: number, cy: number) => ({
+      x: (cx - rect.left + el.scrollLeft) / zoom,
+      y: (cy - rect.top + el.scrollTop) / zoom,
+    });
     const start0 = posOf(key);
-    const offX = e.clientX - rect.left - start0.x;
-    const offY = e.clientY - rect.top - start0.y;
+    const p0 = toCanvas(e.clientX, e.clientY);
+    const offX = p0.x - start0.x;
+    const offY = p0.y - start0.y;
     const onMove = (ev: MouseEvent) => {
-      const x = Math.max(0, ev.clientX - rect.left - offX);
-      const y = Math.max(0, ev.clientY - rect.top - offY);
+      const p = toCanvas(ev.clientX, ev.clientY);
+      const x = Math.max(0, p.x - offX);
+      const y = Math.max(0, p.y - offY);
       setDraft((d) => {
         if (!d) return d;
         if (key === "trigger") return { ...d, layout: { ...d.layout, trigger: { x, y } } };
@@ -262,50 +272,71 @@ export function AutomationsClient({
           </div>
 
           <div className="grid gap-3 lg:grid-cols-[1fr_18rem]">
-            {/* Canvas */}
-            <div
-              ref={canvasRef}
-              className="relative h-[26rem] overflow-auto rounded-xl border border-border"
-              style={{ backgroundColor: "var(--color-card)", backgroundImage: "radial-gradient(var(--color-border) 1px, transparent 1px)", backgroundSize: "18px 18px" }}
-              onMouseDown={(e) => { if (e.target === e.currentTarget) setSelected(null); }}
-            >
-              {/* Wires */}
-              <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
-                {draft.actions.map((_, i) => {
-                  const from = i === 0 ? center("trigger") : center(i - 1);
-                  const to = center(i);
-                  return <path key={i} d={`M ${from.x} ${from.y} C ${from.x} ${(from.y + to.y) / 2}, ${to.x} ${(from.y + to.y) / 2}, ${to.x} ${to.y}`} fill="none" stroke="var(--color-brand)" strokeOpacity="0.5" strokeWidth="2" />;
-                })}
-              </svg>
+            {/* Canvas (relative wrapper holds the floating zoom controls). */}
+            <div className="relative">
+              <div
+                ref={canvasRef}
+                className="relative h-[26rem] overflow-auto rounded-xl border border-border"
+                style={{ backgroundColor: "var(--color-card)", backgroundImage: "radial-gradient(var(--color-border) 1px, transparent 1px)", backgroundSize: `${18 * zoom}px ${18 * zoom}px` }}
+              >
+                {/* Scaled world: everything zooms together, wires stay aligned. */}
+                <div
+                  className="relative"
+                  style={{ width: 1600, height: 1000, transform: `scale(${zoom})`, transformOrigin: "0 0" }}
+                  onMouseDown={(e) => { if (e.target === e.currentTarget) setSelected(null); }}
+                >
+                  <svg width={1600} height={1000} className="pointer-events-none absolute left-0 top-0" aria-hidden>
+                    {draft.actions.map((_, i) => {
+                      const from = i === 0 ? center("trigger") : center(i - 1);
+                      const to = center(i);
+                      return <path key={i} d={`M ${from.x} ${from.y} C ${from.x} ${(from.y + to.y) / 2}, ${to.x} ${(from.y + to.y) / 2}, ${to.x} ${to.y}`} fill="none" stroke="var(--color-brand)" strokeOpacity="0.5" strokeWidth="2" />;
+                    })}
+                  </svg>
 
-              {/* Trigger node */}
-              <CanvasNode
-                pos={posOf("trigger")}
-                selected={selected === "trigger"}
-                tone="bg-brand/10 text-brand"
-                icon={Zap}
-                label={t("triggerLabel")}
-                summary={t(`trigger.${draft.trigger}`) + (triggerNeedsStage(draft.trigger) ? ` · ${stageName(draft.triggerStageId)}` : "")}
-                onSelect={() => setSelected("trigger")}
-                onDragStart={(e) => startDrag("trigger", e)}
-              />
+                  <CanvasNode
+                    pos={posOf("trigger")}
+                    selected={selected === "trigger"}
+                    tone="bg-brand/10 text-brand"
+                    icon={Zap}
+                    label={t("triggerLabel")}
+                    summary={t(`trigger.${draft.trigger}`) + (triggerNeedsStage(draft.trigger) ? ` · ${stageName(draft.triggerStageId)}` : "")}
+                    onSelect={() => setSelected("trigger")}
+                    onDragStart={(e) => startDrag("trigger", e)}
+                  />
 
-              {/* Action nodes */}
-              {draft.actions.map((a, i) => (
-                <CanvasNode
-                  key={i}
-                  pos={posOf(i)}
-                  selected={selected === i}
-                  tone="bg-muted text-foreground"
-                  icon={ACTION_ICON[a.type]}
-                  label={t(`action.${a.type}`)}
-                  summary={actionSummary(a)}
-                  onSelect={() => setSelected(i)}
-                  onDragStart={(e) => startDrag(i, e)}
-                  onRemove={() => removeAction(i)}
-                  removeLabel={t("removeAction")}
-                />
-              ))}
+                  {draft.actions.map((a, i) => (
+                    <CanvasNode
+                      key={i}
+                      pos={posOf(i)}
+                      selected={selected === i}
+                      tone="bg-muted text-foreground"
+                      icon={ACTION_ICON[a.type]}
+                      label={t(`action.${a.type}`)}
+                      summary={actionSummary(a)}
+                      onSelect={() => setSelected(i)}
+                      onDragStart={(e) => startDrag(i, e)}
+                      onRemove={() => removeAction(i)}
+                      removeLabel={t("removeAction")}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Floating zoom controls (over the canvas, not scaled). */}
+              <div className="absolute bottom-2 right-2 flex items-center gap-0.5 rounded-lg border border-border bg-card/90 p-1 shadow-sm backdrop-blur">
+                <button type="button" onClick={() => zoomBy(-0.1)} aria-label={t("zoomOut")} title={t("zoomOut")} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+                  <ZoomOut className="size-4" />
+                </button>
+                <button type="button" onClick={() => setZoom(1)} title={t("zoomReset")} className="min-w-11 px-1 text-center text-xs font-medium tabular-nums text-muted-foreground hover:text-foreground">
+                  {Math.round(zoom * 100)}%
+                </button>
+                <button type="button" onClick={() => zoomBy(0.1)} aria-label={t("zoomIn")} title={t("zoomIn")} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+                  <ZoomIn className="size-4" />
+                </button>
+                <button type="button" onClick={() => setZoom(1)} aria-label={t("zoomReset")} title={t("zoomReset")} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+                  <Maximize2 className="size-4" />
+                </button>
+              </div>
             </div>
 
             {/* Inspector */}
