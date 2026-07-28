@@ -1,5 +1,4 @@
 import { getTranslations } from "next-intl/server";
-import { Workflow } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { requireScreen } from "@/lib/access";
 import { listAutomationRules } from "@/lib/queries/automations";
@@ -32,10 +31,7 @@ export default async function AutomationsPage({ params }: { params: Promise<{ lo
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          <Workflow className="size-6 text-brand" />
-          {t("title")}
-        </h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
         <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
       </div>
 

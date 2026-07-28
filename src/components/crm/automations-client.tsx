@@ -245,7 +245,7 @@ export function AutomationsClient({
 
       {/* ── Canvas editor ─────────────────────────────────────────────────── */}
       {draft ? (
-        <div className="rounded-2xl border border-brand/40 bg-brand/5 p-3">
+        <div className="glass rounded-2xl border border-border p-4 shadow-sm">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder={t("namePlaceholder")} className="max-w-xs font-medium" />
             <div className="ml-auto flex items-center gap-1">
@@ -355,9 +355,9 @@ export function AutomationsClient({
       {rules.length === 0 && !draft ? (
         <p className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">{t("empty")}</p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="stagger-children flex flex-col gap-2">
           {rules.map((rule) => (
-            <div key={rule.id} className={cn("rounded-xl border border-border bg-card p-4", !rule.enabled && "opacity-60")}>
+            <div key={rule.id} className={cn("hover-lift glass rounded-xl border border-border p-4 shadow-sm", !rule.enabled && "opacity-60")}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">

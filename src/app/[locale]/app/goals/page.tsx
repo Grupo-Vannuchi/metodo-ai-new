@@ -49,10 +49,7 @@ export default async function GoalsPage({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-            <Target className="size-6 text-brand" />
-            {t("title")}
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
           <p className="mt-1 text-muted-foreground">{t("subtitle", { month: label })}</p>
         </div>
         <GoalsMonthNav month={month} label={label} />
