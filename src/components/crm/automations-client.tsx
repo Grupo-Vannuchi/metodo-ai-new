@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import {
   Plus, Trash2, Pencil, Zap, X, CheckSquare, Bell, BellPlus, MessageCircle, Mail,
@@ -42,6 +42,25 @@ type Draft = {
 type Selection = "trigger" | number | null;
 
 const NODE_W = 216;
+/** Default position for a node when the saved layout has none. */
+function defaultPos(key: "trigger" | number): NodePos {
+  if (key === "trigger") return { x: 24, y: 24 };
+  return { x: 24 + ((key + 1) % 3) * (NODE_W + 24), y: 24 + Math.floor((key + 1) / 3 + 1) * 130 };
+}
+
+/** Shift all positions so the top-left node sits at (24, 24) — guarantees the
+ * whole flow is visible when the editor opens, regardless of saved coords. */
+function normalizeLayout(actionCount: number, layout: Layout): Layout {
+  const trigger = layout.trigger ?? defaultPos("trigger");
+  const actions = Array.from({ length: actionCount }, (_, i) => layout.actions?.[i] ?? defaultPos(i));
+  const all = [trigger, ...actions];
+  const dx = 24 - Math.min(...all.map((p) => p.x));
+  const dy = 24 - Math.min(...all.map((p) => p.y));
+  return {
+    trigger: { x: trigger.x + dx, y: trigger.y + dy },
+    actions: actions.map((p) => ({ x: p.x + dx, y: p.y + dy })),
+  };
+}
 const emptyDraft = (): Draft => ({ id: null, name: "", trigger: "stage_entered", triggerStageId: "", minValue: "", maxValue: "", actions: [], layout: {} });
 const parseMoney = (s: string) => (s ? Number(s.replace(/[^\d.,]/g, "").replace(/\./g, "").replace(",", ".")) : undefined);
 
@@ -99,6 +118,13 @@ export function AutomationsClient({
   const canvasRef = useRef<HTMLDivElement>(null);
   const zoomBy = (d: number) => setZoom((z) => Math.max(0.4, Math.min(1.6, Math.round((z + d) * 10) / 10)));
 
+  // On opening the editor, scroll the canvas back to the top-left so the flow is
+  // framed (positions are normalized to start there). DOM-only — no setState.
+  useEffect(() => {
+    if (draft) canvasRef.current?.scrollTo({ left: 0, top: 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft?.id, draft === null]);
+
   const stageName = (id: string | null) => stages.find((s) => s.id === id)?.name ?? "—";
   const templateName = (id: string) => templates.find((x) => x.id === id)?.name ?? id;
   const memberName = (id: string) => members.find((x) => x.id === id)?.name ?? id;
@@ -123,6 +149,7 @@ export function AutomationsClient({
   function open(rule?: AutomationRuleView) {
     setError(null);
     setSelected("trigger");
+    setZoom(1);
     if (rule) {
       setDraft({
         id: rule.id,
@@ -132,7 +159,7 @@ export function AutomationsClient({
         minValue: rule.config.minValue ? String(rule.config.minValue) : "",
         maxValue: rule.config.maxValue ? String(rule.config.maxValue) : "",
         actions: rule.actions,
-        layout: rule.config.layout ?? {},
+        layout: normalizeLayout(rule.actions.length, rule.config.layout ?? {}),
       });
     } else {
       setDraft(emptyDraft());
@@ -141,8 +168,8 @@ export function AutomationsClient({
 
   function posOf(key: "trigger" | number): NodePos {
     if (!draft) return { x: 0, y: 0 };
-    if (key === "trigger") return draft.layout.trigger ?? { x: 24, y: 24 };
-    return draft.layout.actions?.[key] ?? { x: 24 + ((key + 1) % 3) * (NODE_W + 24), y: 24 + Math.floor((key + 1) / 3 + 1) * 130 };
+    if (key === "trigger") return draft.layout.trigger ?? defaultPos("trigger");
+    return draft.layout.actions?.[key] ?? defaultPos(key);
   }
 
   function patchAction(i: number, next: RuleAction) {
