@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import {
   Plus, Trash2, Pencil, Zap, X, CheckSquare, Bell, BellPlus, MessageCircle, Mail,
@@ -115,15 +115,13 @@ export function AutomationsClient({
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
   const zoomBy = (d: number) => setZoom((z) => Math.max(0.4, Math.min(1.6, Math.round((z + d) * 10) / 10)));
-
-  // On opening the editor, scroll the canvas back to the top-left so the flow is
-  // framed (positions are normalized to start there). DOM-only — no setState.
-  useEffect(() => {
-    if (draft) canvasRef.current?.scrollTo({ left: 0, top: 0 });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft?.id, draft === null]);
+  const resetView = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
 
   const stageName = (id: string | null) => stages.find((s) => s.id === id)?.name ?? "—";
   const templateName = (id: string) => templates.find((x) => x.id === id)?.name ?? id;
@@ -149,7 +147,7 @@ export function AutomationsClient({
   function open(rule?: AutomationRuleView) {
     setError(null);
     setSelected("trigger");
-    setZoom(1);
+    resetView();
     if (rule) {
       setDraft({
         id: rule.id,
@@ -201,15 +199,31 @@ export function AutomationsClient({
   }
 
   // ── Dragging ───────────────────────────────────────────────────────────────
+  // Drag the empty canvas to pan the whole flow.
+  function startPan(e: React.MouseEvent) {
+    if (e.target !== e.currentTarget) return; // only the background, not a node
+    setSelected(null);
+    const p0 = { ...pan };
+    const sx = e.clientX;
+    const sy = e.clientY;
+    const onMove = (ev: MouseEvent) => setPan({ x: p0.x + (ev.clientX - sx), y: p0.y + (ev.clientY - sy) });
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
   function startDrag(key: "trigger" | number, e: React.MouseEvent) {
     if (!canEdit) return;
     const el = canvasRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    // Screen point → unscaled canvas coordinate (account for zoom + scroll).
+    // Screen point → unscaled world coordinate (undo the pan translate + zoom).
     const toCanvas = (cx: number, cy: number) => ({
-      x: (cx - rect.left + el.scrollLeft) / zoom,
-      y: (cy - rect.top + el.scrollTop) / zoom,
+      x: (cx - rect.left - pan.x) / zoom,
+      y: (cy - rect.top - pan.y) / zoom,
     });
     const start0 = posOf(key);
     const p0 = toCanvas(e.clientX, e.clientY);
@@ -303,16 +317,23 @@ export function AutomationsClient({
             <div className="relative">
               <div
                 ref={canvasRef}
-                className="relative h-[26rem] overflow-auto rounded-xl border border-border"
-                style={{ backgroundColor: "var(--color-card)", backgroundImage: "radial-gradient(var(--color-border) 1px, transparent 1px)", backgroundSize: `${18 * zoom}px ${18 * zoom}px` }}
+                className="relative h-[26rem] cursor-grab overflow-hidden rounded-xl border border-border active:cursor-grabbing"
+                onMouseDown={startPan}
+                style={{
+                  backgroundColor: "var(--color-card)",
+                  backgroundImage: "radial-gradient(var(--color-border) 1px, transparent 1px)",
+                  backgroundSize: `${18 * zoom}px ${18 * zoom}px`,
+                  backgroundPosition: `${pan.x}px ${pan.y}px`,
+                }}
               >
-                {/* Scaled world: everything zooms together, wires stay aligned. */}
+                {/* The panned + zoomed world. Nothing scrolls — pan/zoom instead,
+                    so nodes can never get lost off a scrollbar. */}
                 <div
-                  className="relative"
-                  style={{ width: 1600, height: 1000, transform: `scale(${zoom})`, transformOrigin: "0 0" }}
-                  onMouseDown={(e) => { if (e.target === e.currentTarget) setSelected(null); }}
+                  className="absolute left-0 top-0"
+                  style={{ width: 2400, height: 1600, transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "0 0" }}
+                  onMouseDown={startPan}
                 >
-                  <svg width={1600} height={1000} className="pointer-events-none absolute left-0 top-0" aria-hidden>
+                  <svg width={2400} height={1600} className="pointer-events-none absolute left-0 top-0" aria-hidden>
                     {draft.actions.map((_, i) => {
                       const from = i === 0 ? center("trigger") : center(i - 1);
                       const to = center(i);
@@ -354,13 +375,13 @@ export function AutomationsClient({
                 <button type="button" onClick={() => zoomBy(-0.1)} aria-label={t("zoomOut")} title={t("zoomOut")} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
                   <ZoomOut className="size-4" />
                 </button>
-                <button type="button" onClick={() => setZoom(1)} title={t("zoomReset")} className="min-w-11 px-1 text-center text-xs font-medium tabular-nums text-muted-foreground hover:text-foreground">
+                <button type="button" onClick={resetView} title={t("zoomReset")} className="min-w-11 px-1 text-center text-xs font-medium tabular-nums text-muted-foreground hover:text-foreground">
                   {Math.round(zoom * 100)}%
                 </button>
                 <button type="button" onClick={() => zoomBy(0.1)} aria-label={t("zoomIn")} title={t("zoomIn")} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
                   <ZoomIn className="size-4" />
                 </button>
-                <button type="button" onClick={() => setZoom(1)} aria-label={t("zoomReset")} title={t("zoomReset")} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+                <button type="button" onClick={resetView} aria-label={t("zoomReset")} title={t("zoomReset")} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
                   <Maximize2 className="size-4" />
                 </button>
               </div>
