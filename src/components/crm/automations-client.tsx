@@ -438,9 +438,9 @@ export function AutomationsClient({
           {rules.map((rule) => (
             <div
               key={rule.id}
-              onDoubleClick={(e) => {
-                // Match the rest of the CRM: double-click the card to open it.
-                // Ignore double-clicks landing on the inline controls.
+              onClick={(e) => {
+                // Match the rest of the CRM: a single click on the card opens it.
+                // Ignore clicks landing on the inline controls.
                 if (!canEdit || (e.target as HTMLElement).closest("button, a")) return;
                 open(rule);
               }}
