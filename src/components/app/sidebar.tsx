@@ -68,7 +68,7 @@ export function Sidebar({
 
       {/* Bell gets its own row when collapsed (no header space for it). */}
       {collapsed ? (
-        <div className="mt-1 flex justify-center">
+        <div className="mt-1 flex w-full justify-center">
           <NotificationBell />
         </div>
       ) : (
@@ -82,13 +82,20 @@ export function Sidebar({
         <SearchTrigger variant={collapsed ? "icon" : "box"} />
       </div>
 
-      <div className="mt-4 min-h-0 w-full flex-1 overflow-y-auto">
+      {/* When collapsed, hide the scrollbar so it doesn't steal width on the
+          right and push the icon rail off-center. */}
+      <div
+        className={cn(
+          "mt-4 min-h-0 w-full flex-1 overflow-y-auto",
+          collapsed && "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        )}
+      >
         <AppNav allowedScreens={navScreens} collapsed={collapsed} />
       </div>
 
       <div className="flex w-full flex-col gap-2 border-t border-border pt-3">
         {collapsed ? (
-          <div className="flex justify-center">
+          <div className="flex w-full justify-center">
             <ThemeToggle />
           </div>
         ) : (
