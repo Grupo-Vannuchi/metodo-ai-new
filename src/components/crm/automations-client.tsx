@@ -2,7 +2,10 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, Trash2, Pencil, Zap, X, CheckSquare, Bell, MessageCircle, ArrowRightLeft, UserCog } from "lucide-react";
+import {
+  Plus, Trash2, Pencil, Zap, X, CheckSquare, Bell, BellPlus, MessageCircle, Mail,
+  ArrowRightLeft, UserCog, CalendarClock, Tag, Wallet, Webhook,
+} from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
@@ -31,6 +34,7 @@ type Draft = {
   trigger: TriggerType;
   triggerStageId: string;
   minValue: string;
+  maxValue: string;
   actions: RuleAction[];
   layout: Layout;
 };
@@ -38,23 +42,36 @@ type Draft = {
 type Selection = "trigger" | number | null;
 
 const NODE_W = 216;
-const emptyDraft = (): Draft => ({ id: null, name: "", trigger: "stage_entered", triggerStageId: "", minValue: "", actions: [], layout: {} });
+const emptyDraft = (): Draft => ({ id: null, name: "", trigger: "stage_entered", triggerStageId: "", minValue: "", maxValue: "", actions: [], layout: {} });
+const parseMoney = (s: string) => (s ? Number(s.replace(/[^\d.,]/g, "").replace(/\./g, "").replace(",", ".")) : undefined);
 
 const ACTION_ICON: Record<ActionType, typeof CheckSquare> = {
   create_task: CheckSquare,
   notify_owner: Bell,
+  notify_user: BellPlus,
   send_whatsapp: MessageCircle,
+  send_email: Mail,
   move_stage: ArrowRightLeft,
   set_owner: UserCog,
+  set_expected_close: CalendarClock,
+  add_tag: Tag,
+  create_finance_entry: Wallet,
+  webhook: Webhook,
 };
 
 function newAction(type: ActionType, firstTemplate?: string, firstStage?: string, firstMember?: string): RuleAction {
   switch (type) {
     case "create_task": return { type, title: "", priority: "MEDIUM" };
     case "notify_owner": return { type };
+    case "notify_user": return { type, userId: firstMember ?? "" };
     case "send_whatsapp": return { type, templateId: firstTemplate ?? "" };
+    case "send_email": return { type, subject: "", body: "" };
     case "move_stage": return { type, stageId: firstStage ?? "" };
     case "set_owner": return { type, userId: firstMember ?? "" };
+    case "set_expected_close": return { type, inDays: 7 };
+    case "add_tag": return { type, tag: "" };
+    case "create_finance_entry": return { type, description: "", useOppValue: true };
+    case "webhook": return { type, url: "" };
   }
 }
 
@@ -84,12 +101,20 @@ export function AutomationsClient({
   const templateName = (id: string) => templates.find((x) => x.id === id)?.name ?? id;
   const memberName = (id: string) => members.find((x) => x.id === id)?.name ?? id;
 
-  function actionSummary(a: RuleAction) {
-    if (a.type === "create_task") return t("action.create_task") + (a.title ? `: ${a.title}` : "");
-    if (a.type === "notify_owner") return t("action.notify_owner");
-    if (a.type === "send_whatsapp") return `${t("action.send_whatsapp")}: ${templateName(a.templateId)}`;
-    if (a.type === "move_stage") return `${t("action.move_stage")}: ${stageName(a.stageId)}`;
-    return `${t("action.set_owner")}: ${memberName(a.userId)}`;
+  function actionSummary(a: RuleAction): string {
+    switch (a.type) {
+      case "create_task": return t("action.create_task") + (a.title ? `: ${a.title}` : "");
+      case "notify_owner": return t("action.notify_owner");
+      case "notify_user": return `${t("action.notify_user")}: ${memberName(a.userId)}`;
+      case "send_whatsapp": return `${t("action.send_whatsapp")}: ${templateName(a.templateId)}`;
+      case "send_email": return `${t("action.send_email")}: ${a.subject || "—"}`;
+      case "move_stage": return `${t("action.move_stage")}: ${stageName(a.stageId)}`;
+      case "set_owner": return `${t("action.set_owner")}: ${memberName(a.userId)}`;
+      case "set_expected_close": return `${t("action.set_expected_close")}: +${a.inDays}d`;
+      case "add_tag": return `${t("action.add_tag")}: ${a.tag || "—"}`;
+      case "create_finance_entry": return t("action.create_finance_entry");
+      case "webhook": return `${t("action.webhook")}`;
+    }
   }
 
   // ── Draft helpers ──────────────────────────────────────────────────────────
@@ -103,6 +128,7 @@ export function AutomationsClient({
         trigger: rule.trigger,
         triggerStageId: rule.triggerStageId ?? "",
         minValue: rule.config.minValue ? String(rule.config.minValue) : "",
+        maxValue: rule.config.maxValue ? String(rule.config.maxValue) : "",
         actions: rule.actions,
         layout: rule.config.layout ?? {},
       });
@@ -178,7 +204,8 @@ export function AutomationsClient({
     if (!draft.name.trim() || draft.actions.length === 0) return setError(t("err.invalid"));
     if (triggerNeedsStage(draft.trigger) && !draft.triggerStageId) return setError(t("err.invalid"));
     const config: RuleConfig = {
-      minValue: draft.minValue ? Number(draft.minValue.replace(/[^\d.,]/g, "").replace(/\./g, "").replace(",", ".")) : undefined,
+      minValue: parseMoney(draft.minValue),
+      maxValue: parseMoney(draft.maxValue),
       layout: draft.layout,
     };
     const payload = { name: draft.name, trigger: draft.trigger, triggerStageId: draft.triggerStageId, actions: draft.actions, config };
@@ -296,6 +323,9 @@ export function AutomationsClient({
                   ) : null}
                   <Field label={t("minValue")}>
                     <Input value={draft.minValue} onChange={(e) => setDraft({ ...draft, minValue: e.target.value })} placeholder={t("minValuePlaceholder")} inputMode="numeric" className="h-9" />
+                  </Field>
+                  <Field label={t("maxValue")}>
+                    <Input value={draft.maxValue} onChange={(e) => setDraft({ ...draft, maxValue: e.target.value })} placeholder={t("maxValuePlaceholder")} inputMode="numeric" className="h-9" />
                   </Field>
                 </div>
               ) : typeof selected === "number" && draft.actions[selected] ? (
@@ -451,6 +481,52 @@ function ActionInspector({
         <Field label={t("owner")}>
           <Select value={action.userId} onChange={(v) => onChange({ ...action, userId: v })} placeholder={t("chooseOwner")} options={members.map((m) => ({ value: m.id, label: m.name }))} />
         </Field>
+      ) : null}
+
+      {action.type === "notify_user" ? (
+        <>
+          <Field label={t("owner")}>
+            <Select value={action.userId} onChange={(v) => onChange({ ...action, userId: v })} placeholder={t("chooseOwner")} options={members.map((m) => ({ value: m.id, label: m.name }))} />
+          </Field>
+          <Field label={t("message")}>
+            <textarea value={action.message ?? ""} onChange={(e) => onChange({ ...action, message: e.target.value })} rows={2} placeholder={t("messagePlaceholder")} className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none" />
+          </Field>
+        </>
+      ) : null}
+
+      {action.type === "send_email" ? (
+        <>
+          <Field label={t("emailSubject")}><Input value={action.subject} onChange={(e) => onChange({ ...action, subject: e.target.value })} className="h-9" /></Field>
+          <Field label={t("emailBody")}>
+            <textarea value={action.body} onChange={(e) => onChange({ ...action, body: e.target.value })} rows={4} placeholder={t("emailBodyPlaceholder")} className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none" />
+          </Field>
+        </>
+      ) : null}
+
+      {action.type === "set_expected_close" ? (
+        <Field label={t("inDays")}><Input value={String(action.inDays)} onChange={(e) => onChange({ ...action, inDays: Number(e.target.value) || 0 })} inputMode="numeric" className="h-9" /></Field>
+      ) : null}
+
+      {action.type === "add_tag" ? (
+        <Field label={t("tag")}><Input value={action.tag} onChange={(e) => onChange({ ...action, tag: e.target.value })} placeholder={t("tagPlaceholder")} className="h-9" /></Field>
+      ) : null}
+
+      {action.type === "create_finance_entry" ? (
+        <>
+          <Field label={t("financeDescription")}><Input value={action.description} onChange={(e) => onChange({ ...action, description: e.target.value })} placeholder={t("financeDescriptionPlaceholder")} className="h-9" /></Field>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={action.useOppValue !== false} onChange={(e) => onChange({ ...action, useOppValue: e.target.checked })} className="size-4 accent-[var(--brand)]" />
+            {t("useOppValue")}
+          </label>
+          {action.useOppValue === false ? (
+            <Field label={t("amount")}><Input value={action.amount?.toString() ?? ""} onChange={(e) => onChange({ ...action, amount: e.target.value ? Number(e.target.value) : undefined })} inputMode="numeric" className="h-9" /></Field>
+          ) : null}
+          <Field label={t("dueInDays")}><Input value={action.dueInDays?.toString() ?? ""} onChange={(e) => onChange({ ...action, dueInDays: e.target.value ? Number(e.target.value) : undefined })} inputMode="numeric" placeholder="0" className="h-9" /></Field>
+        </>
+      ) : null}
+
+      {action.type === "webhook" ? (
+        <Field label={t("webhookUrl")}><Input value={action.url} onChange={(e) => onChange({ ...action, url: e.target.value })} placeholder="https://…" className="h-9" /></Field>
       ) : null}
     </div>
   );

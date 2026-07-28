@@ -247,11 +247,14 @@ export async function updateOpportunity(
       });
     }
 
-    // Automations: won/lost transitions, or moving between open stages.
+    // Automations: won/lost transitions, reopening, or moving between open stages.
+    const wasClosed = current.status === "WON" || current.status === "LOST" || current.status === "CANCELED";
     if (status === "WON" && current.status !== "WON") {
       await runAutomations(org, { type: "opportunity_won", opportunityId: id }, ctx.user.name);
     } else if (status === "LOST" && current.status !== "LOST") {
       await runAutomations(org, { type: "opportunity_lost", opportunityId: id }, ctx.user.name);
+    } else if ((status === "OPEN" || status === "ON_HOLD") && wasClosed) {
+      await runAutomations(org, { type: "opportunity_reopened", opportunityId: id }, ctx.user.name);
     } else if (stage.id !== current.stageId && (status === "OPEN" || status === "ON_HOLD")) {
       await runAutomations(org, { type: "stage_entered", opportunityId: id, stageId: stage.id }, ctx.user.name);
     }
@@ -299,11 +302,14 @@ export async function setOpportunityStatus(
     });
     if (res.count === 0) return { ok: false, error: "unknown" };
 
-    // Automations: fire on the transition into WON / LOST (not on re-saves).
+    // Automations: fire on the transition into WON / LOST, or reopening.
+    const wasClosed = current.status === "WON" || current.status === "LOST" || current.status === "CANCELED";
     if (status === "WON" && current.status !== "WON") {
       await runAutomations(ctx.organizationId, { type: "opportunity_won", opportunityId: id }, ctx.user.name);
     } else if (status === "LOST" && current.status !== "LOST") {
       await runAutomations(ctx.organizationId, { type: "opportunity_lost", opportunityId: id }, ctx.user.name);
+    } else if ((status === "OPEN" || status === "ON_HOLD") && wasClosed) {
+      await runAutomations(ctx.organizationId, { type: "opportunity_reopened", opportunityId: id }, ctx.user.name);
     }
 
     revalidatePath("/app/crm");

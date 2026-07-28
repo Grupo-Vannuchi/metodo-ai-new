@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { deleteMedia } from "@/lib/storage/blob";
 import { getProposalTemplate } from "@/lib/queries/proposal-templates";
 import { proposalPrefillFromOpportunity } from "@/lib/queries/proposals";
+import { runAutomations } from "@/lib/automation/engine";
 import {
   proposalSchema,
   updateProposalSchema,
@@ -310,12 +311,17 @@ export async function setProposalStatus(id: string, status: ProposalStatusKey): 
 
   try {
     const db = tenantDb(ctx.organizationId);
-    const current = await db.proposal.findFirst({ where: { id }, select: { sentAt: true, decidedAt: true } });
+    const current = await db.proposal.findFirst({ where: { id }, select: { sentAt: true, decidedAt: true, status: true, opportunityId: true } });
     if (!current) return { ok: false, error: "unknown" };
 
     const ts = statusTimestamps(status, current);
     const res = await db.proposal.updateMany({ where: { id }, data: { status, sentAt: ts.sentAt, decidedAt: ts.decidedAt } });
     if (res.count === 0) return { ok: false, error: "unknown" };
+
+    // Automation: proposal accepted (on the transition), if tied to an opportunity.
+    if (status === "ACCEPTED" && current.status !== "ACCEPTED" && current.opportunityId) {
+      await runAutomations(ctx.organizationId, { type: "proposal_accepted", opportunityId: current.opportunityId }, ctx.user.name);
+    }
 
     revalidatePath("/app/proposals");
     revalidatePath(`/app/proposals/${id}`);
