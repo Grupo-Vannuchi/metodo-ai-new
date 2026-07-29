@@ -13,6 +13,8 @@ import { formatBRL } from "@/lib/money";
 import { createProposal, updateProposal } from "@/app/actions/proposals";
 import type { ProposalFormOptions } from "@/lib/queries/proposals";
 import type { ProposalStatusKey } from "@/lib/validations/proposal";
+import { useRegisterAssistantForm } from "@/components/app/assistant/form-store";
+import type { FormBridge } from "@/lib/assistant/form-bridge";
 
 const selectCls = cn(
   "w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm",
@@ -79,6 +81,7 @@ export function ProposalForm({
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<Scalars>({ defaultValues: defaults });
 
@@ -87,6 +90,81 @@ export function ProposalForm({
   const [items, setItems] = useState<ItemRow[]>(() =>
     defaults.items.map((it, i) => ({ key: `init-${i}`, rev: 0, ...it })),
   );
+
+  // Let the AI copilot pre-fill this proposal for review (it never saves). Text
+  // scalars go through RHF setValue; line items are passed as a JSON string and
+  // rebuilt into the items state (the money inputs re-key, so prices show).
+  const bridge = useMemo<FormBridge>(
+    () => ({
+      key: `proposal:${id ?? "new"}`,
+      title: "Proposta",
+      fields: [
+        { name: "title", label: "Título da proposta", type: "text" },
+        { name: "clientCompany", label: "Empresa do cliente", type: "text" },
+        { name: "clientName", label: "Nome do cliente", type: "text" },
+        { name: "clientEmail", label: "E-mail do cliente", type: "text" },
+        { name: "clientPhone", label: "Telefone do cliente", type: "text" },
+        { name: "clientAddress", label: "Endereço do cliente", type: "text" },
+        { name: "validUntil", label: "Válida até", type: "date" },
+        { name: "intro", label: "Introdução", type: "textarea" },
+        { name: "notes", label: "Observações", type: "textarea" },
+        {
+          name: "items",
+          label: "Itens (JSON)",
+          type: "textarea",
+          description:
+            'Itens da proposta como JSON array. Cada item: {"name": string, "quantity": number, "unitPrice": number (em reais), "description"?: string}. Ex.: [{"name":"Consultoria","quantity":10,"unitPrice":150,"description":"por hora"}]',
+        },
+      ],
+      apply: (values) => {
+        const setScalar = setValue as unknown as (
+          name: keyof Scalars,
+          value: string,
+          opts: { shouldDirty: boolean; shouldTouch: boolean },
+        ) => void;
+        const SCALARS = new Set([
+          "title",
+          "clientCompany",
+          "clientName",
+          "clientEmail",
+          "clientPhone",
+          "clientAddress",
+          "validUntil",
+          "intro",
+          "notes",
+        ]);
+        for (const [k, v] of Object.entries(values)) {
+          if (k === "items") {
+            try {
+              const arr = JSON.parse(v);
+              if (Array.isArray(arr)) {
+                setItems(
+                  arr.map((raw) => {
+                    const o = raw as Record<string, unknown>;
+                    return {
+                      key: `row-${seq.current++}`,
+                      rev: 1,
+                      productServiceId: "",
+                      name: String(o.name ?? ""),
+                      description: String(o.description ?? ""),
+                      quantity: Number(o.quantity) || 1,
+                      unitPrice: Number(o.unitPrice) || 0,
+                    };
+                  }),
+                );
+              }
+            } catch {
+              /* ignore malformed JSON */
+            }
+          } else if (SCALARS.has(k)) {
+            setScalar(k as keyof Scalars, v, { shouldDirty: true, shouldTouch: true });
+          }
+        }
+      },
+    }),
+    [id, setValue],
+  );
+  useRegisterAssistantForm(bridge);
 
   const productById = useMemo(() => new Map(options.products.map((p) => [p.id, p])), [options.products]);
 

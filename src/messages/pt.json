@@ -2323,7 +2323,7 @@
     "title": "Copiloto",
     "openLabel": "Abrir copiloto de IA",
     "closeLabel": "Fechar copiloto",
-    "readOnlyHint": "Por enquanto, apenas leitura",
+    "readOnlyHint": "Seu copiloto de vendas",
     "greeting": "Oi, {name}! Sou seu copiloto. Posso resumir seu funil, achar registros e responder sobre o que está na sua tela.",
     "placeholder": "Pergunte algo sobre seu CRM…",
     "send": "Enviar",

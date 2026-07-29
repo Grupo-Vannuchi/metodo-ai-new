@@ -2323,7 +2323,7 @@
     "title": "Copilot",
     "openLabel": "Open AI copilot",
     "closeLabel": "Close copilot",
-    "readOnlyHint": "Read-only for now",
+    "readOnlyHint": "Your sales copilot",
     "greeting": "Hi, {name}! I'm your copilot. I can summarize your pipeline, find records, and answer about what's on your screen.",
     "placeholder": "Ask something about your CRM…",
     "send": "Send",
