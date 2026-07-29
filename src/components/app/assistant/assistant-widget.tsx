@@ -259,6 +259,8 @@ export function AssistantWidget({ userName }: { userName: string }) {
             args?: Record<string, unknown>;
             title?: string;
             steps?: PlanStep[];
+            b64?: string;
+            mediaType?: string;
           };
           try {
             evt = JSON.parse(line);
@@ -291,6 +293,18 @@ export function AssistantWidget({ userName }: { userName: string }) {
             if (plan.steps.length > 0) setPlans((p) => [...p, plan]);
           } else if (evt.type === "thread" && evt.id) {
             setThreadId(evt.id);
+          } else if (evt.type === "image" && evt.b64) {
+            const url = `data:${evt.mediaType || "image/png"};base64,${evt.b64}`;
+            setMessages((m) => {
+              const next = [...m];
+              const last = next[next.length - 1];
+              if (last && last.role === "assistant") {
+                next[next.length - 1] = { ...last, images: [...(last.images || []), url] };
+              } else {
+                next.push({ role: "assistant", text: "", images: [url] });
+              }
+              return next;
+            });
           } else if (evt.type === "error") {
             setNotice(t("notice.error"));
           }
@@ -434,11 +448,18 @@ export function AssistantWidget({ userName }: { userName: string }) {
                     )}
                   >
                     {m.images && m.images.length > 0 ? (
-                      <div className="mb-1 flex flex-wrap gap-1">
-                        {m.images.map((src, k) => (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img key={k} src={src} alt="" className="size-16 rounded-lg object-cover" />
-                        ))}
+                      <div className="mb-1 flex flex-wrap gap-1.5">
+                        {m.images.map((src, k) =>
+                          m.role === "assistant" ? (
+                            <a key={k} href={src} download={`imagem-${k + 1}.png`} title={t("download")} className="block">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={src} alt="" className="max-h-56 w-auto max-w-full rounded-lg border border-border" />
+                            </a>
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img key={k} src={src} alt="" className="size-16 rounded-lg object-cover" />
+                          ),
+                        )}
                       </div>
                     ) : null}
                     {m.text

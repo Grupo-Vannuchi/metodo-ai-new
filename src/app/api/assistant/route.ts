@@ -8,6 +8,7 @@ import { isAssistantOverDailyLimit } from "@/lib/assistant/quota";
 import { buildSystemPrompt } from "@/lib/assistant/system";
 import { assistantTools, runAssistantTool } from "@/lib/assistant/tools";
 import { buildPlanTool, isWriteTool, PLAN_TOOL_NAME, summarizeWrite, writeToolsFor } from "@/lib/assistant/writes";
+import { generateImage, IMAGE_TOOL_NAME, imageGenTool, isImageGenConfigured } from "@/lib/assistant/image-gen";
 import { appendMessage, loadHistory, resolveThread, setThreadTitle } from "@/lib/assistant/threads";
 import type { AssistantScreenContext } from "@/lib/assistant/context";
 import type { FormDescriptor } from "@/lib/assistant/form-bridge";
@@ -81,6 +82,7 @@ export async function POST(req: Request) {
     ...assistantTools,
     ...writeToolsFor(ctx),
     buildPlanTool(ctx),
+    ...(isImageGenConfigured() ? [imageGenTool] : []),
     ...(form ? [buildPrefillTool(form)] : []),
   ];
   const lastContent: Anthropic.MessageParam["content"] =
@@ -134,7 +136,23 @@ export async function POST(req: Request) {
           for (const tu of toolUses) {
             send({ type: "tool", name: tu.name });
             let out: string;
-            if (tu.name === PLAN_TOOL_NAME) {
+            if (tu.name === IMAGE_TOOL_NAME) {
+              const a = (tu.input ?? {}) as Record<string, unknown>;
+              const prompt = typeof a.prompt === "string" ? a.prompt : "";
+              const shape = typeof a.shape === "string" ? a.shape : undefined;
+              const r = prompt ? await generateImage(prompt, shape) : ({ ok: false, error: "invalid" } as const);
+              if (r.ok) {
+                send({ type: "image", b64: r.b64, mediaType: r.mediaType });
+                out = "Imagem gerada e exibida ao usuário (ele pode baixá-la). Comente brevemente e ofereça ajustes se quiser.";
+              } else if (r.error === "not_configured") {
+                out = "A geração de imagens não está configurada.";
+              } else if (r.error === "billing") {
+                out =
+                  "Não foi possível gerar: a conta de imagens está sem créditos ou atingiu o limite de cobrança. Avise o usuário para adicionar créditos/ajustar o limite na OpenAI.";
+              } else {
+                out = "Não consegui gerar a imagem agora.";
+              }
+            } else if (tu.name === PLAN_TOOL_NAME) {
               const steps = sanitizePlan(tu.input);
               send({ type: "plan", id: tu.id, title: planTitle(tu.input), steps });
               out =

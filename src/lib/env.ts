@@ -79,6 +79,9 @@ const serverSchema = z.object({
   // e.g. ASSISTANT_MODEL=claude-sonnet-5 to trade some quality for cost/latency
   // on a high-volume chat copilot.
   ASSISTANT_MODEL: z.string().optional(),
+  // Image generation for the copilot (OpenAI gpt-image-1). Server-only, optional
+  // — the generate_image tool only appears when this is set.
+  OPENAI_API_KEY: z.string().optional(),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
 
