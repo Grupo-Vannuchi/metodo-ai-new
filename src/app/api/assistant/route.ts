@@ -8,7 +8,7 @@ import { isAssistantOverDailyLimit } from "@/lib/assistant/quota";
 import { buildSystemPrompt } from "@/lib/assistant/system";
 import { assistantTools, runAssistantTool } from "@/lib/assistant/tools";
 import { buildPlanTool, isWriteTool, PLAN_TOOL_NAME, summarizeWrite, writeToolsFor } from "@/lib/assistant/writes";
-import { appendMessage, getOrCreateThread, loadHistory } from "@/lib/assistant/threads";
+import { appendMessage, loadHistory, resolveThread, setThreadTitle } from "@/lib/assistant/threads";
 import type { AssistantScreenContext } from "@/lib/assistant/context";
 import type { FormDescriptor } from "@/lib/assistant/form-bridge";
 
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     if (!success) return json({ error: "rate_limited" }, 429);
   }
 
-  let body: { message?: unknown; screen?: AssistantScreenContext; form?: unknown };
+  let body: { message?: unknown; screen?: AssistantScreenContext; form?: unknown; threadId?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -50,6 +50,7 @@ export async function POST(req: Request) {
   }
   const userMessage = typeof body.message === "string" ? body.message.trim() : "";
   if (!userMessage) return json({ error: "invalid" }, 400);
+  const requestedThreadId = typeof body.threadId === "string" ? body.threadId : null;
   const screen: AssistantScreenContext =
     body.screen && typeof body.screen.screen === "string"
       ? body.screen
@@ -59,9 +60,10 @@ export async function POST(req: Request) {
   const anthropic = getAnthropic();
   if (!anthropic) return json({ error: "not_configured" }, 503);
 
-  const thread = await getOrCreateThread(ctx.organizationId, ctx.userId);
+  const thread = await resolveThread(ctx.organizationId, ctx.userId, requestedThreadId);
   const history = await loadHistory(ctx.organizationId, thread.id);
   await appendMessage(ctx.organizationId, thread.id, "user", userMessage);
+  if (!thread.title) await setThreadTitle(ctx.organizationId, thread.id, userMessage);
 
   let system = buildSystemPrompt(ctx, screen);
   if (form) {
@@ -86,6 +88,7 @@ export async function POST(req: Request) {
     async start(controller) {
       const send = (obj: unknown) =>
         controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+      send({ type: "thread", id: thread.id });
       let assistantText = "";
       try {
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
