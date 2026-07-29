@@ -8,6 +8,7 @@ import { buildSystemPrompt } from "@/lib/assistant/system";
 import { assistantTools, runAssistantTool } from "@/lib/assistant/tools";
 import { appendMessage, getOrCreateThread, loadHistory } from "@/lib/assistant/threads";
 import type { AssistantScreenContext } from "@/lib/assistant/context";
+import type { FormDescriptor } from "@/lib/assistant/form-bridge";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
     if (!success) return json({ error: "rate_limited" }, 429);
   }
 
-  let body: { message?: unknown; screen?: AssistantScreenContext };
+  let body: { message?: unknown; screen?: AssistantScreenContext; form?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -47,6 +48,7 @@ export async function POST(req: Request) {
     body.screen && typeof body.screen.screen === "string"
       ? body.screen
       : { screen: "dashboard", path: "/app" };
+  const form = asFormDescriptor(body.form);
 
   const anthropic = getAnthropic();
   if (!anthropic) return json({ error: "not_configured" }, 503);
@@ -55,7 +57,11 @@ export async function POST(req: Request) {
   const history = await loadHistory(ctx.organizationId, thread.id);
   await appendMessage(ctx.organizationId, thread.id, "user", userMessage);
 
-  const system = buildSystemPrompt(ctx, screen);
+  let system = buildSystemPrompt(ctx, screen);
+  if (form) {
+    system += `\nO usuário está com o formulário "${form.title}" aberto na tela. Se ele pedir para preencher, rascunhar ou montar esse formulário, use a ferramenta prefill_form — ela apenas preenche os campos visíveis para o usuário revisar e salvar (não salva nada). Preencha só os campos que fizerem sentido.`;
+  }
+  const tools = form ? [...assistantTools, buildPrefillTool(form)] : assistantTools;
   const messages: Anthropic.MessageParam[] = [
     ...history.map((m) => ({
       role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
@@ -76,7 +82,7 @@ export async function POST(req: Request) {
             model: ASSISTANT_MODEL,
             max_tokens: 2048,
             system,
-            tools: assistantTools,
+            tools,
             messages,
           });
           turn.on("text", (delta) => {
@@ -94,11 +100,15 @@ export async function POST(req: Request) {
           const results: Anthropic.ToolResultBlockParam[] = [];
           for (const tu of toolUses) {
             send({ type: "tool", name: tu.name });
-            const out = await runAssistantTool(
-              ctx,
-              tu.name,
-              (tu.input ?? {}) as Record<string, unknown>,
-            );
+            let out: string;
+            if (form && tu.name === "prefill_form") {
+              const values = sanitizePrefill(form, tu.input);
+              send({ type: "prefill", formKey: form.key, values });
+              out =
+                "Formulário preenchido na tela do usuário. Peça para ele revisar e salvar — nada foi salvo ainda.";
+            } else {
+              out = await runAssistantTool(ctx, tu.name, (tu.input ?? {}) as Record<string, unknown>);
+            }
             results.push({ type: "tool_result", tool_use_id: tu.id, content: out });
           }
           messages.push({ role: "user", content: results });
@@ -131,4 +141,58 @@ function json(obj: unknown, status: number) {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+/** Validate/narrow the client-sent open-form descriptor. */
+function asFormDescriptor(v: unknown): FormDescriptor | null {
+  if (!v || typeof v !== "object") return null;
+  const f = v as Record<string, unknown>;
+  if (typeof f.key !== "string" || typeof f.title !== "string" || !Array.isArray(f.fields)) return null;
+  const fields = f.fields
+    .filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === "object")
+    .filter((x) => typeof x.name === "string" && typeof x.type === "string");
+  if (fields.length === 0) return null;
+  return v as FormDescriptor;
+}
+
+/** A per-request tool that mirrors the open form's fields. */
+function buildPrefillTool(form: FormDescriptor): Anthropic.Tool {
+  const properties: Record<string, unknown> = {};
+  for (const f of form.fields) {
+    if (f.type === "select" && f.options?.length) {
+      properties[f.name] = {
+        type: "string",
+        enum: f.options.map((o) => o.value),
+        description: `${f.label}. Valores: ${f.options.map((o) => `${o.value}=${o.label}`).join("; ")}`,
+      };
+    } else {
+      properties[f.name] = {
+        type: "string",
+        description: f.description || f.label + (f.type === "date" ? " (formato AAAA-MM-DD)" : ""),
+      };
+    }
+  }
+  return {
+    name: "prefill_form",
+    description: `Preenche o formulário aberto na tela ("${form.title}") com os valores propostos, para o usuário revisar e salvar. NÃO salva nada — só preenche os campos visíveis. Inclua apenas os campos que fizer sentido preencher.`,
+    input_schema: { type: "object", properties } as Anthropic.Tool.InputSchema,
+  };
+}
+
+/** Keep only declared fields; select values must be within their options. */
+function sanitizePrefill(form: FormDescriptor, input: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!input || typeof input !== "object") return out;
+  const rec = input as Record<string, unknown>;
+  for (const f of form.fields) {
+    const v = rec[f.name];
+    if (v == null) continue;
+    const s = String(v);
+    if (f.type === "select") {
+      if (f.options?.some((o) => o.value === s)) out[f.name] = s;
+    } else {
+      out[f.name] = s;
+    }
+  }
+  return out;
 }

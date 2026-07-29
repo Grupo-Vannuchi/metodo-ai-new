@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
 import { usePathname } from "@/i18n/navigation";
 import { Bot, Check, Copy, Send, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { screenContextFromPath } from "@/lib/assistant/context";
+import { getActiveForm, subscribeForm } from "@/components/app/assistant/form-store";
 
 type ChatMessage = { role: "user" | "assistant"; text: string };
 
@@ -30,6 +31,7 @@ export function AssistantWidget({ userName }: { userName: string }) {
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const activeForm = useSyncExternalStore(subscribeForm, getActiveForm, () => null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   async function copy(text: string, i: number) {
@@ -57,7 +59,13 @@ export function AssistantWidget({ userName }: { userName: string }) {
       const res = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed, screen: screenContextFromPath(pathname) }),
+        body: JSON.stringify({
+          message: trimmed,
+          screen: screenContextFromPath(pathname),
+          form: activeForm
+            ? { key: activeForm.key, title: activeForm.title, fields: activeForm.fields }
+            : undefined,
+        }),
       });
       if (!res.ok || !res.body) {
         const code = await res.json().then((b) => b?.error).catch(() => "error");
@@ -76,7 +84,12 @@ export function AssistantWidget({ userName }: { userName: string }) {
         buffer = lines.pop() ?? "";
         for (const line of lines) {
           if (!line.trim()) continue;
-          let evt: { type: string; text?: string };
+          let evt: {
+            type: string;
+            text?: string;
+            formKey?: string;
+            values?: Record<string, string>;
+          };
           try {
             evt = JSON.parse(line);
           } catch {
@@ -91,6 +104,10 @@ export function AssistantWidget({ userName }: { userName: string }) {
               };
               return next;
             });
+          } else if (evt.type === "prefill" && evt.values) {
+            // Apply the copilot's proposed values into the open form for review.
+            const f = getActiveForm();
+            if (f && f.key === evt.formKey) f.apply(evt.values);
           } else if (evt.type === "error") {
             setNotice(t("notice.error"));
           }

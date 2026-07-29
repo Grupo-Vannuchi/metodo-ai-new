@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
 import { Trash2 } from "lucide-react";
@@ -11,6 +11,8 @@ import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/ui/confirm";
 import { updateOpportunity, deleteOpportunity } from "@/app/actions/opportunities";
+import { useRegisterAssistantForm } from "@/components/app/assistant/form-store";
+import type { FormBridge } from "@/lib/assistant/form-bridge";
 
 type Option = { id: string; name: string };
 type ProductOption = { id: string; name: string; kind: "PRODUCT" | "SERVICE"; price: number | null };
@@ -70,6 +72,50 @@ export function OpportunityForm({
 
   const status = watch("status");
   const needsReason = status === "LOST" || status === "CANCELED";
+
+  // Let the AI copilot pre-fill this form for review (it never saves). Money is
+  // left out — the MoneyInput display is uncontrolled and wouldn't reflect it.
+  const bridge = useMemo<FormBridge>(
+    () => ({
+      key: `opportunity:${id}`,
+      title: "Oportunidade",
+      fields: [
+        { name: "title", label: "Título", type: "text" },
+        { name: "notes", label: "Notas / contexto", type: "textarea" },
+        { name: "expectedCloseDate", label: "Previsão de fechamento", type: "date" },
+        {
+          name: "stageId",
+          label: "Etapa do funil",
+          type: "select",
+          options: stages.map((s) => ({ value: s.id, label: s.name })),
+        },
+        {
+          name: "status",
+          label: "Status",
+          type: "select",
+          options: [
+            { value: "OPEN", label: "Aberta" },
+            { value: "ON_HOLD", label: "Em espera" },
+            { value: "WON", label: "Ganha" },
+            { value: "LOST", label: "Perdida" },
+            { value: "CANCELED", label: "Cancelada" },
+          ],
+        },
+      ],
+      apply: (values) => {
+        const set = setValue as unknown as (
+          name: keyof Values,
+          value: string,
+          opts: { shouldDirty: boolean; shouldTouch: boolean },
+        ) => void;
+        for (const [k, v] of Object.entries(values)) {
+          set(k as keyof Values, v, { shouldDirty: true, shouldTouch: true });
+        }
+      },
+    }),
+    [id, stages, setValue],
+  );
+  useRegisterAssistantForm(bridge);
 
   async function onSubmit(values: Values) {
     setServerError(null);
