@@ -3,10 +3,14 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { OrgContext } from "@/lib/tenant";
 import { canAccessScreen } from "@/lib/access";
 import { hasFeature, type PlanKey } from "@/config/plans";
+import { formatBRL } from "@/lib/money";
 import { globalSearch } from "@/lib/queries/search";
+import { getSalesReport, type SalesPeriod } from "@/lib/queries/sales-report";
+import { getOpportunity } from "@/lib/queries/crm";
+import { listTasks, type TaskScope } from "@/lib/queries/tasks";
 
 /**
- * Phase 0 tool set: read-only. Every tool executes under the caller's org
+ * Read-only tool set (phases 0–1). Every tool executes under the caller's org
  * context (tenant-scoped) and respects the same screen access the UI enforces.
  * Write tools (create task, move opportunity, draft/send message…) arrive in
  * later phases behind explicit confirmation.
@@ -15,7 +19,7 @@ export const assistantTools: Anthropic.Tool[] = [
   {
     name: "search_crm",
     description:
-      "Busca no CRM por contatos, empresas, oportunidades, conversas do WhatsApp e lançamentos financeiros a partir de um termo. Retorna itens com tipo, título, subtítulo, detalhes e link. Use para localizar registros reais antes de responder.",
+      "Busca no CRM por contatos, empresas, oportunidades, conversas do WhatsApp e lançamentos financeiros a partir de um termo. Retorna itens com tipo, título, subtítulo, detalhes e link (o link de oportunidade contém o id: /app/crm/<id>). Use para localizar registros reais antes de responder.",
     input_schema: {
       type: "object",
       properties: {
@@ -27,7 +31,58 @@ export const assistantTools: Anthropic.Tool[] = [
       required: ["query"],
     },
   },
+  {
+    name: "get_pipeline_summary",
+    description:
+      "Resumo do funil de vendas no período: ganhos, perdidos, taxa de conversão, valor ganho, ticket médio, ciclo médio, principais motivos de perda e o funil aberto por etapa (quantidade e valor). Use para responder sobre desempenho e sobre onde estão os negócios.",
+    input_schema: {
+      type: "object",
+      properties: {
+        period: {
+          type: "string",
+          enum: ["30D", "MONTH", "YEAR", "ALL"],
+          description: "Período: 30D (últimos 30 dias), MONTH (mês atual), YEAR (ano), ALL (tudo). Padrão MONTH.",
+        },
+      },
+    },
+  },
+  {
+    name: "get_opportunity",
+    description:
+      "Detalhes de uma oportunidade específica pelo id (obtido do link retornado por search_crm, ex.: /app/crm/<id>, ou do contexto da tela quando o usuário está numa oportunidade). Retorna código, título, valor, etapa, status, empresa, contato, responsável, previsão de fechamento e notas.",
+    input_schema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Id da oportunidade." },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "list_my_tasks",
+    description:
+      "Lista as tarefas atribuídas ao próprio usuário, filtradas por situação. Use para responder 'o que preciso fazer', tarefas de hoje, atrasadas, etc.",
+    input_schema: {
+      type: "object",
+      properties: {
+        scope: {
+          type: "string",
+          enum: ["open", "today", "overdue", "upcoming", "done", "all"],
+          description: "Filtro: open (abertas), today (hoje), overdue (atrasadas), upcoming (futuras), done (concluídas), all. Padrão open.",
+        },
+      },
+    },
+  },
 ];
+
+function asPeriod(v: unknown): SalesPeriod {
+  return v === "30D" || v === "YEAR" || v === "ALL" ? v : "MONTH";
+}
+function asTaskScope(v: unknown): TaskScope {
+  return v === "today" || v === "overdue" || v === "upcoming" || v === "done" || v === "all"
+    ? v
+    : "open";
+}
 
 /** Execute a tool call under the caller's org context. Never throws. */
 export async function runAssistantTool(
@@ -57,6 +112,65 @@ export async function runAssistantTool(
         })),
       );
     }
+
+    if (name === "get_pipeline_summary") {
+      if (!canAccessScreen(ctx, "crm")) return "Você não tem acesso ao CRM.";
+      const period = asPeriod(input.period);
+      const r = await getSalesReport(ctx.organizationId, period);
+      return JSON.stringify({
+        periodo: period,
+        ganhos: r.won,
+        perdidos: r.lost,
+        cancelados: r.canceled,
+        taxaConversao: `${Math.round(r.winRate * 100)}%`,
+        valorGanho: formatBRL(r.wonValue),
+        ticketMedio: formatBRL(r.avgTicket),
+        cicloMedioDias: r.avgCycleDays,
+        motivosPerda: r.lossReasons.slice(0, 5),
+        funil: r.funnel.map((f) => ({ etapa: f.name, quantidade: f.count, valor: formatBRL(f.value) })),
+      });
+    }
+
+    if (name === "get_opportunity") {
+      if (!canAccessScreen(ctx, "crm")) return "Você não tem acesso ao CRM.";
+      const id = typeof input.id === "string" ? input.id.trim() : "";
+      if (!id) return "Informe o id da oportunidade (do link retornado pela busca).";
+      const o = await getOpportunity(ctx.organizationId, id);
+      if (!o) return "Oportunidade não encontrada.";
+      return JSON.stringify({
+        codigo: o.code,
+        titulo: o.title,
+        valor: formatBRL(o.value),
+        etapa: o.stageName,
+        status: o.status,
+        empresa: o.companyName,
+        contato: o.contactName,
+        telefone: o.contactPhone,
+        produto: o.productServiceName,
+        responsavel: o.ownerName,
+        previsaoFechamento: o.expectedCloseDate,
+        motivoEncerramento: o.outcomeReason,
+        notas: o.notes,
+      });
+    }
+
+    if (name === "list_my_tasks") {
+      if (!canAccessScreen(ctx, "tasks")) return "Você não tem acesso às Tarefas.";
+      const scope = asTaskScope(input.scope);
+      const rows = await listTasks(ctx.organizationId, { assignedToId: ctx.userId, scope });
+      if (rows.length === 0) return "Nenhuma tarefa encontrada nesse filtro.";
+      return JSON.stringify(
+        rows.slice(0, 25).map((t) => ({
+          titulo: t.title,
+          status: t.status,
+          prioridade: t.priority,
+          vencimento: t.dueDate,
+          oportunidade: t.opportunityTitle,
+          contato: t.contactName,
+        })),
+      );
+    }
+
     return `Ferramenta desconhecida: ${name}`;
   } catch (e) {
     console.error(`[assistant] tool ${name} failed`, e);
