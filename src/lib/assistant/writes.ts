@@ -13,6 +13,7 @@ import { sendMessage, startConversation } from "@/app/actions/inbox";
 import { sendEmail } from "@/lib/email/send";
 import { createRule } from "@/app/actions/automations";
 import { ACTION_TYPES, TRIGGERS } from "@/lib/automation/types";
+import { sendTeamMessage } from "@/app/actions/team-chat";
 
 const DAY = 86_400_000;
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "");
@@ -106,6 +107,19 @@ const BASE_WRITE_TOOLS: Anthropic.Tool[] = [
       required: ["contactId", "tag"],
     },
   },
+  {
+    name: "send_team_chat",
+    description:
+      "Envia uma mensagem numa conversa de equipe (chat interno), após confirmação. Use o id obtido em list_team_chats. Ideal para responder ou encaminhar um resumo à equipe.",
+    input_schema: {
+      type: "object",
+      properties: {
+        chatId: { type: "string", description: "Id da conversa de equipe." },
+        message: { type: "string", description: "Texto da mensagem." },
+      },
+      required: ["chatId", "message"],
+    },
+  },
 ];
 
 const FINANCE_WRITE_TOOL: Anthropic.Tool = {
@@ -191,6 +205,7 @@ const WRITE_TOOL_NAMES = new Set([
   "create_finance_entry",
   "send_whatsapp",
   "send_email",
+  "send_team_chat",
   "create_automation",
 ]);
 
@@ -263,6 +278,8 @@ export function summarizeWrite(tool: string, args: Record<string, unknown>): str
       return "Definir o responsável da oportunidade";
     case "add_tag":
       return `Adicionar a tag "${str(args.tag)}" ao contato`;
+    case "send_team_chat":
+      return `Enviar no chat de equipe:\n\n"${str(args.message)}"`;
     case "create_finance_entry":
       return `Criar lançamento: "${str(args.description)}" — ${str(args.type) === "EXPENSE" ? "despesa" : "receita"} de ${formatBRL(num(args.amount) ?? 0)}`;
     case "send_whatsapp":
@@ -486,6 +503,20 @@ export async function executeWrite(
       }
       await audit(ctx, { action: "assistant.email_sent", entity: "contacts", meta: { to, subject } });
       return { ok: true, message: `E-mail enviado para ${to}.` };
+    }
+
+    if (tool === "send_team_chat") {
+      const chatId = str(args.chatId);
+      const message = str(args.message);
+      if (!chatId || !message) return { ok: false, message: "Conversa e mensagem são obrigatórias." };
+      const res = await sendTeamMessage({ chatId, body: message });
+      if (!res.ok)
+        return {
+          ok: false,
+          message: res.error === "forbidden" ? "Você não participa dessa conversa." : "Não consegui enviar a mensagem.",
+        };
+      await audit(ctx, { action: "assistant.team_message_sent", entity: "TeamChat", entityId: chatId });
+      return { ok: true, message: "Mensagem enviada no chat de equipe." };
     }
 
     if (tool === "create_automation") {

@@ -2106,7 +2106,8 @@
         "whatsapp_sent": "Copiloto enviou um WhatsApp",
         "email_sent": "Copiloto enviou um e-mail",
         "automation_created": "Copiloto criou uma automação",
-        "contact_tagged": "Copiloto adicionou uma tag ao contato"
+        "contact_tagged": "Copiloto adicionou uma tag ao contato",
+        "team_message_sent": "Copiloto enviou mensagem no chat de equipe"
       }
     },
     "entities": {
@@ -2120,6 +2121,7 @@
       "Task": "Tarefa",
       "Opportunity": "Oportunidade",
       "AutomationRule": "Automação",
+      "TeamChat": "Chat de equipe",
       "companies": "Empresas",
       "contacts": "Contatos"
     }

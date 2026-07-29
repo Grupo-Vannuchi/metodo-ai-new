@@ -46,6 +46,7 @@ export const AUDIT_ACTIONS = [
   "assistant.email_sent",
   "assistant.automation_created",
   "assistant.contact_tagged",
+  "assistant.team_message_sent",
 ] as const;
 
 export const AUDIT_ENTITIES = [
@@ -59,6 +60,7 @@ export const AUDIT_ENTITIES = [
   "Task",
   "Opportunity",
   "AutomationRule",
+  "TeamChat",
   "companies",
   "contacts",
 ] as const;

@@ -1,6 +1,7 @@
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { OrgContext } from "@/lib/tenant";
+import { prisma } from "@/lib/prisma";
 import { canAccessScreen } from "@/lib/access";
 import { hasFeature, type PlanKey } from "@/config/plans";
 import { formatBRL } from "@/lib/money";
@@ -11,6 +12,7 @@ import { listTasks, type TaskScope } from "@/lib/queries/tasks";
 import { listQuickReplies } from "@/lib/queries/quick-replies";
 import { getContact } from "@/lib/queries/contacts";
 import { getCompany } from "@/lib/queries/companies";
+import { listTeamChats, listTeamChatMessages } from "@/lib/queries/team-chat";
 
 /**
  * Read-only tool set (phases 0–1). Every tool executes under the caller's org
@@ -105,6 +107,25 @@ export const assistantTools: Anthropic.Tool[] = [
       type: "object",
       properties: { id: { type: "string", description: "Id da empresa." } },
       required: ["id"],
+    },
+  },
+  {
+    name: "list_team_chats",
+    description:
+      "Lista as conversas de equipe (chat interno) das quais o usuário participa: canais e conversas diretas, com id, nome, não lidas e prévia da última mensagem.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "read_team_chat",
+    description:
+      "Lê as mensagens recentes de uma conversa de equipe pelo id (via list_team_chats), com autor e horário. Use para resumir, filtrar ou dar feedback sobre o que foi conversado. Filtro opcional por texto.",
+    input_schema: {
+      type: "object",
+      properties: {
+        chatId: { type: "string", description: "Id da conversa de equipe." },
+        search: { type: "string", description: "Filtro opcional: só mensagens que contêm este texto." },
+      },
+      required: ["chatId"],
     },
   },
 ];
@@ -244,6 +265,39 @@ export async function runAssistantTool(
       const c = await getCompany(ctx.organizationId, id);
       if (!c) return "Empresa não encontrada.";
       return JSON.stringify(c);
+    }
+
+    if (name === "list_team_chats") {
+      const chats = await listTeamChats(ctx.organizationId, ctx.userId);
+      if (chats.length === 0) return "Você não participa de nenhuma conversa de equipe.";
+      return JSON.stringify(
+        chats.slice(0, 30).map((c) => ({
+          id: c.id,
+          nome: c.name || (c.isGroup ? "Canal" : "Conversa direta"),
+          tipo: c.isGroup ? "canal" : "direta",
+          naoLidas: c.unreadCount,
+          ultima: c.lastMessagePreview,
+        })),
+      );
+    }
+
+    if (name === "read_team_chat") {
+      const chatId = typeof input.chatId === "string" ? input.chatId.trim() : "";
+      if (!chatId) return "Informe o id da conversa (via list_team_chats).";
+      const search = typeof input.search === "string" ? input.search.trim().toLowerCase() : "";
+      const msgs = await listTeamChatMessages(ctx.organizationId, chatId, ctx.userId);
+      if (msgs.length === 0) return "Conversa vazia ou você não participa dela.";
+      let rows = msgs.filter((m) => !m.deletedAt && m.body);
+      if (search) rows = rows.filter((m) => (m.body ?? "").toLowerCase().includes(search));
+      rows = rows.slice(-50);
+      const ids = [...new Set(rows.map((m) => m.senderId))];
+      const users = ids.length
+        ? await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
+        : [];
+      const nameOf = new Map(users.map((u) => [u.id, u.name]));
+      return JSON.stringify(
+        rows.map((m) => ({ autor: nameOf.get(m.senderId) ?? "—", texto: m.body, quando: m.createdAt })),
+      );
     }
 
     return `Ferramenta desconhecida: ${name}`;
