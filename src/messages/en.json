@@ -2332,6 +2332,7 @@
     "copy": "Copy",
     "copied": "Copied",
     "confirmTitle": "Confirm action?",
+    "planTitle": "Approve this process?",
     "confirm": "Confirm",
     "cancel": "Cancel",
     "cancelled": "Action cancelled.",

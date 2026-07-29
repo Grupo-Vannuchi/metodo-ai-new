@@ -10,6 +10,8 @@ import { getActiveForm, subscribeForm } from "@/components/app/assistant/form-st
 
 type ChatMessage = { role: "user" | "assistant"; text: string };
 type PendingConfirm = { id: string; tool: string; summary: string; args: Record<string, unknown> };
+type PlanStep = { tool: string; summary: string; args: Record<string, unknown> };
+type PendingPlan = { id: string; title: string; steps: PlanStep[] };
 
 const NOTICE_BY_ERROR: Record<string, string> = {
   not_configured: "notConfigured",
@@ -34,6 +36,7 @@ export function AssistantWidget({ userName }: { userName: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [confirms, setConfirms] = useState<PendingConfirm[]>([]);
+  const [plans, setPlans] = useState<PendingPlan[]>([]);
   const activeForm = useSyncExternalStore(subscribeForm, getActiveForm, () => null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -59,6 +62,28 @@ export function AssistantWidget({ userName }: { userName: string }) {
     setMessages((m) => [...m, { role: "assistant", text: t("cancelled") }]);
   }
 
+  async function runPlan(pl: PendingPlan) {
+    setPlans((p) => p.filter((x) => x.id !== pl.id));
+    try {
+      const res = await fetch("/api/assistant/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: pl.steps.map((s) => ({ tool: s.tool, args: s.args })) }),
+      });
+      const data = await res.json().catch(() => null);
+      const msg = (data && data.message) || (res.ok ? "Feito." : t("notice.error"));
+      setMessages((m) => [...m, { role: "assistant", text: msg }]);
+      if (res.ok && data?.ok) router.refresh();
+    } catch {
+      setMessages((m) => [...m, { role: "assistant", text: t("notice.error") }]);
+    }
+  }
+
+  function cancelPlan(pl: PendingPlan) {
+    setPlans((p) => p.filter((x) => x.id !== pl.id));
+    setMessages((m) => [...m, { role: "assistant", text: t("cancelled") }]);
+  }
+
   async function copy(text: string, i: number) {
     try {
       await navigator.clipboard.writeText(text);
@@ -71,7 +96,7 @@ export function AssistantWidget({ userName }: { userName: string }) {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages, pending, confirms]);
+  }, [messages, pending, confirms, plans]);
 
   async function send(text: string) {
     const trimmed = text.trim();
@@ -118,6 +143,8 @@ export function AssistantWidget({ userName }: { userName: string }) {
             tool?: string;
             summary?: string;
             args?: Record<string, unknown>;
+            title?: string;
+            steps?: PlanStep[];
           };
           try {
             evt = JSON.parse(line);
@@ -145,6 +172,9 @@ export function AssistantWidget({ userName }: { userName: string }) {
               args: evt.args ?? {},
             };
             setConfirms((p) => [...p, card]);
+          } else if (evt.type === "plan" && evt.id && Array.isArray(evt.steps)) {
+            const plan: PendingPlan = { id: evt.id, title: evt.title ?? "", steps: evt.steps };
+            if (plan.steps.length > 0) setPlans((p) => [...p, plan]);
           } else if (evt.type === "error") {
             setNotice(t("notice.error"));
           }
@@ -247,6 +277,36 @@ export function AssistantWidget({ userName }: { userName: string }) {
                   <button
                     type="button"
                     onClick={() => cancelConfirm(c)}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    {t("cancel")}
+                  </button>
+                </div>
+              </div>
+            ))}
+            {plans.map((pl) => (
+              <div key={pl.id} className="rounded-xl border border-brand/40 bg-brand/5 p-3">
+                <p className="text-xs font-semibold text-foreground">{t("planTitle")}</p>
+                {pl.title ? <p className="mt-0.5 text-sm font-medium">{pl.title}</p> : null}
+                <ul className="mt-1.5 space-y-1">
+                  {pl.steps.map((s, i) => (
+                    <li key={i} className="flex gap-1.5 text-sm text-muted-foreground">
+                      <span className="text-brand">{i + 1}.</span>
+                      <span>{s.summary}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => runPlan(pl)}
+                    className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground transition-opacity hover:opacity-90"
+                  >
+                    {t("confirm")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => cancelPlan(pl)}
                     className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     {t("cancel")}

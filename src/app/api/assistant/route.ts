@@ -6,7 +6,7 @@ import { getAnthropic } from "@/lib/assistant/client";
 import { ASSISTANT_MODEL, isAssistantConfigured } from "@/lib/assistant/config";
 import { buildSystemPrompt } from "@/lib/assistant/system";
 import { assistantTools, runAssistantTool } from "@/lib/assistant/tools";
-import { isWriteTool, summarizeWrite, writeToolsFor } from "@/lib/assistant/writes";
+import { buildPlanTool, isWriteTool, PLAN_TOOL_NAME, summarizeWrite, writeToolsFor } from "@/lib/assistant/writes";
 import { appendMessage, getOrCreateThread, loadHistory } from "@/lib/assistant/threads";
 import type { AssistantScreenContext } from "@/lib/assistant/context";
 import type { FormDescriptor } from "@/lib/assistant/form-bridge";
@@ -65,6 +65,7 @@ export async function POST(req: Request) {
   const tools = [
     ...assistantTools,
     ...writeToolsFor(ctx),
+    buildPlanTool(ctx),
     ...(form ? [buildPrefillTool(form)] : []),
   ];
   const messages: Anthropic.MessageParam[] = [
@@ -106,7 +107,12 @@ export async function POST(req: Request) {
           for (const tu of toolUses) {
             send({ type: "tool", name: tu.name });
             let out: string;
-            if (isWriteTool(tu.name)) {
+            if (tu.name === PLAN_TOOL_NAME) {
+              const steps = sanitizePlan(tu.input);
+              send({ type: "plan", id: tu.id, title: planTitle(tu.input), steps });
+              out =
+                "Plano preparado. O usuário verá um cartão para aprovar ou cancelar o processo inteiro — NÃO execute os passos de novo; apenas peça a aprovação de forma breve.";
+            } else if (isWriteTool(tu.name)) {
               const args = (tu.input ?? {}) as Record<string, unknown>;
               send({ type: "confirm", id: tu.id, tool: tu.name, summary: summarizeWrite(tu.name, args), args });
               out =
@@ -187,6 +193,32 @@ function buildPrefillTool(form: FormDescriptor): Anthropic.Tool {
     description: `Preenche o formulário aberto na tela ("${form.title}") com os valores propostos, para o usuário revisar e salvar. NÃO salva nada — só preenche os campos visíveis. Inclua apenas os campos que fizer sentido preencher.`,
     input_schema: { type: "object", properties } as Anthropic.Tool.InputSchema,
   };
+}
+
+function planTitle(input: unknown): string {
+  const t = input && typeof input === "object" ? (input as Record<string, unknown>).title : null;
+  return typeof t === "string" && t.trim() ? t : "Processo";
+}
+
+/** Narrow plan steps to write tools with an object args bag. */
+function sanitizePlan(
+  input: unknown,
+): { tool: string; summary: string; args: Record<string, unknown> }[] {
+  const raw = input && typeof input === "object" ? (input as Record<string, unknown>).steps : null;
+  if (!Array.isArray(raw)) return [];
+  const out: { tool: string; summary: string; args: Record<string, unknown> }[] = [];
+  for (const s of raw) {
+    if (!s || typeof s !== "object") continue;
+    const step = s as Record<string, unknown>;
+    const tool = typeof step.tool === "string" ? step.tool : "";
+    if (!isWriteTool(tool)) continue;
+    out.push({
+      tool,
+      summary: typeof step.summary === "string" ? step.summary : summarizeWrite(tool, (step.args ?? {}) as Record<string, unknown>),
+      args: step.args && typeof step.args === "object" ? (step.args as Record<string, unknown>) : {},
+    });
+  }
+  return out;
 }
 
 /** Keep only declared fields; select values must be within their options. */

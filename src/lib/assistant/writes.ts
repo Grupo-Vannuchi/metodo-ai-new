@@ -7,7 +7,7 @@ import { canAccessScreen } from "@/lib/access";
 import { hasFeature, type PlanKey } from "@/config/plans";
 import { formatBRL } from "@/lib/money";
 import { audit } from "@/lib/audit";
-import { moveOpportunity } from "@/app/actions/opportunities";
+import { moveOpportunity, setOpportunityStatus } from "@/app/actions/opportunities";
 import { sendMessage, startConversation } from "@/app/actions/inbox";
 import { sendEmail } from "@/lib/email/send";
 
@@ -65,6 +65,20 @@ const BASE_WRITE_TOOLS: Anthropic.Tool[] = [
       required: ["opportunityId", "inDays"],
     },
   },
+  {
+    name: "set_opportunity_status",
+    description:
+      "Muda o status de uma oportunidade (após confirmação): OPEN (aberta), ON_HOLD (em espera), WON (ganha), LOST (perdida), CANCELED (cancelada). Para LOST/CANCELED, informe o motivo.",
+    input_schema: {
+      type: "object",
+      properties: {
+        opportunityId: { type: "string", description: "Id da oportunidade." },
+        status: { type: "string", enum: ["OPEN", "ON_HOLD", "WON", "LOST", "CANCELED"], description: "Novo status." },
+        outcomeReason: { type: "string", description: "Motivo (obrigatório para LOST/CANCELED)." },
+      },
+      required: ["opportunityId", "status"],
+    },
+  },
 ];
 
 const FINANCE_WRITE_TOOL: Anthropic.Tool = {
@@ -118,10 +132,13 @@ const WRITE_TOOL_NAMES = new Set([
   "create_task",
   "move_opportunity",
   "set_expected_close",
+  "set_opportunity_status",
   "create_finance_entry",
   "send_whatsapp",
   "send_email",
 ]);
+
+export const PLAN_TOOL_NAME = "plan_actions";
 
 export function isWriteTool(name: string): boolean {
   return WRITE_TOOL_NAMES.has(name);
@@ -138,6 +155,40 @@ export function writeToolsFor(ctx: OrgContext): Anthropic.Tool[] {
   return tools;
 }
 
+/**
+ * A meta-tool that bundles several write steps into one plan the user approves
+ * at once (a multi-step process). The `tool` of each step is constrained to the
+ * write tools this org actually has.
+ */
+export function buildPlanTool(ctx: OrgContext): Anthropic.Tool {
+  const names = writeToolsFor(ctx).map((t) => t.name);
+  return {
+    name: PLAN_TOOL_NAME,
+    description:
+      "Agrupa VÁRIAS ações em um único plano para o usuário aprovar de uma vez (ex.: marcar como ganha + criar tarefa + enviar WhatsApp). Use quando o pedido envolver um processo com múltiplos passos, em vez de pedir várias confirmações separadas.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Título curto do processo." },
+        steps: {
+          type: "array",
+          description: "Passos, em ordem de execução.",
+          items: {
+            type: "object",
+            properties: {
+              tool: { type: "string", enum: names, description: "Ação de escrita deste passo." },
+              summary: { type: "string", description: "Resumo em português do que o passo faz." },
+              args: { type: "object", description: "Argumentos da ação, conforme a ferramenta escolhida." },
+            },
+            required: ["tool", "summary", "args"],
+          },
+        },
+      },
+      required: ["title", "steps"],
+    } as Anthropic.Tool.InputSchema,
+  };
+}
+
 /** A short, human summary for the confirmation card (no DB reads). */
 export function summarizeWrite(tool: string, args: Record<string, unknown>): string {
   switch (tool) {
@@ -149,6 +200,8 @@ export function summarizeWrite(tool: string, args: Record<string, unknown>): str
       return "Mover a oportunidade para outra etapa do funil";
     case "set_expected_close":
       return `Definir previsão de fechamento para daqui a ${num(args.inDays) ?? "?"} dia(s)`;
+    case "set_opportunity_status":
+      return `Marcar oportunidade como ${str(args.status)}${str(args.outcomeReason) ? ` (motivo: ${str(args.outcomeReason)})` : ""}`;
     case "create_finance_entry":
       return `Criar lançamento: "${str(args.description)}" — ${str(args.type) === "EXPENSE" ? "despesa" : "receita"} de ${formatBRL(num(args.amount) ?? 0)}`;
     case "send_whatsapp":
@@ -221,6 +274,20 @@ export async function executeWrite(
       revalidatePath(`/app/crm/${opportunityId}`);
       revalidatePath("/app/crm");
       return { ok: true, message: `Previsão de fechamento definida para daqui a ${inDays} dia(s).` };
+    }
+
+    if (tool === "set_opportunity_status") {
+      const id = str(args.opportunityId);
+      const status = str(args.status);
+      if (!id || !["OPEN", "ON_HOLD", "WON", "LOST", "CANCELED"].includes(status))
+        return { ok: false, message: "Oportunidade e status válidos são obrigatórios." };
+      const reason = str(args.outcomeReason) || undefined;
+      if ((status === "LOST" || status === "CANCELED") && !reason)
+        return { ok: false, message: "Informe o motivo para marcar como perdida/cancelada." };
+      const res = await setOpportunityStatus(id, status as Parameters<typeof setOpportunityStatus>[1], reason);
+      if (!res.ok) return { ok: false, message: "Não consegui atualizar o status da oportunidade." };
+      await audit(ctx, { action: "assistant.opportunity_updated", entity: "Opportunity", entityId: id, meta: { status } });
+      return { ok: true, message: `Oportunidade marcada como ${status}.` };
     }
 
     if (tool === "create_finance_entry") {
@@ -313,4 +380,24 @@ export async function executeWrite(
     console.error(`[assistant] executeWrite ${tool} failed`, e);
     return { ok: false, message: "Não consegui concluir a ação." };
   }
+}
+
+/** Run a confirmed multi-step plan in order, reporting each step's outcome. */
+export async function executePlan(
+  ctx: OrgContext,
+  steps: { tool: string; args: Record<string, unknown> }[],
+): Promise<WriteResult> {
+  const lines: string[] = [];
+  let allOk = true;
+  for (const step of steps) {
+    if (!isWriteTool(step.tool)) {
+      lines.push(`✗ Ação inválida: ${step.tool}`);
+      allOk = false;
+      continue;
+    }
+    const r = await executeWrite(ctx, step.tool, step.args || {});
+    lines.push(`${r.ok ? "✓" : "✗"} ${r.message}`);
+    if (!r.ok) allOk = false;
+  }
+  return { ok: allOk, message: lines.join("\n") || "Nada a fazer." };
 }

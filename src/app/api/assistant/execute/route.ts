@@ -1,7 +1,7 @@
 import { getOrgContext } from "@/lib/tenant";
 import { hasFeature, type PlanKey } from "@/config/plans";
 import { makeRateLimiter } from "@/lib/ratelimit";
-import { executeWrite, isWriteTool } from "@/lib/assistant/writes";
+import { executePlan, executeWrite, isWriteTool } from "@/lib/assistant/writes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,12 +24,27 @@ export async function POST(req: Request) {
     if (!success) return json({ ok: false, message: "Muitas ações em pouco tempo. Aguarde." }, 429);
   }
 
-  let body: { tool?: unknown; args?: unknown };
+  let body: { tool?: unknown; args?: unknown; plan?: unknown };
   try {
     body = await req.json();
   } catch {
     return json({ ok: false, message: "invalid" }, 400);
   }
+
+  // A multi-step plan the user approved as one.
+  if (Array.isArray(body.plan)) {
+    const steps = body.plan
+      .filter((s): s is Record<string, unknown> => Boolean(s) && typeof s === "object")
+      .filter((s) => typeof s.tool === "string" && isWriteTool(s.tool as string))
+      .map((s) => ({
+        tool: s.tool as string,
+        args: s.args && typeof s.args === "object" ? (s.args as Record<string, unknown>) : {},
+      }));
+    if (steps.length === 0) return json({ ok: false, message: "Plano vazio ou inválido." }, 400);
+    const result = await executePlan(ctx, steps);
+    return json(result, result.ok ? 200 : 400);
+  }
+
   const tool = typeof body.tool === "string" ? body.tool : "";
   if (!isWriteTool(tool)) return json({ ok: false, message: "Ação inválida." }, 400);
   const args =
