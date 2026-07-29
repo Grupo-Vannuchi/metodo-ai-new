@@ -4,6 +4,7 @@ import { hasFeature, type PlanKey } from "@/config/plans";
 import { makeRateLimiter } from "@/lib/ratelimit";
 import { getAnthropic } from "@/lib/assistant/client";
 import { ASSISTANT_MODEL, isAssistantConfigured } from "@/lib/assistant/config";
+import { isAssistantOverDailyLimit } from "@/lib/assistant/quota";
 import { buildSystemPrompt } from "@/lib/assistant/system";
 import { assistantTools, runAssistantTool } from "@/lib/assistant/tools";
 import { buildPlanTool, isWriteTool, PLAN_TOOL_NAME, summarizeWrite, writeToolsFor } from "@/lib/assistant/writes";
@@ -30,6 +31,10 @@ export async function POST(req: Request) {
     return json({ error: "forbidden" }, 403);
   }
   if (!isAssistantConfigured()) return json({ error: "not_configured" }, 503);
+
+  if (await isAssistantOverDailyLimit(ctx.organizationId, ctx.organization.plan as PlanKey)) {
+    return json({ error: "daily_limit" }, 429);
+  }
 
   const limiter = makeRateLimiter("assistant", 30, 60);
   if (limiter) {

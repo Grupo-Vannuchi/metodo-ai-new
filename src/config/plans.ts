@@ -38,6 +38,9 @@ export type PlanConfig = {
   /** Max connected WhatsApp numbers (Evolution/Meta) for the org — one per
    * user. `null` = unlimited. */
   whatsappNumbersLimit: number | null;
+  /** Max AI copilot uses (messages) per day, for the whole org. Bounds the
+   * per-use Anthropic cost. 0 on plans without the assistant. */
+  assistantDailyLimit: number;
   /** Features unlocked by this plan. */
   features: Feature[];
 };
@@ -74,6 +77,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     extractionsPerMonth: 20,
     connectionsLimit: 1,
     whatsappNumbersLimit: 3,
+    assistantDailyLimit: 0,
     features: STANDARD_FEATURES,
   },
   PLUS: {
@@ -83,6 +87,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     extractionsPerMonth: 100,
     connectionsLimit: 3,
     whatsappNumbersLimit: 10,
+    assistantDailyLimit: 200,
     features: PLUS_FEATURES,
   },
   GOLD: {
@@ -92,6 +97,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     extractionsPerMonth: 500,
     connectionsLimit: null,
     whatsappNumbersLimit: 25,
+    assistantDailyLimit: 750,
     features: GOLD_FEATURES,
   },
   ENTERPRISE: {
@@ -101,6 +107,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     extractionsPerMonth: 5_000,
     connectionsLimit: null,
     whatsappNumbersLimit: null,
+    assistantDailyLimit: 3_000,
     features: ENTERPRISE_FEATURES,
   },
 };

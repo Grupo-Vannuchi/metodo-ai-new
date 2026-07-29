@@ -46,6 +46,7 @@ const NOTICE_BY_ERROR: Record<string, string> = {
   not_configured: "notConfigured",
   forbidden: "forbidden",
   rate_limited: "rateLimited",
+  daily_limit: "dailyLimit",
   unauthorized: "error",
   invalid: "error",
 };

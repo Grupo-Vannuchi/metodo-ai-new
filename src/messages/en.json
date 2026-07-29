@@ -1660,6 +1660,7 @@
     "dispatch": "{n} messages/month",
     "searches": "{n} prospecting searches/month",
     "prospecting": "{n} prospecting leads/month",
+    "assistant": "AI copilot: {n} uses/day",
     "unlimited": "Unlimited",
     "includedCore": "CRM, pipeline, prospecting, campaigns and connections",
     "cta": "Get started",
@@ -2041,7 +2042,8 @@
       "connections": "Connections",
       "dispatch": "Dispatch (month)",
       "searches": "Searches (month)",
-      "prospecting": "Prospecting (leads/month)"
+      "prospecting": "Prospecting (leads/month)",
+      "assistant": "Copilot (today)"
     }
   },
   "audit": {
@@ -2347,6 +2349,7 @@
       "notConfigured": "The copilot isn't configured yet. An admin needs to add the AI key.",
       "forbidden": "The copilot is available on the PLUS plan and above.",
       "rateLimited": "Too many messages in a short time. Wait a few seconds.",
+      "dailyLimit": "Daily copilot limit reached for your plan. Try again tomorrow or upgrade.",
       "error": "I couldn't answer right now. Please try again."
     }
   }

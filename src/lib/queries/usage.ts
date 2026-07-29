@@ -4,6 +4,7 @@ import { countMembers } from "@/lib/queries/organizations";
 import { countConnections } from "@/lib/queries/connections";
 import { countDispatchedSince } from "@/lib/queries/campaigns";
 import { countLeadsSince, countJobsSince } from "@/lib/queries/extractions";
+import { assistantDailyCount } from "@/lib/assistant/quota";
 
 export type UsageMetric = { used: number; limit: number | null };
 
@@ -13,6 +14,8 @@ export type UsageSummary = {
   dispatch: UsageMetric;
   prospecting: UsageMetric;
   searches: UsageMetric;
+  /** AI copilot uses today (org-wide) vs. the plan's daily limit. */
+  assistant: UsageMetric;
 };
 
 function startOfMonth(): Date {
@@ -28,12 +31,13 @@ export async function getUsageSummary(
   const cfg = planConfig(plan);
   const monthStart = startOfMonth();
 
-  const [seats, connections, dispatch, prospecting, searches] = await Promise.all([
+  const [seats, connections, dispatch, prospecting, searches, assistant] = await Promise.all([
     countMembers(organizationId),
     countConnections(organizationId),
     countDispatchedSince(organizationId, monthStart),
     countLeadsSince(organizationId, monthStart),
     countJobsSince(organizationId, monthStart),
+    assistantDailyCount(organizationId),
   ]);
 
   return {
@@ -42,5 +46,6 @@ export async function getUsageSummary(
     dispatch: { used: dispatch, limit: cfg.dispatchQuotaPerMonth },
     prospecting: { used: prospecting, limit: cfg.prospectingQuotaPerMonth },
     searches: { used: searches, limit: cfg.extractionsPerMonth },
+    assistant: { used: assistant, limit: cfg.assistantDailyLimit },
   };
 }

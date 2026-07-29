@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { Users, CreditCard, ScrollText, UserRound, ShieldCheck, ArrowRight, Building2, Gauge } from "lucide-react";
 import { requireOrgContext, hasRole } from "@/lib/tenant";
 import { getUsageSummary, type UsageMetric } from "@/lib/queries/usage";
-import { type PlanKey } from "@/config/plans";
+import { hasFeature, type PlanKey } from "@/config/plans";
 import { LeaveTeamButton } from "@/components/app/leave-team-button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -89,6 +89,9 @@ export default async function SettingsPage({
           <UsageRow label={t("usage.dispatch")} metric={usage.dispatch} />
           <UsageRow label={t("usage.searches")} metric={usage.searches} />
           <UsageRow label={t("usage.prospecting")} metric={usage.prospecting} />
+          {hasFeature(ctx.organization.plan as PlanKey, "assistant") ? (
+            <UsageRow label={t("usage.assistant")} metric={usage.assistant} />
+          ) : null}
         </div>
         <p className="mt-2 text-xs text-muted-foreground">{t("usageHint")}</p>
       </section>

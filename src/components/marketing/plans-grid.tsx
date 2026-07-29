@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { Check } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { PRICING } from "@/config/pricing";
-import { planConfig, type PlanKey } from "@/config/plans";
+import { hasFeature, planConfig, type PlanKey } from "@/config/plans";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +35,9 @@ export async function PlansGrid({
           t("dispatch", { n: fmt(cfg.dispatchQuotaPerMonth) }),
           t("searches", { n: fmt(cfg.extractionsPerMonth) }),
           t("prospecting", { n: fmt(cfg.prospectingQuotaPerMonth) }),
+          ...(hasFeature(entry.key as PlanKey, "assistant")
+            ? [t("assistant", { n: fmt(cfg.assistantDailyLimit) })]
+            : []),
         ];
         return (
           <div

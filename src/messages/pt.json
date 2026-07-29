@@ -1660,6 +1660,7 @@
     "dispatch": "{n} disparos/mês",
     "searches": "{n} buscas de prospecção/mês",
     "prospecting": "{n} leads de prospecção/mês",
+    "assistant": "Copiloto de IA: {n} usos/dia",
     "unlimited": "Ilimitado",
     "includedCore": "CRM, funil, prospecção, campanhas e conexões",
     "cta": "Começar agora",
@@ -2041,7 +2042,8 @@
       "connections": "Conexões",
       "dispatch": "Disparos (mês)",
       "searches": "Buscas (mês)",
-      "prospecting": "Prospecção (leads/mês)"
+      "prospecting": "Prospecção (leads/mês)",
+      "assistant": "Copiloto (hoje)"
     }
   },
   "audit": {
@@ -2347,6 +2349,7 @@
       "notConfigured": "O copiloto ainda não foi configurado. Um administrador precisa adicionar a chave da IA.",
       "forbidden": "O copiloto está disponível a partir do plano PLUS.",
       "rateLimited": "Muitas mensagens em pouco tempo. Aguarde alguns segundos.",
+      "dailyLimit": "Limite diário do copiloto atingido para o seu plano. Tente novamente amanhã ou faça upgrade.",
       "error": "Não consegui responder agora. Tente novamente."
     }
   }
