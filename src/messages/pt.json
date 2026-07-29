@@ -2095,6 +2095,12 @@
         "created": "Criou uma tarefa",
         "updated": "Alterou uma tarefa",
         "deleted": "Excluiu uma tarefa"
+      },
+      "assistant": {
+        "task_created": "Copiloto criou uma tarefa",
+        "opportunity_moved": "Copiloto moveu uma oportunidade",
+        "opportunity_updated": "Copiloto atualizou uma oportunidade",
+        "finance_created": "Copiloto criou um lançamento"
       }
     },
     "entities": {
@@ -2106,6 +2112,7 @@
       "Invitation": "Convite",
       "Membership": "Equipe",
       "Task": "Tarefa",
+      "Opportunity": "Oportunidade",
       "companies": "Empresas",
       "contacts": "Contatos"
     }
@@ -2322,6 +2329,10 @@
     "send": "Enviar",
     "copy": "Copiar",
     "copied": "Copiado",
+    "confirmTitle": "Confirmar ação?",
+    "confirm": "Confirmar",
+    "cancel": "Cancelar",
+    "cancelled": "Ação cancelada.",
     "suggest": {
       "pipeline": "Resumir meu funil",
       "today": "O que preciso fazer hoje?",

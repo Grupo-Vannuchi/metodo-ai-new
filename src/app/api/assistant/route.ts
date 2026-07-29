@@ -6,6 +6,7 @@ import { getAnthropic } from "@/lib/assistant/client";
 import { ASSISTANT_MODEL, isAssistantConfigured } from "@/lib/assistant/config";
 import { buildSystemPrompt } from "@/lib/assistant/system";
 import { assistantTools, runAssistantTool } from "@/lib/assistant/tools";
+import { isWriteTool, summarizeWrite, writeToolsFor } from "@/lib/assistant/writes";
 import { appendMessage, getOrCreateThread, loadHistory } from "@/lib/assistant/threads";
 import type { AssistantScreenContext } from "@/lib/assistant/context";
 import type { FormDescriptor } from "@/lib/assistant/form-bridge";
@@ -61,7 +62,11 @@ export async function POST(req: Request) {
   if (form) {
     system += `\nO usuário está com o formulário "${form.title}" aberto na tela. Se ele pedir para preencher, rascunhar ou montar esse formulário, use a ferramenta prefill_form — ela apenas preenche os campos visíveis para o usuário revisar e salvar (não salva nada). Preencha só os campos que fizerem sentido.`;
   }
-  const tools = form ? [...assistantTools, buildPrefillTool(form)] : assistantTools;
+  const tools = [
+    ...assistantTools,
+    ...writeToolsFor(ctx),
+    ...(form ? [buildPrefillTool(form)] : []),
+  ];
   const messages: Anthropic.MessageParam[] = [
     ...history.map((m) => ({
       role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
@@ -101,7 +106,12 @@ export async function POST(req: Request) {
           for (const tu of toolUses) {
             send({ type: "tool", name: tu.name });
             let out: string;
-            if (form && tu.name === "prefill_form") {
+            if (isWriteTool(tu.name)) {
+              const args = (tu.input ?? {}) as Record<string, unknown>;
+              send({ type: "confirm", id: tu.id, tool: tu.name, summary: summarizeWrite(tu.name, args), args });
+              out =
+                "Ação preparada. O usuário verá um cartão para confirmar ou cancelar na tela — NÃO execute de novo; apenas peça a confirmação de forma breve.";
+            } else if (form && tu.name === "prefill_form") {
               const values = sanitizePrefill(form, tu.input);
               send({ type: "prefill", formKey: form.key, values });
               out =

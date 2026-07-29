@@ -38,6 +38,10 @@ export const AUDIT_ACTIONS = [
   "task.created",
   "task.updated",
   "task.deleted",
+  "assistant.task_created",
+  "assistant.opportunity_moved",
+  "assistant.opportunity_updated",
+  "assistant.finance_created",
 ] as const;
 
 export const AUDIT_ENTITIES = [
@@ -49,6 +53,7 @@ export const AUDIT_ENTITIES = [
   "Invitation",
   "Membership",
   "Task",
+  "Opportunity",
   "companies",
   "contacts",
 ] as const;

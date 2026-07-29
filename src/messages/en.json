@@ -2095,6 +2095,12 @@
         "created": "Created a task",
         "updated": "Changed a task",
         "deleted": "Deleted a task"
+      },
+      "assistant": {
+        "task_created": "Copilot created a task",
+        "opportunity_moved": "Copilot moved an opportunity",
+        "opportunity_updated": "Copilot updated an opportunity",
+        "finance_created": "Copilot created a finance entry"
       }
     },
     "entities": {
@@ -2106,6 +2112,7 @@
       "Invitation": "Invitation",
       "Membership": "Team",
       "Task": "Task",
+      "Opportunity": "Opportunity",
       "companies": "Companies",
       "contacts": "Contacts"
     }
@@ -2322,6 +2329,10 @@
     "send": "Send",
     "copy": "Copy",
     "copied": "Copied",
+    "confirmTitle": "Confirm action?",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "cancelled": "Action cancelled.",
     "suggest": {
       "pipeline": "Summarize my pipeline",
       "today": "What do I need to do today?",

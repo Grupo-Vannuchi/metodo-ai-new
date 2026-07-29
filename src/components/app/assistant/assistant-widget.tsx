@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
-import { usePathname } from "@/i18n/navigation";
+import { usePathname, useRouter } from "@/i18n/navigation";
 import { Bot, Check, Copy, Send, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { screenContextFromPath } from "@/lib/assistant/context";
 import { getActiveForm, subscribeForm } from "@/components/app/assistant/form-store";
 
 type ChatMessage = { role: "user" | "assistant"; text: string };
+type PendingConfirm = { id: string; tool: string; summary: string; args: Record<string, unknown> };
 
 const NOTICE_BY_ERROR: Record<string, string> = {
   not_configured: "notConfigured",
@@ -25,14 +26,38 @@ const NOTICE_BY_ERROR: Record<string, string> = {
 export function AssistantWidget({ userName }: { userName: string }) {
   const t = useTranslations("assistant");
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [confirms, setConfirms] = useState<PendingConfirm[]>([]);
   const activeForm = useSyncExternalStore(subscribeForm, getActiveForm, () => null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  async function runConfirm(c: PendingConfirm) {
+    setConfirms((p) => p.filter((x) => x.id !== c.id));
+    try {
+      const res = await fetch("/api/assistant/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tool: c.tool, args: c.args }),
+      });
+      const data = await res.json().catch(() => null);
+      const msg = (data && data.message) || (res.ok ? "Feito." : t("notice.error"));
+      setMessages((m) => [...m, { role: "assistant", text: msg }]);
+      if (res.ok && data?.ok) router.refresh();
+    } catch {
+      setMessages((m) => [...m, { role: "assistant", text: t("notice.error") }]);
+    }
+  }
+
+  function cancelConfirm(c: PendingConfirm) {
+    setConfirms((p) => p.filter((x) => x.id !== c.id));
+    setMessages((m) => [...m, { role: "assistant", text: t("cancelled") }]);
+  }
 
   async function copy(text: string, i: number) {
     try {
@@ -46,7 +71,7 @@ export function AssistantWidget({ userName }: { userName: string }) {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages, pending]);
+  }, [messages, pending, confirms]);
 
   async function send(text: string) {
     const trimmed = text.trim();
@@ -89,6 +114,10 @@ export function AssistantWidget({ userName }: { userName: string }) {
             text?: string;
             formKey?: string;
             values?: Record<string, string>;
+            id?: string;
+            tool?: string;
+            summary?: string;
+            args?: Record<string, unknown>;
           };
           try {
             evt = JSON.parse(line);
@@ -108,6 +137,14 @@ export function AssistantWidget({ userName }: { userName: string }) {
             // Apply the copilot's proposed values into the open form for review.
             const f = getActiveForm();
             if (f && f.key === evt.formKey) f.apply(evt.values);
+          } else if (evt.type === "confirm" && evt.id && evt.tool) {
+            const card: PendingConfirm = {
+              id: evt.id,
+              tool: evt.tool,
+              summary: evt.summary ?? "",
+              args: evt.args ?? {},
+            };
+            setConfirms((p) => [...p, card]);
           } else if (evt.type === "error") {
             setNotice(t("notice.error"));
           }
@@ -195,6 +232,28 @@ export function AssistantWidget({ userName }: { userName: string }) {
                 </div>
               ))
             )}
+            {confirms.map((c) => (
+              <div key={c.id} className="rounded-xl border border-brand/40 bg-brand/5 p-3">
+                <p className="text-xs font-semibold text-foreground">{t("confirmTitle")}</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">{c.summary}</p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => runConfirm(c)}
+                    className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground transition-opacity hover:opacity-90"
+                  >
+                    {t("confirm")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => cancelConfirm(c)}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    {t("cancel")}
+                  </button>
+                </div>
+              </div>
+            ))}
             {notice ? <p className="text-xs text-red-600">{notice}</p> : null}
           </div>
 
