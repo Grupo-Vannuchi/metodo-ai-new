@@ -2102,7 +2102,8 @@
         "opportunity_updated": "Copiloto atualizou uma oportunidade",
         "finance_created": "Copiloto criou um lançamento",
         "whatsapp_sent": "Copiloto enviou um WhatsApp",
-        "email_sent": "Copiloto enviou um e-mail"
+        "email_sent": "Copiloto enviou um e-mail",
+        "automation_created": "Copiloto criou uma automação"
       }
     },
     "entities": {
@@ -2115,6 +2116,7 @@
       "Membership": "Equipe",
       "Task": "Tarefa",
       "Opportunity": "Oportunidade",
+      "AutomationRule": "Automação",
       "companies": "Empresas",
       "contacts": "Contatos"
     }

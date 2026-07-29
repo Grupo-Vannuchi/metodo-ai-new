@@ -10,6 +10,8 @@ import { audit } from "@/lib/audit";
 import { moveOpportunity, setOpportunityStatus } from "@/app/actions/opportunities";
 import { sendMessage, startConversation } from "@/app/actions/inbox";
 import { sendEmail } from "@/lib/email/send";
+import { createRule } from "@/app/actions/automations";
+import { ACTION_TYPES, TRIGGERS } from "@/lib/automation/types";
 
 const DAY = 86_400_000;
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "");
@@ -128,6 +130,32 @@ const EMAIL_WRITE_TOOL: Anthropic.Tool = {
   },
 };
 
+const AUTOMATION_WRITE_TOOL: Anthropic.Tool = {
+  name: "create_automation",
+  description:
+    "Cria uma automação (regra 'quando o gatilho ocorre → executa as ações') no funil, após confirmação. Campos por tipo de ação: create_task{title,description?,priority?,dueInDays?}; notify_owner{message?}; notify_user{userId,message?}; send_whatsapp{templateId}; send_email{subject,body}; move_stage{stageId}; set_owner{userId}; set_expected_close{inDays}; add_tag{tag}; create_finance_entry{description,useOppValue?,amount?,dueInDays?}; webhook{url}.",
+  input_schema: {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "Nome da automação." },
+      trigger: { type: "string", enum: [...TRIGGERS], description: "Gatilho. stage_entered exige triggerStageId." },
+      triggerStageId: { type: "string", description: "Id da etapa (apenas para stage_entered)." },
+      actions: {
+        type: "array",
+        description: "Ações executadas quando o gatilho ocorre (na ordem).",
+        items: {
+          type: "object",
+          properties: {
+            type: { type: "string", enum: [...ACTION_TYPES], description: "Tipo da ação." },
+          },
+          required: ["type"],
+        },
+      },
+    },
+    required: ["name", "trigger", "actions"],
+  } as Anthropic.Tool.InputSchema,
+};
+
 const WRITE_TOOL_NAMES = new Set([
   "create_task",
   "move_opportunity",
@@ -136,6 +164,7 @@ const WRITE_TOOL_NAMES = new Set([
   "create_finance_entry",
   "send_whatsapp",
   "send_email",
+  "create_automation",
 ]);
 
 export const PLAN_TOOL_NAME = "plan_actions";
@@ -152,6 +181,7 @@ export function writeToolsFor(ctx: OrgContext): Anthropic.Tool[] {
   }
   if (canAccessScreen(ctx, "inbox")) tools.push(WHATSAPP_WRITE_TOOL);
   if (canAccessScreen(ctx, "inbox") || canAccessScreen(ctx, "campaigns")) tools.push(EMAIL_WRITE_TOOL);
+  if (canAccessScreen(ctx, "crm")) tools.push(AUTOMATION_WRITE_TOOL);
   return tools;
 }
 
@@ -208,6 +238,10 @@ export function summarizeWrite(tool: string, args: Record<string, unknown>): str
       return `Enviar WhatsApp para ${str(args.name) || str(args.phone)}:\n\n"${str(args.message)}"`;
     case "send_email":
       return `Enviar e-mail para ${str(args.to)} — assunto "${str(args.subject)}":\n\n"${str(args.body)}"`;
+    case "create_automation": {
+      const n = Array.isArray(args.actions) ? args.actions.length : 0;
+      return `Criar automação "${str(args.name)}" — quando ${str(args.trigger)} → ${n} ação(ões)`;
+    }
     default:
       return "Executar ação";
   }
@@ -373,6 +407,29 @@ export async function executeWrite(
       }
       await audit(ctx, { action: "assistant.email_sent", entity: "contacts", meta: { to, subject } });
       return { ok: true, message: `E-mail enviado para ${to}.` };
+    }
+
+    if (tool === "create_automation") {
+      if (!canAccessScreen(ctx, "crm")) return { ok: false, message: "Você não tem acesso às automações." };
+      const name = str(args.name);
+      const trigger = str(args.trigger);
+      const actions = Array.isArray(args.actions) ? args.actions : [];
+      if (!name || !trigger || actions.length === 0)
+        return { ok: false, message: "Nome, gatilho e ao menos uma ação são obrigatórios." };
+      const res = await createRule({
+        name,
+        trigger,
+        triggerStageId: str(args.triggerStageId) || undefined,
+        actions,
+        config: args.config,
+      });
+      if (!res.ok)
+        return {
+          ok: false,
+          message: res.error === "invalid" ? "Automação inválida — verifique o gatilho e as ações." : "Não consegui criar a automação.",
+        };
+      await audit(ctx, { action: "assistant.automation_created", entity: "AutomationRule", entityId: res.id, meta: { name } });
+      return { ok: true, message: `Automação "${name}" criada.` };
     }
 
     return { ok: false, message: "Ação desconhecida." };

@@ -44,6 +44,7 @@ export const AUDIT_ACTIONS = [
   "assistant.finance_created",
   "assistant.whatsapp_sent",
   "assistant.email_sent",
+  "assistant.automation_created",
 ] as const;
 
 export const AUDIT_ENTITIES = [
@@ -56,6 +57,7 @@ export const AUDIT_ENTITIES = [
   "Membership",
   "Task",
   "Opportunity",
+  "AutomationRule",
   "companies",
   "contacts",
 ] as const;
