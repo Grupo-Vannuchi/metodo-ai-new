@@ -2334,6 +2334,8 @@
     "greeting": "Hi, {name}! I'm your copilot. I can summarize your pipeline, find records, and answer about what's on your screen.",
     "placeholder": "Ask something about your CRM…",
     "send": "Send",
+    "attachImage": "Attach image",
+    "removeImage": "Remove image",
     "copy": "Copy",
     "copied": "Copied",
     "chats": "Chats",

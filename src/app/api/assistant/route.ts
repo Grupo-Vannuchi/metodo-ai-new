@@ -42,14 +42,21 @@ export async function POST(req: Request) {
     if (!success) return json({ error: "rate_limited" }, 429);
   }
 
-  let body: { message?: unknown; screen?: AssistantScreenContext; form?: unknown; threadId?: unknown };
+  let body: {
+    message?: unknown;
+    screen?: AssistantScreenContext;
+    form?: unknown;
+    threadId?: unknown;
+    images?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
     return json({ error: "invalid" }, 400);
   }
   const userMessage = typeof body.message === "string" ? body.message.trim() : "";
-  if (!userMessage) return json({ error: "invalid" }, 400);
+  const images = parseImages(body.images);
+  if (!userMessage && images.length === 0) return json({ error: "invalid" }, 400);
   const requestedThreadId = typeof body.threadId === "string" ? body.threadId : null;
   const screen: AssistantScreenContext =
     body.screen && typeof body.screen.screen === "string"
@@ -62,8 +69,9 @@ export async function POST(req: Request) {
 
   const thread = await resolveThread(ctx.organizationId, ctx.userId, requestedThreadId);
   const history = await loadHistory(ctx.organizationId, thread.id);
-  await appendMessage(ctx.organizationId, thread.id, "user", userMessage);
-  if (!thread.title) await setThreadTitle(ctx.organizationId, thread.id, userMessage);
+  const storedText = userMessage || "[imagem]";
+  await appendMessage(ctx.organizationId, thread.id, "user", storedText);
+  if (!thread.title) await setThreadTitle(ctx.organizationId, thread.id, storedText);
 
   let system = buildSystemPrompt(ctx, screen);
   if (form) {
@@ -75,12 +83,23 @@ export async function POST(req: Request) {
     buildPlanTool(ctx),
     ...(form ? [buildPrefillTool(form)] : []),
   ];
+  const lastContent: Anthropic.MessageParam["content"] =
+    images.length > 0
+      ? [
+          ...images.map((img) => ({
+            type: "image" as const,
+            source: { type: "base64" as const, media_type: img.mediaType, data: img.data },
+          })),
+          { type: "text" as const, text: userMessage || "Analise a imagem enviada." },
+        ]
+      : userMessage;
+
   const messages: Anthropic.MessageParam[] = [
     ...history.map((m) => ({
       role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
       content: m.content,
     })),
-    { role: "user" as const, content: userMessage },
+    { role: "user" as const, content: lastContent },
   ];
 
   const encoder = new TextEncoder();
@@ -201,6 +220,24 @@ function buildPrefillTool(form: FormDescriptor): Anthropic.Tool {
     description: `Preenche o formulário aberto na tela ("${form.title}") com os valores propostos, para o usuário revisar e salvar. NÃO salva nada — só preenche os campos visíveis. Inclua apenas os campos que fizer sentido preencher.`,
     input_schema: { type: "object", properties } as Anthropic.Tool.InputSchema,
   };
+}
+
+type Img = { mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string };
+const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+
+/** Validate up to 4 base64 images from the client (vision input). */
+function parseImages(input: unknown): Img[] {
+  if (!Array.isArray(input)) return [];
+  const out: Img[] = [];
+  for (const raw of input.slice(0, 4)) {
+    if (!raw || typeof raw !== "object") continue;
+    const o = raw as Record<string, unknown>;
+    const mediaType = typeof o.mediaType === "string" ? o.mediaType : "";
+    const data = typeof o.data === "string" ? o.data : "";
+    if (!IMAGE_TYPES.has(mediaType) || data.length < 16) continue;
+    out.push({ mediaType: mediaType as Img["mediaType"], data });
+  }
+  return out;
 }
 
 function planTitle(input: unknown): string {

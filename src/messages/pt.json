@@ -2334,6 +2334,8 @@
     "greeting": "Oi, {name}! Sou seu copiloto. Posso resumir seu funil, achar registros e responder sobre o que está na sua tela.",
     "placeholder": "Pergunte algo sobre seu CRM…",
     "send": "Enviar",
+    "attachImage": "Anexar imagem",
+    "removeImage": "Remover imagem",
     "copy": "Copiar",
     "copied": "Copiado",
     "chats": "Conversas",

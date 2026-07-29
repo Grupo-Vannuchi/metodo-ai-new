@@ -3,7 +3,7 @@
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/navigation";
-import { Bot, Check, Copy, History, Plus, Send, Sparkles, SquarePen, Trash2, X } from "lucide-react";
+import { Bot, Check, Copy, History, ImagePlus, Plus, Send, Sparkles, SquarePen, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { screenContextFromPath } from "@/lib/assistant/context";
 import { getActiveForm, subscribeForm } from "@/components/app/assistant/form-store";
@@ -14,7 +14,8 @@ import {
   type ThreadSummary,
 } from "@/app/actions/assistant";
 
-type ChatMessage = { role: "user" | "assistant"; text: string };
+type ChatMessage = { role: "user" | "assistant"; text: string; images?: string[] };
+type Attachment = { mediaType: string; data: string; url: string };
 type PendingConfirm = { id: string; tool: string; summary: string; args: Record<string, unknown> };
 type PlanStep = { tool: string; summary: string; args: Record<string, unknown> };
 type PendingPlan = { id: string; title: string; steps: PlanStep[] };
@@ -76,8 +77,30 @@ export function AssistantWidget({ userName }: { userName: string }) {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [showChats, setShowChats] = useState(false);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const activeForm = useSyncExternalStore(subscribeForm, getActiveForm, () => null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function onFiles(files: FileList | null) {
+    if (!files) return;
+    const room = 4 - attachments.length;
+    Array.from(files)
+      .slice(0, Math.max(0, room))
+      .forEach((file) => {
+        if (!file.type.startsWith("image/")) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const url = String(reader.result || "");
+          const comma = url.indexOf(",");
+          if (comma < 0) return;
+          setAttachments((a) =>
+            a.length >= 4 ? a : [...a, { mediaType: file.type, data: url.slice(comma + 1), url }],
+          );
+        };
+        reader.readAsDataURL(file);
+      });
+  }
 
   async function refreshThreads() {
     try {
@@ -183,10 +206,16 @@ export function AssistantWidget({ userName }: { userName: string }) {
 
   async function send(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || pending) return;
+    if ((!trimmed && attachments.length === 0) || pending) return;
+    const imgs = attachments;
     setInput("");
+    setAttachments([]);
     setNotice(null);
-    setMessages((m) => [...m, { role: "user", text: trimmed }, { role: "assistant", text: "" }]);
+    setMessages((m) => [
+      ...m,
+      { role: "user", text: trimmed, images: imgs.map((a) => a.url) },
+      { role: "assistant", text: "" },
+    ]);
     setPending(true);
     try {
       const res = await fetch("/api/assistant", {
@@ -195,6 +224,7 @@ export function AssistantWidget({ userName }: { userName: string }) {
         body: JSON.stringify({
           message: trimmed,
           threadId,
+          images: imgs.map((a) => ({ mediaType: a.mediaType, data: a.data })),
           screen: screenContextFromPath(pathname),
           form: activeForm
             ? { key: activeForm.key, title: activeForm.title, fields: activeForm.fields }
@@ -403,6 +433,14 @@ export function AssistantWidget({ userName }: { userName: string }) {
                         : "bg-muted text-foreground",
                     )}
                   >
+                    {m.images && m.images.length > 0 ? (
+                      <div className="mb-1 flex flex-wrap gap-1">
+                        {m.images.map((src, k) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img key={k} src={src} alt="" className="size-16 rounded-lg object-cover" />
+                        ))}
+                      </div>
+                    ) : null}
                     {m.text
                       ? m.role === "assistant"
                         ? renderRich(m.text)
@@ -479,29 +517,70 @@ export function AssistantWidget({ userName }: { userName: string }) {
             {notice ? <p className="text-xs text-red-600">{notice}</p> : null}
           </div>
 
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              send(input);
-            }}
-            className="flex items-center gap-2 border-t border-border px-3 py-2.5"
-          >
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={t("placeholder")}
-              disabled={pending}
-              className="min-w-0 flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-brand disabled:opacity-60"
-            />
-            <button
-              type="submit"
-              disabled={pending || !input.trim()}
-              aria-label={t("send")}
-              className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+          <div className="border-t border-border">
+            {attachments.length > 0 ? (
+              <div className="flex flex-wrap gap-2 px-3 pt-2">
+                {attachments.map((a, k) => (
+                  <div key={k} className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={a.url} alt="" className="size-12 rounded-lg object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setAttachments((p) => p.filter((_, j) => j !== k))}
+                      aria-label={t("removeImage")}
+                      className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-foreground text-background"
+                    >
+                      <X className="size-2.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                send(input);
+              }}
+              className="flex items-center gap-2 px-3 py-2.5"
             >
-              <Send className="size-4" />
-            </button>
-          </form>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                multiple
+                hidden
+                onChange={(e) => {
+                  onFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={pending || attachments.length >= 4}
+                aria-label={t("attachImage")}
+                title={t("attachImage")}
+                className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+              >
+                <ImagePlus className="size-4" />
+              </button>
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={t("placeholder")}
+                disabled={pending}
+                className="min-w-0 flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-brand disabled:opacity-60"
+              />
+              <button
+                type="submit"
+                disabled={pending || (!input.trim() && attachments.length === 0)}
+                aria-label={t("send")}
+                className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+              >
+                <Send className="size-4" />
+              </button>
+            </form>
+          </div>
         </div>
       ) : null}
 
