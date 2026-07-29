@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { Bot, Check, Copy, Send, Sparkles, X } from "lucide-react";
@@ -12,6 +12,35 @@ type ChatMessage = { role: "user" | "assistant"; text: string };
 type PendingConfirm = { id: string; tool: string; summary: string; args: Record<string, unknown> };
 type PlanStep = { tool: string; summary: string; args: Record<string, unknown> };
 type PendingPlan = { id: string; title: string; steps: PlanStep[] };
+
+/**
+ * Minimal, safe inline formatting for the copilot's replies: **bold**, *italic*
+ * / _italic_, and `code`. Renders into React text nodes (auto-escaped) — no
+ * dangerouslySetInnerHTML. Newlines are handled by `whitespace-pre-wrap`.
+ */
+function renderRich(text: string): ReactNode {
+  const nodes: ReactNode[] = [];
+  const re = /(\*\*[^*\n]+\*\*|\*[^*\n]+\*|_[^_\n]+_|`[^`\n]+`)/g;
+  let last = 0;
+  let key = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    const tok = m[0];
+    if (tok.startsWith("**")) nodes.push(<strong key={key++}>{tok.slice(2, -2)}</strong>);
+    else if (tok.startsWith("*")) nodes.push(<em key={key++}>{tok.slice(1, -1)}</em>);
+    else if (tok.startsWith("_")) nodes.push(<em key={key++}>{tok.slice(1, -1)}</em>);
+    else
+      nodes.push(
+        <code key={key++} className="rounded bg-black/10 px-1 text-[0.85em] dark:bg-white/15">
+          {tok.slice(1, -1)}
+        </code>,
+      );
+    last = m.index + tok.length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
+}
 
 const NOTICE_BY_ERROR: Record<string, string> = {
   not_configured: "notConfigured",
@@ -247,7 +276,13 @@ export function AssistantWidget({ userName }: { userName: string }) {
                         : "bg-muted text-foreground",
                     )}
                   >
-                    {m.text || (pending && i === messages.length - 1 ? "…" : "")}
+                    {m.text
+                      ? m.role === "assistant"
+                        ? renderRich(m.text)
+                        : m.text
+                      : pending && i === messages.length - 1
+                        ? "…"
+                        : ""}
                   </div>
                   {m.role === "assistant" && m.text ? (
                     <button

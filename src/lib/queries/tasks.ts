@@ -27,6 +27,7 @@ export type TaskRow = {
   opportunityTitle: string | null;
   checklistTotal: number;
   checklistDone: number;
+  checklist: { text: string; done: boolean }[];
   attachmentCount: number;
 };
 
@@ -96,7 +97,7 @@ export async function listTasks(
       contactId: true,
       companyId: true,
       opportunityId: true,
-      checklist: { select: { done: true } },
+      checklist: { select: { text: true, done: true }, orderBy: { order: "asc" } },
       _count: { select: { attachments: true } },
     },
   });
@@ -130,6 +131,7 @@ export async function listTasks(
       opportunityTitle: t.opportunityId ? oMap.get(t.opportunityId) ?? null : null,
       checklistTotal: checklist.length,
       checklistDone: checklist.filter((c) => c.done).length,
+      checklist: checklist.map((c) => ({ text: c.text, done: c.done })),
       attachmentCount: _count.attachments,
     };
   });

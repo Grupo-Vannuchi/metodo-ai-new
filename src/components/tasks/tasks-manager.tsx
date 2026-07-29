@@ -22,6 +22,12 @@ const PRIORITIES = ["LOW", "MEDIUM", "HIGH"] as const;
 const STATUSES = ["TODO", "IN_PROGRESS", "DONE"] as const;
 const RECURRENCES = ["NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"] as const;
 
+const PRIO_CLS: Record<string, string> = {
+  HIGH: "bg-red-500/15 text-red-600",
+  MEDIUM: "bg-amber-500/15 text-amber-600",
+  LOW: "bg-muted text-muted-foreground",
+};
+
 function reminderDue(d: Date | string | null, done: boolean) {
   return !done && d != null && new Date(d).getTime() <= Date.now();
 }
@@ -326,10 +332,18 @@ export function TasksManager({
                         {t("status.IN_PROGRESS")}
                       </span>
                     ) : null}
+                    {!done ? (
+                      <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", PRIO_CLS[task.priority] ?? "bg-muted text-muted-foreground")}>
+                        {t(`priority.${task.priority}`)}
+                      </span>
+                    ) : null}
                   </div>
-                  {!done && task.progress > 0 && task.progress < 100 ? (
-                    <div className="mt-1.5 h-1 w-full max-w-48 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${task.progress}%` }} />
+                  {!done && task.progress > 0 ? (
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <div className="h-1.5 w-full max-w-48 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${task.progress}%` }} />
+                      </div>
+                      <span className="text-[11px] tabular-nums text-muted-foreground">{task.progress}%</span>
                     </div>
                   ) : null}
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
@@ -369,6 +383,33 @@ export function TasksManager({
                       </span>
                     ) : null}
                   </div>
+                  {task.description ? (
+                    <p className={cn("mt-1 line-clamp-2 text-xs text-muted-foreground", done && "line-through")}>
+                      {task.description}
+                    </p>
+                  ) : null}
+                  {task.checklist.length > 0 ? (
+                    <ul className="mt-1.5 space-y-0.5">
+                      {task.checklist.slice(0, 6).map((c, i) => (
+                        <li key={i} className="flex items-center gap-1.5 text-xs">
+                          <span
+                            className={cn(
+                              "flex size-3.5 shrink-0 items-center justify-center rounded border",
+                              c.done ? "border-green-500 bg-green-500 text-white" : "border-border",
+                            )}
+                          >
+                            {c.done ? <Check className="size-2.5" /> : null}
+                          </span>
+                          <span className={cn("min-w-0 truncate", c.done ? "text-muted-foreground line-through" : "text-foreground/80")}>
+                            {c.text}
+                          </span>
+                        </li>
+                      ))}
+                      {task.checklist.length > 6 ? (
+                        <li className="pl-5 text-[11px] text-muted-foreground">+{task.checklist.length - 6}</li>
+                      ) : null}
+                    </ul>
+                  ) : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-0.5">
                   <button

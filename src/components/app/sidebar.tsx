@@ -69,7 +69,9 @@ export function Sidebar({
       {/* Bell gets its own row when collapsed (no header space for it). */}
       {collapsed ? (
         <div className="mt-1 flex w-full justify-center">
-          <NotificationBell />
+          {/* Anchor the dropdown to open toward the right — otherwise it opens
+              left off the narrow rail and gets clipped. */}
+          <NotificationBell align="left" />
         </div>
       ) : (
         <div className="mt-4 w-full rounded-lg border border-border bg-muted/40 px-3 py-2">
