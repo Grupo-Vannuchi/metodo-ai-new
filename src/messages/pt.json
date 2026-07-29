@@ -2311,5 +2311,25 @@
       "COMPANY": "Empresa",
       "LEAD": "Lead"
     }
+  },
+  "assistant": {
+    "title": "Copiloto",
+    "openLabel": "Abrir copiloto de IA",
+    "closeLabel": "Fechar copiloto",
+    "readOnlyHint": "Por enquanto, apenas leitura",
+    "greeting": "Oi, {name}! Sou seu copiloto. Posso resumir seu funil, achar registros e responder sobre o que está na sua tela.",
+    "placeholder": "Pergunte algo sobre seu CRM…",
+    "send": "Enviar",
+    "suggest": {
+      "pipeline": "Resumir meu funil",
+      "today": "O que preciso fazer hoje?",
+      "find": "Encontrar um contato"
+    },
+    "notice": {
+      "notConfigured": "O copiloto ainda não foi configurado. Um administrador precisa adicionar a chave da IA.",
+      "forbidden": "O copiloto está disponível a partir do plano PLUS.",
+      "rateLimited": "Muitas mensagens em pouco tempo. Aguarde alguns segundos.",
+      "error": "Não consegui responder agora. Tente novamente."
+    }
   }
 }

@@ -6,6 +6,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { MobileNav } from "@/components/app/mobile-nav";
 import { NotificationBell } from "@/components/app/notification-bell";
 import { Sidebar } from "@/components/app/sidebar";
+import { AssistantWidget } from "@/components/app/assistant/assistant-widget";
 import { NotificationSound } from "@/components/app/notification-sound";
 import { CommandPalette } from "@/components/app/command-palette";
 import { RealtimeProvider } from "@/components/app/realtime-provider";
@@ -35,6 +36,7 @@ export async function AppShell({
   );
 
   const collapsed = (await cookies()).get("sidebar_collapsed")?.value === "1";
+  const assistantEnabled = hasFeature(ctx.organization.plan as PlanKey, "assistant");
 
   return (
     <RealtimeProvider>
@@ -87,6 +89,7 @@ export async function AppShell({
           <PageTransition>{children}</PageTransition>
         </main>
       </div>
+      {assistantEnabled ? <AssistantWidget userName={ctx.user.name} /> : null}
     </div>
     </RealtimeProvider>
   );

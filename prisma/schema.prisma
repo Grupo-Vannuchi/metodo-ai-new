@@ -1867,3 +1867,41 @@ model TimeOff {
   @@index([organizationId, startDate])
   @@map("time_off")
 }
+
+// ---------------------------------------------------------------------------
+// AI Copilot (assistant)
+// ---------------------------------------------------------------------------
+
+/// A conversation between a user and the in-app AI copilot. One ongoing thread
+/// per user by default; keeps history so context survives across sessions and
+/// so tool calls are auditable. Org-scoped like every tenant model.
+model AssistantThread {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  title          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  messages AssistantMessage[]
+
+  @@index([organizationId, userId, updatedAt])
+  @@map("assistant_threads")
+}
+
+/// One turn in an assistant thread. `role` is "user" | "assistant". `content`
+/// stores the rendered text; tool activity is summarized into it (the raw
+/// tool_use/tool_result blocks are not persisted).
+model AssistantMessage {
+  id             String   @id @default(cuid())
+  organizationId String
+  threadId       String
+  role           String
+  content        String   @db.Text
+  createdAt      DateTime @default(now())
+
+  thread AssistantThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@map("assistant_messages")
+}

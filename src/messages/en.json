@@ -2311,5 +2311,25 @@
       "COMPANY": "Company",
       "LEAD": "Lead"
     }
+  },
+  "assistant": {
+    "title": "Copilot",
+    "openLabel": "Open AI copilot",
+    "closeLabel": "Close copilot",
+    "readOnlyHint": "Read-only for now",
+    "greeting": "Hi, {name}! I'm your copilot. I can summarize your pipeline, find records, and answer about what's on your screen.",
+    "placeholder": "Ask something about your CRM…",
+    "send": "Send",
+    "suggest": {
+      "pipeline": "Summarize my pipeline",
+      "today": "What do I need to do today?",
+      "find": "Find a contact"
+    },
+    "notice": {
+      "notConfigured": "The copilot isn't configured yet. An admin needs to add the AI key.",
+      "forbidden": "The copilot is available on the PLUS plan and above.",
+      "rateLimited": "Too many messages in a short time. Wait a few seconds.",
+      "error": "I couldn't answer right now. Please try again."
+    }
   }
 }

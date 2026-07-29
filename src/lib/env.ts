@@ -71,6 +71,14 @@ const serverSchema = z.object({
   // Cache / rate-limit (Upstash Redis) — optional until dispatch throttling runs.
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+  // AI copilot (Anthropic Claude). Server-only. Optional so the app boots
+  // without it; the assistant endpoint reports "not configured" and the widget
+  // stays dormant until the key is present.
+  ANTHROPIC_API_KEY: z.string().optional(),
+  // Override the assistant model (defaults to a strong Opus model in code). Set
+  // e.g. ASSISTANT_MODEL=claude-sonnet-5 to trade some quality for cost/latency
+  // on a high-volume chat copilot.
+  ASSISTANT_MODEL: z.string().optional(),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
 

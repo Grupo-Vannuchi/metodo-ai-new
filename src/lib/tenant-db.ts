@@ -70,6 +70,8 @@ const TENANT_MODELS = new Set<string>([
   "PayrollItem",
   "PayrollLine",
   "TimeOff",
+  "AssistantThread",
+  "AssistantMessage",
 ]);
 
 const WHERE_OPS = new Set<string>([
