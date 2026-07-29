@@ -2320,6 +2320,8 @@
     "greeting": "Hi, {name}! I'm your copilot. I can summarize your pipeline, find records, and answer about what's on your screen.",
     "placeholder": "Ask something about your CRM…",
     "send": "Send",
+    "copy": "Copy",
+    "copied": "Copied",
     "suggest": {
       "pipeline": "Summarize my pipeline",
       "today": "What do I need to do today?",

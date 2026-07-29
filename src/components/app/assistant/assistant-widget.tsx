@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { usePathname } from "@/i18n/navigation";
-import { Bot, Send, Sparkles, X } from "lucide-react";
+import { Bot, Check, Copy, Send, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { screenContextFromPath } from "@/lib/assistant/context";
 
@@ -29,7 +29,18 @@ export function AssistantWidget({ userName }: { userName: string }) {
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  async function copy(text: string, i: number) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIdx(i);
+      setTimeout(() => setCopiedIdx((c) => (c === i ? null : c)), 1500);
+    } catch {
+      /* clipboard unavailable — ignore */
+    }
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -143,7 +154,7 @@ export function AssistantWidget({ userName }: { userName: string }) {
               </div>
             ) : (
               messages.map((m, i) => (
-                <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
+                <div key={i} className={cn("flex flex-col", m.role === "user" ? "items-end" : "items-start")}>
                   <div
                     className={cn(
                       "max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm",
@@ -154,6 +165,16 @@ export function AssistantWidget({ userName }: { userName: string }) {
                   >
                     {m.text || (pending && i === messages.length - 1 ? "…" : "")}
                   </div>
+                  {m.role === "assistant" && m.text ? (
+                    <button
+                      type="button"
+                      onClick={() => copy(m.text, i)}
+                      className="mt-1 flex items-center gap-1 px-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      {copiedIdx === i ? <Check className="size-3" /> : <Copy className="size-3" />}
+                      {copiedIdx === i ? t("copied") : t("copy")}
+                    </button>
+                  ) : null}
                 </div>
               ))
             )}

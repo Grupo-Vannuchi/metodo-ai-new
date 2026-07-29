@@ -8,6 +8,7 @@ import { globalSearch } from "@/lib/queries/search";
 import { getSalesReport, type SalesPeriod } from "@/lib/queries/sales-report";
 import { getOpportunity } from "@/lib/queries/crm";
 import { listTasks, type TaskScope } from "@/lib/queries/tasks";
+import { listQuickReplies } from "@/lib/queries/quick-replies";
 
 /**
  * Read-only tool set (phases 0–1). Every tool executes under the caller's org
@@ -72,6 +73,12 @@ export const assistantTools: Anthropic.Tool[] = [
         },
       },
     },
+  },
+  {
+    name: "list_message_templates",
+    description:
+      "Lista os modelos de mensagem de WhatsApp da organização (nome + texto). Use como referência de tom e estilo ao RASCUNHAR uma mensagem, ou para responder quais modelos existem.",
+    input_schema: { type: "object", properties: {} },
   },
 ];
 
@@ -169,6 +176,15 @@ export async function runAssistantTool(
           contato: t.contactName,
         })),
       );
+    }
+
+    if (name === "list_message_templates") {
+      if (!canAccessScreen(ctx, "inbox") && !canAccessScreen(ctx, "campaigns")) {
+        return "Você não tem acesso aos modelos de mensagem.";
+      }
+      const rows = await listQuickReplies(ctx.organizationId);
+      if (rows.length === 0) return "Nenhum modelo de mensagem cadastrado ainda.";
+      return JSON.stringify(rows.slice(0, 30).map((r) => ({ nome: r.name, texto: r.body })));
     }
 
     return `Ferramenta desconhecida: ${name}`;
