@@ -2105,7 +2105,8 @@
         "finance_created": "Copilot created a finance entry",
         "whatsapp_sent": "Copilot sent a WhatsApp",
         "email_sent": "Copilot sent an email",
-        "automation_created": "Copilot created an automation"
+        "automation_created": "Copilot created an automation",
+        "contact_tagged": "Copilot tagged a contact"
       }
     },
     "entities": {

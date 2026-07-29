@@ -45,6 +45,7 @@ export const AUDIT_ACTIONS = [
   "assistant.whatsapp_sent",
   "assistant.email_sent",
   "assistant.automation_created",
+  "assistant.contact_tagged",
 ] as const;
 
 export const AUDIT_ENTITIES = [

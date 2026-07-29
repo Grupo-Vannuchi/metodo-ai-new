@@ -6,9 +6,11 @@ import { hasFeature, type PlanKey } from "@/config/plans";
 import { formatBRL } from "@/lib/money";
 import { globalSearch } from "@/lib/queries/search";
 import { getSalesReport, type SalesPeriod } from "@/lib/queries/sales-report";
-import { getOpportunity } from "@/lib/queries/crm";
+import { getOpportunity, stageOptions } from "@/lib/queries/crm";
 import { listTasks, type TaskScope } from "@/lib/queries/tasks";
 import { listQuickReplies } from "@/lib/queries/quick-replies";
+import { getContact } from "@/lib/queries/contacts";
+import { getCompany } from "@/lib/queries/companies";
 
 /**
  * Read-only tool set (phases 0–1). Every tool executes under the caller's org
@@ -79,6 +81,31 @@ export const assistantTools: Anthropic.Tool[] = [
     description:
       "Lista os modelos de mensagem de WhatsApp da organização (nome + texto). Use como referência de tom e estilo ao RASCUNHAR uma mensagem, ou para responder quais modelos existem.",
     input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "list_pipeline_stages",
+    description:
+      "Lista as etapas do funil (id + nome), na ordem. Use para obter o id de uma etapa antes de mover uma oportunidade ou de criar automações por etapa (stage_entered / move_stage).",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "get_contact",
+    description:
+      "Detalhes de um contato pelo id (obtido via search_crm): nome, e-mail, telefone, cargo, empresa, tags.",
+    input_schema: {
+      type: "object",
+      properties: { id: { type: "string", description: "Id do contato." } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "get_company",
+    description: "Detalhes de uma empresa pelo id (obtido via search_crm).",
+    input_schema: {
+      type: "object",
+      properties: { id: { type: "string", description: "Id da empresa." } },
+      required: ["id"],
+    },
   },
 ];
 
@@ -185,6 +212,38 @@ export async function runAssistantTool(
       const rows = await listQuickReplies(ctx.organizationId);
       if (rows.length === 0) return "Nenhum modelo de mensagem cadastrado ainda.";
       return JSON.stringify(rows.slice(0, 30).map((r) => ({ nome: r.name, texto: r.body })));
+    }
+
+    if (name === "list_pipeline_stages") {
+      if (!canAccessScreen(ctx, "crm")) return "Você não tem acesso ao CRM.";
+      const { stages } = await stageOptions(ctx.organizationId);
+      if (stages.length === 0) return "Nenhuma etapa encontrada.";
+      return JSON.stringify(stages.map((s) => ({ id: s.id, etapa: s.name })));
+    }
+
+    if (name === "get_contact") {
+      if (!canAccessScreen(ctx, "contacts")) return "Você não tem acesso aos contatos.";
+      const id = typeof input.id === "string" ? input.id.trim() : "";
+      if (!id) return "Informe o id do contato.";
+      const c = await getContact(ctx.organizationId, id);
+      if (!c) return "Contato não encontrado.";
+      return JSON.stringify({
+        nome: c.name,
+        email: c.email,
+        telefone: c.phone,
+        cargo: c.role,
+        empresa: c.company?.name ?? null,
+        tags: c.tags,
+      });
+    }
+
+    if (name === "get_company") {
+      if (!canAccessScreen(ctx, "companies")) return "Você não tem acesso às empresas.";
+      const id = typeof input.id === "string" ? input.id.trim() : "";
+      if (!id) return "Informe o id da empresa.";
+      const c = await getCompany(ctx.organizationId, id);
+      if (!c) return "Empresa não encontrada.";
+      return JSON.stringify(c);
     }
 
     return `Ferramenta desconhecida: ${name}`;

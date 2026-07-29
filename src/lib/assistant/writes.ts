@@ -3,6 +3,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { revalidatePath } from "next/cache";
 import type { OrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
+import { prisma } from "@/lib/prisma";
 import { canAccessScreen } from "@/lib/access";
 import { hasFeature, type PlanKey } from "@/config/plans";
 import { formatBRL } from "@/lib/money";
@@ -79,6 +80,30 @@ const BASE_WRITE_TOOLS: Anthropic.Tool[] = [
         outcomeReason: { type: "string", description: "Motivo (obrigatório para LOST/CANCELED)." },
       },
       required: ["opportunityId", "status"],
+    },
+  },
+  {
+    name: "set_owner",
+    description: "Define o responsável (owner) de uma oportunidade (após confirmação).",
+    input_schema: {
+      type: "object",
+      properties: {
+        opportunityId: { type: "string", description: "Id da oportunidade." },
+        userId: { type: "string", description: "Id do responsável (membro da organização)." },
+      },
+      required: ["opportunityId", "userId"],
+    },
+  },
+  {
+    name: "add_tag",
+    description: "Adiciona uma tag a um contato (após confirmação).",
+    input_schema: {
+      type: "object",
+      properties: {
+        contactId: { type: "string", description: "Id do contato." },
+        tag: { type: "string", description: "Tag a adicionar." },
+      },
+      required: ["contactId", "tag"],
     },
   },
 ];
@@ -161,6 +186,8 @@ const WRITE_TOOL_NAMES = new Set([
   "move_opportunity",
   "set_expected_close",
   "set_opportunity_status",
+  "set_owner",
+  "add_tag",
   "create_finance_entry",
   "send_whatsapp",
   "send_email",
@@ -232,6 +259,10 @@ export function summarizeWrite(tool: string, args: Record<string, unknown>): str
       return `Definir previsão de fechamento para daqui a ${num(args.inDays) ?? "?"} dia(s)`;
     case "set_opportunity_status":
       return `Marcar oportunidade como ${str(args.status)}${str(args.outcomeReason) ? ` (motivo: ${str(args.outcomeReason)})` : ""}`;
+    case "set_owner":
+      return "Definir o responsável da oportunidade";
+    case "add_tag":
+      return `Adicionar a tag "${str(args.tag)}" ao contato`;
     case "create_finance_entry":
       return `Criar lançamento: "${str(args.description)}" — ${str(args.type) === "EXPENSE" ? "despesa" : "receita"} de ${formatBRL(num(args.amount) ?? 0)}`;
     case "send_whatsapp":
@@ -322,6 +353,54 @@ export async function executeWrite(
       if (!res.ok) return { ok: false, message: "Não consegui atualizar o status da oportunidade." };
       await audit(ctx, { action: "assistant.opportunity_updated", entity: "Opportunity", entityId: id, meta: { status } });
       return { ok: true, message: `Oportunidade marcada como ${status}.` };
+    }
+
+    if (tool === "set_owner") {
+      if (!canAccessScreen(ctx, "crm")) return { ok: false, message: "Você não tem acesso ao CRM." };
+      const opportunityId = str(args.opportunityId);
+      const userId = str(args.userId);
+      if (!opportunityId || !userId) return { ok: false, message: "Oportunidade e responsável são obrigatórios." };
+      const member = await prisma.membership.findFirst({
+        where: { organizationId: ctx.organizationId, userId },
+        select: { userId: true },
+      });
+      if (!member) return { ok: false, message: "Esse usuário não é membro da organização." };
+      const opp = await db.opportunity.findFirst({
+        where: { id: opportunityId },
+        select: { id: true, title: true, ownerId: true },
+      });
+      if (!opp) return { ok: false, message: "Oportunidade não encontrada." };
+      await db.opportunity.updateMany({ where: { id: opportunityId }, data: { ownerId: userId } });
+      if (userId !== opp.ownerId) {
+        await db.notification.create({
+          data: {
+            organizationId: ctx.organizationId,
+            userId,
+            type: "OPP_ASSIGNED",
+            data: { actor: ctx.user.name, title: opp.title },
+            link: `/app/crm/${opportunityId}`,
+          },
+        });
+      }
+      await audit(ctx, { action: "assistant.opportunity_updated", entity: "Opportunity", entityId: opportunityId, meta: { ownerId: userId } });
+      revalidatePath(`/app/crm/${opportunityId}`);
+      revalidatePath("/app/crm");
+      return { ok: true, message: "Responsável atualizado." };
+    }
+
+    if (tool === "add_tag") {
+      if (!canAccessScreen(ctx, "contacts")) return { ok: false, message: "Você não tem acesso aos contatos." };
+      const contactId = str(args.contactId);
+      const tag = str(args.tag);
+      if (!contactId || !tag) return { ok: false, message: "Contato e tag são obrigatórios." };
+      const c = await db.contact.findFirst({ where: { id: contactId }, select: { tags: true } });
+      if (!c) return { ok: false, message: "Contato não encontrado." };
+      if (c.tags.includes(tag)) return { ok: true, message: `O contato já tem a tag "${tag}".` };
+      await db.contact.updateMany({ where: { id: contactId }, data: { tags: [...c.tags, tag] } });
+      await audit(ctx, { action: "assistant.contact_tagged", entity: "contacts", entityId: contactId, meta: { tag } });
+      revalidatePath("/app/contacts");
+      revalidatePath(`/app/contacts/${contactId}`);
+      return { ok: true, message: `Tag "${tag}" adicionada ao contato.` };
     }
 
     if (tool === "create_finance_entry") {
