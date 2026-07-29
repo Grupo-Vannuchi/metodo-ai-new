@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
 import { Search, Loader2 } from "lucide-react";
@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea, FieldError } from "@/components/ui/field";
 import { Link, useRouter } from "@/i18n/navigation";
 import { onlyDigits, formatCnpj } from "@/lib/cnpj";
+import { useRegisterAssistantForm } from "@/components/app/assistant/form-store";
+import type { FormBridge } from "@/lib/assistant/form-bridge";
 import {
   formToCompanyInput,
   type CompanyFormValues,
@@ -47,6 +49,39 @@ export function CompanyForm({
     getValues,
     formState: { errors, isSubmitting },
   } = useForm<CompanyFormValues>({ defaultValues });
+
+  // AI copilot pre-fill (review only; never saves).
+  const bridge = useMemo<FormBridge>(
+    () => ({
+      key: `company:${companyId ?? "new"}`,
+      title: "Empresa",
+      fields: [
+        { name: "name", label: "Nome", type: "text" },
+        { name: "cnpj", label: "CNPJ", type: "text" },
+        { name: "email", label: "E-mail", type: "text" },
+        { name: "phone", label: "Telefone", type: "text" },
+        { name: "website", label: "Site", type: "text" },
+        { name: "street", label: "Endereço", type: "text" },
+        { name: "city", label: "Cidade", type: "text" },
+        { name: "uf", label: "UF", type: "text" },
+        { name: "zip", label: "CEP", type: "text" },
+        { name: "notes", label: "Observações", type: "textarea" },
+      ],
+      apply: (values) => {
+        const set = setValue as unknown as (
+          name: keyof CompanyFormValues,
+          value: string,
+          opts: { shouldDirty: boolean; shouldTouch: boolean },
+        ) => void;
+        const FIELDS = new Set(["name", "cnpj", "email", "phone", "website", "street", "city", "uf", "zip", "notes"]);
+        for (const [k, v] of Object.entries(values)) {
+          if (FIELDS.has(k)) set(k as keyof CompanyFormValues, v, { shouldDirty: true, shouldTouch: true });
+        }
+      },
+    }),
+    [companyId, setValue],
+  );
+  useRegisterAssistantForm(bridge);
 
   async function runCnpjLookup() {
     const digits = onlyDigits(getValues("cnpj"));

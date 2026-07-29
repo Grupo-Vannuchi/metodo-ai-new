@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { Input, Label, FieldError } from "@/components/ui/field";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { formatBrPhone, isValidBrPhone } from "@/lib/phone";
+import { useRegisterAssistantForm } from "@/components/app/assistant/form-store";
+import type { FormBridge } from "@/lib/assistant/form-bridge";
 import {
   formToContactInput,
   type ContactFormValues,
@@ -37,6 +39,7 @@ export function ContactForm({
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<ContactFormValues>({
     defaultValues: { ...defaultValues, phone: formatBrPhone(defaultValues.phone) },
@@ -46,6 +49,34 @@ export function ContactForm({
   const phoneField = register("phone", {
     validate: (v) => isValidBrPhone(v) || tv("phone"),
   });
+
+  // AI copilot pre-fill (review only; never saves).
+  const bridge = useMemo<FormBridge>(
+    () => ({
+      key: `contact:${contactId ?? "new"}`,
+      title: "Contato",
+      fields: [
+        { name: "name", label: "Nome", type: "text" },
+        { name: "email", label: "E-mail", type: "text" },
+        { name: "phone", label: "Telefone", type: "text" },
+        { name: "role", label: "Cargo", type: "text" },
+        { name: "tags", label: "Tags (separadas por vírgula)", type: "text" },
+      ],
+      apply: (values) => {
+        const set = setValue as unknown as (
+          name: keyof ContactFormValues,
+          value: string,
+          opts: { shouldDirty: boolean; shouldTouch: boolean },
+        ) => void;
+        const FIELDS = new Set(["name", "email", "phone", "role", "tags"]);
+        for (const [k, v] of Object.entries(values)) {
+          if (FIELDS.has(k)) set(k as keyof ContactFormValues, v, { shouldDirty: true, shouldTouch: true });
+        }
+      },
+    }),
+    [contactId, setValue],
+  );
+  useRegisterAssistantForm(bridge);
 
   async function onSubmit(values: ContactFormValues) {
     setServerError(null);

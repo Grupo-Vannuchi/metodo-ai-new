@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
 import { Plus, X, Search, Loader2 } from "lucide-react";
@@ -10,6 +10,8 @@ import { MoneyInput } from "@/components/ui/money-input";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { onlyDigits, formatCnpj } from "@/lib/cnpj";
+import { useRegisterAssistantForm } from "@/components/app/assistant/form-store";
+import type { FormBridge } from "@/lib/assistant/form-bridge";
 import { createOpportunity } from "@/app/actions/opportunities";
 import { createContact } from "@/app/actions/contacts";
 import { createCompany, lookupCnpj } from "@/app/actions/companies";
@@ -104,6 +106,39 @@ export function NewOpportunityForm({
       notes: "",
     },
   });
+
+  // AI copilot pre-fill (review only; never saves). Money/company/contact/owner
+  // stay with the user (uncontrolled money input / need real ids).
+  const bridge = useMemo<FormBridge>(
+    () => ({
+      key: "opportunity:new",
+      title: "Nova oportunidade",
+      fields: [
+        { name: "title", label: "Título", type: "text" },
+        { name: "notes", label: "Notas / contexto", type: "textarea" },
+        { name: "expectedCloseDate", label: "Previsão de fechamento", type: "date" },
+        {
+          name: "stageId",
+          label: "Etapa do funil",
+          type: "select",
+          options: stages.map((s) => ({ value: s.id, label: s.name })),
+        },
+      ],
+      apply: (values) => {
+        const set = setValue as unknown as (
+          name: keyof Values,
+          value: string,
+          opts: { shouldDirty: boolean; shouldTouch: boolean },
+        ) => void;
+        const FIELDS = new Set(["title", "notes", "expectedCloseDate", "stageId"]);
+        for (const [k, v] of Object.entries(values)) {
+          if (FIELDS.has(k)) set(k as keyof Values, v, { shouldDirty: true, shouldTouch: true });
+        }
+      },
+    }),
+    [stages, setValue],
+  );
+  useRegisterAssistantForm(bridge);
 
   function toggle(which: "company" | "contact" | "product") {
     setCreateErr(null);
