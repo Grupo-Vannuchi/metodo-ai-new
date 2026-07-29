@@ -8,9 +8,13 @@ import { hasFeature, type PlanKey } from "@/config/plans";
 import { formatBRL } from "@/lib/money";
 import { audit } from "@/lib/audit";
 import { moveOpportunity } from "@/app/actions/opportunities";
+import { sendMessage, startConversation } from "@/app/actions/inbox";
+import { sendEmail } from "@/lib/email/send";
 
 const DAY = 86_400_000;
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "");
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const num = (v: unknown): number | null => {
   const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
   return Number.isFinite(n) ? n : null;
@@ -79,22 +83,59 @@ const FINANCE_WRITE_TOOL: Anthropic.Tool = {
   },
 };
 
+const WHATSAPP_WRITE_TOOL: Anthropic.Tool = {
+  name: "send_whatsapp",
+  description:
+    "Envia uma mensagem de WhatsApp para um número (após confirmação). Use o telefone do contato/oportunidade (search_crm e get_opportunity retornam o telefone). Só funciona se o usuário tiver uma conexão de WhatsApp ativa.",
+  input_schema: {
+    type: "object",
+    properties: {
+      phone: { type: "string", description: "Telefone do destinatário, com DDD." },
+      name: { type: "string", description: "Nome do destinatário (opcional)." },
+      contactId: { type: "string", description: "Id do contato, se houver (opcional)." },
+      message: { type: "string", description: "Texto da mensagem a enviar." },
+    },
+    required: ["phone", "message"],
+  },
+};
+
+const EMAIL_WRITE_TOOL: Anthropic.Tool = {
+  name: "send_email",
+  description:
+    "Envia um e-mail (após confirmação). Use o e-mail do contato (search_crm/get_opportunity).",
+  input_schema: {
+    type: "object",
+    properties: {
+      to: { type: "string", description: "E-mail do destinatário." },
+      subject: { type: "string", description: "Assunto do e-mail." },
+      body: { type: "string", description: "Corpo do e-mail em texto simples (quebras de linha viram parágrafos)." },
+    },
+    required: ["to", "subject", "body"],
+  },
+};
+
 const WRITE_TOOL_NAMES = new Set([
   "create_task",
   "move_opportunity",
   "set_expected_close",
   "create_finance_entry",
+  "send_whatsapp",
+  "send_email",
 ]);
 
 export function isWriteTool(name: string): boolean {
   return WRITE_TOOL_NAMES.has(name);
 }
 
-/** Write tools available to this org (finance is plan/access gated). */
+/** Write tools available to this org (finance + messaging are access gated). */
 export function writeToolsFor(ctx: OrgContext): Anthropic.Tool[] {
-  const financeOk =
-    hasFeature(ctx.organization.plan as PlanKey, "finance") && canAccessScreen(ctx, "finance");
-  return financeOk ? [...BASE_WRITE_TOOLS, FINANCE_WRITE_TOOL] : BASE_WRITE_TOOLS;
+  const tools = [...BASE_WRITE_TOOLS];
+  if (hasFeature(ctx.organization.plan as PlanKey, "finance") && canAccessScreen(ctx, "finance")) {
+    tools.push(FINANCE_WRITE_TOOL);
+  }
+  if (canAccessScreen(ctx, "inbox")) tools.push(WHATSAPP_WRITE_TOOL);
+  if (canAccessScreen(ctx, "inbox") || canAccessScreen(ctx, "campaigns")) tools.push(EMAIL_WRITE_TOOL);
+  return tools;
 }
 
 /** A short, human summary for the confirmation card (no DB reads). */
@@ -110,6 +151,10 @@ export function summarizeWrite(tool: string, args: Record<string, unknown>): str
       return `Definir previsão de fechamento para daqui a ${num(args.inDays) ?? "?"} dia(s)`;
     case "create_finance_entry":
       return `Criar lançamento: "${str(args.description)}" — ${str(args.type) === "EXPENSE" ? "despesa" : "receita"} de ${formatBRL(num(args.amount) ?? 0)}`;
+    case "send_whatsapp":
+      return `Enviar WhatsApp para ${str(args.name) || str(args.phone)}:\n\n"${str(args.message)}"`;
+    case "send_email":
+      return `Enviar e-mail para ${str(args.to)} — assunto "${str(args.subject)}":\n\n"${str(args.body)}"`;
     default:
       return "Executar ação";
   }
@@ -204,6 +249,63 @@ export async function executeWrite(
       revalidatePath("/app/finance");
       revalidatePath("/app/finance/entries");
       return { ok: true, message: `Lançamento "${description}" (${formatBRL(amount)}) criado.` };
+    }
+
+    if (tool === "send_whatsapp") {
+      if (!canAccessScreen(ctx, "inbox")) return { ok: false, message: "Você não tem acesso ao Inbox." };
+      const phone = str(args.phone);
+      const message = str(args.message);
+      if (!phone || !message) return { ok: false, message: "Telefone e mensagem são obrigatórios." };
+      const conv = await startConversation({
+        phone,
+        name: str(args.name) || undefined,
+        contactId: str(args.contactId) || undefined,
+      });
+      if (!conv.ok) {
+        return {
+          ok: false,
+          message:
+            conv.error === "no_connection"
+              ? "Você não tem uma conexão de WhatsApp ativa."
+              : "Não consegui abrir a conversa.",
+        };
+      }
+      const sent = await sendMessage(conv.conversationId, message);
+      if (!sent.ok) return { ok: false, message: "Não consegui enviar o WhatsApp." };
+      await audit(ctx, {
+        action: "assistant.whatsapp_sent",
+        entity: "contacts",
+        entityId: str(args.contactId) || undefined,
+        meta: { phone },
+      });
+      return { ok: true, message: `WhatsApp enviado para ${str(args.name) || phone}.` };
+    }
+
+    if (tool === "send_email") {
+      if (!canAccessScreen(ctx, "inbox") && !canAccessScreen(ctx, "campaigns"))
+        return { ok: false, message: "Você não tem acesso para enviar e-mails." };
+      const to = str(args.to);
+      const subject = str(args.subject);
+      const body = str(args.body);
+      if (!to || !subject || !body)
+        return { ok: false, message: "Destinatário, assunto e corpo são obrigatórios." };
+      const html = body
+        .split(/\n+/)
+        .filter(Boolean)
+        .map((line) => `<p>${escapeHtml(line)}</p>`)
+        .join("");
+      const res = await sendEmail({ to, subject, html, text: body });
+      if (!res.ok) {
+        return {
+          ok: false,
+          message:
+            res.error === "not_configured"
+              ? "O envio de e-mail ainda não está configurado."
+              : "Não consegui enviar o e-mail.",
+        };
+      }
+      await audit(ctx, { action: "assistant.email_sent", entity: "contacts", meta: { to, subject } });
+      return { ok: true, message: `E-mail enviado para ${to}.` };
     }
 
     return { ok: false, message: "Ação desconhecida." };

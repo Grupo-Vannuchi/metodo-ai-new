@@ -2100,7 +2100,9 @@
         "task_created": "Copilot created a task",
         "opportunity_moved": "Copilot moved an opportunity",
         "opportunity_updated": "Copilot updated an opportunity",
-        "finance_created": "Copilot created a finance entry"
+        "finance_created": "Copilot created a finance entry",
+        "whatsapp_sent": "Copilot sent a WhatsApp",
+        "email_sent": "Copilot sent an email"
       }
     },
     "entities": {

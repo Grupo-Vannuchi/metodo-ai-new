@@ -235,7 +235,7 @@ export function AssistantWidget({ userName }: { userName: string }) {
             {confirms.map((c) => (
               <div key={c.id} className="rounded-xl border border-brand/40 bg-brand/5 p-3">
                 <p className="text-xs font-semibold text-foreground">{t("confirmTitle")}</p>
-                <p className="mt-0.5 text-sm text-muted-foreground">{c.summary}</p>
+                <p className="mt-0.5 whitespace-pre-wrap text-sm text-muted-foreground">{c.summary}</p>
                 <div className="mt-2 flex gap-2">
                   <button
                     type="button"
