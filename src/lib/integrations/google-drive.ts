@@ -100,6 +100,72 @@ export async function getDriveAccessToken(
   }
 }
 
+/** The user's Drive connection for this org, if any. */
+export async function findDriveConnection(organizationId: string, userId: string) {
+  const db = tenantDb(organizationId);
+  return db.integrationConnection.findFirst({
+    where: { provider: "GOOGLE_DRIVE", ownerId: userId },
+    select: { id: true, label: true },
+  });
+}
+
+const FOLDER_MIME = "application/vnd.google-apps.folder";
+
+export type DriveFile = {
+  id: string;
+  name: string;
+  mimeType: string;
+  webViewLink: string | null;
+  modifiedTime: string | null;
+  size: number | null;
+  isFolder: boolean;
+};
+
+type RawDriveFile = {
+  id: string;
+  name: string;
+  mimeType: string;
+  webViewLink?: string;
+  modifiedTime?: string;
+  size?: string;
+};
+
+/** List a folder's children (default = root), or search by name across the
+ * Drive when `search` is given. Returns [] on any API error. */
+export async function listDriveFiles(
+  accessToken: string,
+  opts: { folderId?: string; search?: string } = {},
+): Promise<DriveFile[]> {
+  const search = (opts.search ?? "").trim();
+  const folderId = opts.folderId || "root";
+  const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  const q = search
+    ? `name contains '${esc(search)}' and trashed = false`
+    : `'${esc(folderId)}' in parents and trashed = false`;
+  const params = new URLSearchParams({
+    q,
+    fields: "files(id,name,mimeType,webViewLink,modifiedTime,size)",
+    orderBy: "folder,name",
+    pageSize: "200",
+    supportsAllDrives: "true",
+    includeItemsFromAllDrives: "true",
+  });
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return [];
+  const j = (await res.json().catch(() => null)) as { files?: RawDriveFile[] } | null;
+  return (j?.files ?? []).map((f) => ({
+    id: f.id,
+    name: f.name,
+    mimeType: f.mimeType,
+    webViewLink: f.webViewLink ?? null,
+    modifiedTime: f.modifiedTime ?? null,
+    size: f.size ? Number(f.size) : null,
+    isFolder: f.mimeType === FOLDER_MIME,
+  }));
+}
+
 export type DriveUser = { displayName: string | null; emailAddress: string | null; photoLink: string | null };
 
 /** Drive `about(user)` — used for the connection label and as a health check. */

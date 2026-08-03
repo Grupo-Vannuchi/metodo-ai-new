@@ -19,6 +19,7 @@ import {
   Settings,
   Workflow,
   Target,
+  HardDrive,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
@@ -44,6 +45,7 @@ type NavKey =
   | "hr"
   | "automations"
   | "goals"
+  | "files"
   | "settings";
 type Item = { href: string; key: NavKey; icon: typeof LayoutDashboard };
 type GroupKey = "general" | "crm" | "comms" | "finance" | "hr" | "system";
@@ -69,6 +71,7 @@ const GROUPS: Group[] = [
       { href: "/app/tasks", key: "tasks", icon: CheckSquare },
       { href: "/app/goals", key: "goals", icon: Target },
       { href: "/app/automations", key: "automations", icon: Workflow },
+      { href: "/app/files", key: "files", icon: HardDrive },
     ],
   },
   {

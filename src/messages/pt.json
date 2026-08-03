@@ -214,6 +214,7 @@
       "tasks": "Tarefas",
       "goals": "Metas",
       "automations": "Automações",
+      "files": "Arquivos",
       "prospecting": "Prospecção",
       "campaigns": "Campanhas",
       "inbox": "Conversas",
@@ -2337,6 +2338,23 @@
       "COMPANY": "Empresa",
       "LEAD": "Lead"
     }
+  },
+  "files": {
+    "title": "Arquivos (Drive)",
+    "subtitle": "Seu Google Drive dentro do CRM.",
+    "connectTitle": "Conecte seu Google Drive",
+    "connectBody": "Conecte sua conta do Google para espelhar seu Drive aqui e usar seus arquivos no CRM.",
+    "connectCta": "Conectar Google Drive",
+    "notConfigured": "A integração com o Google Drive ainda não foi configurada pelo administrador.",
+    "root": "Meu Drive",
+    "searchPlaceholder": "Buscar no Drive…",
+    "empty": "Pasta vazia.",
+    "noResults": "Nenhum arquivo encontrado.",
+    "open": "Abrir no Drive",
+    "reconnect": "Sua conexão com o Drive expirou. Reconecte para continuar.",
+    "reconnectCta": "Reconectar",
+    "refresh": "Atualizar",
+    "loading": "Carregando…"
   },
   "assistant": {
     "title": "Copiloto",
