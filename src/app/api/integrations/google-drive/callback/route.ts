@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  * GOOGLE_DRIVE connection, and bounce back to /app/connections. */
 export async function GET(req: NextRequest) {
   const back = (q: string) =>
-    NextResponse.redirect(new URL(`/app/connections?${q}`, env.NEXT_PUBLIC_SITE_URL));
+    NextResponse.redirect(new URL(`/app/files?${q}`, env.NEXT_PUBLIC_SITE_URL));
 
   const ctx = await getOrgContext();
   if (!ctx) return NextResponse.redirect(new URL("/login", env.NEXT_PUBLIC_SITE_URL));

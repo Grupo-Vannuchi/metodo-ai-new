@@ -1,7 +1,6 @@
 import { getTranslations } from "next-intl/server";
-import { Plus, HardDrive } from "lucide-react";
+import { Plus } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
-import { isDriveConfigured } from "@/lib/integrations/google-drive";
 import { listConnections } from "@/lib/queries/connections";
 import { listMembers } from "@/lib/queries/organizations";
 import { deleteConnection } from "@/app/actions/connections";
@@ -23,17 +22,12 @@ const statusStyles: Record<string, string> = {
 
 export default async function ConnectionsPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ connected?: string; error?: string }>;
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("connections");
-  const sp = await searchParams;
-  const driveConnected = sp.connected === "drive";
-  const driveError = typeof sp.error === "string" && sp.error.startsWith("drive_");
 
   // Members see only the WhatsApp number they connected; OWNER/ADMIN see all
   // connections (with the owning member's name).
@@ -52,31 +46,11 @@ export default async function ConnectionsPage({
           <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
           <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
         </div>
-        <div className="flex items-center gap-2">
-          {isDriveConfigured() ? (
-            // Full navigation to the OAuth start route (not an app page) — Link/client nav can't do the server redirect.
-            // eslint-disable-next-line @next/next/no-html-link-for-pages
-            <a href="/api/integrations/google-drive/connect" className={buttonVariants({ variant: "outline" })}>
-              <HardDrive className="size-4" />
-              {t("connectDrive")}
-            </a>
-          ) : null}
-          <Link href="/app/connections/new" className={buttonVariants()}>
-            <Plus className="size-4" />
-            {t("new")}
-          </Link>
-        </div>
+        <Link href="/app/connections/new" className={buttonVariants()}>
+          <Plus className="size-4" />
+          {t("new")}
+        </Link>
       </div>
-
-      {driveConnected ? (
-        <p className="rounded-lg border border-green-500/40 bg-green-500/10 px-4 py-2.5 text-sm text-green-700 dark:text-green-300">
-          {t("driveConnected")}
-        </p>
-      ) : driveError ? (
-        <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm text-red-700 dark:text-red-300">
-          {t("driveError")}
-        </p>
-      ) : null}
 
       {connections.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">

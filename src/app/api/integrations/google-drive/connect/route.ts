@@ -20,7 +20,7 @@ export async function GET() {
   const ctx = await getOrgContext();
   if (!ctx) return NextResponse.redirect(new URL("/login", env.NEXT_PUBLIC_SITE_URL));
   if (!isDriveConfigured()) {
-    return NextResponse.redirect(new URL("/app/connections?error=drive_config", env.NEXT_PUBLIC_SITE_URL));
+    return NextResponse.redirect(new URL("/app/files?error=drive_config", env.NEXT_PUBLIC_SITE_URL));
   }
 
   const state = generateState();
