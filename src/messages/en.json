@@ -214,7 +214,6 @@
       "tasks": "Tasks",
       "goals": "Goals",
       "automations": "Automations",
-      "files": "Files",
       "prospecting": "Prospecting",
       "campaigns": "Campaigns",
       "inbox": "Inbox",
@@ -2335,24 +2334,6 @@
       "COMPANY": "Company",
       "LEAD": "Lead"
     }
-  },
-  "files": {
-    "title": "Files (Drive)",
-    "subtitle": "Your Google Drive inside the CRM.",
-    "connectTitle": "Connect your Google Drive",
-    "connectBody": "Connect your Google account to mirror your Drive here and use your files in the CRM.",
-    "connectCta": "Connect Google Drive",
-    "notConfigured": "The Google Drive integration hasn't been set up by an admin yet.",
-    "connectError": "Couldn't connect. Please try again.",
-    "root": "My Drive",
-    "searchPlaceholder": "Search Drive…",
-    "empty": "Empty folder.",
-    "noResults": "No files found.",
-    "open": "Open in Drive",
-    "reconnect": "Your Drive connection expired. Reconnect to continue.",
-    "reconnectCta": "Reconnect",
-    "refresh": "Refresh",
-    "loading": "Loading…"
   },
   "assistant": {
     "title": "Copilot",
