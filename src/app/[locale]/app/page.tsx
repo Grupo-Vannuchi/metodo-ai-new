@@ -8,41 +8,69 @@ import {
   Contact,
   Send,
   ArrowRight,
+  Users,
+  BarChart3,
 } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getDashboardInsights } from "@/lib/queries/insights";
-import { getSalesReport } from "@/lib/queries/sales-report";
+import { getSalesReport, type SalesPeriod } from "@/lib/queries/sales-report";
+import { getSalesLeaderboard, getMonthlyTrend } from "@/lib/queries/dashboard-extra";
+import { getGoals, currentMonth } from "@/lib/queries/goals";
 import { PIE_MODELS, PIE_FINANCE_MODELS } from "@/lib/queries/dashboard";
 import { hasFeature, type PlanKey } from "@/config/plans";
 import { PieCard } from "@/components/dashboard/pie-card";
+import { DashboardPeriod } from "@/components/dashboard/dashboard-period";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+function asPeriod(v: string | undefined): SalesPeriod {
+  return v === "30D" || v === "YEAR" || v === "ALL" ? v : "MONTH";
+}
+
 export default async function DashboardPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{ period?: string }>;
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("app.dashboard");
   const tr = await getTranslations("crm.reports");
+  const period = asPeriod((await searchParams).period);
 
-  const [ins, report] = await Promise.all([
+  const [ins, report, leaderboard, goals, trend] = await Promise.all([
     getDashboardInsights(ctx.organizationId),
-    getSalesReport(ctx.organizationId, "MONTH"),
+    getSalesReport(ctx.organizationId, period),
+    getSalesLeaderboard(ctx.organizationId, period),
+    getGoals(ctx.organizationId, currentMonth()),
+    getMonthlyTrend(ctx.organizationId, 6),
   ]);
   const brl = new Intl.NumberFormat(locale === "pt" ? "pt-BR" : "en-US", {
     style: "currency",
     currency: "BRL",
     maximumFractionDigits: 0,
   });
+  const fmtMonth = (m: string) => {
+    const [y, mo] = m.split("-").map(Number);
+    return new Intl.DateTimeFormat(locale === "pt" ? "pt-BR" : "en-US", { month: "short" }).format(
+      new Date(y, mo - 1, 1),
+    );
+  };
   const pct = (n: number) => `${Math.round(n * 100)}%`;
   const maxReason = Math.max(1, ...report.lossReasons.map((l) => l.count));
   const maxStageValue = Math.max(1, ...ins.stages.map((s) => s.value));
+  const maxLeader = Math.max(1, ...leaderboard.map((r) => r.wonValue));
+  const maxTrend = Math.max(1, ...trend.map((p) => p.wonValue));
+
+  const goalsWithTarget = goals.filter((g) => g.target > 0);
+  const teamTarget = goalsWithTarget.reduce((a, g) => a + g.target, 0);
+  const teamAchieved = goalsWithTarget.reduce((a, g) => a + g.achieved, 0);
+  const teamPct = teamTarget > 0 ? Math.min(100, Math.round((teamAchieved / teamTarget) * 100)) : 0;
 
   const pieModels: string[] = [
     ...PIE_MODELS,
@@ -99,6 +127,53 @@ export default async function DashboardPage({
         ))}
       </section>
 
+      {goalsWithTarget.length > 0 ? (
+        <section className="glass rounded-xl border border-border p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              <Target className="size-4 text-brand" />
+              {t("goalsTitle")}
+            </h2>
+            <Link href="/app/goals" className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline">
+              {t("manageGoals")}
+              <ArrowRight className="size-4" />
+            </Link>
+          </div>
+          <div className="mb-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">{t("goalTeam")}</span>
+              <span className="font-medium">
+                {brl.format(teamAchieved)} / {brl.format(teamTarget)} · {teamPct}%
+              </span>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+              <div
+                className={cn("h-full rounded-full transition-all", teamPct >= 100 ? "bg-green-500" : "bg-brand")}
+                style={{ width: `${teamPct}%` }}
+              />
+            </div>
+          </div>
+          <ul className="flex flex-col gap-2">
+            {goalsWithTarget.slice(0, 5).map((g) => {
+              const p = g.target > 0 ? Math.min(100, Math.round((g.achieved / g.target) * 100)) : 0;
+              return (
+                <li key={g.userId} className="flex items-center gap-3">
+                  <span className="w-28 shrink-0 truncate text-sm">{g.name}</span>
+                  <div className="h-4 flex-1 overflow-hidden rounded-md bg-muted">
+                    <div
+                      className={cn("h-full rounded-md transition-all", p >= 100 ? "bg-green-500/80" : "bg-brand/80")}
+                      style={{ width: `${Math.max(4, p)}%` }}
+                    />
+                  </div>
+                  <span className="w-24 shrink-0 text-right text-xs text-muted-foreground">{brl.format(g.achieved)}</span>
+                  <span className="w-9 shrink-0 text-right text-xs font-medium">{p}%</span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+
       <PieCard models={pieModels} defaultModel="opps_by_stage" />
 
       <section className="glass rounded-xl border border-border p-5 shadow-sm">
@@ -136,9 +211,12 @@ export default async function DashboardPage({
         )}
       </section>
 
-      {/* Sales performance this month (moved here from a separate report page). */}
+      {/* Sales performance for the selected period. */}
       <section className="glass rounded-xl border border-border p-5 shadow-sm">
-        <h2 className="mb-4 text-sm font-semibold">{tr("title")}</h2>
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">{tr("title")}</h2>
+          <DashboardPeriod value={period} />
+        </div>
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="grid grid-cols-3 gap-3">
             {[
@@ -170,6 +248,52 @@ export default async function DashboardPage({
                 ))}
               </ul>
             )}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        {/* Sales leaderboard (won value per person, in the period). */}
+        <div className="glass rounded-xl border border-border p-5 shadow-sm">
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold">
+            <Users className="size-4 text-brand" />
+            {t("leaderboardTitle")}
+          </h2>
+          {leaderboard.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">{t("noSales")}</p>
+          ) : (
+            <ul className="flex flex-col gap-2.5">
+              {leaderboard.slice(0, 6).map((r, i) => (
+                <li key={r.userId} className="flex items-center gap-3">
+                  <span className="w-5 shrink-0 text-center text-xs font-semibold text-muted-foreground">{i + 1}</span>
+                  <span className="w-28 shrink-0 truncate text-sm">{r.name}</span>
+                  <div className="h-4 flex-1 overflow-hidden rounded-md bg-muted">
+                    <div className="h-full rounded-md bg-brand/80 transition-all" style={{ width: `${Math.max(4, (r.wonValue / maxLeader) * 100)}%` }} />
+                  </div>
+                  <span className="w-24 shrink-0 text-right text-xs font-medium">{brl.format(r.wonValue)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Won-value trend, last 6 months. */}
+        <div className="glass rounded-xl border border-border p-5 shadow-sm">
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold">
+            <BarChart3 className="size-4 text-brand" />
+            {t("trendTitle")}
+          </h2>
+          <div className="flex h-44 items-end gap-2">
+            {trend.map((p) => (
+              <div key={p.month} className="flex flex-1 flex-col items-center gap-1">
+                <div
+                  className="w-full rounded-t bg-brand/70 transition-all"
+                  style={{ height: `${Math.max(3, (p.wonValue / maxTrend) * 128)}px` }}
+                  title={`${fmtMonth(p.month)}: ${brl.format(p.wonValue)}`}
+                />
+                <span className="text-[10px] capitalize text-muted-foreground">{fmtMonth(p.month)}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>
