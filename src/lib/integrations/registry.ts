@@ -9,6 +9,7 @@ export type IntegrationProviderKey =
   | "EVOLUTION"
   | "META_CLOUD"
   | "GOOGLE"
+  | "GOOGLE_DRIVE"
   | "RESEND"
   | "SMTP"
   | "N8N";
@@ -27,6 +28,8 @@ export type ProviderSpec = {
   /** Short hint shown under the provider name. */
   description: string;
   fields: CredentialField[];
+  /** OAuth-connected (no manual credential form; connected via a redirect flow). */
+  oauth?: boolean;
 };
 
 export const PROVIDERS: Record<IntegrationProviderKey, ProviderSpec> = {
@@ -58,6 +61,13 @@ export const PROVIDERS: Record<IntegrationProviderKey, ProviderSpec> = {
     fields: [
       { key: "apiKey", label: "API Key (Places API New)", type: "password", required: true },
     ],
+  },
+  GOOGLE_DRIVE: {
+    provider: "GOOGLE_DRIVE",
+    label: "Google Drive",
+    description: "Espelhe seu Google Drive e anexe arquivos aos registros. Conectado via sua conta Google.",
+    oauth: true,
+    fields: [],
   },
   RESEND: {
     provider: "RESEND",

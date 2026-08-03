@@ -695,6 +695,7 @@ enum IntegrationProvider {
   EVOLUTION // WhatsApp via Evolution API
   META_CLOUD // WhatsApp Cloud API (Meta)
   GOOGLE // Maps / Custom Search
+  GOOGLE_DRIVE // Google Drive (per-user OAuth: mirror + attach files)
   RESEND // transactional / campaign email
   SMTP // generic SMTP
   N8N // workflow automation

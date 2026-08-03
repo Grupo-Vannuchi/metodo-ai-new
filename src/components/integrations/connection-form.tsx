@@ -19,7 +19,7 @@ type FormValues = {
 /** Providers that are now automatic (platform-managed) and no longer need a
  * manual "new connection": WhatsApp (one-click Evolution) and Google Places
  * (platform key). They're hidden from the provider picker. */
-const AUTOMATIC_PROVIDERS = new Set<IntegrationProviderKey>(["EVOLUTION", "GOOGLE"]);
+const AUTOMATIC_PROVIDERS = new Set<IntegrationProviderKey>(["EVOLUTION", "GOOGLE", "GOOGLE_DRIVE"]);
 const MANUAL_KEYS = PROVIDER_KEYS.filter((k) => !AUTOMATIC_PROVIDERS.has(k));
 
 export function ConnectionForm() {
