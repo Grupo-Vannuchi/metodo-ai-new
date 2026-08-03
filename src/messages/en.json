@@ -1215,6 +1215,8 @@
       "title": "Sales Pipeline",
       "noPipeline": "No pipeline configured.",
       "newOpportunity": "New opportunity",
+      "searchPlaceholder": "Search opportunity…",
+      "searchClear": "Clear search",
       "allDeals": "All",
       "myDeals": "Mine",
       "oppTitle": "Title",

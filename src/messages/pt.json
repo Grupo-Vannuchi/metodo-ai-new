@@ -1215,6 +1215,8 @@
       "title": "Funil de Vendas",
       "noPipeline": "Nenhum funil configurado.",
       "newOpportunity": "Nova oportunidade",
+      "searchPlaceholder": "Buscar oportunidade…",
+      "searchClear": "Limpar busca",
       "allDeals": "Todas",
       "myDeals": "Minhas",
       "oppTitle": "Título",

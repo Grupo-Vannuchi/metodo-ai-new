@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { LayoutGrid, List } from "lucide-react";
+import { LayoutGrid, List, Search, X } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import type { BoardStatusFilter, BoardPeriodFilter } from "@/lib/queries/crm";
@@ -20,6 +20,7 @@ export type BoardToolbarState = {
   status: BoardStatusFilter;
   period: BoardPeriodFilter;
   view: View;
+  search: string;
 };
 
 const selectClass = cn(
@@ -43,6 +44,16 @@ export function BoardToolbar({
   const t = useTranslations("crm.board");
   const router = useRouter();
 
+  // Local search box (debounced). Kept in sync when the URL search changes from
+  // elsewhere (e.g. a saved view) via the render-phase derive below.
+  const [value, setValue] = useState(current.search);
+  const [prevSearch, setPrevSearch] = useState(current.search);
+  if (prevSearch !== current.search) {
+    setPrevSearch(current.search);
+    setValue(current.search);
+  }
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
   // Remember the funnel that's open so `/app/crm` (no param) reopens it.
   useEffect(() => {
     if (current.pipelineId) {
@@ -58,12 +69,46 @@ export function BoardToolbar({
     if (next.status !== "ACTIVE") p.set("status", next.status);
     if (next.period !== "ALL") p.set("period", next.period);
     if (next.view !== "kanban") p.set("view", next.view);
+    if (next.search.trim()) p.set("q", next.search.trim());
     const qs = p.toString();
     return qs ? `/app/crm?${qs}` : "/app/crm";
   }
 
+  function onSearch(v: string) {
+    setValue(v);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => router.push(href({ search: v })), 350);
+  }
+
+  function submitSearch(e: React.FormEvent) {
+    e.preventDefault();
+    clearTimeout(timer.current);
+    router.push(href({ search: value }));
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-2">
+      <form onSubmit={submitSearch} className="relative">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={value}
+          onChange={(e) => onSearch(e.target.value)}
+          placeholder={t("searchPlaceholder")}
+          aria-label={t("searchPlaceholder")}
+          className={cn("h-9 w-48 rounded-lg border border-border bg-card pl-8 pr-8 text-sm", "focus-visible:border-brand focus-visible:outline-none")}
+        />
+        {value ? (
+          <button
+            type="button"
+            onClick={() => onSearch("")}
+            aria-label={t("searchClear")}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        ) : null}
+      </form>
+
       {pipelines.length > 1 ? (
         <select
           aria-label={t("pipelineLabel")}

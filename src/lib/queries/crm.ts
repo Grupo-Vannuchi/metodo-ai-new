@@ -62,6 +62,14 @@ function boardStatusWhere(status?: BoardStatusFilter): OpportunityStatus | { in:
   }
 }
 
+/** Text-search condition over a card's title/code and its company/contact name. */
+function boardSearchWhere(search?: string) {
+  const term = (search ?? "").trim();
+  if (!term) return {};
+  const c = { contains: term, mode: "insensitive" as const };
+  return { OR: [{ title: c }, { code: c }, { company: { name: c } }, { contact: { name: c } }] };
+}
+
 /** Start-of-range Date for a period filter (null = no lower bound). */
 function periodCutoff(period?: BoardPeriodFilter): Date | null {
   const now = new Date();
@@ -98,7 +106,7 @@ export async function getBoard(
   organizationId: string,
   pipelineId?: string,
   ownerId?: string,
-  filters: { status?: BoardStatusFilter; period?: BoardPeriodFilter } = {},
+  filters: { status?: BoardStatusFilter; period?: BoardPeriodFilter; search?: string } = {},
 ): Promise<Board | null> {
   const db = tenantDb(organizationId);
   const pipeline =
@@ -121,6 +129,7 @@ export async function getBoard(
         status: boardStatusWhere(filters.status),
         ...(ownerId ? { ownerId } : {}),
         ...(cutoff ? { createdAt: { gte: cutoff } } : {}),
+        ...boardSearchWhere(filters.search),
       },
       orderBy: { order: "asc" },
       select: {

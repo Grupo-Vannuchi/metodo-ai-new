@@ -27,7 +27,7 @@ export default async function CrmPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ pipeline?: string; owner?: string; status?: string; period?: string; view?: string }>;
+  searchParams: Promise<{ pipeline?: string; owner?: string; status?: string; period?: string; view?: string; q?: string }>;
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
@@ -38,13 +38,14 @@ export default async function CrmPage({
   const status = (BOARD_STATUS_FILTERS.includes(sp?.status as BoardStatusFilter) ? sp!.status : "ACTIVE") as BoardStatusFilter;
   const period = (BOARD_PERIOD_FILTERS.includes(sp?.period as BoardPeriodFilter) ? sp!.period : "ALL") as BoardPeriodFilter;
   const view = sp?.view === "list" ? "list" : "kanban";
+  const search = (sp?.q ?? "").trim().slice(0, 100);
 
   // Fall back to the last-opened funnel (cookie) when no explicit ?pipeline.
   const cookiePid = (await cookies()).get("crm_pipeline")?.value;
   const requestedPid = sp?.pipeline || cookiePid || undefined;
 
   const [board, pipelines, savedViews] = await Promise.all([
-    getBoard(ctx.organizationId, requestedPid, mine ? ctx.userId : undefined, { status, period }),
+    getBoard(ctx.organizationId, requestedPid, mine ? ctx.userId : undefined, { status, period, search }),
     pipelineOptions(ctx.organizationId),
     listSavedViews(ctx.organizationId, ctx.userId, "crm"),
   ]);
@@ -76,6 +77,7 @@ export default async function CrmPage({
     if (status !== "ACTIVE") p.set("status", status);
     if (period !== "ALL") p.set("period", period);
     if (view !== "kanban") p.set("view", view);
+    if (search) p.set("q", search);
     return p.toString();
   })();
 
@@ -112,7 +114,7 @@ export default async function CrmPage({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <BoardToolbar
           pipelines={pipelines}
-          current={{ pipelineId: board.pipelineId, owner: mine ? "me" : "all", status, period, view }}
+          current={{ pipelineId: board.pipelineId, owner: mine ? "me" : "all", status, period, view, search }}
         />
         <SavedViews current={currentQuery} views={savedViews} />
       </div>
