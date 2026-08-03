@@ -106,7 +106,7 @@ export async function getBoard(
   organizationId: string,
   pipelineId?: string,
   ownerId?: string,
-  filters: { status?: BoardStatusFilter; period?: BoardPeriodFilter; search?: string } = {},
+  filters: { status?: BoardStatusFilter; period?: BoardPeriodFilter; search?: string; from?: Date; to?: Date } = {},
 ): Promise<Board | null> {
   const db = tenantDb(organizationId);
   const pipeline =
@@ -115,6 +115,16 @@ export async function getBoard(
   if (!pipeline) return null;
 
   const cutoff = periodCutoff(filters.period);
+  // Explicit date range (from the calendar) wins over the legacy period preset.
+  const createdAt =
+    filters.from || filters.to
+      ? {
+          ...(filters.from ? { gte: filters.from } : {}),
+          ...(filters.to ? { lte: filters.to } : {}),
+        }
+      : cutoff
+        ? { gte: cutoff }
+        : null;
   const [stages, opportunities] = await Promise.all([
     db.stage.findMany({
       where: { pipelineId: pipeline.id },
@@ -128,7 +138,7 @@ export async function getBoard(
         pipelineId: pipeline.id,
         status: boardStatusWhere(filters.status),
         ...(ownerId ? { ownerId } : {}),
-        ...(cutoff ? { createdAt: { gte: cutoff } } : {}),
+        ...(createdAt ? { createdAt } : {}),
         ...boardSearchWhere(filters.search),
       },
       orderBy: { order: "asc" },

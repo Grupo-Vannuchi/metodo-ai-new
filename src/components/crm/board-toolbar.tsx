@@ -5,20 +5,22 @@ import { useTranslations } from "next-intl";
 import { LayoutGrid, List, Search, X } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
-import type { BoardStatusFilter, BoardPeriodFilter } from "@/lib/queries/crm";
+import { DateRangePicker } from "@/components/crm/date-range-picker";
+import type { BoardStatusFilter } from "@/lib/queries/crm";
 
 type PipelineOpt = { id: string; name: string };
 type Owner = "all" | "me";
 type View = "kanban" | "list";
 
 const STATUSES: BoardStatusFilter[] = ["ACTIVE", "OPEN", "ON_HOLD", "WON", "LOST", "CANCELED"];
-const PERIODS: BoardPeriodFilter[] = ["ALL", "TODAY", "7D", "30D", "MONTH", "YEAR"];
 
 export type BoardToolbarState = {
   pipelineId: string;
   owner: Owner;
   status: BoardStatusFilter;
-  period: BoardPeriodFilter;
+  /** Date range (YYYY-MM-DD), empty when no range is set. */
+  from: string;
+  to: string;
   view: View;
   search: string;
 };
@@ -67,7 +69,8 @@ export function BoardToolbar({
     if (next.pipelineId) p.set("pipeline", next.pipelineId);
     if (next.owner === "me") p.set("owner", "me");
     if (next.status !== "ACTIVE") p.set("status", next.status);
-    if (next.period !== "ALL") p.set("period", next.period);
+    if (next.from) p.set("from", next.from);
+    if (next.to) p.set("to", next.to);
     if (next.view !== "kanban") p.set("view", next.view);
     if (next.search.trim()) p.set("q", next.search.trim());
     const qs = p.toString();
@@ -137,18 +140,11 @@ export function BoardToolbar({
         ))}
       </select>
 
-      <select
-        aria-label={t("periodLabel")}
-        value={current.period}
-        onChange={(e) => router.push(href({ period: e.target.value as BoardPeriodFilter }))}
-        className={selectClass}
-      >
-        {PERIODS.map((p) => (
-          <option key={p} value={p}>
-            {t(`filters.period.${p}`)}
-          </option>
-        ))}
-      </select>
+      <DateRangePicker
+        from={current.from}
+        to={current.to}
+        onApply={(f, tt) => router.push(href({ from: f ?? "", to: tt ?? "" }))}
+      />
 
       {/* Owner: all / mine */}
       <div className="flex items-center rounded-lg border border-border p-0.5">
