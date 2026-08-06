@@ -1984,6 +1984,48 @@ model SupplyItem {
   @@map("supply_items")
 }
 
+/// Item category (support registry).
+model SupplyCategory {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, name])
+  @@map("supply_categories")
+}
+
+/// Unit of measure (support registry).
+model SupplyUnit {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  /// Short symbol, e.g. "un", "kg", "m".
+  abbreviation   String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, name])
+  @@map("supply_units")
+}
+
+/// Warehouse / stock location (support registry).
+model Warehouse {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  location       String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, name])
+  @@map("warehouses")
+}
+
 // ---------------------------------------------------------------------------
 // AI Copilot (assistant)
 // ---------------------------------------------------------------------------

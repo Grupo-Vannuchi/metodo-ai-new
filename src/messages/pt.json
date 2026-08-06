@@ -223,6 +223,7 @@
       "hr": "RH",
       "supplies": "Painel",
       "supplyItems": "Itens",
+      "supplyRegistries": "Cadastros",
       "suppliers": "Fornecedores",
       "connections": "Conexões",
       "settings": "Configurações",
@@ -2346,7 +2347,31 @@
     "subtitle": "Cadastro, compras, estoque e patrimônio.",
     "nav": {
       "items": "Itens",
+      "registries": "Cadastros",
       "suppliers": "Fornecedores"
+    },
+    "registries": {
+      "title": "Cadastros de apoio",
+      "subtitle": "Categorias, unidades e almoxarifados usados nos itens.",
+      "tab": {
+        "category": "Categorias",
+        "unit": "Unidades",
+        "warehouse": "Almoxarifados"
+      },
+      "extra": {
+        "unit": "Símbolo (un, kg, m…)",
+        "warehouse": "Localização"
+      },
+      "name": "Nome",
+      "active": "Ativo",
+      "new": "Novo",
+      "save": "Salvar",
+      "saving": "Salvando…",
+      "cancel": "Cancelar",
+      "edit": "Editar",
+      "delete": "Excluir",
+      "deleteConfirm": "Excluir {name}?",
+      "empty": "Nenhum registro ainda."
     },
     "items": {
       "title": "Itens",

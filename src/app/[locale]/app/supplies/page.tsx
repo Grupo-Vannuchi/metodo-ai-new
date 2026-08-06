@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { Truck, Package } from "lucide-react";
+import { Truck, Package, ListChecks } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +10,7 @@ export default async function SuppliesPage() {
 
   const cards = [
     { href: "/app/supplies/items", icon: Package, label: t("nav.items"), desc: t("items.subtitle") },
+    { href: "/app/supplies/registries", icon: ListChecks, label: t("nav.registries"), desc: t("registries.subtitle") },
     { href: "/app/supplies/suppliers", icon: Truck, label: t("nav.suppliers"), desc: t("suppliers.subtitle") },
   ];
 

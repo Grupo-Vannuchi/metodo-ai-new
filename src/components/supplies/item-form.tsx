@@ -85,10 +85,16 @@ export function ItemForm({
   id,
   defaults,
   suppliers,
+  categories = [],
+  units = [],
+  warehouses = [],
 }: {
   id?: string;
   defaults: ItemFormValues;
   suppliers: Option[];
+  categories?: string[];
+  units?: string[];
+  warehouses?: string[];
 }) {
   const t = useTranslations("supplies.items");
   const tv = useTranslations("validation");
@@ -121,6 +127,22 @@ export function ItemForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6" noValidate>
+      <datalist id="supply-units">
+        {units.map((u) => (
+          <option key={u} value={u} />
+        ))}
+      </datalist>
+      <datalist id="supply-categories">
+        {categories.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
+      <datalist id="supply-warehouses">
+        {warehouses.map((w) => (
+          <option key={w} value={w} />
+        ))}
+      </datalist>
+
       {/* Bloco 1 — Identificação */}
       <fieldset className="rounded-xl border border-border bg-card p-5">
         <legend className="px-1 text-sm font-medium">{t("blockIdentification")}</legend>
@@ -140,11 +162,11 @@ export function ItemForm({
           </div>
           <div>
             <Label htmlFor="unit">{t("unit")}</Label>
-            <Input id="unit" placeholder="un, kg, m…" {...register("unit")} />
+            <Input id="unit" list="supply-units" placeholder="un, kg, m…" {...register("unit")} />
           </div>
           <div>
             <Label htmlFor="category">{t("category")}</Label>
-            <Input id="category" {...register("category")} />
+            <Input id="category" list="supply-categories" {...register("category")} />
           </div>
           <div>
             <Label htmlFor="brand">{t("brand")}</Label>
@@ -260,7 +282,7 @@ export function ItemForm({
         <div className="mt-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <Label htmlFor="defaultWarehouse">{t("defaultWarehouse")}</Label>
-            <Input id="defaultWarehouse" {...register("defaultWarehouse")} />
+            <Input id="defaultWarehouse" list="supply-warehouses" {...register("defaultWarehouse")} />
           </div>
           <div>
             <Label htmlFor="location">{t("location")}</Label>

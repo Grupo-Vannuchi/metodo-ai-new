@@ -223,6 +223,7 @@
       "hr": "HR",
       "supplies": "Dashboard",
       "supplyItems": "Items",
+      "supplyRegistries": "Registries",
       "suppliers": "Suppliers",
       "connections": "Connections",
       "settings": "Settings",
@@ -2346,7 +2347,31 @@
     "subtitle": "Items, purchasing, inventory and assets.",
     "nav": {
       "items": "Items",
+      "registries": "Registries",
       "suppliers": "Suppliers"
+    },
+    "registries": {
+      "title": "Support registries",
+      "subtitle": "Categories, units and warehouses used by items.",
+      "tab": {
+        "category": "Categories",
+        "unit": "Units",
+        "warehouse": "Warehouses"
+      },
+      "extra": {
+        "unit": "Symbol (un, kg, m…)",
+        "warehouse": "Location"
+      },
+      "name": "Name",
+      "active": "Active",
+      "new": "New",
+      "save": "Save",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteConfirm": "Delete {name}?",
+      "empty": "No records yet."
     },
     "items": {
       "title": "Items",

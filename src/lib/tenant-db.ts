@@ -74,6 +74,9 @@ const TENANT_MODELS = new Set<string>([
   "AssistantMessage",
   "Supplier",
   "SupplyItem",
+  "SupplyCategory",
+  "SupplyUnit",
+  "Warehouse",
 ]);
 
 const WHERE_OPS = new Set<string>([
