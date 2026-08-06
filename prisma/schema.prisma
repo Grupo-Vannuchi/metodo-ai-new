@@ -2102,6 +2102,48 @@ model StockReservation {
   @@map("stock_reservations")
 }
 
+/// Lifecycle of an individual asset (patrimônio).
+enum AssetStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+  RETIRED
+}
+
+/// An individual, trackable asset (patrimônio próprio, equipamento de cliente,
+/// item alugado de terceiro). Optionally an instance of a catalog SupplyItem.
+model Asset {
+  id               String         @id @default(cuid())
+  organizationId   String
+  /// Patrimônio / tombamento code.
+  code             String?
+  name             String
+  /// Optional link to the catalog item that models this asset.
+  itemId           String?
+  serialNumber     String?
+  nature           PropertyNature @default(OWN)
+  status           AssetStatus    @default(AVAILABLE)
+  supplierId       String?
+  warehouseId      String?
+  /// Free-text current physical location.
+  location         String?
+  /// Free-text person responsible for the asset.
+  custodian        String?
+  /// Owner CRM Company when this is client/third-party equipment.
+  ownerCompanyId   String?
+  acquisitionDate  DateTime?
+  acquisitionValue Decimal?       @db.Decimal(14, 2)
+  notes            String?
+  active           Boolean        @default(true)
+  createdById      String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([organizationId, status])
+  @@index([organizationId, code])
+  @@map("assets")
+}
+
 /// Purchase order lifecycle. DRAFT is a request/quote; receiving posts each line
 /// to the stock ledger (StockMovement IN). PARTIAL when some lines are pending.
 enum PurchaseOrderStatus {
