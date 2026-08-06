@@ -2068,6 +2068,67 @@ model StockMovement {
   @@map("stock_movements")
 }
 
+/// Purchase order lifecycle. DRAFT is a request/quote; receiving posts each line
+/// to the stock ledger (StockMovement IN). PARTIAL when some lines are pending.
+enum PurchaseOrderStatus {
+  DRAFT
+  APPROVED
+  ORDERED
+  PARTIAL
+  RECEIVED
+  CANCELED
+}
+
+model PurchaseOrder {
+  id             String              @id @default(cuid())
+  organizationId String
+  /// Sequential per-org-per-year code, e.g. "0001/26".
+  code           String?
+  supplierId     String?
+  status         PurchaseOrderStatus @default(DRAFT)
+  /// Default destination for received goods.
+  warehouseId    String?
+  expectedAt     DateTime?
+  notes          String?
+  /// Σ(line total), stored so listings don't recompute.
+  total          Decimal             @default(0) @db.Decimal(14, 2)
+  approvedAt     DateTime?
+  approvedById   String?
+  orderedAt      DateTime?
+  receivedAt     DateTime?
+  createdById    String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  items PurchaseOrderItem[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String  @id @default(cuid())
+  organizationId  String
+  purchaseOrderId String
+  /// Optional link to the catalog item (null = free line).
+  itemId          String?
+  /// Snapshot description (kept even if the item is renamed/removed).
+  description     String
+  quantity        Decimal @default(0) @db.Decimal(14, 3)
+  unitPrice       Decimal @default(0) @db.Decimal(14, 2)
+  /// quantity × unitPrice, stored so totals don't recompute on read.
+  total           Decimal @default(0) @db.Decimal(14, 2)
+  /// How much has already been received into stock.
+  receivedQty     Decimal @default(0) @db.Decimal(14, 3)
+  order           Int     @default(0)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, purchaseOrderId])
+  @@map("purchase_order_items")
+}
+
 // ---------------------------------------------------------------------------
 // AI Copilot (assistant)
 // ---------------------------------------------------------------------------
