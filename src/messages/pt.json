@@ -2349,6 +2349,23 @@
   "supplies": {
     "title": "Suprimentos",
     "subtitle": "Cadastro, compras, estoque e patrimônio.",
+    "kpi": {
+      "title": "Indicadores",
+      "sections": "Seções",
+      "belowMin": "Abaixo do mínimo",
+      "belowMinSub": "itens no estoque",
+      "stockValue": "Valor em estoque",
+      "reservations": "Reservas ativas",
+      "reservationsSub": "holds de estoque",
+      "openPurchases": "Compras abertas",
+      "assets": "Ativos",
+      "assetsSub": "{inUse} em uso · {available} disp.",
+      "assetValue": "Valor do patrimônio",
+      "overdue": "Manutenção vencida",
+      "overdueSub": "eventos",
+      "upcoming": "A vencer (30 dias)",
+      "upcomingSub": "manut./calibr."
+    },
     "nav": {
       "items": "Itens",
       "purchases": "Compras",

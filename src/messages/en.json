@@ -2349,6 +2349,23 @@
   "supplies": {
     "title": "Supplies",
     "subtitle": "Items, purchasing, inventory and assets.",
+    "kpi": {
+      "title": "Indicators",
+      "sections": "Sections",
+      "belowMin": "Below minimum",
+      "belowMinSub": "stock items",
+      "stockValue": "Stock value",
+      "reservations": "Active reservations",
+      "reservationsSub": "stock holds",
+      "openPurchases": "Open purchases",
+      "assets": "Assets",
+      "assetsSub": "{inUse} in use · {available} avail.",
+      "assetValue": "Assets value",
+      "overdue": "Overdue maintenance",
+      "overdueSub": "events",
+      "upcoming": "Due (30 days)",
+      "upcomingSub": "maint./calib."
+    },
     "nav": {
       "items": "Items",
       "purchases": "Purchases",
