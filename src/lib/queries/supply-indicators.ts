@@ -6,6 +6,7 @@ export type SupplyIndicators = {
   purchases: { openCount: number; openValue: number; receivableCount: number };
   assets: { total: number; available: number; inUse: number; maintenance: number; totalValue: number };
   maintenance: { overdue: number; upcoming30: number };
+  clientEquipment: { inHouse: number };
 };
 
 /** Cross-module KPIs for the supplies home dashboard. */
@@ -15,7 +16,7 @@ export async function getSupplyIndicators(organizationId: string): Promise<Suppl
   const in30 = new Date(now);
   in30.setDate(now.getDate() + 30);
 
-  const [items, movementSums, reservations, poOpen, poReceivable, assetGroups, assetValue, overdue, upcoming30] =
+  const [items, movementSums, reservations, poOpen, poReceivable, assetGroups, assetValue, overdue, upcoming30, inHouse] =
     await Promise.all([
       db.supplyItem.findMany({
         where: { controlsStock: true },
@@ -33,6 +34,7 @@ export async function getSupplyIndicators(organizationId: string): Promise<Suppl
       db.asset.aggregate({ where: { active: true }, _sum: { acquisitionValue: true } }),
       db.maintenanceEvent.count({ where: { status: "SCHEDULED", dueDate: { lt: now } } }),
       db.maintenanceEvent.count({ where: { status: "SCHEDULED", dueDate: { gte: now, lte: in30 } } }),
+      db.serviceTicket.count({ where: { status: { in: ["RECEIVED", "IN_SERVICE", "READY"] } } }),
     ]);
 
   const balanceOf = new Map(movementSums.map((m) => [m.itemId, m._sum.qty == null ? 0 : Number(m._sum.qty)]));
@@ -69,6 +71,9 @@ export async function getSupplyIndicators(organizationId: string): Promise<Suppl
     maintenance: {
       overdue,
       upcoming30,
+    },
+    clientEquipment: {
+      inHouse,
     },
   };
 }

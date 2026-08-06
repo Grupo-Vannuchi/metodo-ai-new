@@ -2188,6 +2188,44 @@ model MaintenanceEvent {
   @@map("maintenance_events")
 }
 
+/// Custody/service lifecycle for a client's equipment brought in for service.
+enum ServiceTicketStatus {
+  RECEIVED
+  IN_SERVICE
+  READY
+  RETURNED
+  CANCELED
+}
+
+model ServiceTicket {
+  id             String              @id @default(cuid())
+  organizationId String
+  /// Sequential per-org-per-year code, e.g. "0001/26".
+  code           String?
+  /// Optional link to a registered client-equipment Asset.
+  assetId        String?
+  /// Client (CRM Company).
+  companyId      String?
+  /// Snapshot description of the equipment.
+  equipment      String
+  status         ServiceTicketStatus @default(RECEIVED)
+  /// Reported problem / service to perform.
+  description    String?
+  receivedAt     DateTime
+  expectedReturn DateTime?
+  returnedAt     DateTime?
+  responsible    String?
+  cost           Decimal?            @db.Decimal(14, 2)
+  notes          String?
+  createdById    String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([organizationId, status])
+  @@index([organizationId, companyId])
+  @@map("service_tickets")
+}
+
 /// Purchase order lifecycle. DRAFT is a request/quote; receiving posts each line
 /// to the stock ledger (StockMovement IN). PARTIAL when some lines are pending.
 enum PurchaseOrderStatus {

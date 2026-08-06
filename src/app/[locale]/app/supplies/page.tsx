@@ -11,6 +11,7 @@ import {
   Bookmark,
   CalendarClock,
   Coins,
+  PackageOpen,
 } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { requireOrgContext } from "@/lib/tenant";
@@ -81,6 +82,7 @@ export default async function SuppliesPage({ params }: { params: Promise<{ local
     { href: "/app/supplies/stock", icon: Warehouse, label: t("nav.stock"), desc: t("stock.subtitle") },
     { href: "/app/supplies/assets", icon: Tag, label: t("nav.assets"), desc: t("assets.subtitle") },
     { href: "/app/supplies/maintenance", icon: Wrench, label: t("nav.maintenance"), desc: t("maintenance.subtitle") },
+    { href: "/app/supplies/client-equipment", icon: PackageOpen, label: t("nav.clientEquipment"), desc: t("clientEquipment.subtitle") },
     { href: "/app/supplies/registries", icon: ListChecks, label: t("nav.registries"), desc: t("registries.subtitle") },
     { href: "/app/supplies/suppliers", icon: Truck, label: t("nav.suppliers"), desc: t("suppliers.subtitle") },
   ];
@@ -146,6 +148,13 @@ export default async function SuppliesPage({ params }: { params: Promise<{ local
             value={nf.format(ind.maintenance.upcoming30)}
             sub={tk("upcomingSub")}
             tone={ind.maintenance.upcoming30 > 0 ? "warn" : "default"}
+          />
+          <Tile
+            href="/app/supplies/client-equipment"
+            icon={PackageOpen}
+            label={tk("inHouse")}
+            value={nf.format(ind.clientEquipment.inHouse)}
+            sub={tk("inHouseSub")}
           />
         </div>
       </section>
