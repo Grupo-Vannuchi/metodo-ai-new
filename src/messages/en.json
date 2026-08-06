@@ -223,6 +223,7 @@
       "hr": "HR",
       "supplies": "Dashboard",
       "supplyItems": "Items",
+      "supplyStock": "Stock",
       "supplyRegistries": "Registries",
       "suppliers": "Suppliers",
       "connections": "Connections",
@@ -2347,8 +2348,67 @@
     "subtitle": "Items, purchasing, inventory and assets.",
     "nav": {
       "items": "Items",
+      "stock": "Stock",
       "registries": "Registries",
       "suppliers": "Suppliers"
+    },
+    "stock": {
+      "title": "Stock",
+      "subtitle": "Item balances and movements by warehouse.",
+      "tab": {
+        "balances": "Balances",
+        "movements": "Movements"
+      },
+      "new": "New movement",
+      "searchPlaceholder": "Search item…",
+      "noItems": "Register stock-controlled items to start moving stock.",
+      "emptyBalances": "No balances yet.",
+      "emptyMovements": "No movements yet.",
+      "noResults": "No item found.",
+      "belowMin": "Below minimum",
+      "min": "Minimum",
+      "reverse": "Reverse",
+      "reverseConfirm": "Reverse this movement? An opposite entry will be created.",
+      "reversedTag": "Reversed",
+      "insufficient": "Not enough stock. Available: {available}.",
+      "saveError": "Could not save the movement.",
+      "save": "Save",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "kind": {
+        "IN": "In",
+        "OUT": "Out",
+        "ADJUST": "Adjust",
+        "TRANSFER": "Transfer"
+      },
+      "type": {
+        "IN": "In",
+        "OUT": "Out",
+        "ADJUST": "Adjust",
+        "TRANSFER_IN": "Transfer in",
+        "TRANSFER_OUT": "Transfer out"
+      },
+      "field": {
+        "item": "Item",
+        "itemPlaceholder": "Select an item…",
+        "warehouse": "Warehouse",
+        "noWarehouse": "No warehouse",
+        "fromWarehouse": "From",
+        "toWarehouse": "To",
+        "selectWarehouse": "Select…",
+        "quantity": "Quantity",
+        "direction": "Operation",
+        "increase": "Increase",
+        "decrease": "Decrease",
+        "unitCost": "Unit cost",
+        "reason": "Reason / source",
+        "reasonPlaceholder": "Purchase, donation, inventory…",
+        "reference": "Reference",
+        "referencePlaceholder": "Job, work order, invoice…",
+        "lot": "Lot",
+        "validity": "Expiry",
+        "note": "Notes"
+      }
     },
     "registries": {
       "title": "Support registries",

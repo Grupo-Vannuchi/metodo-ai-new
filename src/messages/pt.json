@@ -223,6 +223,7 @@
       "hr": "RH",
       "supplies": "Painel",
       "supplyItems": "Itens",
+      "supplyStock": "Estoque",
       "supplyRegistries": "Cadastros",
       "suppliers": "Fornecedores",
       "connections": "Conexões",
@@ -2347,8 +2348,67 @@
     "subtitle": "Cadastro, compras, estoque e patrimônio.",
     "nav": {
       "items": "Itens",
+      "stock": "Estoque",
       "registries": "Cadastros",
       "suppliers": "Fornecedores"
+    },
+    "stock": {
+      "title": "Estoque",
+      "subtitle": "Saldos e movimentações de itens por almoxarifado.",
+      "tab": {
+        "balances": "Saldos",
+        "movements": "Movimentações"
+      },
+      "new": "Nova movimentação",
+      "searchPlaceholder": "Buscar item…",
+      "noItems": "Cadastre itens que controlam estoque para começar a movimentar.",
+      "emptyBalances": "Nenhum saldo ainda.",
+      "emptyMovements": "Nenhuma movimentação ainda.",
+      "noResults": "Nenhum item encontrado.",
+      "belowMin": "Abaixo do mínimo",
+      "min": "Mínimo",
+      "reverse": "Estornar",
+      "reverseConfirm": "Estornar esta movimentação? Um lançamento inverso será criado.",
+      "reversedTag": "Estornado",
+      "insufficient": "Saldo insuficiente. Disponível: {available}.",
+      "saveError": "Não foi possível salvar a movimentação.",
+      "save": "Salvar",
+      "saving": "Salvando…",
+      "cancel": "Cancelar",
+      "kind": {
+        "IN": "Entrada",
+        "OUT": "Saída",
+        "ADJUST": "Ajuste",
+        "TRANSFER": "Transferência"
+      },
+      "type": {
+        "IN": "Entrada",
+        "OUT": "Saída",
+        "ADJUST": "Ajuste",
+        "TRANSFER_IN": "Transf. entrada",
+        "TRANSFER_OUT": "Transf. saída"
+      },
+      "field": {
+        "item": "Item",
+        "itemPlaceholder": "Selecione um item…",
+        "warehouse": "Almoxarifado",
+        "noWarehouse": "Sem almoxarifado",
+        "fromWarehouse": "Origem",
+        "toWarehouse": "Destino",
+        "selectWarehouse": "Selecione…",
+        "quantity": "Quantidade",
+        "direction": "Operação",
+        "increase": "Aumentar",
+        "decrease": "Diminuir",
+        "unitCost": "Custo unitário",
+        "reason": "Motivo / origem",
+        "reasonPlaceholder": "Compra, doação, inventário…",
+        "reference": "Referência",
+        "referencePlaceholder": "Obra, OS, NF…",
+        "lot": "Lote",
+        "validity": "Validade",
+        "note": "Observações"
+      }
     },
     "registries": {
       "title": "Cadastros de apoio",

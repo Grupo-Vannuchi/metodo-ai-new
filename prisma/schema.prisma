@@ -2026,6 +2026,48 @@ model Warehouse {
   @@map("warehouses")
 }
 
+/// A stock movement. IN/TRANSFER_IN raise the balance, OUT/TRANSFER_OUT lower it,
+/// ADJUST is signed. Immutable ledger (source of truth): the balance of an item
+/// in a warehouse is Σ qty. Corrections use a reversal movement (reversalOfId),
+/// never a delete.
+enum StockMovementType {
+  IN
+  OUT
+  ADJUST
+  TRANSFER_IN
+  TRANSFER_OUT
+}
+
+model StockMovement {
+  id             String            @id @default(cuid())
+  organizationId String
+  itemId         String
+  /// Affected location (null = unspecified location bucket).
+  warehouseId    String?
+  type           StockMovementType
+  /// Signed effect on the balance (positive raises, negative lowers).
+  qty            Decimal           @db.Decimal(14, 3)
+  lot            String?
+  validity       DateTime?
+  unitCost       Decimal?          @db.Decimal(14, 2)
+  /// Origin/motive (OC, doação, ajuste de inventário, transferência…).
+  reason         String?
+  /// Free reference: obra/OS/documento.
+  reference      String?
+  note           String?
+  /// Ties the two rows of a transfer together.
+  transferGroupId String?
+  /// When set, this movement reverses another (estorno).
+  reversalOfId   String?
+  createdById    String?
+  createdAt      DateTime          @default(now())
+
+  @@index([organizationId, itemId])
+  @@index([organizationId, warehouseId])
+  @@index([organizationId, createdAt])
+  @@map("stock_movements")
+}
+
 // ---------------------------------------------------------------------------
 // AI Copilot (assistant)
 // ---------------------------------------------------------------------------

@@ -23,6 +23,7 @@ import {
   Truck,
   Package,
   ListChecks,
+  Warehouse,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
@@ -50,6 +51,7 @@ type NavKey =
   | "goals"
   | "supplies"
   | "supplyItems"
+  | "supplyStock"
   | "supplyRegistries"
   | "suppliers"
   | "settings";
@@ -100,6 +102,7 @@ const GROUPS: Group[] = [
     items: [
       { href: "/app/supplies", key: "supplies", icon: Boxes },
       { href: "/app/supplies/items", key: "supplyItems", icon: Package },
+      { href: "/app/supplies/stock", key: "supplyStock", icon: Warehouse },
       { href: "/app/supplies/registries", key: "supplyRegistries", icon: ListChecks },
       { href: "/app/supplies/suppliers", key: "suppliers", icon: Truck },
     ],
@@ -128,7 +131,11 @@ export function AppNav({ allowedScreens, collapsed = false }: { allowedScreens: 
     // Automations + goals act on the CRM funnel — show wherever the CRM is allowed.
     ((key === "automations" || key === "goals") && allowedScreens.includes("crm")) ||
     // Supplies sub-screens all gate on the single "supplies" module access.
-    ((key === "supplies" || key === "supplyItems" || key === "supplyRegistries" || key === "suppliers") &&
+    ((key === "supplies" ||
+      key === "supplyItems" ||
+      key === "supplyStock" ||
+      key === "supplyRegistries" ||
+      key === "suppliers") &&
       allowedScreens.includes("supplies"));
   const isActive = (href: string) => (href === "/app" ? pathname === "/app" : pathname.startsWith(href));
 
