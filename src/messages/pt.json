@@ -2596,6 +2596,7 @@
       },
       "new": "Nova movimentação",
       "newReservation": "Nova reserva",
+      "moveItem": "Movimentar",
       "searchPlaceholder": "Buscar item…",
       "noItems": "Cadastre itens que controlam estoque para começar a movimentar.",
       "noReservableItems": "Marque itens como \"Pode reservar\" para criar reservas.",

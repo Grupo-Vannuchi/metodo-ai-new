@@ -18,6 +18,7 @@ import {
 import { useRouter } from "@/i18n/navigation";
 import { useConfirm } from "@/components/ui/confirm";
 import { Button } from "@/components/ui/button";
+import { Drawer } from "@/components/ui/drawer";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 import {
@@ -66,17 +67,14 @@ export function StockClient({
   const t = useTranslations("supplies.stock");
   const locale = useLocale();
   const [tab, setTab] = useState<Tab>("balances");
-  const [adding, setAdding] = useState(false);
+  // Movement drawer: null = closed; string = open with that item preselected ("" = none).
+  const [movePreset, setMovePreset] = useState<string | null>(null);
+  const [reservationOpen, setReservationOpen] = useState(false);
   const nf = useMemo(() => new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }), [locale]);
   const canMove = options.items.length > 0;
   const onReservations = tab === "reservations";
   const canReserve = reservationOptions.items.length > 0;
   const canAdd = onReservations ? canReserve : canMove;
-
-  function switchTab(x: Tab) {
-    setTab(x);
-    setAdding(false);
-  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -86,7 +84,7 @@ export function StockClient({
             <button
               key={x}
               type="button"
-              onClick={() => switchTab(x)}
+              onClick={() => setTab(x)}
               className={cn(
                 "rounded-lg px-3 py-1.5 text-sm transition-colors",
                 tab === x ? "bg-brand/10 font-medium text-brand" : "text-muted-foreground hover:bg-muted",
@@ -96,8 +94,12 @@ export function StockClient({
             </button>
           ))}
         </div>
-        {!adding && canAdd ? (
-          <Button type="button" size="sm" onClick={() => setAdding(true)}>
+        {canAdd ? (
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => (onReservations ? setReservationOpen(true) : setMovePreset(""))}
+          >
             <Plus className="size-4" />
             {onReservations ? t("newReservation") : t("new")}
           </Button>
@@ -110,19 +112,41 @@ export function StockClient({
         </p>
       ) : null}
 
-      {adding && !onReservations ? <MovementForm options={options} onClose={() => setAdding(false)} /> : null}
-      {adding && onReservations ? (
-        <ReservationForm options={reservationOptions} onClose={() => setAdding(false)} />
+      {tab === "balances" ? (
+        <Balances rows={balances} nf={nf} onMove={canMove ? (id) => setMovePreset(id) : undefined} />
       ) : null}
-
-      {tab === "balances" ? <Balances rows={balances} nf={nf} /> : null}
       {tab === "movements" ? <Movements rows={movements} nf={nf} locale={locale} /> : null}
       {tab === "reservations" ? <Reservations rows={reservations} nf={nf} locale={locale} /> : null}
+
+      <Drawer open={movePreset !== null} onClose={() => setMovePreset(null)} title={t("new")}>
+        {movePreset !== null ? (
+          <MovementForm
+            key={movePreset || "none"}
+            options={options}
+            presetItemId={movePreset}
+            onClose={() => setMovePreset(null)}
+          />
+        ) : null}
+      </Drawer>
+
+      <Drawer open={reservationOpen} onClose={() => setReservationOpen(false)} title={t("newReservation")}>
+        {reservationOpen ? (
+          <ReservationForm options={reservationOptions} onClose={() => setReservationOpen(false)} />
+        ) : null}
+      </Drawer>
     </div>
   );
 }
 
-function Balances({ rows, nf }: { rows: StockBalanceRow[]; nf: Intl.NumberFormat }) {
+function Balances({
+  rows,
+  nf,
+  onMove,
+}: {
+  rows: StockBalanceRow[];
+  nf: Intl.NumberFormat;
+  onMove?: (itemId: string) => void;
+}) {
   const t = useTranslations("supplies.stock");
   const [q, setQ] = useState("");
   const term = q.trim().toLowerCase();
@@ -196,6 +220,17 @@ function Balances({ rows, nf }: { rows: StockBalanceRow[]; nf: Intl.NumberFormat
                   </span>
                 ) : null}
               </span>
+              {onMove ? (
+                <button
+                  type="button"
+                  onClick={() => onMove(r.itemId)}
+                  title={t("moveItem")}
+                  aria-label={t("moveItem")}
+                  className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-brand"
+                >
+                  <ArrowLeftRight className="size-4" />
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -277,7 +312,15 @@ function Movements({ rows, nf, locale }: { rows: StockMovementRow[]; nf: Intl.Nu
   );
 }
 
-function MovementForm({ options, onClose }: { options: StockFormOptions; onClose: () => void }) {
+function MovementForm({
+  options,
+  onClose,
+  presetItemId = "",
+}: {
+  options: StockFormOptions;
+  onClose: () => void;
+  presetItemId?: string;
+}) {
   const t = useTranslations("supplies.stock");
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -319,7 +362,7 @@ function MovementForm({ options, onClose }: { options: StockFormOptions; onClose
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
+    <form onSubmit={onSubmit} className="flex flex-col gap-4">
       {/* Movement kind */}
       <div className="flex flex-wrap gap-1.5">
         {KINDS.map((k) => (
@@ -343,7 +386,7 @@ function MovementForm({ options, onClose }: { options: StockFormOptions; onClose
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <Label htmlFor="itemId">{t("field.item")}</Label>
-          <select id="itemId" name="itemId" required className={selectCls} defaultValue="">
+          <select id="itemId" name="itemId" required className={selectCls} defaultValue={presetItemId || ""}>
             <option value="" disabled>
               {t("field.itemPlaceholder")}
             </option>
@@ -586,7 +629,7 @@ function ReservationForm({ options, onClose }: { options: ReservationFormOptions
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
+    <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <Label htmlFor="res-item">{t("field.item")}</Label>

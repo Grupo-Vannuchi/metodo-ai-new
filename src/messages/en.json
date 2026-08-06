@@ -2596,6 +2596,7 @@
       },
       "new": "New movement",
       "newReservation": "New reservation",
+      "moveItem": "Move",
       "searchPlaceholder": "Search item…",
       "noItems": "Register stock-controlled items to start moving stock.",
       "noReservableItems": "Mark items as \"Can reserve\" to create reservations.",

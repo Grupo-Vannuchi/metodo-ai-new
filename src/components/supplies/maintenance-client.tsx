@@ -6,6 +6,7 @@ import { Plus, Wrench, Gauge, Check, Ban, Trash2, X, AlertTriangle } from "lucid
 import { useRouter } from "@/i18n/navigation";
 import { useConfirm } from "@/components/ui/confirm";
 import { Button } from "@/components/ui/button";
+import { Drawer } from "@/components/ui/drawer";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 import {
@@ -82,7 +83,7 @@ export function MaintenanceClient({
             ))}
           </div>
         </div>
-        {!adding && canSchedule ? (
+        {canSchedule ? (
           <Button type="button" size="sm" onClick={() => setAdding(true)}>
             <Plus className="size-4" />
             {t("schedule")}
@@ -96,7 +97,9 @@ export function MaintenanceClient({
         </p>
       ) : null}
 
-      {adding ? <ScheduleForm options={options} onClose={() => setAdding(false)} /> : null}
+      <Drawer open={adding} onClose={() => setAdding(false)} title={t("schedule")}>
+        {adding ? <ScheduleForm options={options} onClose={() => setAdding(false)} /> : null}
+      </Drawer>
 
       {filtered.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
@@ -332,7 +335,7 @@ function ScheduleForm({ options, onClose }: { options: MaintenanceFormOptions; o
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
+    <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <Label htmlFor="sch-asset">{t("asset")}</Label>
