@@ -1869,6 +1869,34 @@ model TimeOff {
 }
 
 // ---------------------------------------------------------------------------
+// Supplies module (Suprimentos) — Fase 1: base cadastros
+// ---------------------------------------------------------------------------
+
+/// A supplier / vendor for the supplies & procurement module.
+model Supplier {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  /// Optional trade / fantasy name.
+  tradeName      String?
+  /// CNPJ/CPF (digits only, normalized).
+  document       String?
+  email          String?
+  phone          String?
+  /// Main contact person at the supplier.
+  contactName    String?
+  city           String?
+  uf             String?
+  notes          String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, name])
+  @@map("suppliers")
+}
+
+// ---------------------------------------------------------------------------
 // AI Copilot (assistant)
 // ---------------------------------------------------------------------------
 

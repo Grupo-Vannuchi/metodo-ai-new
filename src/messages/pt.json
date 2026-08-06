@@ -221,6 +221,8 @@
       "contacts": "Contatos",
       "finance": "Financeiro",
       "hr": "RH",
+      "supplies": "Painel",
+      "suppliers": "Fornecedores",
       "connections": "Conexões",
       "settings": "Configurações",
       "group": {
@@ -229,6 +231,7 @@
         "comms": "Comunicação",
         "finance": "Financeiro",
         "hr": "Pessoas",
+        "supplies": "Suprimentos",
         "system": "Sistema"
       },
       "signOut": "Sair",
@@ -2335,6 +2338,41 @@
       "CONTACT": "Contato",
       "COMPANY": "Empresa",
       "LEAD": "Lead"
+    }
+  },
+  "supplies": {
+    "title": "Suprimentos",
+    "subtitle": "Cadastro, compras, estoque e patrimônio.",
+    "nav": {
+      "suppliers": "Fornecedores"
+    },
+    "suppliers": {
+      "title": "Fornecedores",
+      "subtitle": "Cadastro de fornecedores para compras.",
+      "new": "Novo fornecedor",
+      "name": "Nome / Razão social",
+      "tradeName": "Nome fantasia",
+      "document": "CNPJ / CPF",
+      "email": "E-mail",
+      "phone": "Telefone",
+      "contactName": "Contato",
+      "city": "Cidade",
+      "uf": "UF",
+      "notes": "Observações",
+      "active": "Ativo",
+      "inactive": "Inativo",
+      "empty": "Nenhum fornecedor cadastrado ainda.",
+      "save": "Salvar",
+      "saving": "Salvando…",
+      "cancel": "Cancelar",
+      "edit": "Editar",
+      "delete": "Excluir",
+      "deleteConfirm": "Excluir o fornecedor {name}?",
+      "error": {
+        "unauthorized": "Sessão expirada.",
+        "invalid": "Verifique os campos.",
+        "unknown": "Algo deu errado."
+      }
     }
   },
   "assistant": {

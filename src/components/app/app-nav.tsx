@@ -19,6 +19,8 @@ import {
   Settings,
   Workflow,
   Target,
+  Boxes,
+  Truck,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
@@ -44,9 +46,11 @@ type NavKey =
   | "hr"
   | "automations"
   | "goals"
+  | "supplies"
+  | "suppliers"
   | "settings";
 type Item = { href: string; key: NavKey; icon: typeof LayoutDashboard };
-type GroupKey = "general" | "crm" | "comms" | "finance" | "hr" | "system";
+type GroupKey = "general" | "crm" | "comms" | "finance" | "hr" | "supplies" | "system";
 type Group = { key: GroupKey; items: Item[] };
 
 /** Nav items grouped into collapsible sections. */
@@ -88,6 +92,13 @@ const GROUPS: Group[] = [
     items: [{ href: "/app/hr", key: "hr", icon: UsersRound }],
   },
   {
+    key: "supplies",
+    items: [
+      { href: "/app/supplies", key: "supplies", icon: Boxes },
+      { href: "/app/supplies/suppliers", key: "suppliers", icon: Truck },
+    ],
+  },
+  {
     key: "system",
     items: [
       { href: "/app/connections", key: "connections", icon: Cable },
@@ -109,7 +120,9 @@ export function AppNav({ allowedScreens, collapsed = false }: { allowedScreens: 
     ALWAYS_SHOWN.includes(key) ||
     allowedScreens.includes(key) ||
     // Automations + goals act on the CRM funnel — show wherever the CRM is allowed.
-    ((key === "automations" || key === "goals") && allowedScreens.includes("crm"));
+    ((key === "automations" || key === "goals") && allowedScreens.includes("crm")) ||
+    // Supplies sub-screens all gate on the single "supplies" module access.
+    ((key === "supplies" || key === "suppliers") && allowedScreens.includes("supplies"));
   const isActive = (href: string) => (href === "/app" ? pathname === "/app" : pathname.startsWith(href));
 
   // Live unread badge for the inbox item — pushed by the realtime stream.

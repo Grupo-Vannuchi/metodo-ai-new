@@ -221,6 +221,8 @@
       "contacts": "Contacts",
       "finance": "Finance",
       "hr": "HR",
+      "supplies": "Dashboard",
+      "suppliers": "Suppliers",
       "connections": "Connections",
       "settings": "Settings",
       "group": {
@@ -229,6 +231,7 @@
         "comms": "Communication",
         "finance": "Finance",
         "hr": "People",
+        "supplies": "Supplies",
         "system": "System"
       },
       "signOut": "Sign out",
@@ -2335,6 +2338,41 @@
       "CONTACT": "Contact",
       "COMPANY": "Company",
       "LEAD": "Lead"
+    }
+  },
+  "supplies": {
+    "title": "Supplies",
+    "subtitle": "Items, purchasing, inventory and assets.",
+    "nav": {
+      "suppliers": "Suppliers"
+    },
+    "suppliers": {
+      "title": "Suppliers",
+      "subtitle": "Vendor registry for purchasing.",
+      "new": "New supplier",
+      "name": "Name / Legal name",
+      "tradeName": "Trade name",
+      "document": "Tax ID",
+      "email": "Email",
+      "phone": "Phone",
+      "contactName": "Contact",
+      "city": "City",
+      "uf": "State",
+      "notes": "Notes",
+      "active": "Active",
+      "inactive": "Inactive",
+      "empty": "No suppliers yet.",
+      "save": "Save",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteConfirm": "Delete supplier {name}?",
+      "error": {
+        "unauthorized": "Session expired.",
+        "invalid": "Check the fields.",
+        "unknown": "Something went wrong."
+      }
     }
   },
   "assistant": {

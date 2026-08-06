@@ -72,6 +72,7 @@ const TENANT_MODELS = new Set<string>([
   "TimeOff",
   "AssistantThread",
   "AssistantMessage",
+  "Supplier",
 ]);
 
 const WHERE_OPS = new Set<string>([

@@ -19,6 +19,7 @@ export type Feature =
   | "prospecting" // Google Places lead extraction (tenant's own key)
   | "finance" // Financeiro: lançamentos, fluxo de caixa, DRE
   | "hr" // RH: funcionários, folha de pagamento, férias
+  | "supplies" // Suprimentos: cadastro, compras, estoque, patrimônio, calibração
   | "assistant" // Copiloto de IA (Anthropic Claude) embutido no CRM
   | "webhooks.outbound" // outbound webhooks to the customer's systems
   | "sso"; // single sign-on
@@ -57,6 +58,8 @@ const PLUS_FEATURES: Feature[] = [
   "finance",
   // RH shares the Financeiro gate: payroll posts into the finance ledger.
   "hr",
+  // Suprimentos — módulo operacional premium (estoque, compras, patrimônio).
+  "supplies",
   // AI copilot — a premium differentiator; keeps per-use API cost on paid tiers.
   "assistant",
 ];
