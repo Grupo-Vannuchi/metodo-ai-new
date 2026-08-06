@@ -2139,9 +2139,53 @@ model Asset {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
+  maintenanceEvents MaintenanceEvent[]
+
   @@index([organizationId, status])
   @@index([organizationId, code])
   @@map("assets")
+}
+
+enum MaintenanceType {
+  MAINTENANCE
+  CALIBRATION
+}
+
+enum MaintenanceStatus {
+  SCHEDULED
+  DONE
+  CANCELED
+}
+
+/// A maintenance or calibration event for an individual asset. Completing one
+/// can auto-schedule the next from the linked item's periodicity.
+model MaintenanceEvent {
+  id             String            @id @default(cuid())
+  organizationId String
+  assetId        String
+  type           MaintenanceType
+  status         MaintenanceStatus @default(SCHEDULED)
+  dueDate        DateTime
+  performedAt    DateTime?
+  /// Who performed it (internal team or external lab/supplier).
+  provider       String?
+  cost           Decimal?          @db.Decimal(14, 2)
+  /// Calibration certificate number.
+  certificate    String?
+  /// Free-text result (e.g. aprovado/reprovado + observações).
+  result         String?
+  /// Next scheduled date computed on completion (for reference).
+  nextDueDate    DateTime?
+  notes          String?
+  createdById    String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, assetId])
+  @@index([organizationId, status, dueDate])
+  @@map("maintenance_events")
 }
 
 /// Purchase order lifecycle. DRAFT is a request/quote; receiving posts each line

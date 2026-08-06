@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { Truck, Package, ListChecks, Warehouse, ShoppingCart, Tag } from "lucide-react";
+import { Truck, Package, ListChecks, Warehouse, ShoppingCart, Tag, Wrench } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +13,7 @@ export default async function SuppliesPage() {
     { href: "/app/supplies/purchases", icon: ShoppingCart, label: t("nav.purchases"), desc: t("purchases.subtitle") },
     { href: "/app/supplies/stock", icon: Warehouse, label: t("nav.stock"), desc: t("stock.subtitle") },
     { href: "/app/supplies/assets", icon: Tag, label: t("nav.assets"), desc: t("assets.subtitle") },
+    { href: "/app/supplies/maintenance", icon: Wrench, label: t("nav.maintenance"), desc: t("maintenance.subtitle") },
     { href: "/app/supplies/registries", icon: ListChecks, label: t("nav.registries"), desc: t("registries.subtitle") },
     { href: "/app/supplies/suppliers", icon: Truck, label: t("nav.suppliers"), desc: t("suppliers.subtitle") },
   ];

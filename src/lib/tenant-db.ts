@@ -82,6 +82,7 @@ const TENANT_MODELS = new Set<string>([
   "PurchaseOrder",
   "PurchaseOrderItem",
   "Asset",
+  "MaintenanceEvent",
 ]);
 
 const WHERE_OPS = new Set<string>([

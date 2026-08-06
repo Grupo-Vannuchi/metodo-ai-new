@@ -26,6 +26,7 @@ import {
   Warehouse,
   ShoppingCart,
   Tag,
+  Wrench,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
@@ -56,6 +57,7 @@ type NavKey =
   | "supplyPurchases"
   | "supplyStock"
   | "supplyAssets"
+  | "supplyMaintenance"
   | "supplyRegistries"
   | "suppliers"
   | "settings";
@@ -109,6 +111,7 @@ const GROUPS: Group[] = [
       { href: "/app/supplies/purchases", key: "supplyPurchases", icon: ShoppingCart },
       { href: "/app/supplies/stock", key: "supplyStock", icon: Warehouse },
       { href: "/app/supplies/assets", key: "supplyAssets", icon: Tag },
+      { href: "/app/supplies/maintenance", key: "supplyMaintenance", icon: Wrench },
       { href: "/app/supplies/registries", key: "supplyRegistries", icon: ListChecks },
       { href: "/app/supplies/suppliers", key: "suppliers", icon: Truck },
     ],
@@ -142,6 +145,7 @@ export function AppNav({ allowedScreens, collapsed = false }: { allowedScreens: 
       key === "supplyPurchases" ||
       key === "supplyStock" ||
       key === "supplyAssets" ||
+      key === "supplyMaintenance" ||
       key === "supplyRegistries" ||
       key === "suppliers") &&
       allowedScreens.includes("supplies"));
