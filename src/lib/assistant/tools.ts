@@ -13,6 +13,10 @@ import { listQuickReplies } from "@/lib/queries/quick-replies";
 import { getContact } from "@/lib/queries/contacts";
 import { getCompany } from "@/lib/queries/companies";
 import { listTeamChats, listTeamChatMessages } from "@/lib/queries/team-chat";
+import { getSupplyIndicators } from "@/lib/queries/supply-indicators";
+import { listSupplyItems } from "@/lib/queries/supply-items";
+import { listPurchaseOrders } from "@/lib/queries/purchases";
+import { listMaintenanceEvents } from "@/lib/queries/maintenance";
 
 /**
  * Read-only tool set (phases 0–1). Every tool executes under the caller's org
@@ -127,6 +131,34 @@ export const assistantTools: Anthropic.Tool[] = [
       },
       required: ["chatId"],
     },
+  },
+  {
+    name: "get_supplies_overview",
+    description:
+      "Panorama do módulo Suprimentos: itens abaixo do estoque mínimo, valor total em estoque, reservas ativas, ordens de compra abertas (e valor), patrimônio (total/em uso/disponível/valor) e manutenções/calibrações vencidas e a vencer em 30 dias, além de equipamentos de clientes em custódia. Use para responder 'como está o suprimentos' e o que precisa de atenção.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "search_supply_items",
+    description:
+      "Busca itens do cadastro de Suprimentos por termo (descrição, código, código de barras, marca). Retorna código, descrição, tipo, unidade, categoria, preço de venda e fornecedor. Use para responder se um item existe, seu preço ou seus dados.",
+    input_schema: {
+      type: "object",
+      properties: { query: { type: "string", description: "Termo de busca do item." } },
+      required: ["query"],
+    },
+  },
+  {
+    name: "list_open_purchases",
+    description:
+      "Lista as ordens de compra em aberto (rascunho, aprovada, pedida ou recebida em parte), com código, fornecedor, status, valor total, nº de itens e previsão de entrega. Use para responder o que está em compra ou a receber.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "list_maintenance_due",
+    description:
+      "Lista manutenções e calibrações agendadas dos ativos, com destaque para as vencidas: ativo, tipo (manutenção/calibração), data prevista e se está vencida. Use para responder o que está vencido ou próximo do vencimento.",
+    input_schema: { type: "object", properties: {} },
   },
 ];
 
@@ -297,6 +329,92 @@ export async function runAssistantTool(
       const nameOf = new Map(users.map((u) => [u.id, u.name]));
       return JSON.stringify(
         rows.map((m) => ({ autor: nameOf.get(m.senderId) ?? "—", texto: m.body, quando: m.createdAt })),
+      );
+    }
+
+    // --- Suprimentos (leitura) — gate único no acesso à tela + feature do plano.
+    const supplyTools = new Set([
+      "get_supplies_overview",
+      "search_supply_items",
+      "list_open_purchases",
+      "list_maintenance_due",
+    ]);
+    if (
+      supplyTools.has(name) &&
+      (!canAccessScreen(ctx, "supplies") || !hasFeature(ctx.organization.plan as PlanKey, "supplies"))
+    ) {
+      return "Você não tem acesso a Suprimentos.";
+    }
+
+    if (name === "get_supplies_overview") {
+      const ind = await getSupplyIndicators(ctx.organizationId);
+      return JSON.stringify({
+        estoque: {
+          itensAbaixoDoMinimo: ind.stock.belowMin,
+          valorEmEstoque: formatBRL(ind.stock.totalValue),
+          reservasAtivas: ind.stock.reservations,
+        },
+        compras: {
+          abertas: ind.purchases.openCount,
+          valorAberto: formatBRL(ind.purchases.openValue),
+          aReceber: ind.purchases.receivableCount,
+        },
+        patrimonio: {
+          total: ind.assets.total,
+          emUso: ind.assets.inUse,
+          disponiveis: ind.assets.available,
+          valorAquisicao: formatBRL(ind.assets.totalValue),
+        },
+        manutencao: { vencidas: ind.maintenance.overdue, aVencerEm30Dias: ind.maintenance.upcoming30 },
+        equipamentosDeClientes: { emCustodia: ind.clientEquipment.inHouse },
+      });
+    }
+
+    if (name === "search_supply_items") {
+      const query = typeof input.query === "string" ? input.query.trim() : "";
+      if (query.length < 2) return "Informe um termo de busca com pelo menos 2 caracteres.";
+      const items = await listSupplyItems(ctx.organizationId, query);
+      if (items.length === 0) return "Nenhum item encontrado.";
+      return JSON.stringify(
+        items.slice(0, 10).map((i) => ({
+          codigo: i.code,
+          descricao: i.description,
+          tipo: i.type,
+          unidade: i.unit,
+          categoria: i.category,
+          precoVenda: i.salePrice == null ? null : formatBRL(i.salePrice),
+          fornecedor: i.supplierName,
+          ativo: i.active,
+        })),
+      );
+    }
+
+    if (name === "list_open_purchases") {
+      const orders = await listPurchaseOrders(ctx.organizationId);
+      const open = orders.filter((o) => ["DRAFT", "APPROVED", "ORDERED", "PARTIAL"].includes(o.status));
+      if (open.length === 0) return "Nenhuma ordem de compra em aberto.";
+      return JSON.stringify(
+        open.slice(0, 15).map((o) => ({
+          codigo: o.code,
+          fornecedor: o.supplierName,
+          status: o.status,
+          valor: formatBRL(o.total),
+          itens: o.itemCount,
+          previsaoEntrega: o.expectedAt,
+        })),
+      );
+    }
+
+    if (name === "list_maintenance_due") {
+      const events = await listMaintenanceEvents(ctx.organizationId, { status: "SCHEDULED" });
+      if (events.length === 0) return "Nenhuma manutenção ou calibração agendada.";
+      return JSON.stringify(
+        events.slice(0, 20).map((e) => ({
+          ativo: e.assetName,
+          tipo: e.type,
+          dataPrevista: e.dueDate,
+          vencida: e.overdue,
+        })),
       );
     }
 

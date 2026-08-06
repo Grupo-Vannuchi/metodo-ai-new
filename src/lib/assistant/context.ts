@@ -23,6 +23,6 @@ export function screenContextFromPath(pathname: string): AssistantScreenContext 
   const screen = parts[1] || "dashboard";
   const maybeId = parts[2];
   // Treat a segment that isn't a known sub-route word as an entity id.
-  const isEntity = maybeId && !["new", "pipelines", "products", "closed", "templates", "entries", "cashflow", "dre", "employees", "payroll", "timeoff", "settings", "access", "audit", "plans", "team", "profile"].includes(maybeId);
+  const isEntity = maybeId && !["new", "pipelines", "products", "closed", "templates", "entries", "cashflow", "dre", "employees", "payroll", "timeoff", "settings", "access", "audit", "plans", "team", "profile", "items", "purchases", "stock", "assets", "maintenance", "client-equipment", "registries", "suppliers"].includes(maybeId);
   return { screen, path: pathname, entityId: isEntity ? maybeId : undefined };
 }
