@@ -12,17 +12,31 @@ import {
   RotateCcw,
   X,
   AlertTriangle,
+  BookmarkX,
+  PackageCheck,
 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { useConfirm } from "@/components/ui/confirm";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
-import { createStockMovement, reverseStockMovement } from "@/app/actions/stock";
-import type { StockBalanceRow, StockMovementRow, StockFormOptions } from "@/lib/queries/stock";
+import {
+  createStockMovement,
+  reverseStockMovement,
+  createReservation,
+  releaseReservation,
+  consumeReservation,
+} from "@/app/actions/stock";
+import type {
+  StockBalanceRow,
+  StockMovementRow,
+  StockFormOptions,
+  ReservationRow,
+  ReservationFormOptions,
+} from "@/lib/queries/stock";
 
 type Kind = "IN" | "OUT" | "ADJUST" | "TRANSFER";
-type Tab = "balances" | "movements";
+type Tab = "balances" | "movements" | "reservations";
 
 const KINDS: { kind: Kind; icon: typeof Plus }[] = [
   { kind: "IN", icon: ArrowDownToLine },
@@ -40,10 +54,14 @@ export function StockClient({
   balances,
   movements,
   options,
+  reservations,
+  reservationOptions,
 }: {
   balances: StockBalanceRow[];
   movements: StockMovementRow[];
   options: StockFormOptions;
+  reservations: ReservationRow[];
+  reservationOptions: ReservationFormOptions;
 }) {
   const t = useTranslations("supplies.stock");
   const locale = useLocale();
@@ -51,16 +69,24 @@ export function StockClient({
   const [adding, setAdding] = useState(false);
   const nf = useMemo(() => new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }), [locale]);
   const canMove = options.items.length > 0;
+  const onReservations = tab === "reservations";
+  const canReserve = reservationOptions.items.length > 0;
+  const canAdd = onReservations ? canReserve : canMove;
+
+  function switchTab(x: Tab) {
+    setTab(x);
+    setAdding(false);
+  }
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap gap-1">
-          {(["balances", "movements"] as const).map((x) => (
+          {(["balances", "movements", "reservations"] as const).map((x) => (
             <button
               key={x}
               type="button"
-              onClick={() => setTab(x)}
+              onClick={() => switchTab(x)}
               className={cn(
                 "rounded-lg px-3 py-1.5 text-sm transition-colors",
                 tab === x ? "bg-brand/10 font-medium text-brand" : "text-muted-foreground hover:bg-muted",
@@ -70,29 +96,28 @@ export function StockClient({
             </button>
           ))}
         </div>
-        {!adding && canMove ? (
+        {!adding && canAdd ? (
           <Button type="button" size="sm" onClick={() => setAdding(true)}>
             <Plus className="size-4" />
-            {t("new")}
+            {onReservations ? t("newReservation") : t("new")}
           </Button>
         ) : null}
       </div>
 
-      {!canMove ? (
+      {!canAdd && ((onReservations && reservations.length === 0) || (!onReservations && !canMove)) ? (
         <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          {t("noItems")}
+          {onReservations ? t("noReservableItems") : t("noItems")}
         </p>
       ) : null}
 
-      {adding ? (
-        <MovementForm options={options} onClose={() => setAdding(false)} />
+      {adding && !onReservations ? <MovementForm options={options} onClose={() => setAdding(false)} /> : null}
+      {adding && onReservations ? (
+        <ReservationForm options={reservationOptions} onClose={() => setAdding(false)} />
       ) : null}
 
-      {tab === "balances" ? (
-        <Balances rows={balances} nf={nf} />
-      ) : (
-        <Movements rows={movements} nf={nf} locale={locale} />
-      )}
+      {tab === "balances" ? <Balances rows={balances} nf={nf} /> : null}
+      {tab === "movements" ? <Movements rows={movements} nf={nf} locale={locale} /> : null}
+      {tab === "reservations" ? <Reservations rows={reservations} nf={nf} locale={locale} /> : null}
     </div>
   );
 }
@@ -142,11 +167,18 @@ function Balances({ rows, nf }: { rows: StockBalanceRow[]; nf: Intl.NumberFormat
                     </span>
                   ) : null}
                 </span>
-                {r.minStock != null ? (
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    {t("min")}: {nf.format(r.minStock)}
-                  </span>
-                ) : null}
+                <span className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+                  {r.minStock != null ? (
+                    <span>
+                      {t("min")}: {nf.format(r.minStock)}
+                    </span>
+                  ) : null}
+                  {r.reserved > 0 ? (
+                    <span>
+                      {t("reservedLabel")}: {nf.format(r.reserved)}
+                    </span>
+                  ) : null}
+                </span>
               </span>
               <span className="shrink-0 text-right">
                 <span
@@ -158,6 +190,11 @@ function Balances({ rows, nf }: { rows: StockBalanceRow[]; nf: Intl.NumberFormat
                   {nf.format(r.balance)}
                 </span>
                 {r.unit ? <span className="ml-1 text-xs text-muted-foreground">{r.unit}</span> : null}
+                {r.reserved > 0 ? (
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {t("availableLabel")}: <span className="font-medium text-foreground">{nf.format(r.available)}</span>
+                  </span>
+                ) : null}
               </span>
             </li>
           ))}
@@ -407,6 +444,206 @@ function MovementForm({ options, onClose }: { options: StockFormOptions; onClose
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={pending}>
           {pending ? t("saving") : t("save")}
+        </Button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex items-center gap-1 px-2 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <X className="size-4" />
+          {t("cancel")}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+const resStatusCls: Record<string, string> = {
+  ACTIVE: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  RELEASED: "bg-muted text-muted-foreground",
+  CONSUMED: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+};
+
+function Reservations({ rows, nf, locale }: { rows: ReservationRow[]; nf: Intl.NumberFormat; locale: string }) {
+  const t = useTranslations("supplies.stock");
+  const router = useRouter();
+  const confirm = useConfirm();
+  const [pending, start] = useTransition();
+  const df = useMemo(
+    () => new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
+    [locale],
+  );
+
+  function onRelease(r: ReservationRow) {
+    start(async () => {
+      await releaseReservation(r.id);
+      router.refresh();
+    });
+  }
+  async function onConsume(r: ReservationRow) {
+    if (!(await confirm({ description: t("consumeConfirm"), confirmLabel: t("consume"), variant: "danger" }))) return;
+    start(async () => {
+      await consumeReservation(r.id);
+      router.refresh();
+    });
+  }
+
+  if (rows.length === 0) {
+    return (
+      <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+        {t("emptyReservations")}
+      </p>
+    );
+  }
+
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {rows.map((r) => {
+        const active = r.status === "ACTIVE";
+        return (
+          <li
+            key={r.id}
+            className={cn("flex items-center gap-3 rounded-lg border border-border bg-card p-3", !active && "opacity-60")}
+          >
+            <span className="min-w-0 flex-1">
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium">{r.itemDescription}</span>
+                <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", resStatusCls[r.status])}>
+                  {t(`resStatus.${r.status}`)}
+                </span>
+              </span>
+              <span className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+                <span>{df.format(r.createdAt)}</span>
+                {r.warehouseName ? <span>{r.warehouseName}</span> : null}
+                {r.reason ? <span>{r.reason}</span> : null}
+                {r.reference ? <span>{r.reference}</span> : null}
+              </span>
+            </span>
+            <span className="shrink-0 text-sm font-semibold tabular-nums">{nf.format(r.qty)}</span>
+            {active ? (
+              <span className="flex shrink-0 items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => onConsume(r)}
+                  disabled={pending}
+                  aria-label={t("consume")}
+                  title={t("consume")}
+                  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-emerald-600 disabled:opacity-50"
+                >
+                  <PackageCheck className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onRelease(r)}
+                  disabled={pending}
+                  aria-label={t("release")}
+                  title={t("release")}
+                  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-red-600 disabled:opacity-50"
+                >
+                  <BookmarkX className="size-4" />
+                </button>
+              </span>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function ReservationForm({ options, onClose }: { options: ReservationFormOptions; onClose: () => void }) {
+  const t = useTranslations("supplies.stock");
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const hasWarehouses = options.warehouses.length > 0;
+
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    const fd = new FormData(e.currentTarget);
+    const input = {
+      itemId: String(fd.get("itemId") ?? ""),
+      warehouseId: String(fd.get("warehouseId") ?? ""),
+      quantity: String(fd.get("quantity") ?? ""),
+      reason: String(fd.get("reason") ?? ""),
+      reference: String(fd.get("reference") ?? ""),
+      note: String(fd.get("note") ?? ""),
+    };
+    start(async () => {
+      const r = await createReservation(input);
+      if (r.ok) {
+        onClose();
+        router.refresh();
+      } else if (r.error === "insufficient") {
+        setError(t("insufficientAvailable", { available: r.available ?? 0 }));
+      } else if (r.error === "notReservable") {
+        setError(t("notReservable"));
+      } else {
+        setError(t("saveError"));
+      }
+    });
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <Label htmlFor="res-item">{t("field.item")}</Label>
+          <select id="res-item" name="itemId" required className={selectCls} defaultValue="">
+            <option value="" disabled>
+              {t("field.itemPlaceholder")}
+            </option>
+            {options.items.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {hasWarehouses ? (
+          <div>
+            <Label htmlFor="res-warehouse">{t("field.warehouse")}</Label>
+            <select id="res-warehouse" name="warehouseId" className={selectCls} defaultValue="">
+              <option value="">{t("field.noWarehouse")}</option>
+              {options.warehouses.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <input type="hidden" name="warehouseId" value="" />
+        )}
+
+        <div>
+          <Label htmlFor="res-qty">{t("field.quantity")}</Label>
+          <Input id="res-qty" name="quantity" type="number" step="0.001" min="0" required inputMode="decimal" />
+        </div>
+
+        <div>
+          <Label htmlFor="res-reason">{t("field.reason")}</Label>
+          <Input id="res-reason" name="reason" maxLength={160} placeholder={t("reservationReasonPlaceholder")} />
+        </div>
+
+        <div>
+          <Label htmlFor="res-reference">{t("field.reference")}</Label>
+          <Input id="res-reference" name="reference" maxLength={160} placeholder={t("field.referencePlaceholder")} />
+        </div>
+
+        <div className="sm:col-span-2">
+          <Label htmlFor="res-note">{t("field.note")}</Label>
+          <Textarea id="res-note" name="note" rows={2} maxLength={500} />
+        </div>
+      </div>
+
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={pending}>
+          {pending ? t("saving") : t("reserve")}
         </Button>
         <button
           type="button"

@@ -10,6 +10,8 @@ export type StockBalanceRow = {
   description: string;
   unit: string | null;
   balance: number;
+  reserved: number;
+  available: number;
   minStock: number | null;
   belowMin: boolean;
 };
@@ -23,8 +25,9 @@ export type StockBalanceRow = {
 export async function getStockBalances(organizationId: string, search?: string): Promise<StockBalanceRow[]> {
   const db = tenantDb(organizationId);
 
-  const [sums, items] = await Promise.all([
+  const [sums, reservedSums, items] = await Promise.all([
     db.stockMovement.groupBy({ by: ["itemId"], _sum: { qty: true } }),
+    db.stockReservation.groupBy({ by: ["itemId"], where: { status: "ACTIVE" }, _sum: { qty: true } }),
     db.supplyItem.findMany({
       where: { OR: [{ controlsStock: true }, { active: true }] },
       select: { id: true, code: true, description: true, unit: true, minStock: true, controlsStock: true },
@@ -33,19 +36,23 @@ export async function getStockBalances(organizationId: string, search?: string):
   ]);
 
   const balanceOf = new Map(sums.map((s) => [s.itemId, dec(s._sum.qty)]));
+  const reservedOf = new Map(reservedSums.map((s) => [s.itemId, dec(s._sum.qty)]));
   const term = (search ?? "").trim().toLowerCase();
 
   const rows: StockBalanceRow[] = items
-    .filter((i) => i.controlsStock || balanceOf.has(i.id))
+    .filter((i) => i.controlsStock || balanceOf.has(i.id) || reservedOf.has(i.id))
     .map((i) => {
       const min = i.minStock == null ? null : Number(i.minStock);
       const balance = balanceOf.get(i.id) ?? 0;
+      const reserved = reservedOf.get(i.id) ?? 0;
       return {
         itemId: i.id,
         code: i.code,
         description: i.description,
         unit: i.unit,
         balance,
+        reserved,
+        available: balance - reserved,
         minStock: min,
         belowMin: min != null && balance < min,
       };
@@ -138,3 +145,67 @@ export async function stockFormOptions(organizationId: string) {
 }
 
 export type StockFormOptions = Awaited<ReturnType<typeof stockFormOptions>>;
+
+export type ReservationRow = {
+  id: string;
+  createdAt: Date;
+  status: string;
+  itemDescription: string;
+  warehouseName: string | null;
+  qty: number;
+  reason: string | null;
+  reference: string | null;
+};
+
+/** Reservations for the reservations tab (active first, then recent history). */
+export async function listReservations(organizationId: string, limit = 200): Promise<ReservationRow[]> {
+  const db = tenantDb(organizationId);
+  const res = await db.stockReservation.findMany({
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    take: limit,
+  });
+
+  const itemIds = [...new Set(res.map((r) => r.itemId))];
+  const whIds = [...new Set(res.map((r) => r.warehouseId).filter(Boolean))] as string[];
+  const [items, whs] = await Promise.all([
+    itemIds.length
+      ? db.supplyItem.findMany({ where: { id: { in: itemIds } }, select: { id: true, description: true } })
+      : Promise.resolve([]),
+    whIds.length
+      ? db.warehouse.findMany({ where: { id: { in: whIds } }, select: { id: true, name: true } })
+      : Promise.resolve([]),
+  ]);
+  const itemName = new Map(items.map((i) => [i.id, i.description]));
+  const whName = new Map(whs.map((w) => [w.id, w.name]));
+
+  return res.map((r) => ({
+    id: r.id,
+    createdAt: r.createdAt,
+    status: r.status,
+    itemDescription: itemName.get(r.itemId) ?? "—",
+    warehouseName: r.warehouseId ? whName.get(r.warehouseId) ?? null : null,
+    qty: Number(r.qty),
+    reason: r.reason,
+    reference: r.reference,
+  }));
+}
+
+/** Items that can be reserved + warehouses, for the reservation form. */
+export async function reservationFormOptions(organizationId: string) {
+  const db = tenantDb(organizationId);
+  const [items, warehouses] = await Promise.all([
+    db.supplyItem.findMany({
+      where: { active: true, canReserve: true },
+      orderBy: { description: "asc" },
+      select: { id: true, description: true, code: true, unit: true },
+      take: 2000,
+    }),
+    db.warehouse.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true }, take: 1000 }),
+  ]);
+  return {
+    items: items.map((i) => ({ id: i.id, label: i.code ? `${i.code} · ${i.description}` : i.description, unit: i.unit })),
+    warehouses,
+  };
+}
+
+export type ReservationFormOptions = Awaited<ReturnType<typeof reservationFormOptions>>;

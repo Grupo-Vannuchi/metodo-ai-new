@@ -78,6 +78,7 @@ const TENANT_MODELS = new Set<string>([
   "SupplyUnit",
   "Warehouse",
   "StockMovement",
+  "StockReservation",
   "PurchaseOrder",
   "PurchaseOrderItem",
 ]);

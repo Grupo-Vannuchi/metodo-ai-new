@@ -35,3 +35,14 @@ export const stockMovementSchema = z
   });
 
 export type StockMovementInput = z.infer<typeof stockMovementSchema>;
+
+export const stockReservationSchema = z.object({
+  itemId: z.string().trim().min(1),
+  warehouseId: optStr(40),
+  quantity: posNum,
+  reason: optStr(160),
+  reference: optStr(160),
+  note: optStr(500),
+});
+
+export type StockReservationInput = z.infer<typeof stockReservationSchema>;

@@ -2071,6 +2071,37 @@ model StockMovement {
   @@map("stock_movements")
 }
 
+/// A soft hold on stock: it does not change the physical balance, only lowers
+/// what is available (available = physical − Σ active reservations). Consuming a
+/// reservation turns it into a physical OUT movement.
+enum StockReservationStatus {
+  ACTIVE
+  RELEASED
+  CONSUMED
+}
+
+model StockReservation {
+  id             String                 @id @default(cuid())
+  organizationId String
+  itemId         String
+  warehouseId    String?
+  qty            Decimal                @db.Decimal(14, 3)
+  status         StockReservationStatus @default(ACTIVE)
+  reason         String?
+  /// Free reference: obra/OS/cliente.
+  reference      String?
+  note           String?
+  createdById    String?
+  releasedAt     DateTime?
+  consumedAt     DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([organizationId, itemId])
+  @@index([organizationId, status])
+  @@map("stock_reservations")
+}
+
 /// Purchase order lifecycle. DRAFT is a request/quote; receiving posts each line
 /// to the stock ledger (StockMovement IN). PARTIAL when some lines are pending.
 enum PurchaseOrderStatus {
