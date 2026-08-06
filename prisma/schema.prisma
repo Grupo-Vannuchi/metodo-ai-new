@@ -1896,6 +1896,94 @@ model Supplier {
   @@map("suppliers")
 }
 
+/// The item's nature/category — drives which fields and rules apply.
+enum SupplyItemType {
+  MATERIAL // material de consumo
+  INSUMO // insumo (lote/validade)
+  PATRIMONIO // ativo próprio (ficha individual)
+  CLIENT_EQUIPMENT // equipamento de cliente (custódia)
+  SERVICE // serviço (calibração, frete, locação)
+  KIT // conjunto
+}
+
+/// Who owns the item — defines posse, responsabilidade e movimentação.
+enum PropertyNature {
+  OWN // próprio da empresa
+  CLIENT // de cliente
+  THIRD_PARTY // alugado de terceiro
+  RESALE // mercadoria para revenda
+}
+
+/// Single item registry (cadastro único). Conditional fields/rules are driven by
+/// `type` + `nature`; operational screens (stock, assets, calibration) read this.
+model SupplyItem {
+  id             String @id @default(cuid())
+  organizationId String
+
+  // Bloco 1 — Identificação
+  code             String?
+  description      String
+  shortName        String?
+  unit             String?
+  category         String?
+  brand            String?
+  model            String?
+  barcode          String?
+  ncm              String?
+  manufacturerCode String?
+
+  // Bloco 2 — Classificação
+  type                SupplyItemType @default(MATERIAL)
+  nature              PropertyNature @default(OWN)
+  controlsStock       Boolean        @default(true)
+  controlsLot         Boolean        @default(false)
+  controlsValidity    Boolean        @default(false)
+  individualControl   Boolean        @default(false)
+  canSell             Boolean        @default(false)
+  canRent             Boolean        @default(false)
+  canReserve          Boolean        @default(true)
+  requiresCalibration Boolean        @default(false)
+  requiresMaintenance Boolean        @default(false)
+  critical            Boolean        @default(false)
+
+  // Bloco 3 — Suprimento e custo
+  supplierId   String?
+  leadTimeDays Int?
+  minStock     Decimal? @db.Decimal(14, 3)
+  maxStock     Decimal? @db.Decimal(14, 3)
+  reorderPoint Decimal? @db.Decimal(14, 3)
+  lastCost     Decimal? @db.Decimal(14, 2)
+  avgCost      Decimal? @db.Decimal(14, 2)
+  salePrice    Decimal? @db.Decimal(14, 2)
+  rentPrice    Decimal? @db.Decimal(14, 2)
+  costCenter   String?
+
+  // Bloco 4 — Armazenamento
+  defaultWarehouse String?
+  location         String?
+  shelf            String?
+  weight           Decimal? @db.Decimal(12, 3)
+  dimensions       String?
+  hazardous        Boolean  @default(false)
+  logisticsNotes   String?
+
+  // Bloco 5 — Dados técnicos e conformidade (o essencial; detalhe na calibração)
+  calibrationPeriodMonths Int?
+  maintenancePeriodMonths Int?
+  warningDays             Int?
+  measurementRange        String?
+  resolution              String?
+
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, type])
+  @@index([organizationId, description])
+  @@map("supply_items")
+}
+
 // ---------------------------------------------------------------------------
 // AI Copilot (assistant)
 // ---------------------------------------------------------------------------

@@ -1,0 +1,82 @@
+"use client";
+
+import { useState } from "react";
+import { useTranslations } from "next-intl";
+import { Plus, Search, Package } from "lucide-react";
+import { Link } from "@/i18n/navigation";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import type { SupplyItemRow } from "@/lib/queries/supply-items";
+
+export function ItemsList({ items }: { items: SupplyItemRow[] }) {
+  const t = useTranslations("supplies.items");
+  const [q, setQ] = useState("");
+  const term = q.trim().toLowerCase();
+  const filtered = term
+    ? items.filter((i) =>
+        [i.description, i.code, i.supplierName, i.category, i.unit].some((x) => (x ?? "").toLowerCase().includes(term)),
+      )
+    : items;
+  const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={t("searchPlaceholder")}
+            className="h-9 w-56 rounded-lg border border-border bg-card pl-8 pr-3 text-sm focus-visible:border-brand focus-visible:outline-none"
+          />
+        </div>
+        <Link href="/app/supplies/items/new" className={buttonVariants({ size: "sm" })}>
+          <Plus className="size-4" />
+          {t("new")}
+        </Link>
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+          {items.length === 0 ? t("empty") : t("noResults")}
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-1.5">
+          {filtered.map((i) => (
+            <li key={i.id}>
+              <Link
+                href={`/app/supplies/items/${i.id}/edit`}
+                className={cn(
+                  "hover-lift flex items-center gap-3 rounded-lg border border-border bg-card p-3 hover:border-brand/40",
+                  !i.active && "opacity-60",
+                )}
+              >
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
+                  <Package className="size-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium">{i.description}</span>
+                    {i.code ? <span className="text-xs text-muted-foreground">{i.code}</span> : null}
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {t(`typeOpt.${i.type}`)}
+                    </span>
+                  </span>
+                  <span className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+                    {i.category ? <span>{i.category}</span> : null}
+                    {i.unit ? <span>{i.unit}</span> : null}
+                    {i.supplierName ? <span>{i.supplierName}</span> : null}
+                  </span>
+                </span>
+                {i.salePrice != null ? (
+                  <span className="shrink-0 text-sm font-semibold tabular-nums text-brand">{brl.format(i.salePrice)}</span>
+                ) : null}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
