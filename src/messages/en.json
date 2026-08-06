@@ -2400,6 +2400,8 @@
       "receive": "Receive",
       "cancelOrder": "Cancel",
       "delete": "Delete",
+      "postFinance": "Post to finance",
+      "posted": "Posted to finance",
       "actionError": "Could not complete the action.",
       "cancelConfirm": "Cancel this purchase order?",
       "deleteConfirm": "Delete this purchase order?",

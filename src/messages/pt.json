@@ -2400,6 +2400,8 @@
       "receive": "Receber",
       "cancelOrder": "Cancelar",
       "delete": "Excluir",
+      "postFinance": "Lançar no financeiro",
+      "posted": "Lançamento gerado",
       "actionError": "Não foi possível concluir a ação.",
       "cancelConfirm": "Cancelar esta ordem de compra?",
       "deleteConfirm": "Excluir esta ordem de compra?",

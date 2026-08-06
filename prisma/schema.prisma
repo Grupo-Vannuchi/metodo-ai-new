@@ -1140,6 +1140,8 @@ model FinanceEntry {
   /// expense traces back to the employee and to the folha that generated it.
   employeeId         String?
   payrollRunId       String?
+  /// Set when a purchase order is posted, so the expense traces back to the OC.
+  purchaseOrderId    String?
   /// Installments: entries of the same sale share a group id (NNNN.../uuid),
   /// with their position (installmentNo) out of installmentTotal.
   installmentGroupId String?
@@ -1158,6 +1160,7 @@ model FinanceEntry {
   @@index([organizationId, contactId])
   @@index([organizationId, employeeId])
   @@index([organizationId, payrollRunId])
+  @@index([organizationId, purchaseOrderId])
   @@map("finance_entries")
 }
 
@@ -2096,6 +2099,8 @@ model PurchaseOrder {
   approvedById   String?
   orderedAt      DateTime?
   receivedAt     DateTime?
+  /// Set once the order is posted to the finance ledger (prevents double-posting).
+  financeEntryId String?
   createdById    String?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt

@@ -2,9 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { Prisma, type PurchaseOrderStatus } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb, type TenantDb } from "@/lib/tenant-db";
 import { purchaseOrderSchema, receiveSchema, type PurchaseOrderInput } from "@/lib/validations/purchase";
+
+const money = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
 export type PurchaseResult =
   | { ok: true; id: string }
@@ -266,6 +269,64 @@ export async function receivePurchaseOrder(id: string, input: unknown): Promise<
     return { ok: true, id };
   } catch (e) {
     console.error("receivePurchaseOrder failed", e);
+    return { ok: false, error: "unknown" };
+  }
+}
+
+/**
+ * Post the order to the finance ledger as a payable (EXPENSE / PENDING), once.
+ * Mirrors the payroll→finance bridge: raw prisma with explicit org, the created
+ * entry's id is stored back on the order so it can't be posted twice. Only
+ * committed orders (approved onward, not canceled) with a positive total qualify.
+ */
+export async function postPurchaseToFinance(id: string): Promise<PurchaseResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+  const org = ctx.organizationId;
+
+  try {
+    const po = await prisma.purchaseOrder.findFirst({
+      where: { id, organizationId: org },
+      select: { id: true, code: true, status: true, total: true, supplierId: true, expectedAt: true, financeEntryId: true },
+    });
+    if (!po) return { ok: false, error: "unknown" };
+    if (po.financeEntryId) return { ok: false, error: "state" };
+    if (!["APPROVED", "ORDERED", "PARTIAL", "RECEIVED"].includes(po.status)) return { ok: false, error: "state" };
+    const amount = money(Number(po.total));
+    if (amount <= 0) return { ok: false, error: "nothing" };
+
+    const supplier = po.supplierId
+      ? await prisma.supplier.findFirst({ where: { id: po.supplierId, organizationId: org }, select: { name: true } })
+      : null;
+    const label = po.code ? `Compra OC ${po.code}` : "Compra";
+    const description = supplier?.name ? `${label} — ${supplier.name}` : label;
+
+    await prisma.$transaction(async (tx) => {
+      const entry = await tx.financeEntry.create({
+        data: {
+          organizationId: org,
+          type: "EXPENSE",
+          description,
+          amount,
+          status: "PENDING",
+          dueDate: po.expectedAt ?? new Date(),
+          purchaseOrderId: po.id,
+          createdById: ctx.userId,
+        },
+        select: { id: true },
+      });
+      await tx.purchaseOrder.updateMany({
+        where: { id: po.id, organizationId: org },
+        data: { financeEntryId: entry.id },
+      });
+    });
+
+    revalidatePath("/app/supplies/purchases");
+    revalidatePath(`/app/supplies/purchases/${id}`);
+    revalidatePath("/app/finance/entries");
+    return { ok: true, id };
+  } catch (e) {
+    console.error("postPurchaseToFinance failed", e);
     return { ok: false, error: "unknown" };
   }
 }

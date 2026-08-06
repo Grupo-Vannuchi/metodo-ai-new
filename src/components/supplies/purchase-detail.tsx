@@ -2,13 +2,18 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Pencil, Check, Send, PackageCheck, Ban, Trash2, X } from "lucide-react";
+import { Pencil, Check, Send, PackageCheck, Ban, Trash2, X, Landmark } from "lucide-react";
 import { useRouter, Link } from "@/i18n/navigation";
 import { useConfirm } from "@/components/ui/confirm";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
-import { setPurchaseOrderStatus, receivePurchaseOrder, deletePurchaseOrder } from "@/app/actions/purchases";
+import {
+  setPurchaseOrderStatus,
+  receivePurchaseOrder,
+  deletePurchaseOrder,
+  postPurchaseToFinance,
+} from "@/app/actions/purchases";
 import { statusBadgeCls } from "@/components/supplies/purchase-status";
 import type { PurchaseOrderDetail } from "@/lib/queries/purchases";
 
@@ -32,6 +37,17 @@ export function PurchaseDetail({ order }: { order: PurchaseOrderDetail }) {
   const canReceive = st === "APPROVED" || st === "ORDERED" || st === "PARTIAL";
   const canCancel = st === "DRAFT" || st === "APPROVED" || st === "ORDERED" || st === "PARTIAL";
   const canDelete = st === "DRAFT" || st === "CANCELED";
+  const posted = !!order.financeEntryId;
+  const canPost = !posted && order.total > 0 && (st === "APPROVED" || st === "ORDERED" || st === "PARTIAL" || st === "RECEIVED");
+
+  function post() {
+    setError(null);
+    start(async () => {
+      const res = await postPurchaseToFinance(order.id);
+      if (res.ok) router.refresh();
+      else setError(t("actionError"));
+    });
+  }
 
   const pendingLines = order.items.filter((i) => i.quantity - i.receivedQty > 0.0001);
   const [recv, setRecv] = useState<Record<string, string>>(() =>
@@ -124,6 +140,21 @@ export function PurchaseDetail({ order }: { order: PurchaseOrderDetail }) {
               <PackageCheck className="size-4" />
               {t("receive")}
             </Button>
+          ) : null}
+          {canPost ? (
+            <Button size="sm" variant="outline" disabled={pending} onClick={post}>
+              <Landmark className="size-4" />
+              {t("postFinance")}
+            </Button>
+          ) : null}
+          {posted ? (
+            <Link
+              href="/app/finance/entries"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/15 px-3 py-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-400"
+            >
+              <Landmark className="size-4" />
+              {t("posted")}
+            </Link>
           ) : null}
           {canCancel ? (
             <Button size="sm" variant="ghost" disabled={pending} onClick={onCancel}>

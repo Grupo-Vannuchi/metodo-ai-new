@@ -80,6 +80,7 @@ export type PurchaseOrderDetail = {
   approvedAt: Date | null;
   orderedAt: Date | null;
   receivedAt: Date | null;
+  financeEntryId: string | null;
   createdAt: Date;
   items: PurchaseOrderItemDetail[];
 };
@@ -116,6 +117,7 @@ export async function getPurchaseOrder(organizationId: string, id: string): Prom
     approvedAt: o.approvedAt,
     orderedAt: o.orderedAt,
     receivedAt: o.receivedAt,
+    financeEntryId: o.financeEntryId,
     createdAt: o.createdAt,
     items: o.items.map((i) => ({
       id: i.id,
