@@ -3,7 +3,6 @@ import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
 import { getPurchaseOrder, purchaseFormOptions } from "@/lib/queries/purchases";
 import { PurchaseForm } from "@/components/supplies/purchase-form";
-import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
@@ -27,12 +26,10 @@ export default async function EditPurchasePage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Link href={`/app/supplies/purchases/${id}`} className="text-sm text-muted-foreground hover:text-foreground">
-          ← {order.code ? `OC ${order.code}` : t("title")}
-        </Link>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight">{t("editTitle")}</h1>
-      </div>
+      <h1 className="text-2xl font-bold tracking-tight">
+        {t("editTitle")}
+        {order.code ? <span className="ml-2 text-base font-normal text-muted-foreground">OC {order.code}</span> : null}
+      </h1>
       <PurchaseForm options={options} initial={order} />
     </div>
   );

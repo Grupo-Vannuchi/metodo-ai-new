@@ -24,6 +24,17 @@ const TOP_LEVEL = new Set([
   "/app/finance",
   "/app/hr",
   "/app/settings",
+  // Supplies is a single workspace: its section roots are tabs, not drill-ins,
+  // so they carry no Back control (only new/edit/detail routes below them do).
+  "/app/supplies",
+  "/app/supplies/items",
+  "/app/supplies/purchases",
+  "/app/supplies/stock",
+  "/app/supplies/assets",
+  "/app/supplies/maintenance",
+  "/app/supplies/client-equipment",
+  "/app/supplies/suppliers",
+  "/app/supplies/registries",
 ]);
 
 /**
