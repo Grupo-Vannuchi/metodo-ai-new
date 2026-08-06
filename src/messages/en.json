@@ -221,7 +221,7 @@
       "contacts": "Contacts",
       "finance": "Finance",
       "hr": "HR",
-      "supplies": "Dashboard",
+      "supplies": "Supplies",
       "supplyItems": "Items",
       "supplyPurchases": "Purchases",
       "supplyStock": "Stock",
@@ -2350,6 +2350,10 @@
   "supplies": {
     "title": "Supplies",
     "subtitle": "Items, purchasing, inventory and assets.",
+    "tabs": {
+      "overview": "Dashboard",
+      "assets": "Assets"
+    },
     "kpi": {
       "title": "Indicators",
       "sections": "Sections",

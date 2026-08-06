@@ -20,14 +20,6 @@ import {
   Workflow,
   Target,
   Boxes,
-  Truck,
-  Package,
-  ListChecks,
-  Warehouse,
-  ShoppingCart,
-  Tag,
-  Wrench,
-  PackageOpen,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
@@ -106,18 +98,9 @@ const GROUPS: Group[] = [
     items: [{ href: "/app/hr", key: "hr", icon: UsersRound }],
   },
   {
+    // The Supplies module is a single workspace: one entry, tabs inside it.
     key: "supplies",
-    items: [
-      { href: "/app/supplies", key: "supplies", icon: Boxes },
-      { href: "/app/supplies/items", key: "supplyItems", icon: Package },
-      { href: "/app/supplies/purchases", key: "supplyPurchases", icon: ShoppingCart },
-      { href: "/app/supplies/stock", key: "supplyStock", icon: Warehouse },
-      { href: "/app/supplies/assets", key: "supplyAssets", icon: Tag },
-      { href: "/app/supplies/maintenance", key: "supplyMaintenance", icon: Wrench },
-      { href: "/app/supplies/client-equipment", key: "supplyClientEquipment", icon: PackageOpen },
-      { href: "/app/supplies/registries", key: "supplyRegistries", icon: ListChecks },
-      { href: "/app/supplies/suppliers", key: "suppliers", icon: Truck },
-    ],
+    items: [{ href: "/app/supplies", key: "supplies", icon: Boxes }],
   },
   {
     key: "system",
@@ -141,18 +124,7 @@ export function AppNav({ allowedScreens, collapsed = false }: { allowedScreens: 
     ALWAYS_SHOWN.includes(key) ||
     allowedScreens.includes(key) ||
     // Automations + goals act on the CRM funnel — show wherever the CRM is allowed.
-    ((key === "automations" || key === "goals") && allowedScreens.includes("crm")) ||
-    // Supplies sub-screens all gate on the single "supplies" module access.
-    ((key === "supplies" ||
-      key === "supplyItems" ||
-      key === "supplyPurchases" ||
-      key === "supplyStock" ||
-      key === "supplyAssets" ||
-      key === "supplyMaintenance" ||
-      key === "supplyClientEquipment" ||
-      key === "supplyRegistries" ||
-      key === "suppliers") &&
-      allowedScreens.includes("supplies"));
+    ((key === "automations" || key === "goals") && allowedScreens.includes("crm"));
   const isActive = (href: string) => (href === "/app" ? pathname === "/app" : pathname.startsWith(href));
 
   // Live unread badge for the inbox item — pushed by the realtime stream.

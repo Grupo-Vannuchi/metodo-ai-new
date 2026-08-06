@@ -221,7 +221,7 @@
       "contacts": "Contatos",
       "finance": "Financeiro",
       "hr": "RH",
-      "supplies": "Painel",
+      "supplies": "Suprimentos",
       "supplyItems": "Itens",
       "supplyPurchases": "Compras",
       "supplyStock": "Estoque",
@@ -2350,6 +2350,10 @@
   "supplies": {
     "title": "Suprimentos",
     "subtitle": "Cadastro, compras, estoque e patrimônio.",
+    "tabs": {
+      "overview": "Painel",
+      "assets": "Ativos"
+    },
     "kpi": {
       "title": "Indicadores",
       "sections": "Seções",

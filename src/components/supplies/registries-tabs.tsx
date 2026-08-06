@@ -20,34 +20,42 @@ const TABS: { kind: Kind; hasExtra: boolean }[] = [
   { kind: "warehouse", hasExtra: true },
 ];
 
-export function RegistriesTabs({ data }: { data: Data }) {
+/**
+ * When `activeKind` is provided (driven by the workspace sub-nav / URL), the
+ * internal tab bar is hidden and only that registry is shown. Without it, the
+ * component keeps its own tab bar (standalone use).
+ */
+export function RegistriesTabs({ data, activeKind }: { data: Data; activeKind?: Kind }) {
   const t = useTranslations("supplies.registries");
-  const [tab, setTab] = useState<Kind>("category");
+  const [tab, setTab] = useState<Kind>(activeKind ?? "category");
+  const current = activeKind ?? tab;
   const rowsByKind: Record<Kind, RegistryRow[]> = {
     category: data.categories,
     unit: data.units,
     warehouse: data.warehouses,
   };
-  const cfg = TABS.find((x) => x.kind === tab)!;
+  const cfg = TABS.find((x) => x.kind === current)!;
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-1">
-        {TABS.map((x) => (
-          <button
-            key={x.kind}
-            type="button"
-            onClick={() => setTab(x.kind)}
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-sm transition-colors",
-              tab === x.kind ? "bg-brand/10 font-medium text-brand" : "text-muted-foreground hover:bg-muted",
-            )}
-          >
-            {t(`tab.${x.kind}`)}
-          </button>
-        ))}
-      </div>
-      <RegistryManager key={tab} kind={tab} rows={rowsByKind[tab]} hasExtra={cfg.hasExtra} />
+      {!activeKind ? (
+        <div className="flex flex-wrap gap-1">
+          {TABS.map((x) => (
+            <button
+              key={x.kind}
+              type="button"
+              onClick={() => setTab(x.kind)}
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-sm transition-colors",
+                tab === x.kind ? "bg-brand/10 font-medium text-brand" : "text-muted-foreground hover:bg-muted",
+              )}
+            >
+              {t(`tab.${x.kind}`)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <RegistryManager key={current} kind={current} rows={rowsByKind[current]} hasExtra={cfg.hasExtra} />
     </div>
   );
 }

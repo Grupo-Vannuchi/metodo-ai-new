@@ -1,9 +1,5 @@
 import { getTranslations, getLocale } from "next-intl/server";
 import {
-  Truck,
-  Package,
-  ListChecks,
-  Warehouse,
   ShoppingCart,
   Tag,
   Wrench,
@@ -36,7 +32,7 @@ function Tile({
   value: string;
   sub?: string;
   tone?: Tone;
-  icon?: typeof Package;
+  icon?: typeof ShoppingCart;
 }) {
   const toneCls =
     tone === "danger"
@@ -64,7 +60,7 @@ function Tile({
   );
 }
 
-/** Supplies module home: cross-module indicators + section navigation. */
+/** Supplies module home: cross-module indicators (navigation lives in the tab bar). */
 export default async function SuppliesPage({ params }: { params: Promise<{ locale: string }> }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
@@ -75,17 +71,6 @@ export default async function SuppliesPage({ params }: { params: Promise<{ local
 
   const brl = new Intl.NumberFormat(intlLocale, { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
   const nf = new Intl.NumberFormat(intlLocale);
-
-  const cards = [
-    { href: "/app/supplies/items", icon: Package, label: t("nav.items"), desc: t("items.subtitle") },
-    { href: "/app/supplies/purchases", icon: ShoppingCart, label: t("nav.purchases"), desc: t("purchases.subtitle") },
-    { href: "/app/supplies/stock", icon: Warehouse, label: t("nav.stock"), desc: t("stock.subtitle") },
-    { href: "/app/supplies/assets", icon: Tag, label: t("nav.assets"), desc: t("assets.subtitle") },
-    { href: "/app/supplies/maintenance", icon: Wrench, label: t("nav.maintenance"), desc: t("maintenance.subtitle") },
-    { href: "/app/supplies/client-equipment", icon: PackageOpen, label: t("nav.clientEquipment"), desc: t("clientEquipment.subtitle") },
-    { href: "/app/supplies/registries", icon: ListChecks, label: t("nav.registries"), desc: t("registries.subtitle") },
-    { href: "/app/supplies/suppliers", icon: Truck, label: t("nav.suppliers"), desc: t("suppliers.subtitle") },
-  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -156,27 +141,6 @@ export default async function SuppliesPage({ params }: { params: Promise<{ local
             value={nf.format(ind.clientEquipment.inHouse)}
             sub={tk("inHouseSub")}
           />
-        </div>
-      </section>
-
-      <section>
-        <h2 className="mb-2 text-sm font-semibold text-muted-foreground">{tk("sections")}</h2>
-        <div className="stagger-children grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {cards.map((c) => (
-            <Link
-              key={c.href}
-              href={c.href}
-              className="hover-lift glass group flex items-start gap-3 rounded-xl border border-border p-5 shadow-sm hover:border-brand/40"
-            >
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
-                <c.icon className="size-5" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="font-medium">{c.label}</span>
-                <span className="mt-0.5 block text-sm text-muted-foreground">{c.desc}</span>
-              </span>
-            </Link>
-          ))}
         </div>
       </section>
     </div>

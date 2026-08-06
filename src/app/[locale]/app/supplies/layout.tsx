@@ -1,10 +1,13 @@
+import { Suspense } from "react";
 import { requireOrgContext } from "@/lib/tenant";
 import { requireScreen } from "@/lib/access";
 import { hasFeature, type PlanKey } from "@/config/plans";
 import { redirect } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
+import { SuppliesNav } from "@/components/supplies/supplies-nav";
 
-/** Guard for /app/supplies: access-template (screen "supplies") + plan feature. */
+/** Guard for /app/supplies: access-template (screen "supplies") + plan feature.
+ *  Renders the single-workspace tab bar shared across all sections. */
 export default async function SuppliesLayout({
   children,
   params,
@@ -18,5 +21,12 @@ export default async function SuppliesLayout({
   if (!hasFeature(ctx.organization.plan as PlanKey, "supplies")) {
     redirect({ href: "/pricing", locale });
   }
-  return <>{children}</>;
+  return (
+    <div className="flex flex-col gap-6">
+      <Suspense fallback={null}>
+        <SuppliesNav />
+      </Suspense>
+      {children}
+    </div>
+  );
 }
