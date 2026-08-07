@@ -153,6 +153,8 @@ export function ItemForm({
   categories = [],
   units = [],
   warehouses = [],
+  onDone,
+  onCancel,
 }: {
   id?: string;
   defaults: ItemFormValues;
@@ -160,6 +162,10 @@ export function ItemForm({
   categories?: string[];
   units?: string[];
   warehouses?: string[];
+  /** When provided (drawer mode), called on success instead of navigating away. */
+  onDone?: () => void;
+  /** When provided (drawer mode), the Cancel control closes the drawer. */
+  onCancel?: () => void;
 }) {
   const t = useTranslations("supplies.items");
   const tv = useTranslations("validation");
@@ -188,8 +194,13 @@ export function ItemForm({
     const res = id ? await updateSupplyItem(id, values) : await createSupplyItem(values);
     if (res.ok) {
       notify("saved");
-      router.push("/app/supplies/items");
-      router.refresh();
+      if (onDone) {
+        onDone();
+        router.refresh();
+      } else {
+        router.push("/app/supplies/items");
+        router.refresh();
+      }
     } else {
       setServerError(t(`error.${res.error}`));
     }
@@ -477,12 +488,22 @@ export function ItemForm({
         <Button type="submit" size="lg" disabled={isSubmitting}>
           {isSubmitting ? t("saving") : t("save")}
         </Button>
-        <Link
-          href="/app/supplies/items"
-          className="inline-flex h-13 items-center px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          {t("cancel")}
-        </Link>
+        {onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex h-13 items-center px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {t("cancel")}
+          </button>
+        ) : (
+          <Link
+            href="/app/supplies/items"
+            className="inline-flex h-13 items-center px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {t("cancel")}
+          </Link>
+        )}
         {id ? (
           <button
             type="button"

@@ -4,15 +4,18 @@ import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Plus, Search, Tag } from "lucide-react";
 import { Link } from "@/i18n/navigation";
-import { buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { Drawer } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { ASSET_STATUSES, assetStatusCls } from "@/components/supplies/asset-status";
-import type { AssetRow } from "@/lib/queries/assets";
+import { AssetForm } from "@/components/supplies/asset-form";
+import type { AssetRow, AssetFormOptions } from "@/lib/queries/assets";
 
-export function AssetsList({ assets }: { assets: AssetRow[] }) {
+export function AssetsList({ assets, options }: { assets: AssetRow[]; options: AssetFormOptions }) {
   const t = useTranslations("supplies.assets");
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<string>("ALL");
+  const [creating, setCreating] = useState(false);
 
   const tabs = ["ALL", ...ASSET_STATUSES];
   const term = q.trim().toLowerCase();
@@ -40,10 +43,10 @@ export function AssetsList({ assets }: { assets: AssetRow[] }) {
             className="h-9 w-56 rounded-lg border border-border bg-card pl-8 pr-3 text-sm focus-visible:border-brand focus-visible:outline-none"
           />
         </div>
-        <Link href="/app/supplies/assets/new" className={buttonVariants({ size: "sm" })}>
+        <Button type="button" size="sm" onClick={() => setCreating(true)}>
           <Plus className="size-4" />
           {t("new")}
-        </Link>
+        </Button>
       </div>
 
       <div className="flex flex-wrap gap-1">
@@ -101,6 +104,12 @@ export function AssetsList({ assets }: { assets: AssetRow[] }) {
           ))}
         </ul>
       )}
+
+      <Drawer open={creating} onClose={() => setCreating(false)} title={t("newTitle")} className="max-w-2xl">
+        {creating ? (
+          <AssetForm options={options} onDone={() => setCreating(false)} onCancel={() => setCreating(false)} />
+        ) : null}
+      </Drawer>
     </div>
   );
 }

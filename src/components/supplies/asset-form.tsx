@@ -60,7 +60,17 @@ function toDefaults(a?: AssetDetail): AssetFormValues {
   };
 }
 
-export function AssetForm({ options, initial }: { options: AssetFormOptions; initial?: AssetDetail }) {
+export function AssetForm({
+  options,
+  initial,
+  onDone,
+  onCancel,
+}: {
+  options: AssetFormOptions;
+  initial?: AssetDetail;
+  onDone?: () => void;
+  onCancel?: () => void;
+}) {
   const t = useTranslations("supplies.assets");
   const router = useRouter();
   const notify = useNotify();
@@ -74,7 +84,8 @@ export function AssetForm({ options, initial }: { options: AssetFormOptions; ini
       const res = initial ? await updateAsset(initial.id, values) : await createAsset(values);
       if (res.ok) {
         notify("saved");
-        router.push("/app/supplies/assets");
+        if (onDone) onDone();
+        else router.push("/app/supplies/assets");
         router.refresh();
       } else {
         setError(t(`error.${res.error}`));
@@ -212,7 +223,7 @@ export function AssetForm({ options, initial }: { options: AssetFormOptions; ini
         </Button>
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={() => (onCancel ? onCancel() : router.back())}
           className="inline-flex items-center gap-1 px-2 text-sm text-muted-foreground hover:text-foreground"
         >
           <X className="size-4" />

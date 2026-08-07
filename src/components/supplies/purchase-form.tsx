@@ -18,7 +18,17 @@ const selectCls = cn(
   "focus-visible:border-brand focus-visible:outline-none",
 );
 
-export function PurchaseForm({ options, initial }: { options: PurchaseFormOptions; initial?: PurchaseOrderDetail }) {
+export function PurchaseForm({
+  options,
+  initial,
+  onDone,
+  onCancel,
+}: {
+  options: PurchaseFormOptions;
+  initial?: PurchaseOrderDetail;
+  onDone?: () => void;
+  onCancel?: () => void;
+}) {
   const t = useTranslations("supplies.purchases");
   const locale = useLocale();
   const router = useRouter();
@@ -93,7 +103,8 @@ export function PurchaseForm({ options, initial }: { options: PurchaseFormOption
       const res = initial ? await updatePurchaseOrder(initial.id, input) : await createPurchaseOrder(input);
       if (res.ok) {
         notify("saved");
-        router.push(`/app/supplies/purchases/${res.id}`);
+        if (onDone) onDone();
+        else router.push(`/app/supplies/purchases/${res.id}`);
         router.refresh();
       } else {
         setError(t("saveError"));
@@ -235,7 +246,7 @@ export function PurchaseForm({ options, initial }: { options: PurchaseFormOption
         </Button>
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={() => (onCancel ? onCancel() : router.back())}
           className="inline-flex items-center gap-1 px-2 text-sm text-muted-foreground hover:text-foreground"
         >
           <X className="size-4" />
