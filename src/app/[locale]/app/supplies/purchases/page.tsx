@@ -6,10 +6,17 @@ import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
 
-export default async function PurchasesPage({ params }: { params: Promise<{ locale: string }> }) {
+export default async function PurchasesPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<{ new?: string }>;
+}) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("supplies.purchases");
+  const initialNew = Boolean((await searchParams)?.new);
   const [orders, options] = await Promise.all([
     listPurchaseOrders(ctx.organizationId),
     purchaseFormOptions(ctx.organizationId),
@@ -21,7 +28,7 @@ export default async function PurchasesPage({ params }: { params: Promise<{ loca
         <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
         <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
       </div>
-      <PurchasesList orders={orders} options={options} />
+      <PurchasesList orders={orders} options={options} initialNew={initialNew} />
     </div>
   );
 }

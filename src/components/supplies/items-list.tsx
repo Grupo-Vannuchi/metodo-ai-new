@@ -19,17 +19,19 @@ export function ItemsList({
   categories,
   units,
   warehouses,
+  initialNew = false,
 }: {
   items: SupplyItemRow[];
   suppliers: Supplier[];
   categories: string[];
   units: string[];
   warehouses: string[];
+  initialNew?: boolean;
 }) {
   const t = useTranslations("supplies.items");
   const tm = useTranslations("supplies.stock");
   const [q, setQ] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(initialNew);
   const term = q.trim().toLowerCase();
   const filtered = term
     ? items.filter((i) =>

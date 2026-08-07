@@ -1,7 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Search, User, Building2, KanbanSquare, MessageCircle, Wallet } from "lucide-react";
+import {
+  Search,
+  User,
+  Building2,
+  KanbanSquare,
+  MessageCircle,
+  Wallet,
+  ArrowLeftRight,
+  Package,
+  ShoppingCart,
+  Tag,
+  Wrench,
+  PackageOpen,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
@@ -15,9 +28,22 @@ const ICON: Record<SearchType, typeof User> = {
   finance: Wallet,
 };
 
+type Href = Parameters<ReturnType<typeof useRouter>["push"]>[0];
+
+/** Quick actions launchable from anywhere. Each navigates to a screen with a
+ *  drawer/action auto-opened via URL. Gated by the screen it targets. */
+const ACTIONS: { key: string; icon: typeof User; screen: string; href: Href }[] = [
+  { key: "newMovement", icon: ArrowLeftRight, screen: "supplies", href: { pathname: "/app/supplies/stock", query: { move: "" } } },
+  { key: "newPurchase", icon: ShoppingCart, screen: "supplies", href: { pathname: "/app/supplies/purchases", query: { new: "1" } } },
+  { key: "newItem", icon: Package, screen: "supplies", href: { pathname: "/app/supplies/items", query: { new: "1" } } },
+  { key: "newAsset", icon: Tag, screen: "supplies", href: { pathname: "/app/supplies/assets", query: { new: "1" } } },
+  { key: "scheduleMaintenance", icon: Wrench, screen: "supplies", href: { pathname: "/app/supplies/maintenance", query: { asset: "" } } },
+  { key: "receiveEquipment", icon: PackageOpen, screen: "supplies", href: { pathname: "/app/supplies/client-equipment", query: { receive: "1" } } },
+];
+
 /** ⌘K / Ctrl+K global search. Rendered once in the shell; opened by the
  * shortcut or a `cmdk:open` window event (dispatched by the trigger buttons). */
-export function CommandPalette() {
+export function CommandPalette({ allowedScreens = [] }: { allowedScreens?: string[] }) {
   const t = useTranslations("search");
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -99,6 +125,12 @@ export function CommandPalette() {
     router.push(r.href);
   }
 
+  function runAction(href: Href) {
+    setOpen(false);
+    reset();
+    router.push(href);
+  }
+
   function onInputKey(e: React.KeyboardEvent) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -115,6 +147,10 @@ export function CommandPalette() {
   if (!open) return null;
 
   const term = q.trim();
+  const termLower = term.toLowerCase();
+  const actions = ACTIONS.filter(
+    (a) => allowedScreens.includes(a.screen) && (term.length < 2 || t(`actions.${a.key}`).toLowerCase().includes(termLower)),
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[14vh]" role="dialog" aria-modal="true">
@@ -132,12 +168,38 @@ export function CommandPalette() {
           />
         </div>
         <div className="max-h-80 overflow-y-auto p-1">
+          {actions.length > 0 ? (
+            <>
+              <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                {t("actionsTitle")}
+              </p>
+              {actions.map((a) => {
+                const Icon = a.icon;
+                return (
+                  <button
+                    key={a.key}
+                    type="button"
+                    onClick={() => runAction(a.href)}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
+                  >
+                    <Icon className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="flex-1 truncate font-medium">{t(`actions.${a.key}`)}</span>
+                  </button>
+                );
+              })}
+            </>
+          ) : null}
+
           {term.length < 2 ? (
-            <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t("hint")}</p>
+            actions.length === 0 ? (
+              <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t("hint")}</p>
+            ) : null
           ) : loading && results.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t("searching")}</p>
           ) : results.length === 0 ? (
-            <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t("noResults")}</p>
+            actions.length === 0 ? (
+              <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t("noResults")}</p>
+            ) : null
           ) : (
             results.map((r, i) => {
               const Icon = ICON[r.type];

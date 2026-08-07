@@ -2173,10 +2173,19 @@
     "invalidBody": "Este link de descadastro é inválido ou expirou."
   },
   "search": {
-    "placeholder": "Buscar…",
+    "placeholder": "Buscar ou executar uma ação…",
     "hint": "Busque contatos, empresas, oportunidades, conversas…",
     "searching": "Buscando…",
     "noResults": "Nenhum resultado.",
+    "actionsTitle": "Ações",
+    "actions": {
+      "newMovement": "Nova movimentação de estoque",
+      "newPurchase": "Nova ordem de compra",
+      "newItem": "Novo item de suprimentos",
+      "newAsset": "Novo ativo (patrimônio)",
+      "scheduleMaintenance": "Agendar manutenção / calibração",
+      "receiveEquipment": "Receber equipamento de cliente"
+    },
     "type": {
       "contact": "Contato",
       "company": "Empresa",

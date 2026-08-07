@@ -34,14 +34,17 @@ const TABS = ["ALL", "RECEIVED", "IN_SERVICE", "READY", "RETURNED", "CANCELED"];
 export function ClientEquipmentClient({
   tickets,
   options,
+  initialReceive = false,
 }: {
   tickets: ServiceTicketRow[];
   options: ServiceFormOptions;
+  /** Quick action `?receive=1`: opens the receive drawer on load. */
+  initialReceive?: boolean;
 }) {
   const t = useTranslations("supplies.clientEquipment");
   const locale = useLocale();
   const [statusF, setStatusF] = useState("ALL");
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(initialReceive);
   const df = useMemo(() => new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "numeric" }), [locale]);
   const brl = useMemo(() => new Intl.NumberFormat(locale, { style: "currency", currency: "BRL" }), [locale]);
 

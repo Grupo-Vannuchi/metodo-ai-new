@@ -11,11 +11,19 @@ import { PURCHASE_STATUSES, statusBadgeCls } from "@/components/supplies/purchas
 import { PurchaseForm } from "@/components/supplies/purchase-form";
 import type { PurchaseOrderRow, PurchaseFormOptions } from "@/lib/queries/purchases";
 
-export function PurchasesList({ orders, options }: { orders: PurchaseOrderRow[]; options: PurchaseFormOptions }) {
+export function PurchasesList({
+  orders,
+  options,
+  initialNew = false,
+}: {
+  orders: PurchaseOrderRow[];
+  options: PurchaseFormOptions;
+  initialNew?: boolean;
+}) {
   const t = useTranslations("supplies.purchases");
   const locale = useLocale();
   const [status, setStatus] = useState<string>("ALL");
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(initialNew);
   const brl = useMemo(() => new Intl.NumberFormat(locale, { style: "currency", currency: "BRL" }), [locale]);
   const df = useMemo(() => new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "2-digit" }), [locale]);
 

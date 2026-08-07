@@ -2173,10 +2173,19 @@
     "invalidBody": "This unsubscribe link is invalid or has expired."
   },
   "search": {
-    "placeholder": "Search…",
+    "placeholder": "Search or run an action…",
     "hint": "Search contacts, companies, opportunities, conversations…",
     "searching": "Searching…",
     "noResults": "No results.",
+    "actionsTitle": "Actions",
+    "actions": {
+      "newMovement": "New stock movement",
+      "newPurchase": "New purchase order",
+      "newItem": "New supply item",
+      "newAsset": "New asset",
+      "scheduleMaintenance": "Schedule maintenance / calibration",
+      "receiveEquipment": "Receive client equipment"
+    },
     "type": {
       "contact": "Contact",
       "company": "Company",

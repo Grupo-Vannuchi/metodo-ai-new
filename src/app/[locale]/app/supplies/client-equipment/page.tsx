@@ -6,10 +6,17 @@ import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
 
-export default async function ClientEquipmentPage({ params }: { params: Promise<{ locale: string }> }) {
+export default async function ClientEquipmentPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<{ receive?: string }>;
+}) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("supplies.clientEquipment");
+  const initialReceive = Boolean((await searchParams)?.receive);
 
   const [tickets, options] = await Promise.all([
     listServiceTickets(ctx.organizationId),
@@ -22,7 +29,7 @@ export default async function ClientEquipmentPage({ params }: { params: Promise<
         <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
         <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
       </div>
-      <ClientEquipmentClient tickets={tickets} options={options} />
+      <ClientEquipmentClient tickets={tickets} options={options} initialReceive={initialReceive} />
     </div>
   );
 }

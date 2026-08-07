@@ -43,7 +43,7 @@ export function MaintenanceClient({
   const locale = useLocale();
   const [statusF, setStatusF] = useState("ALL");
   const [typeF, setTypeF] = useState("ALL");
-  const [adding, setAdding] = useState(Boolean(initialAsset));
+  const [adding, setAdding] = useState(initialAsset !== null);
   const df = useMemo(() => new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "numeric" }), [locale]);
   const brl = useMemo(() => new Intl.NumberFormat(locale, { style: "currency", currency: "BRL" }), [locale]);
   const canSchedule = options.assets.length > 0;

@@ -11,12 +11,20 @@ import { ASSET_STATUSES, assetStatusCls } from "@/components/supplies/asset-stat
 import { AssetForm } from "@/components/supplies/asset-form";
 import type { AssetRow, AssetFormOptions } from "@/lib/queries/assets";
 
-export function AssetsList({ assets, options }: { assets: AssetRow[]; options: AssetFormOptions }) {
+export function AssetsList({
+  assets,
+  options,
+  initialNew = false,
+}: {
+  assets: AssetRow[];
+  options: AssetFormOptions;
+  initialNew?: boolean;
+}) {
   const t = useTranslations("supplies.assets");
   const tmaint = useTranslations("supplies.maintenance");
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<string>("ALL");
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(initialNew);
 
   const tabs = ["ALL", ...ASSET_STATUSES];
   const term = q.trim().toLowerCase();

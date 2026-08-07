@@ -53,7 +53,7 @@ export async function AppShell({
         {/* Green accent stays dark-mode only — in light it read as a stray tint. */}
         <div className="absolute right-[-10rem] top-1/3 hidden size-[28rem] animate-lava-c rounded-full bg-accent/10 blur-3xl will-change-transform dark:block" />
       </div>
-      <CommandPalette />
+      <CommandPalette allowedScreens={navScreens} />
       {/* Opaque branded surface — NOT glass: a translucent navy washes out over
           the light canvas and makes its inner boxes (search, org card) read as
           mismatched tones. Collapsible to an icon rail. */}

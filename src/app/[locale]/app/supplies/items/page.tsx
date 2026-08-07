@@ -9,12 +9,15 @@ export const dynamic = "force-dynamic";
 
 export default async function ItemsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{ new?: string }>;
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("supplies.items");
+  const initialNew = Boolean((await searchParams)?.new);
   const [items, suppliers, reg] = await Promise.all([
     listSupplyItems(ctx.organizationId),
     supplierOptions(ctx.organizationId),
@@ -33,6 +36,7 @@ export default async function ItemsPage({
         categories={reg.categories}
         units={reg.units}
         warehouses={reg.warehouses}
+        initialNew={initialNew}
       />
     </div>
   );
