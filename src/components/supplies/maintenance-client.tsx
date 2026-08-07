@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Plus, Wrench, Gauge, Check, Ban, Trash2, X, AlertTriangle } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { useConfirm } from "@/components/ui/confirm";
+import { useNotify } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/drawer";
 import { Input, Label, Textarea } from "@/components/ui/field";
@@ -119,6 +120,7 @@ export function MaintenanceClient({
 function EventRow({ e, df, brl }: { e: MaintenanceEventRow; df: Intl.DateTimeFormat; brl: Intl.NumberFormat }) {
   const t = useTranslations("supplies.maintenance");
   const router = useRouter();
+  const notify = useNotify();
   const confirm = useConfirm();
   const [pending, start] = useTransition();
   const [completing, setCompleting] = useState(false);
@@ -129,6 +131,7 @@ function EventRow({ e, df, brl }: { e: MaintenanceEventRow; df: Intl.DateTimeFor
     if (!(await confirm({ description: t("cancelConfirm"), confirmLabel: t("cancelEvent"), variant: "danger" }))) return;
     start(async () => {
       await cancelMaintenance(e.id);
+      notify("canceled");
       router.refresh();
     });
   }
@@ -136,6 +139,7 @@ function EventRow({ e, df, brl }: { e: MaintenanceEventRow; df: Intl.DateTimeFor
     if (!(await confirm({ description: t("deleteConfirm"), confirmLabel: t("delete"), variant: "danger" }))) return;
     start(async () => {
       await deleteMaintenance(e.id);
+      notify("deleted");
       router.refresh();
     });
   }
@@ -224,6 +228,7 @@ function EventRow({ e, df, brl }: { e: MaintenanceEventRow; df: Intl.DateTimeFor
 function CompleteForm({ event, onClose }: { event: MaintenanceEventRow; onClose: () => void }) {
   const t = useTranslations("supplies.maintenance");
   const router = useRouter();
+  const notify = useNotify();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const today = new Date().toISOString().slice(0, 10);
@@ -245,6 +250,7 @@ function CompleteForm({ event, onClose }: { event: MaintenanceEventRow; onClose:
     start(async () => {
       const res = await completeMaintenance(event.id, input);
       if (res.ok) {
+        notify("completed");
         onClose();
         router.refresh();
       } else {
@@ -309,6 +315,7 @@ function CompleteForm({ event, onClose }: { event: MaintenanceEventRow; onClose:
 function ScheduleForm({ options, onClose }: { options: MaintenanceFormOptions; onClose: () => void }) {
   const t = useTranslations("supplies.maintenance");
   const router = useRouter();
+  const notify = useNotify();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -326,6 +333,7 @@ function ScheduleForm({ options, onClose }: { options: MaintenanceFormOptions; o
     start(async () => {
       const res = await scheduleMaintenance(input);
       if (res.ok) {
+        notify("scheduled");
         onClose();
         router.refresh();
       } else {

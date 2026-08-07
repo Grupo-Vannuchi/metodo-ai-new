@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Plus, Wrench, PlayCircle, CheckCircle2, Undo2, Ban, Trash2, X, AlertTriangle } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { useConfirm } from "@/components/ui/confirm";
+import { useNotify } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/drawer";
 import { Input, Label, Textarea } from "@/components/ui/field";
@@ -92,6 +93,7 @@ export function ClientEquipmentClient({
 function TicketRow({ tk, df, brl }: { tk: ServiceTicketRow; df: Intl.DateTimeFormat; brl: Intl.NumberFormat }) {
   const t = useTranslations("supplies.clientEquipment");
   const router = useRouter();
+  const notify = useNotify();
   const confirm = useConfirm();
   const [pending, start] = useTransition();
   const [returning, setReturning] = useState(false);
@@ -102,6 +104,7 @@ function TicketRow({ tk, df, brl }: { tk: ServiceTicketRow; df: Intl.DateTimeFor
   function transition(action: string) {
     start(async () => {
       await setServiceStatus(tk.id, action);
+      notify("statusChanged");
       router.refresh();
     });
   }
@@ -113,6 +116,7 @@ function TicketRow({ tk, df, brl }: { tk: ServiceTicketRow; df: Intl.DateTimeFor
     if (!(await confirm({ description: t("deleteConfirm"), confirmLabel: t("delete"), variant: "danger" }))) return;
     start(async () => {
       await deleteServiceTicket(tk.id);
+      notify("deleted");
       router.refresh();
     });
   }
@@ -229,6 +233,7 @@ function IconBtn({
 function ReturnForm({ ticket, onClose }: { ticket: ServiceTicketRow; onClose: () => void }) {
   const t = useTranslations("supplies.clientEquipment");
   const router = useRouter();
+  const notify = useNotify();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const today = new Date().toISOString().slice(0, 10);
@@ -245,6 +250,7 @@ function ReturnForm({ ticket, onClose }: { ticket: ServiceTicketRow; onClose: ()
     start(async () => {
       const res = await returnServiceTicket(ticket.id, input);
       if (res.ok) {
+        notify("returned");
         onClose();
         router.refresh();
       } else {
@@ -291,6 +297,7 @@ function ReturnForm({ ticket, onClose }: { ticket: ServiceTicketRow; onClose: ()
 function ReceiveForm({ options, onClose }: { options: ServiceFormOptions; onClose: () => void }) {
   const t = useTranslations("supplies.clientEquipment");
   const router = useRouter();
+  const notify = useNotify();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const today = new Date().toISOString().slice(0, 10);
@@ -326,6 +333,7 @@ function ReceiveForm({ options, onClose }: { options: ServiceFormOptions; onClos
     start(async () => {
       const res = await createServiceTicket(input);
       if (res.ok) {
+        notify("received");
         onClose();
         router.refresh();
       } else {

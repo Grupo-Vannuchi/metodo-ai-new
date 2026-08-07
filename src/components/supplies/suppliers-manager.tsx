@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Pencil, Trash2, Plus, X, Mail, Phone, MapPin } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { useConfirm } from "@/components/ui/confirm";
+import { useNotify } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,7 @@ import type { SupplierRow } from "@/lib/queries/suppliers";
 export function SuppliersManager({ suppliers }: { suppliers: SupplierRow[] }) {
   const t = useTranslations("supplies.suppliers");
   const router = useRouter();
+  const notify = useNotify();
   const confirm = useConfirm();
   const [pending, start] = useTransition();
   const [adding, setAdding] = useState(false);
@@ -50,6 +52,7 @@ export function SuppliersManager({ suppliers }: { suppliers: SupplierRow[] }) {
     start(async () => {
       const r = editing ? await updateSupplier(editing.id, input) : await createSupplier(input);
       if (r.ok) {
+        notify("saved");
         close();
         router.refresh();
       } else {
@@ -62,6 +65,7 @@ export function SuppliersManager({ suppliers }: { suppliers: SupplierRow[] }) {
     if (!(await confirm({ description: t("deleteConfirm", { name: s.name }), confirmLabel: t("delete"), variant: "danger" }))) return;
     start(async () => {
       await deleteSupplier(s.id);
+      notify("deleted");
       router.refresh();
     });
   }

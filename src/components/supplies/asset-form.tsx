@@ -8,6 +8,7 @@ import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
+import { useNotify } from "@/components/ui/toast";
 import { createAsset, updateAsset } from "@/app/actions/assets";
 import { ASSET_STATUSES } from "@/components/supplies/asset-status";
 import { ASSET_NATURES } from "@/lib/validations/asset";
@@ -62,6 +63,7 @@ function toDefaults(a?: AssetDetail): AssetFormValues {
 export function AssetForm({ options, initial }: { options: AssetFormOptions; initial?: AssetDetail }) {
   const t = useTranslations("supplies.assets");
   const router = useRouter();
+  const notify = useNotify();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const { register, handleSubmit } = useForm<AssetFormValues>({ defaultValues: toDefaults(initial) });
@@ -71,6 +73,7 @@ export function AssetForm({ options, initial }: { options: AssetFormOptions; ini
     start(async () => {
       const res = initial ? await updateAsset(initial.id, values) : await createAsset(values);
       if (res.ok) {
+        notify("saved");
         router.push("/app/supplies/assets");
         router.refresh();
       } else {

@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Pencil, Trash2, Plus, X } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { useConfirm } from "@/components/ui/confirm";
+import { useNotify } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
@@ -63,6 +64,7 @@ export function RegistriesTabs({ data, activeKind }: { data: Data; activeKind?: 
 function RegistryManager({ kind, rows, hasExtra }: { kind: Kind; rows: RegistryRow[]; hasExtra: boolean }) {
   const t = useTranslations("supplies.registries");
   const router = useRouter();
+  const notify = useNotify();
   const confirm = useConfirm();
   const [pending, start] = useTransition();
   const [adding, setAdding] = useState(false);
@@ -85,6 +87,7 @@ function RegistryManager({ kind, rows, hasExtra }: { kind: Kind; rows: RegistryR
     start(async () => {
       const r = await saveRegistry(kind, editing?.id ?? null, input);
       if (r.ok) {
+        notify("saved");
         close();
         router.refresh();
       }
@@ -95,6 +98,7 @@ function RegistryManager({ kind, rows, hasExtra }: { kind: Kind; rows: RegistryR
     if (!(await confirm({ description: t("deleteConfirm", { name: row.name }), confirmLabel: t("delete"), variant: "danger" }))) return;
     start(async () => {
       await deleteRegistry(kind, row.id);
+      notify("deleted");
       router.refresh();
     });
   }

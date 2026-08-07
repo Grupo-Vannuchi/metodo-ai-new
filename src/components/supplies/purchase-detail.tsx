@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Pencil, Check, Send, PackageCheck, Ban, Trash2, X, Landmark } from "lucide-react";
 import { useRouter, Link } from "@/i18n/navigation";
 import { useConfirm } from "@/components/ui/confirm";
+import { useNotify } from "@/components/ui/toast";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,7 @@ export function PurchaseDetail({ order }: { order: PurchaseOrderDetail }) {
   const t = useTranslations("supplies.purchases");
   const locale = useLocale();
   const router = useRouter();
+  const notify = useNotify();
   const confirm = useConfirm();
   const [pending, start] = useTransition();
   const [receiving, setReceiving] = useState(false);
@@ -44,8 +46,10 @@ export function PurchaseDetail({ order }: { order: PurchaseOrderDetail }) {
     setError(null);
     start(async () => {
       const res = await postPurchaseToFinance(order.id);
-      if (res.ok) router.refresh();
-      else setError(t("actionError"));
+      if (res.ok) {
+        notify("posted");
+        router.refresh();
+      } else setError(t("actionError"));
     });
   }
 
@@ -58,8 +62,10 @@ export function PurchaseDetail({ order }: { order: PurchaseOrderDetail }) {
     setError(null);
     start(async () => {
       const res = await setPurchaseOrderStatus(order.id, action);
-      if (res.ok) router.refresh();
-      else setError(t("actionError"));
+      if (res.ok) {
+        notify("statusChanged");
+        router.refresh();
+      } else setError(t("actionError"));
     });
   }
 
@@ -74,6 +80,7 @@ export function PurchaseDetail({ order }: { order: PurchaseOrderDetail }) {
     start(async () => {
       const res = await deletePurchaseOrder(order.id);
       if (res.ok) {
+        notify("deleted");
         router.push("/app/supplies/purchases");
         router.refresh();
       } else setError(t("actionError"));
@@ -92,6 +99,7 @@ export function PurchaseDetail({ order }: { order: PurchaseOrderDetail }) {
     start(async () => {
       const res = await receivePurchaseOrder(order.id, { lines });
       if (res.ok) {
+        notify("received");
         setReceiving(false);
         router.refresh();
       } else {

@@ -9,6 +9,7 @@ import { Input, Label, Textarea, FieldError } from "@/components/ui/field";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/ui/confirm";
+import { useNotify } from "@/components/ui/toast";
 import { createSupplyItem, updateSupplyItem, deleteSupplyItem } from "@/app/actions/supply-items";
 import { SUPPLY_ITEM_TYPES, PROPERTY_NATURES } from "@/lib/validations/supply-item";
 
@@ -163,6 +164,7 @@ export function ItemForm({
   const t = useTranslations("supplies.items");
   const tv = useTranslations("validation");
   const router = useRouter();
+  const notify = useNotify();
   const confirm = useConfirm();
   const [serverError, setServerError] = useState<string | null>(null);
   const [deleting, startDelete] = useTransition();
@@ -185,6 +187,7 @@ export function ItemForm({
     setServerError(null);
     const res = id ? await updateSupplyItem(id, values) : await createSupplyItem(values);
     if (res.ok) {
+      notify("saved");
       router.push("/app/supplies/items");
       router.refresh();
     } else {
@@ -488,6 +491,7 @@ export function ItemForm({
               if (!(await confirm({ description: t("deleteConfirm"), confirmLabel: t("delete"), variant: "danger" }))) return;
               startDelete(async () => {
                 await deleteSupplyItem(id);
+                notify("deleted");
                 router.push("/app/supplies/items");
                 router.refresh();
               });

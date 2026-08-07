@@ -1697,6 +1697,24 @@
     "confirm": "Confirmar",
     "cancel": "Cancelar"
   },
+  "toast": {
+    "saved": "Salvo",
+    "done": "Pronto!",
+    "moved": "Movimentação registrada",
+    "reserved": "Reserva criada",
+    "released": "Reserva liberada",
+    "consumed": "Reserva consumida",
+    "reversed": "Movimentação estornada",
+    "scheduled": "Agendado",
+    "completed": "Concluído",
+    "received": "Recebido",
+    "returned": "Devolvido",
+    "canceled": "Cancelado",
+    "deleted": "Excluído",
+    "posted": "Lançado no financeiro",
+    "statusChanged": "Situação atualizada",
+    "error": "Não foi possível concluir"
+  },
   "profile": {
     "title": "Meu perfil",
     "subtitle": "Seus dados pessoais e de contato",

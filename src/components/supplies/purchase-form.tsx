@@ -7,6 +7,7 @@ import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
+import { useNotify } from "@/components/ui/toast";
 import { createPurchaseOrder, updatePurchaseOrder } from "@/app/actions/purchases";
 import type { PurchaseFormOptions, PurchaseOrderDetail } from "@/lib/queries/purchases";
 
@@ -21,6 +22,7 @@ export function PurchaseForm({ options, initial }: { options: PurchaseFormOption
   const t = useTranslations("supplies.purchases");
   const locale = useLocale();
   const router = useRouter();
+  const notify = useNotify();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const brl = useMemo(() => new Intl.NumberFormat(locale, { style: "currency", currency: "BRL" }), [locale]);
@@ -90,6 +92,7 @@ export function PurchaseForm({ options, initial }: { options: PurchaseFormOption
     start(async () => {
       const res = initial ? await updatePurchaseOrder(initial.id, input) : await createPurchaseOrder(input);
       if (res.ok) {
+        notify("saved");
         router.push(`/app/supplies/purchases/${res.id}`);
         router.refresh();
       } else {

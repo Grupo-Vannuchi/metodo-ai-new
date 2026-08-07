@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { useConfirm } from "@/components/ui/confirm";
+import { useNotify } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/drawer";
 import { Input, Label, Textarea } from "@/components/ui/field";
@@ -242,6 +243,7 @@ function Balances({
 function Movements({ rows, nf, locale }: { rows: StockMovementRow[]; nf: Intl.NumberFormat; locale: string }) {
   const t = useTranslations("supplies.stock");
   const router = useRouter();
+  const notify = useNotify();
   const confirm = useConfirm();
   const [pending, start] = useTransition();
   const df = useMemo(
@@ -253,6 +255,7 @@ function Movements({ rows, nf, locale }: { rows: StockMovementRow[]; nf: Intl.Nu
     if (!(await confirm({ description: t("reverseConfirm"), confirmLabel: t("reverse"), variant: "danger" }))) return;
     start(async () => {
       await reverseStockMovement(row.id);
+      notify("reversed");
       router.refresh();
     });
   }
@@ -323,6 +326,7 @@ function MovementForm({
 }) {
   const t = useTranslations("supplies.stock");
   const router = useRouter();
+  const notify = useNotify();
   const [pending, start] = useTransition();
   const [kind, setKind] = useState<Kind>("IN");
   const [error, setError] = useState<string | null>(null);
@@ -351,6 +355,7 @@ function MovementForm({
     start(async () => {
       const r = await createStockMovement(input);
       if (r.ok) {
+        notify("moved");
         onClose();
         router.refresh();
       } else if (r.error === "insufficient") {
@@ -510,6 +515,7 @@ const resStatusCls: Record<string, string> = {
 function Reservations({ rows, nf, locale }: { rows: ReservationRow[]; nf: Intl.NumberFormat; locale: string }) {
   const t = useTranslations("supplies.stock");
   const router = useRouter();
+  const notify = useNotify();
   const confirm = useConfirm();
   const [pending, start] = useTransition();
   const df = useMemo(
@@ -520,6 +526,7 @@ function Reservations({ rows, nf, locale }: { rows: ReservationRow[]; nf: Intl.N
   function onRelease(r: ReservationRow) {
     start(async () => {
       await releaseReservation(r.id);
+      notify("released");
       router.refresh();
     });
   }
@@ -527,6 +534,7 @@ function Reservations({ rows, nf, locale }: { rows: ReservationRow[]; nf: Intl.N
     if (!(await confirm({ description: t("consumeConfirm"), confirmLabel: t("consume"), variant: "danger" }))) return;
     start(async () => {
       await consumeReservation(r.id);
+      notify("consumed");
       router.refresh();
     });
   }
@@ -597,6 +605,7 @@ function Reservations({ rows, nf, locale }: { rows: ReservationRow[]; nf: Intl.N
 function ReservationForm({ options, onClose }: { options: ReservationFormOptions; onClose: () => void }) {
   const t = useTranslations("supplies.stock");
   const router = useRouter();
+  const notify = useNotify();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const hasWarehouses = options.warehouses.length > 0;
@@ -616,6 +625,7 @@ function ReservationForm({ options, onClose }: { options: ReservationFormOptions
     start(async () => {
       const r = await createReservation(input);
       if (r.ok) {
+        notify("reserved");
         onClose();
         router.refresh();
       } else if (r.error === "insufficient") {

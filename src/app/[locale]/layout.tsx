@@ -6,6 +6,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { ThemeStyle } from "@/components/theme-style";
 import { ConfirmProvider } from "@/components/ui/confirm";
+import { ToastProvider } from "@/components/ui/toast";
 import { PromptProvider } from "@/components/ui/prompt";
 import { UndoProvider } from "@/components/ui/undo";
 import { siteConfig } from "@/config/site";
@@ -82,11 +83,13 @@ export default async function LocaleLayout({
           {`(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':matchMedia('(prefers-color-scheme:dark)').matches;document.documentElement.classList.toggle('dark',d);}catch(e){}})();`}
         </Script>
         <NextIntlClientProvider>
-          <ConfirmProvider>
-            <UndoProvider>
-              <PromptProvider>{children}</PromptProvider>
-            </UndoProvider>
-          </ConfirmProvider>
+          <ToastProvider>
+            <ConfirmProvider>
+              <UndoProvider>
+                <PromptProvider>{children}</PromptProvider>
+              </UndoProvider>
+            </ConfirmProvider>
+          </ToastProvider>
         </NextIntlClientProvider>
       </body>
     </html>
