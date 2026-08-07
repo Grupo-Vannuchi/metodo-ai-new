@@ -6,10 +6,17 @@ import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
 
-export default async function MaintenancePage({ params }: { params: Promise<{ locale: string }> }) {
+export default async function MaintenancePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<{ asset?: string }>;
+}) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("supplies.maintenance");
+  const initialAsset = (await searchParams)?.asset ?? null;
 
   const [events, options] = await Promise.all([
     listMaintenanceEvents(ctx.organizationId),
@@ -22,7 +29,7 @@ export default async function MaintenancePage({ params }: { params: Promise<{ lo
         <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
         <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
       </div>
-      <MaintenanceClient events={events} options={options} />
+      <MaintenanceClient events={events} options={options} initialAsset={initialAsset} />
     </div>
   );
 }

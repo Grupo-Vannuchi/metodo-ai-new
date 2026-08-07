@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, Search, Package } from "lucide-react";
+import { Plus, Search, Package, ArrowLeftRight } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/drawer";
@@ -27,6 +27,7 @@ export function ItemsList({
   warehouses: string[];
 }) {
   const t = useTranslations("supplies.items");
+  const tm = useTranslations("supplies.stock");
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
   const term = q.trim().toLowerCase();
@@ -62,11 +63,11 @@ export function ItemsList({
       ) : (
         <ul className="flex flex-col gap-1.5">
           {filtered.map((i) => (
-            <li key={i.id}>
+            <li key={i.id} className="flex items-stretch gap-1.5">
               <Link
                 href={`/app/supplies/items/${i.id}/edit`}
                 className={cn(
-                  "hover-lift flex items-center gap-3 rounded-lg border border-border bg-card p-3 hover:border-brand/40",
+                  "hover-lift flex flex-1 items-center gap-3 rounded-lg border border-border bg-card p-3 hover:border-brand/40",
                   !i.active && "opacity-60",
                 )}
               >
@@ -90,6 +91,14 @@ export function ItemsList({
                 {i.salePrice != null ? (
                   <span className="shrink-0 text-sm font-semibold tabular-nums text-brand">{brl.format(i.salePrice)}</span>
                 ) : null}
+              </Link>
+              <Link
+                href={{ pathname: "/app/supplies/stock", query: { move: i.id } }}
+                title={tm("moveItem")}
+                aria-label={tm("moveItem")}
+                className="flex shrink-0 items-center justify-center rounded-lg border border-border bg-card px-3 text-muted-foreground transition-colors hover:border-brand/40 hover:text-brand"
+              >
+                <ArrowLeftRight className="size-4" />
               </Link>
             </li>
           ))}

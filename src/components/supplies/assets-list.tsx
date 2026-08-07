@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, Search, Tag } from "lucide-react";
+import { Plus, Search, Tag, Wrench } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/drawer";
@@ -13,6 +13,7 @@ import type { AssetRow, AssetFormOptions } from "@/lib/queries/assets";
 
 export function AssetsList({ assets, options }: { assets: AssetRow[]; options: AssetFormOptions }) {
   const t = useTranslations("supplies.assets");
+  const tmaint = useTranslations("supplies.maintenance");
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<string>("ALL");
   const [creating, setCreating] = useState(false);
@@ -72,11 +73,11 @@ export function AssetsList({ assets, options }: { assets: AssetRow[]; options: A
       ) : (
         <ul className="flex flex-col gap-1.5">
           {filtered.map((a) => (
-            <li key={a.id}>
+            <li key={a.id} className="flex items-stretch gap-1.5">
               <Link
                 href={`/app/supplies/assets/${a.id}/edit`}
                 className={cn(
-                  "hover-lift flex items-center gap-3 rounded-lg border border-border bg-card p-3 hover:border-brand/40",
+                  "hover-lift flex flex-1 items-center gap-3 rounded-lg border border-border bg-card p-3 hover:border-brand/40",
                   !a.active && "opacity-60",
                 )}
               >
@@ -99,6 +100,14 @@ export function AssetsList({ assets, options }: { assets: AssetRow[]; options: A
                     {a.location ? <span>{a.location}</span> : null}
                   </span>
                 </span>
+              </Link>
+              <Link
+                href={{ pathname: "/app/supplies/maintenance", query: { asset: a.id } }}
+                title={tmaint("schedule")}
+                aria-label={tmaint("schedule")}
+                className="flex shrink-0 items-center justify-center rounded-lg border border-border bg-card px-3 text-muted-foreground transition-colors hover:border-brand/40 hover:text-brand"
+              >
+                <Wrench className="size-4" />
               </Link>
             </li>
           ))}

@@ -32,15 +32,18 @@ const statusCls: Record<string, string> = {
 export function MaintenanceClient({
   events,
   options,
+  initialAsset = null,
 }: {
   events: MaintenanceEventRow[];
   options: MaintenanceFormOptions;
+  /** Cross-action `?asset=<id>`: opens the scheduling drawer preset to it. */
+  initialAsset?: string | null;
 }) {
   const t = useTranslations("supplies.maintenance");
   const locale = useLocale();
   const [statusF, setStatusF] = useState("ALL");
   const [typeF, setTypeF] = useState("ALL");
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(Boolean(initialAsset));
   const df = useMemo(() => new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "numeric" }), [locale]);
   const brl = useMemo(() => new Intl.NumberFormat(locale, { style: "currency", currency: "BRL" }), [locale]);
   const canSchedule = options.assets.length > 0;
@@ -99,7 +102,9 @@ export function MaintenanceClient({
       ) : null}
 
       <Drawer open={adding} onClose={() => setAdding(false)} title={t("schedule")}>
-        {adding ? <ScheduleForm options={options} onClose={() => setAdding(false)} /> : null}
+        {adding ? (
+          <ScheduleForm options={options} presetAssetId={initialAsset ?? ""} onClose={() => setAdding(false)} />
+        ) : null}
       </Drawer>
 
       {filtered.length === 0 ? (
@@ -312,7 +317,15 @@ function CompleteForm({ event, onClose }: { event: MaintenanceEventRow; onClose:
   );
 }
 
-function ScheduleForm({ options, onClose }: { options: MaintenanceFormOptions; onClose: () => void }) {
+function ScheduleForm({
+  options,
+  onClose,
+  presetAssetId = "",
+}: {
+  options: MaintenanceFormOptions;
+  onClose: () => void;
+  presetAssetId?: string;
+}) {
   const t = useTranslations("supplies.maintenance");
   const router = useRouter();
   const notify = useNotify();
@@ -347,7 +360,7 @@ function ScheduleForm({ options, onClose }: { options: MaintenanceFormOptions; o
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <Label htmlFor="sch-asset">{t("asset")}</Label>
-          <select id="sch-asset" name="assetId" required className={selectCls} defaultValue="">
+          <select id="sch-asset" name="assetId" required className={selectCls} defaultValue={presetAssetId || ""}>
             <option value="" disabled>
               {t("assetPlaceholder")}
             </option>

@@ -12,10 +12,17 @@ import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
 
-export default async function StockPage({ params }: { params: Promise<{ locale: string }> }) {
+export default async function StockPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<{ move?: string }>;
+}) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("supplies.stock");
+  const initialMove = (await searchParams)?.move ?? null;
 
   const [balances, movements, options, reservations, reservationOptions] = await Promise.all([
     getStockBalances(ctx.organizationId),
@@ -37,6 +44,7 @@ export default async function StockPage({ params }: { params: Promise<{ locale: 
         options={options}
         reservations={reservations}
         reservationOptions={reservationOptions}
+        initialMove={initialMove}
       />
     </div>
   );

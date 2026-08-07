@@ -58,18 +58,21 @@ export function StockClient({
   options,
   reservations,
   reservationOptions,
+  initialMove = null,
 }: {
   balances: StockBalanceRow[];
   movements: StockMovementRow[];
   options: StockFormOptions;
   reservations: ReservationRow[];
   reservationOptions: ReservationFormOptions;
+  /** When set (cross-action `?move=<itemId>`), the movement drawer opens preset. */
+  initialMove?: string | null;
 }) {
   const t = useTranslations("supplies.stock");
   const locale = useLocale();
   const [tab, setTab] = useState<Tab>("balances");
   // Movement drawer: null = closed; string = open with that item preselected ("" = none).
-  const [movePreset, setMovePreset] = useState<string | null>(null);
+  const [movePreset, setMovePreset] = useState<string | null>(initialMove);
   const [reservationOpen, setReservationOpen] = useState(false);
   const nf = useMemo(() => new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }), [locale]);
   const canMove = options.items.length > 0;
