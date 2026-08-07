@@ -19,7 +19,6 @@ import { useRouter } from "@/i18n/navigation";
 import { useConfirm } from "@/components/ui/confirm";
 import { useNotify } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
-import { Drawer } from "@/components/ui/drawer";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 import {
@@ -116,28 +115,23 @@ export function StockClient({
         </p>
       ) : null}
 
+      {movePreset !== null ? (
+        <MovementForm
+          key={movePreset || "none"}
+          options={options}
+          presetItemId={movePreset}
+          onClose={() => setMovePreset(null)}
+        />
+      ) : null}
+      {reservationOpen ? (
+        <ReservationForm options={reservationOptions} onClose={() => setReservationOpen(false)} />
+      ) : null}
+
       {tab === "balances" ? (
         <Balances rows={balances} nf={nf} onMove={canMove ? (id) => setMovePreset(id) : undefined} />
       ) : null}
       {tab === "movements" ? <Movements rows={movements} nf={nf} locale={locale} /> : null}
       {tab === "reservations" ? <Reservations rows={reservations} nf={nf} locale={locale} /> : null}
-
-      <Drawer open={movePreset !== null} onClose={() => setMovePreset(null)} title={t("new")}>
-        {movePreset !== null ? (
-          <MovementForm
-            key={movePreset || "none"}
-            options={options}
-            presetItemId={movePreset}
-            onClose={() => setMovePreset(null)}
-          />
-        ) : null}
-      </Drawer>
-
-      <Drawer open={reservationOpen} onClose={() => setReservationOpen(false)} title={t("newReservation")}>
-        {reservationOpen ? (
-          <ReservationForm options={reservationOptions} onClose={() => setReservationOpen(false)} />
-        ) : null}
-      </Drawer>
     </div>
   );
 }
@@ -370,7 +364,7 @@ function MovementForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
+    <form onSubmit={onSubmit} className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
       {/* Movement kind */}
       <div className="flex flex-wrap gap-1.5">
         {KINDS.map((k) => (
@@ -642,7 +636,7 @@ function ReservationForm({ options, onClose }: { options: ReservationFormOptions
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
+    <form onSubmit={onSubmit} className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <Label htmlFor="res-item">{t("field.item")}</Label>

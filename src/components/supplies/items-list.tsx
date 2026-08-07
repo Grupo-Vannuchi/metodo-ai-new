@@ -4,34 +4,14 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Plus, Search, Package, ArrowLeftRight } from "lucide-react";
 import { Link } from "@/i18n/navigation";
-import { Button } from "@/components/ui/button";
-import { Drawer } from "@/components/ui/drawer";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ItemForm } from "@/components/supplies/item-form";
-import { emptyItemForm } from "@/lib/supplies/item-form-values";
 import type { SupplyItemRow } from "@/lib/queries/supply-items";
 
-type Supplier = { id: string; name: string };
-
-export function ItemsList({
-  items,
-  suppliers,
-  categories,
-  units,
-  warehouses,
-  initialNew = false,
-}: {
-  items: SupplyItemRow[];
-  suppliers: Supplier[];
-  categories: string[];
-  units: string[];
-  warehouses: string[];
-  initialNew?: boolean;
-}) {
+export function ItemsList({ items }: { items: SupplyItemRow[] }) {
   const t = useTranslations("supplies.items");
   const tm = useTranslations("supplies.stock");
   const [q, setQ] = useState("");
-  const [creating, setCreating] = useState(initialNew);
   const term = q.trim().toLowerCase();
   const filtered = term
     ? items.filter((i) =>
@@ -52,10 +32,10 @@ export function ItemsList({
             className="h-9 w-56 rounded-lg border border-border bg-card pl-8 pr-3 text-sm focus-visible:border-brand focus-visible:outline-none"
           />
         </div>
-        <Button type="button" size="sm" onClick={() => setCreating(true)}>
+        <Link href="/app/supplies/items/new" className={buttonVariants({ size: "sm" })}>
           <Plus className="size-4" />
           {t("new")}
-        </Button>
+        </Link>
       </div>
 
       {filtered.length === 0 ? (
@@ -106,20 +86,6 @@ export function ItemsList({
           ))}
         </ul>
       )}
-
-      <Drawer open={creating} onClose={() => setCreating(false)} title={t("newTitle")} className="max-w-2xl">
-        {creating ? (
-          <ItemForm
-            defaults={emptyItemForm()}
-            suppliers={suppliers}
-            categories={categories}
-            units={units}
-            warehouses={warehouses}
-            onDone={() => setCreating(false)}
-            onCancel={() => setCreating(false)}
-          />
-        ) : null}
-      </Drawer>
     </div>
   );
 }

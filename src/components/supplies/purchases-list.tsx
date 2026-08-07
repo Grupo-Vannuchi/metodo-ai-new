@@ -4,26 +4,15 @@ import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Plus, ShoppingCart } from "lucide-react";
 import { Link } from "@/i18n/navigation";
-import { Button } from "@/components/ui/button";
-import { Drawer } from "@/components/ui/drawer";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { PURCHASE_STATUSES, statusBadgeCls } from "@/components/supplies/purchase-status";
-import { PurchaseForm } from "@/components/supplies/purchase-form";
-import type { PurchaseOrderRow, PurchaseFormOptions } from "@/lib/queries/purchases";
+import type { PurchaseOrderRow } from "@/lib/queries/purchases";
 
-export function PurchasesList({
-  orders,
-  options,
-  initialNew = false,
-}: {
-  orders: PurchaseOrderRow[];
-  options: PurchaseFormOptions;
-  initialNew?: boolean;
-}) {
+export function PurchasesList({ orders }: { orders: PurchaseOrderRow[] }) {
   const t = useTranslations("supplies.purchases");
   const locale = useLocale();
   const [status, setStatus] = useState<string>("ALL");
-  const [creating, setCreating] = useState(initialNew);
   const brl = useMemo(() => new Intl.NumberFormat(locale, { style: "currency", currency: "BRL" }), [locale]);
   const df = useMemo(() => new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "2-digit" }), [locale]);
 
@@ -48,10 +37,10 @@ export function PurchasesList({
             </button>
           ))}
         </div>
-        <Button type="button" size="sm" onClick={() => setCreating(true)}>
+        <Link href="/app/supplies/purchases/new" className={buttonVariants({ size: "sm" })}>
           <Plus className="size-4" />
           {t("new")}
-        </Button>
+        </Link>
       </div>
 
       {filtered.length === 0 ? (
@@ -88,12 +77,6 @@ export function PurchasesList({
           ))}
         </ul>
       )}
-
-      <Drawer open={creating} onClose={() => setCreating(false)} title={t("newTitle")} className="max-w-2xl">
-        {creating ? (
-          <PurchaseForm options={options} onDone={() => setCreating(false)} onCancel={() => setCreating(false)} />
-        ) : null}
-      </Drawer>
     </div>
   );
 }

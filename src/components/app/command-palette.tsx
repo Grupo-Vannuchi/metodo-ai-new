@@ -34,9 +34,9 @@ type Href = Parameters<ReturnType<typeof useRouter>["push"]>[0];
  *  drawer/action auto-opened via URL. Gated by the screen it targets. */
 const ACTIONS: { key: string; icon: typeof User; screen: string; href: Href }[] = [
   { key: "newMovement", icon: ArrowLeftRight, screen: "supplies", href: { pathname: "/app/supplies/stock", query: { move: "" } } },
-  { key: "newPurchase", icon: ShoppingCart, screen: "supplies", href: { pathname: "/app/supplies/purchases", query: { new: "1" } } },
-  { key: "newItem", icon: Package, screen: "supplies", href: { pathname: "/app/supplies/items", query: { new: "1" } } },
-  { key: "newAsset", icon: Tag, screen: "supplies", href: { pathname: "/app/supplies/assets", query: { new: "1" } } },
+  { key: "newPurchase", icon: ShoppingCart, screen: "supplies", href: "/app/supplies/purchases/new" },
+  { key: "newItem", icon: Package, screen: "supplies", href: "/app/supplies/items/new" },
+  { key: "newAsset", icon: Tag, screen: "supplies", href: "/app/supplies/assets/new" },
   { key: "scheduleMaintenance", icon: Wrench, screen: "supplies", href: { pathname: "/app/supplies/maintenance", query: { asset: "" } } },
   { key: "receiveEquipment", icon: PackageOpen, screen: "supplies", href: { pathname: "/app/supplies/client-equipment", query: { receive: "1" } } },
 ];

@@ -7,7 +7,6 @@ import { useRouter } from "@/i18n/navigation";
 import { useConfirm } from "@/components/ui/confirm";
 import { useNotify } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
-import { Drawer } from "@/components/ui/drawer";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 import {
@@ -74,9 +73,7 @@ export function ClientEquipmentClient({
         </Button>
       </div>
 
-      <Drawer open={adding} onClose={() => setAdding(false)} title={t("receive")}>
-        {adding ? <ReceiveForm options={options} onClose={() => setAdding(false)} /> : null}
-      </Drawer>
+      {adding ? <ReceiveForm options={options} onClose={() => setAdding(false)} /> : null}
 
       {filtered.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
@@ -346,7 +343,7 @@ function ReceiveForm({ options, onClose }: { options: ServiceFormOptions; onClos
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
+    <form onSubmit={onSubmit} className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
       <div className="grid gap-3 sm:grid-cols-2">
         {options.assets.length > 0 ? (
           <div className="sm:col-span-2">
