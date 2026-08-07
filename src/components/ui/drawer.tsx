@@ -5,9 +5,10 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * A right-anchored side panel for acting in-context without leaving the screen.
- * Controlled via `open`/`onClose`. Mirrors the app dialog conventions
- * (fixed overlay, backdrop blur, Escape to close) from the confirm dialog.
+ * A centered modal dialog for acting in-context, matching the app's overlay
+ * pattern (confirm / CSV import): centered, glass-strong, scrollable body,
+ * Escape to close. (Named Drawer for its callers; renders as a centered modal
+ * to stay consistent with the rest of the CRM.)
  */
 export function Drawer({
   open,
@@ -41,17 +42,17 @@ export function Drawer({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={title}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title}>
       <button
         type="button"
         tabIndex={-1}
         aria-label="Fechar"
         onClick={onClose}
-        className="absolute inset-0 cursor-default bg-black/50 backdrop-blur-sm motion-safe:animate-overlay-in"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm motion-safe:animate-overlay-in"
       />
       <div
         className={cn(
-          "relative flex h-full w-full max-w-lg flex-col border-l border-border bg-card shadow-2xl motion-safe:animate-dialog-in",
+          "glass-strong relative flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-white/15 shadow-2xl motion-safe:animate-dialog-in",
           className,
         )}
       >
