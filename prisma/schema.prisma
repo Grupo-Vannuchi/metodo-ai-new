@@ -1076,6 +1076,10 @@ model Message {
   providerMessageId String?
   status            MessageStatus?
   fromMe            Boolean          @default(false)
+  /// True when THIS outbound message was authored by the WhatsApp AI agent (not
+  /// a human on the Inbox nor the owner replying from their phone). Lets the
+  /// agent detect a human takeover (handoff) and not silence itself.
+  agentReply        Boolean          @default(false)
   /// In group chats, the display name of the participant who sent this inbound
   /// message (null for individual chats and own messages).
   senderName        String?

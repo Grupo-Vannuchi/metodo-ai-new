@@ -4,6 +4,7 @@ import { getAnthropic } from "@/lib/assistant/client";
 import { loadEvoCredsById } from "@/lib/integrations/evolution-creds";
 import { getChannelAdapter } from "@/lib/integrations/channels";
 import { hasFeature, type PlanKey } from "@/config/plans";
+import { isAgentOverDailyLimit } from "@/lib/whatsapp-agent/quota";
 import type { ParsedInbound } from "@/lib/whatsapp/inbound";
 
 /** Wait this long before replying, so rapid-fire messages get answered as one. */
@@ -32,7 +33,7 @@ async function runAgentReply(organizationId: string, connectionId: string, m: Pa
   // 1. Agent enabled + configured for this connection?
   const agent = await prisma.whatsappAgent.findFirst({
     where: { organizationId, connectionId, enabled: true },
-    select: { prompt: true, model: true },
+    select: { prompt: true, model: true, handoffMinutes: true },
   });
   if (!agent || !agent.prompt.trim()) return;
 
@@ -49,8 +50,22 @@ async function runAgentReply(organizationId: string, connectionId: string, m: Pa
   });
   if (!conversation) return;
 
-  // 4. Human handoff — a team member owns this chat → the bot stays silent.
+  // 4. Human handoff (explicit) — a team member owns this chat → bot silent.
   if (conversation.assignedToId) return;
+
+  // 4b. Human handoff (by time) — if a person replied within the handoff window,
+  //     the bot stays quiet so it doesn't talk over them. A non-bot outbound is
+  //     agentReply=false (Inbox reply OR the owner answering from their own
+  //     phone); the bot's own echoed messages are agentReply=true, so they don't
+  //     trip this. handoffMinutes=0 disables the time-based handoff.
+  if (agent.handoffMinutes > 0) {
+    const since = new Date(Date.now() - agent.handoffMinutes * 60_000);
+    const humanReply = await prisma.message.findFirst({
+      where: { conversationId: conversation.id, direction: "OUTBOUND", agentReply: false, createdAt: { gte: since } },
+      select: { id: true },
+    });
+    if (humanReply) return;
+  }
 
   // 5. Our message must still be the very latest in the chat: no newer inbound
   //    (a later message's own job handles the burst) and nobody has replied yet
@@ -78,6 +93,9 @@ async function runAgentReply(organizationId: string, connectionId: string, m: Pa
   );
   if (messages.length === 0 || messages[messages.length - 1].role !== "user") return;
 
+  // 6b. Daily reply cap for the org's plan — bounds the per-reply AI cost.
+  if (await isAgentOverDailyLimit(organizationId, org.plan as PlanKey)) return;
+
   // 7. Ask the model.
   const anthropic = getAnthropic();
   if (!anthropic) return;
@@ -97,7 +115,49 @@ async function runAgentReply(organizationId: string, connectionId: string, m: Pa
   const creds = await loadEvoCredsById(connectionId);
   if (!creds) return;
   const number = m.remoteJid.split("@")[0];
-  await getChannelAdapter("WHATSAPP_EVOLUTION").send(creds, { to: number, body: text });
+  const sent = await getChannelAdapter("WHATSAPP_EVOLUTION").send(creds, { to: number, body: text });
+  if (!sent.ok) return;
+
+  // 9. Persist + tag our own reply (agentReply=true). This both feeds the quota
+  //    counter and lets later messages tell the bot's echo apart from a human
+  //    takeover. The Evolution echo may beat us here, so mark it if it exists.
+  await recordAgentReply(organizationId, conversation.id, text, sent.providerMessageId ?? null);
+}
+
+/** Store the bot's outgoing message, or tag the already-ingested echo. Uses the
+ *  providerMessageId returned by the send so the webhook echo dedups against it. */
+async function recordAgentReply(
+  organizationId: string,
+  conversationId: string,
+  body: string,
+  providerMessageId: string | null,
+): Promise<void> {
+  if (providerMessageId) {
+    const echo = await prisma.message.findFirst({ where: { providerMessageId }, select: { id: true } });
+    if (echo) {
+      await prisma.message.update({ where: { id: echo.id }, data: { agentReply: true } });
+      return;
+    }
+  }
+  const now = new Date();
+  await prisma.message.create({
+    data: {
+      organizationId,
+      conversationId,
+      direction: "OUTBOUND",
+      type: "TEXT",
+      body,
+      providerMessageId,
+      status: "SENT",
+      fromMe: true,
+      agentReply: true,
+      timestamp: now,
+    },
+  });
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { lastMessageAt: now, lastMessagePreview: body },
+  });
 }
 
 /** Merge consecutive same-role turns and drop any leading assistant turns, so
