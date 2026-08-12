@@ -1465,6 +1465,29 @@
   "connections": {
     "title": "Connections",
     "subtitle": "Integrations with WhatsApp, email and webhooks",
+    "agent": {
+      "title": "AI agent (auto-reply)",
+      "subtitle": "Automatically answers incoming messages on this WhatsApp.",
+      "on": "On",
+      "off": "Off",
+      "name": "Agent name",
+      "namePlaceholder": "e.g. Bia",
+      "model": "AI model",
+      "modelOpt": {
+        "claude-haiku-4-5-20251001": "Fast and cheap (recommended)",
+        "claude-sonnet-5": "Balanced",
+        "claude-opus-5": "Top quality (pricier)"
+      },
+      "prompt": "Personality / instructions (prompt)",
+      "promptPlaceholder": "You are Bia, virtual consultant at Company X. You answer over WhatsApp politely and objectively. Your mission is…",
+      "promptHint": "Describe who the agent is, the tone, what it can answer, and when to hand off to a human.",
+      "handoff": "Silence after a human replies (minutes)",
+      "handoffHint": "When a team member replies to a chat, the agent stays silent for this long.",
+      "save": "Save agent",
+      "saving": "Saving…",
+      "errPrompt": "Write the agent prompt before enabling it.",
+      "errGeneric": "Could not save the agent."
+    },
     "new": "New connection",
     "newTitle": "New connection",
     "edit": "Edit",

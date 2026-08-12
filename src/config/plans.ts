@@ -21,6 +21,7 @@ export type Feature =
   | "hr" // RH: funcionários, folha de pagamento, férias
   | "supplies" // Suprimentos: cadastro, compras, estoque, patrimônio, calibração
   | "assistant" // Copiloto de IA (Anthropic Claude) embutido no CRM
+  | "whatsapp_agent" // Agente de IA que responde clientes no WhatsApp automaticamente
   | "webhooks.outbound" // outbound webhooks to the customer's systems
   | "sso"; // single sign-on
 
@@ -62,6 +63,8 @@ const PLUS_FEATURES: Feature[] = [
   "supplies",
   // AI copilot — a premium differentiator; keeps per-use API cost on paid tiers.
   "assistant",
+  // WhatsApp AI auto-responder — customer-facing agent; premium, per-use cost.
+  "whatsapp_agent",
 ];
 
 const GOLD_FEATURES: Feature[] = [...PLUS_FEATURES];

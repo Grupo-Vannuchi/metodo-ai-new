@@ -728,6 +728,32 @@ model IntegrationConnection {
   @@map("integration_connections")
 }
 
+/// Per-connection WhatsApp AI auto-responder config. When enabled, inbound
+/// customer messages on this connection are answered automatically by the AI
+/// with the org's persona/prompt (unless a human is handling the chat).
+model WhatsappAgent {
+  id             String   @id @default(cuid())
+  organizationId String
+  /// One agent per WhatsApp connection (IntegrationConnection id).
+  connectionId   String   @unique
+  /// Off by default — a customer-facing bot must be turned on explicitly.
+  enabled        Boolean  @default(false)
+  /// Display name of the agent (e.g. "Bia").
+  name           String?
+  /// The persona / system prompt written by the client.
+  prompt         String
+  /// AI model id (defaults to a fast/cheap model for high-volume replies).
+  model          String   @default("claude-haiku-4-5-20251001")
+  /// Minutes the bot stays silent in a chat after a human replies there.
+  handoffMinutes Int      @default(30)
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("whatsapp_agents")
+}
+
 /// Inbound webhook endpoint configuration (a provider calls us here).
 model WebhookEndpoint {
   id             String              @id @default(cuid())

@@ -1465,6 +1465,29 @@
   "connections": {
     "title": "Conexões",
     "subtitle": "Integrações com WhatsApp, e-mail e webhooks",
+    "agent": {
+      "title": "Agente de IA (auto-atendimento)",
+      "subtitle": "Responde automaticamente as mensagens recebidas neste WhatsApp.",
+      "on": "Ativo",
+      "off": "Desligado",
+      "name": "Nome do agente",
+      "namePlaceholder": "Ex.: Bia",
+      "model": "Modelo de IA",
+      "modelOpt": {
+        "claude-haiku-4-5-20251001": "Rápido e econômico (recomendado)",
+        "claude-sonnet-5": "Equilibrado",
+        "claude-opus-5": "Máxima qualidade (mais caro)"
+      },
+      "prompt": "Personalidade / instruções (prompt)",
+      "promptPlaceholder": "Você é a Bia, consultora virtual da Empresa X. Atende via WhatsApp de forma cordial e objetiva. Sua missão é…",
+      "promptHint": "Descreva quem é o agente, o tom, o que ele pode responder e quando passar para um humano.",
+      "handoff": "Silêncio após atendimento humano (minutos)",
+      "handoffHint": "Quando alguém da equipe responder a conversa, o agente fica em silêncio por este tempo.",
+      "save": "Salvar agente",
+      "saving": "Salvando…",
+      "errPrompt": "Escreva o prompt do agente para poder ativá-lo.",
+      "errGeneric": "Não foi possível salvar o agente."
+    },
     "new": "Nova conexão",
     "newTitle": "Nova conexão",
     "edit": "Editar",

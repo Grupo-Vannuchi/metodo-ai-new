@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getConnection } from "@/lib/queries/connections";
+import { getWhatsappAgent } from "@/lib/queries/whatsapp-agent";
+import { hasFeature, type PlanKey } from "@/config/plans";
 import { EvolutionConnect } from "@/components/integrations/evolution-connect";
+import { WhatsappAgentConfig } from "@/components/integrations/whatsapp-agent-config";
 import { PROVIDERS, type IntegrationProviderKey } from "@/lib/integrations/registry";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
@@ -30,6 +33,8 @@ export default async function ConnectionDetailPage({
 
   const conn = await getConnection(ctx.organizationId, id);
   if (!conn) notFound();
+
+  const agent = conn.provider === "EVOLUTION" ? await getWhatsappAgent(ctx.organizationId, conn.id) : null;
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
@@ -58,6 +63,10 @@ export default async function ConnectionDetailPage({
           {t("detailNote")}
         </p>
       )}
+
+      {conn.provider === "EVOLUTION" && hasFeature(ctx.organization.plan as PlanKey, "whatsapp_agent") ? (
+        <WhatsappAgentConfig connectionId={conn.id} initial={agent} />
+      ) : null}
     </div>
   );
 }
