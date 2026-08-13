@@ -66,7 +66,12 @@ export async function ingestInbound(
   organizationId: string,
   connectionId: string,
   m: ParsedInbound,
+  opts?: { history?: boolean },
 ): Promise<void> {
+  // History-sync messages (the batch pulled right after linking) are old: don't
+  // mark them unread, and don't let them drag the conversation's "last message"
+  // backwards (they can arrive out of order).
+  const history = opts?.history === true;
   if (m.providerMessageId) {
     const existing = await prisma.message.findFirst({
       where: { providerMessageId: m.providerMessageId },
@@ -77,7 +82,7 @@ export async function ingestInbound(
 
   let conversation = await prisma.conversation.findUnique({
     where: { connectionId_remoteJid: { connectionId, remoteJid: m.remoteJid } },
-    select: { id: true },
+    select: { id: true, lastMessageAt: true },
   });
 
   if (!conversation) {
@@ -98,18 +103,21 @@ export async function ingestInbound(
         contactId,
         lastMessageAt: m.timestamp,
         lastMessagePreview: m.preview,
-        unreadCount: m.fromMe ? 0 : 1,
+        unreadCount: m.fromMe || history ? 0 : 1,
       },
-      select: { id: true },
+      select: { id: true, lastMessageAt: true },
     });
   } else {
+    // Only advance the conversation's "last message" when this one is newer, so
+    // an out-of-order history batch doesn't reorder the list or overwrite the
+    // real latest preview with an old one.
+    const isNewer = !conversation.lastMessageAt || m.timestamp > conversation.lastMessageAt;
     await prisma.conversation.update({
       where: { id: conversation.id },
       data: {
-        lastMessageAt: m.timestamp,
-        lastMessagePreview: m.preview,
+        ...(isNewer ? { lastMessageAt: m.timestamp, lastMessagePreview: m.preview } : {}),
         ...(!m.isGroup && !m.fromMe && m.pushName ? { name: m.pushName } : {}),
-        ...(m.fromMe ? {} : { unreadCount: { increment: 1 } }),
+        ...(m.fromMe || history ? {} : { unreadCount: { increment: 1 } }),
       },
     });
   }

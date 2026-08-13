@@ -82,6 +82,13 @@ export async function POST(
       for (const r of parseInboundReactions(payload)) {
         await applyInboundReaction(conn.organizationId, conn.id, r);
       }
+    } else if (ev.includes("messages.set") || ev.includes("messages_set")) {
+      // History sync (the batch Evolution pulls right after the QR is scanned):
+      // persist so the user's existing chats show up in the inbox. These are old
+      // messages, so mark them read and NEVER trigger the AI agent.
+      for (const m of parseInboundMessages(payload)) {
+        await ingestInbound(conn.organizationId, conn.id, m, { history: true });
+      }
     } else if (ev.includes("messages.update") || ev.includes("messages_update")) {
       const updates = parseDeliveryUpdates("EVOLUTION", payload);
       if (updates.length > 0) {

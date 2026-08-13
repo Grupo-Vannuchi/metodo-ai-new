@@ -13,6 +13,7 @@ import {
   connectionState,
   setWebhook,
   logout,
+  deleteInstance,
   type EvoCreds,
   type EvoState,
 } from "@/lib/integrations/evolution-client";
@@ -174,7 +175,12 @@ export async function disconnectEvolution(id: string): Promise<{ ok: boolean }> 
   const creds = await loadEvoCreds(ctx.organizationId, id);
   if (!creds) return { ok: false };
 
+  // Authoritative disconnect: unlink the device (logout) AND remove the instance
+  // (delete) so its persisted session can't silently reconnect. Both best-effort;
+  // the next connect re-creates a fresh instance. Without the delete, Baileys
+  // reconnects on its own and the number "comes back" after a disconnect.
   await logout(creds);
+  await deleteInstance(creds);
   const db = tenantDb(ctx.organizationId);
   await db.integrationConnection.updateMany({
     where: { id },

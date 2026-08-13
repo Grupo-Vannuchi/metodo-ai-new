@@ -12,8 +12,10 @@ export type EvoCreds = { baseUrl: string; apiKey: string; instance: string };
 
 export type EvoState = "open" | "connecting" | "close" | "unknown";
 
-/** Events we subscribe the instance to (delivery-status mapping lands later). */
+/** Events we subscribe the instance to (delivery-status mapping lands later).
+ *  MESSAGES_SET carries the history batch synced right after the QR is scanned. */
 export const EVO_EVENTS = [
+  "MESSAGES_SET",
   "MESSAGES_UPSERT",
   "MESSAGES_UPDATE",
   "CONNECTION_UPDATE",
@@ -83,6 +85,10 @@ export async function createInstance(
     instanceName: creds.instance,
     integration: "WHATSAPP-BAILEYS",
     qrcode: true,
+    // Pull the chat history on link so the inbox isn't empty until new messages
+    // arrive (Baileys only pushes new messages otherwise). Delivered via
+    // MESSAGES_SET. Only honored on a FRESH instance — hence delete-on-disconnect.
+    syncFullHistory: true,
     webhook: { url: webhookUrl, enabled: true, events: EVO_EVENTS },
   });
   if (ok) return { ok: true };
@@ -151,6 +157,21 @@ export async function logout(creds: EvoCreds): Promise<{ ok: boolean }> {
     creds,
     "DELETE",
     `/instance/logout/${encodeURIComponent(creds.instance)}`,
+  );
+  return { ok };
+}
+
+/**
+ * Delete the instance entirely. `logout` alone unlinks the device but leaves the
+ * instance (with its persisted auth) around, so Baileys can silently reconnect —
+ * deleting clears that so a disconnect actually stays disconnected. The next
+ * connect re-creates the instance (fresh, with the current webhook + history sync).
+ */
+export async function deleteInstance(creds: EvoCreds): Promise<{ ok: boolean }> {
+  const { ok } = await req(
+    creds,
+    "DELETE",
+    `/instance/delete/${encodeURIComponent(creds.instance)}`,
   );
   return { ok };
 }
