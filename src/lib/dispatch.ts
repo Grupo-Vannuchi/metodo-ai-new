@@ -7,7 +7,7 @@ import { decryptCredentials } from "@/lib/integrations/crypto";
 import { makeRateLimiter } from "@/lib/ratelimit";
 import { unsubscribeUrl } from "@/lib/unsubscribe";
 import { normalizeWhatsappNumber, looksLikeWhatsappMobile } from "@/lib/phone";
-import { planConfig, type PlanKey } from "@/config/plans";
+import { LIMITS } from "@/config/limits";
 
 /** Per-channel sliding-window rate limit (events per window) — a hard ceiling. */
 const RATE: Record<ChannelKey, { limit: number; windowSec: number }> = {
@@ -119,11 +119,7 @@ export async function dispatchCampaignBatch(
     return { done: true };
   }
 
-  const org = await prisma.organization.findUnique({
-    where: { id: campaign.organizationId },
-    select: { plan: true },
-  });
-  const quota = planConfig((org?.plan ?? "STANDARD") as PlanKey).dispatchQuotaPerMonth;
+  const quota = LIMITS.dispatchQuotaPerMonth;
   const sentThisMonth = await prisma.campaignRecipient.count({
     where: {
       organizationId: campaign.organizationId,

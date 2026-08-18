@@ -39,13 +39,6 @@ enum Role {
 }
 
 /// Subscription tier. Gates features + seats + dispatch quota (src/config/plans.ts).
-enum Plan {
-  STANDARD
-  PLUS
-  GOLD
-  ENTERPRISE
-}
-
 /// Install state of a module for an org. DORMANT = uninstalled but data kept, so
 /// reinstalling restores everything (no destructive uninstall).
 enum ModuleStatus {
@@ -58,8 +51,6 @@ model Organization {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
-  plan      Plan     @default(STANDARD)
-  seatLimit Int      @default(3)
   /// Null until the owner finishes the "monte seu Método" onboarding (picks the
   /// first modules). Existing orgs are backfilled as already onboarded.
   onboardedAt DateTime?

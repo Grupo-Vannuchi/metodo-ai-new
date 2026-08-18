@@ -19,7 +19,7 @@ export type OrgContext = {
   organizationId: string;
   role: SessionRole;
   user: { id: string; name: string; email: string };
-  organization: { id: string; name: string; slug: string; plan: string };
+  organization: { id: string; name: string; slug: string };
   /** Access template assigned to this membership (null = full access). */
   accessTemplateId: string | null;
   /** Screen keys this member can reach (see src/lib/access.ts). */
@@ -58,7 +58,6 @@ export const getOrgContext = cache(async (): Promise<OrgContext | null> => {
           id: true,
           name: true,
           slug: true,
-          plan: true,
           onboardedAt: true,
           modules: { where: { status: "ACTIVE" }, select: { moduleId: true } },
         },

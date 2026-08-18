@@ -2,7 +2,6 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
 import { createDefaultPipeline } from "@/lib/default-pipeline";
-import { PLANS } from "@/config/plans";
 import type { SessionPayload } from "@/lib/session";
 import type { OAuthProvider } from "@/lib/oauth/shared";
 import type { OAuthProfile } from "@/lib/oauth/providers";
@@ -108,7 +107,7 @@ export async function resolveOAuthSession(
   const slug = await uniqueOrgSlug(profile.name);
   const session = await prisma.$transaction(async (tx) => {
     const org = await tx.organization.create({
-      data: { name: profile.name, slug, plan: "STANDARD", seatLimit: PLANS.STANDARD.seatLimit },
+      data: { name: profile.name, slug },
     });
     const user = await tx.user.create({
       // No passwordHash — this account signs in through the provider only.

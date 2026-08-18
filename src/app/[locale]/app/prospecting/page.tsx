@@ -4,7 +4,6 @@ import { requireOrgContext } from "@/lib/tenant";
 import { listExtractionJobs } from "@/lib/queries/extractions";
 import { listConnections } from "@/lib/queries/connections";
 import { getUsageSummary } from "@/lib/queries/usage";
-import { type PlanKey } from "@/config/plans";
 import { env } from "@/lib/env";
 import { NewExtraction } from "@/components/prospecting/new-extraction";
 import { deleteExtraction } from "@/app/actions/extractions";
@@ -46,7 +45,7 @@ export default async function ProspectingPage({
   const [extractionData, connections, usage] = await Promise.all([
     listExtractionJobs(ctx.organizationId, page, pageSize),
     listConnections(ctx.organizationId),
-    getUsageSummary(ctx.organizationId, ctx.organization.plan as PlanKey),
+    getUsageSummary(ctx.organizationId),
   ]);
   // A tenant's own Google key OR the shared platform key both enable prospecting.
   const hasGoogle = connections.some((c) => c.provider === "GOOGLE") || Boolean(env.GOOGLE_PLACES_API_KEY);

@@ -1,4 +1,4 @@
-import { PrismaClient, Plan, Role } from "@prisma/client";
+import { PrismaClient, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { createDefaultPipeline } from "../src/lib/default-pipeline";
 
@@ -30,7 +30,7 @@ async function main() {
   const org = await prisma.organization.upsert({
     where: { slug },
     update: {},
-    create: { name: orgName, slug, plan: Plan.GOLD, seatLimit: 25 },
+    create: { name: orgName, slug },
   });
 
   const user = await prisma.user.upsert({

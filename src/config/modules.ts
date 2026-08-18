@@ -1,4 +1,16 @@
-import type { Feature, PlanKey } from "@/config/plans";
+/** Capabilities a module unlocks — the gating flags used across the app. */
+export type Feature =
+  | "campaigns.whatsapp"
+  | "campaigns.email"
+  | "campaigns.scheduling.advanced"
+  | "prospecting"
+  | "finance"
+  | "hr"
+  | "supplies"
+  | "assistant"
+  | "whatsapp_agent"
+  | "webhooks.outbound"
+  | "sso";
 
 /**
  * The MetodoLoja module registry — the single source of truth for the modular
@@ -195,20 +207,6 @@ export function availableScreens(installed: readonly string[]): Set<string> {
 export const SCREEN_MODULE: Record<string, ModuleId> = Object.fromEntries(
   MODULES.flatMap((m) => m.screens.map((s) => [s, m.id])),
 );
-
-/**
- * Which modules a legacy plan maps to — used to backfill existing orgs so the
- * plan→module switch is invisible. Everyone had the ungated core screens
- * (crm/tasks/inbox) plus Marketing (in the STANDARD floor); PLUS+ additionally
- * had finance/hr/supplies and the AI features.
- */
-export function modulesForPlan(plan: PlanKey): ModuleId[] {
-  const base: ModuleId[] = ["crm", "tasks", "inbox", "marketing"];
-  if (plan === "PLUS" || plan === "GOLD" || plan === "ENTERPRISE") {
-    return [...base, "finance", "hr", "supplies", "ia"];
-  }
-  return base;
-}
 
 /** Store "packages" — the old plans reborn as presets that pre-select modules. */
 export type ModulePreset = { id: string; name: string; tagline: string; modules: ModuleId[] };

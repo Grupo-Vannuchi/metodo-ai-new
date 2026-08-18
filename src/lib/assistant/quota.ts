@@ -1,6 +1,6 @@
 import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
-import { planConfig, type PlanKey } from "@/config/plans";
+import { LIMITS } from "@/config/limits";
 
 /** Anything at/above this is shown/treated as "unlimited". */
 const UNLIMITED = 1_000_000;
@@ -19,11 +19,8 @@ export async function assistantDailyCount(organizationId: string): Promise<numbe
 }
 
 /** True when the org has hit its plan's daily copilot limit. */
-export async function isAssistantOverDailyLimit(
-  organizationId: string,
-  plan: PlanKey,
-): Promise<boolean> {
-  const limit = planConfig(plan).assistantDailyLimit;
+export async function isAssistantOverDailyLimit(organizationId: string): Promise<boolean> {
+  const limit = LIMITS.assistantDailyLimit;
   if (limit >= UNLIMITED) return false;
   if (limit <= 0) return true;
   const used = await assistantDailyCount(organizationId);

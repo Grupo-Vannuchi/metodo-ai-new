@@ -1,5 +1,5 @@
 import "server-only";
-import { planConfig, type PlanKey } from "@/config/plans";
+import { LIMITS } from "@/config/limits";
 import { countMembers } from "@/lib/queries/organizations";
 import { countConnections } from "@/lib/queries/connections";
 import { countDispatchedSince } from "@/lib/queries/campaigns";
@@ -23,12 +23,8 @@ function startOfMonth(): Date {
   return new Date(now.getFullYear(), now.getMonth(), 1);
 }
 
-/** Current usage vs. the plan's limits, for the settings usage panel. */
-export async function getUsageSummary(
-  organizationId: string,
-  plan: PlanKey,
-): Promise<UsageSummary> {
-  const cfg = planConfig(plan);
+/** Current usage vs. the global limits, for the settings usage panel. */
+export async function getUsageSummary(organizationId: string): Promise<UsageSummary> {
   const monthStart = startOfMonth();
 
   const [seats, connections, dispatch, prospecting, searches, assistant] = await Promise.all([
@@ -41,11 +37,11 @@ export async function getUsageSummary(
   ]);
 
   return {
-    seats: { used: seats, limit: cfg.seatLimit },
-    connections: { used: connections, limit: cfg.connectionsLimit },
-    dispatch: { used: dispatch, limit: cfg.dispatchQuotaPerMonth },
-    prospecting: { used: prospecting, limit: cfg.prospectingQuotaPerMonth },
-    searches: { used: searches, limit: cfg.extractionsPerMonth },
-    assistant: { used: assistant, limit: cfg.assistantDailyLimit },
+    seats: { used: seats, limit: LIMITS.seatLimit },
+    connections: { used: connections, limit: LIMITS.connectionsLimit },
+    dispatch: { used: dispatch, limit: LIMITS.dispatchQuotaPerMonth },
+    prospecting: { used: prospecting, limit: LIMITS.prospectingQuotaPerMonth },
+    searches: { used: searches, limit: LIMITS.extractionsPerMonth },
+    assistant: { used: assistant, limit: LIMITS.assistantDailyLimit },
   };
 }

@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { getAnthropic } from "@/lib/assistant/client";
 import { loadEvoCredsById } from "@/lib/integrations/evolution-creds";
 import { getChannelAdapter } from "@/lib/integrations/channels";
-import { type PlanKey } from "@/config/plans";
 import { hasFeatureByModules } from "@/config/modules";
 import { isAgentOverDailyLimit } from "@/lib/whatsapp-agent/quota";
 import { agentToolset, runAgentTool, type BotContext } from "@/lib/whatsapp-agent/tools";
@@ -57,7 +56,7 @@ async function runAgentReply(organizationId: string, connectionId: string, m: Pa
   // 2. Plan still entitles the feature (a downgrade silences the bot)?
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
-    select: { plan: true, modules: { where: { status: "ACTIVE" }, select: { moduleId: true } } },
+    select: { modules: { where: { status: "ACTIVE" }, select: { moduleId: true } } },
   });
   if (!org) return;
   const moduleIds = org.modules.map((m) => m.moduleId);
@@ -112,7 +111,7 @@ async function runAgentReply(organizationId: string, connectionId: string, m: Pa
 
   // 6. Daily reply cap for the org's plan — bounds outbound volume + AI cost.
   //    Applies to a model reply and the audio fallback alike.
-  if (await isAgentOverDailyLimit(organizationId, org.plan as PlanKey)) return;
+  if (await isAgentOverDailyLimit(organizationId)) return;
 
   // 7. Reply text: the model (with the CRM tool set) normally, or a fixed
   //    "please type" line when an inbound audio couldn't be transcribed. The bot

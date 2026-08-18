@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { audit } from "@/lib/audit";
-import { planConfig, type PlanKey } from "@/config/plans";
+import { LIMITS } from "@/config/limits";
 import { assertFeatureByModules } from "@/config/modules";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
 import { runExtractionToCompletion, MAX_TOTAL } from "@/lib/prospecting/runner";
@@ -50,7 +50,6 @@ export async function startExtraction(input: ExtractionInput): Promise<Extractio
   const parsed = extractionSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
 
-  const plan = ctx.organization.plan as PlanKey;
   try {
     assertFeatureByModules(ctx.modules, "prospecting");
   } catch {
@@ -73,15 +72,14 @@ export async function startExtraction(input: ExtractionInput): Promise<Extractio
       if (!conn) return { ok: false, error: "no_connection" };
     }
 
-    const cfg = planConfig(plan);
     const monthStart = startOfMonth();
 
-    // Per-plan limit on the number of searches (extraction runs) this month.
+    // Global monthly limit on the number of searches (extraction runs).
     const searches = await countJobsSince(ctx.organizationId, monthStart);
-    if (searches >= cfg.extractionsPerMonth) return { ok: false, error: "search_quota" };
+    if (searches >= LIMITS.extractionsPerMonth) return { ok: false, error: "search_quota" };
 
-    // Per-plan limit on the number of leads extracted this month.
-    const quota = cfg.prospectingQuotaPerMonth;
+    // Global monthly limit on the number of leads extracted.
+    const quota = LIMITS.prospectingQuotaPerMonth;
     const used = await countLeadsSince(ctx.organizationId, monthStart);
     const remaining = quota - used;
     if (remaining <= 0) return { ok: false, error: "quota" };

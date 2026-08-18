@@ -1,7 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { getOrgContext } from "@/lib/tenant";
 import { hasFeatureByModules } from "@/config/modules";
-import { type PlanKey } from "@/config/plans";
 import { makeRateLimiter } from "@/lib/ratelimit";
 import { getAnthropic } from "@/lib/assistant/client";
 import { ASSISTANT_MODEL, isAssistantConfigured } from "@/lib/assistant/config";
@@ -34,7 +33,7 @@ export async function POST(req: Request) {
   }
   if (!isAssistantConfigured()) return json({ error: "not_configured" }, 503);
 
-  if (await isAssistantOverDailyLimit(ctx.organizationId, ctx.organization.plan as PlanKey)) {
+  if (await isAssistantOverDailyLimit(ctx.organizationId)) {
     return json({ error: "daily_limit" }, 429);
   }
 

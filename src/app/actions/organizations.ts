@@ -7,6 +7,7 @@ import { getOrgContext, assertRole } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
 import { hashPassword } from "@/lib/password";
 import { coreProfileData } from "@/lib/profile";
+import { LIMITS } from "@/config/limits";
 import {
   generateInvitationToken,
   hashInvitationToken,
@@ -119,9 +120,9 @@ export async function inviteMember(
   const members = await countMembers(ctx.organizationId);
   const org = await prisma.organization.findUnique({
     where: { id: ctx.organizationId },
-    select: { seatLimit: true, name: true },
+    select: { name: true },
   });
-  if (org && members >= org.seatLimit) return { error: "seat_limit" };
+  if (members >= LIMITS.seatLimit) return { error: "seat_limit" };
 
   // One team per user: refuse if the invitee already belongs to a team.
   const target = await prisma.user.findUnique({
@@ -288,11 +289,7 @@ export async function acceptInvitation(
   if (invitation.expiresAt.getTime() < Date.now()) return { error: "expired" };
 
   const members = await countMembers(invitation.organizationId);
-  const org = await prisma.organization.findUnique({
-    where: { id: invitation.organizationId },
-    select: { seatLimit: true },
-  });
-  if (org && members >= org.seatLimit) return { error: "seat_limit" };
+  if (members >= LIMITS.seatLimit) return { error: "seat_limit" };
 
   const existingUser = await prisma.user.findUnique({
     where: { email: invitation.email },

@@ -10,7 +10,6 @@ import { createDefaultPipeline } from "@/lib/default-pipeline";
 import { coreProfileData } from "@/lib/profile";
 import { makeRateLimiter } from "@/lib/ratelimit";
 import { sendVerificationEmail } from "@/lib/auth-email";
-import { PLANS } from "@/config/plans";
 import { loginSchema, signupSchema } from "@/lib/validations/auth";
 import { redirect } from "@/i18n/navigation";
 import { defaultLocale, routing, type Locale } from "@/i18n/routing";
@@ -129,12 +128,7 @@ export async function signup(
   try {
     userId = await prisma.$transaction(async (tx) => {
       const org = await tx.organization.create({
-        data: {
-          name: organizationName,
-          slug,
-          plan: "STANDARD",
-          seatLimit: PLANS.STANDARD.seatLimit,
-        },
+        data: { name: organizationName, slug },
       });
       const user = await tx.user.create({
         data: {

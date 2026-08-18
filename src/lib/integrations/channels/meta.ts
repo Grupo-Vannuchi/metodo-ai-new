@@ -1,4 +1,4 @@
-import type { Feature } from "@/config/plans";
+import type { Feature } from "@/config/modules";
 
 /**
  * Client-safe channel metadata. Used by the campaign/template forms (labels,

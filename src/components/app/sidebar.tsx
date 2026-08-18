@@ -18,7 +18,6 @@ import { cn } from "@/lib/utils";
  */
 export function Sidebar({
   orgName,
-  plan,
   userName,
   userEmail,
   navScreens,
@@ -26,7 +25,6 @@ export function Sidebar({
   initialCollapsed,
 }: {
   orgName: string;
-  plan: string;
   userName: string;
   userEmail: string;
   navScreens: string[];
@@ -76,7 +74,6 @@ export function Sidebar({
       ) : (
         <div className="mt-4 w-full rounded-lg border border-border bg-muted/40 px-3 py-2">
           <p className="truncate text-sm font-medium">{orgName}</p>
-          <p className="text-xs text-muted-foreground">{plan}</p>
         </div>
       )}
 

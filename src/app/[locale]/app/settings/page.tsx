@@ -1,9 +1,8 @@
 import { getTranslations } from "next-intl/server";
-import { Users, CreditCard, ScrollText, UserRound, ShieldCheck, ArrowRight, Building2, Gauge } from "lucide-react";
+import { Users, ScrollText, UserRound, ShieldCheck, ArrowRight, Building2, Gauge } from "lucide-react";
 import { requireOrgContext, hasRole } from "@/lib/tenant";
 import { getUsageSummary, type UsageMetric } from "@/lib/queries/usage";
 import { hasFeatureByModules } from "@/config/modules";
-import { type PlanKey } from "@/config/plans";
 import { LeaveTeamButton } from "@/components/app/leave-team-button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -48,11 +47,10 @@ export default async function SettingsPage({
   const t = await getTranslations("settings");
   const isAdmin = hasRole(ctx.role, "ADMIN");
 
-  const usage = await getUsageSummary(ctx.organizationId, ctx.organization.plan as PlanKey);
+  const usage = await getUsageSummary(ctx.organizationId);
 
   const stats = [
     { icon: Building2, label: t("org"), value: ctx.organization.name, sub: ctx.organization.slug },
-    { icon: CreditCard, label: t("plan"), value: ctx.organization.plan, sub: null },
     { icon: ShieldCheck, label: t("yourRole"), value: ctx.role, sub: null },
   ];
 
@@ -61,7 +59,6 @@ export default async function SettingsPage({
     { href: "/app/settings/team", icon: Users, label: t("nav.team"), desc: t("sections.teamDesc"), show: true },
     { href: "/app/settings/access", icon: ShieldCheck, label: t("nav.access"), desc: t("sections.accessDesc"), show: isAdmin },
     { href: "/app/settings/audit", icon: ScrollText, label: t("nav.audit"), desc: t("sections.auditDesc"), show: isAdmin },
-    { href: "/app/settings/plans", icon: CreditCard, label: t("nav.plans"), desc: t("sections.plansDesc"), show: true },
   ].filter((s) => s.show);
 
   return (

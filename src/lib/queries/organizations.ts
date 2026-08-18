@@ -28,7 +28,6 @@ export type UserOrganization = {
   id: string;
   name: string;
   slug: string;
-  plan: string;
   role: SessionRole;
 };
 
@@ -44,7 +43,7 @@ export async function listOrganizationsForUser(
     where: { userId },
     select: {
       role: true,
-      organization: { select: { id: true, name: true, slug: true, plan: true } },
+      organization: { select: { id: true, name: true, slug: true } },
     },
     orderBy: { createdAt: "asc" },
   });
@@ -53,7 +52,6 @@ export async function listOrganizationsForUser(
     id: m.organization.id,
     name: m.organization.name,
     slug: m.organization.slug,
-    plan: m.organization.plan,
     role: m.role,
   }));
 }

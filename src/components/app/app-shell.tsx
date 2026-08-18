@@ -58,7 +58,6 @@ export async function AppShell({
           mismatched tones. Collapsible to an icon rail. */}
       <Sidebar
         orgName={ctx.organization.name}
-        plan={ctx.organization.plan}
         userName={ctx.user.name}
         userEmail={ctx.user.email}
         navScreens={navScreens}

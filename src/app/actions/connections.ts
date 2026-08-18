@@ -9,7 +9,7 @@ import { connectionState } from "@/lib/integrations/evolution-client";
 import { searchPlacesPage } from "@/lib/prospecting/places";
 import { audit } from "@/lib/audit";
 import { providerSpec, type IntegrationProviderKey } from "@/lib/integrations/registry";
-import { planConfig, type PlanKey } from "@/config/plans";
+import { LIMITS } from "@/config/limits";
 import {
   countNonWhatsappConnections,
   countWhatsappConnections,
@@ -58,20 +58,19 @@ export async function createConnection(
 
   // Limits. WhatsApp numbers are personal (one per user) and capped per plan;
   // other integrations use the general (org-level) connection limit.
-  const plan = planConfig(ctx.organization.plan as PlanKey);
   const isWhatsapp = (WHATSAPP_PROVIDERS as readonly string[]).includes(provider);
   let ownerId: string | null = null;
   if (isWhatsapp) {
     const mine = await countUserWhatsappConnections(ctx.organizationId, ctx.userId);
     if (mine >= 1) return { ok: false, error: "number_exists" };
-    if (plan.whatsappNumbersLimit !== null) {
+    if (LIMITS.whatsappNumbersLimit !== null) {
       const orgWa = await countWhatsappConnections(ctx.organizationId);
-      if (orgWa >= plan.whatsappNumbersLimit) return { ok: false, error: "limit" };
+      if (orgWa >= LIMITS.whatsappNumbersLimit) return { ok: false, error: "limit" };
     }
     ownerId = ctx.userId;
-  } else if (plan.connectionsLimit !== null) {
+  } else if (LIMITS.connectionsLimit !== null) {
     const count = await countNonWhatsappConnections(ctx.organizationId);
-    if (count >= plan.connectionsLimit) return { ok: false, error: "limit" };
+    if (count >= LIMITS.connectionsLimit) return { ok: false, error: "limit" };
   }
 
   // Evolution: auto-generate an instance name when the user leaves it blank.
