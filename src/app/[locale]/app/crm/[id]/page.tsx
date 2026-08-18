@@ -8,7 +8,7 @@ import { OpportunityTimeline } from "@/components/crm/opportunity-timeline";
 import { listMembers } from "@/lib/queries/organizations";
 import { listTasks } from "@/lib/queries/tasks";
 import { entriesForOpportunity } from "@/lib/queries/finance";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 import { TasksManager } from "@/components/tasks/tasks-manager";
 import { OpportunityStatusBar } from "@/components/crm/opportunity-status-bar";
 import { OpportunityAttachments } from "@/components/crm/opportunity-attachments";
@@ -33,7 +33,7 @@ export default async function OpportunityViewPage({
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("crm.opportunity");
   const tf = await getTranslations("finance");
-  const canFinance = hasFeature(ctx.organization.plan as PlanKey, "finance");
+  const canFinance = hasFeatureByModules(ctx.modules, "finance");
 
   const [opp, rawMembers, tasks, entries, attachments, timeline] = await Promise.all([
     getOpportunity(ctx.organizationId, id),

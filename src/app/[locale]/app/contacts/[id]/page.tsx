@@ -7,7 +7,7 @@ import { getConversationByContact } from "@/lib/queries/inbox";
 import { listTasks } from "@/lib/queries/tasks";
 import { listMembers } from "@/lib/queries/organizations";
 import { getEntityFinance } from "@/lib/queries/finance";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { TasksManager } from "@/components/tasks/tasks-manager";
 import { EntityFinanceCard } from "@/components/finance/entity-finance-card";
@@ -28,7 +28,7 @@ export default async function ContactViewPage({
   const t = await getTranslations("crm.contacts");
   const ti = await getTranslations("inbox");
 
-  const canFinance = hasFeature(ctx.organization.plan as PlanKey, "finance");
+  const canFinance = hasFeatureByModules(ctx.modules, "finance");
   const [contact, conversation, rawMembers, tasks, finance] = await Promise.all([
     getContact(ctx.organizationId, id),
     getConversationByContact(ctx.organizationId, id, ctx.userId),

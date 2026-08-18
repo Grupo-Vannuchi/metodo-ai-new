@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getOrgContext, type OrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { canAccessScreen } from "@/lib/access";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 import { audit } from "@/lib/audit";
 import { entrySchema, categorySchema, type EntryInput } from "@/lib/validations/finance";
 
@@ -14,7 +14,7 @@ export type FinanceResult =
 
 /** Finance is plan-gated (PLUS+) and screen-gated (access template). */
 function denyReason(ctx: OrgContext): "forbidden" | null {
-  if (!hasFeature(ctx.organization.plan as PlanKey, "finance")) return "forbidden";
+  if (!hasFeatureByModules(ctx.modules, "finance")) return "forbidden";
   if (!canAccessScreen(ctx, "finance")) return "forbidden";
   return null;
 }

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { tenantDb } from "@/lib/tenant-db";
 import { getAlerts } from "@/lib/queries/notifications";
 import { hrAlertCounts } from "@/lib/queries/time-off";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 import { DIGEST_KINDS } from "@/lib/notifications";
 
 export const runtime = "nodejs";
@@ -30,7 +30,9 @@ export async function GET(req: Request) {
       organizationId: true,
       userId: true,
       role: true,
-      organization: { select: { plan: true } },
+      organization: {
+        select: { modules: { where: { status: "ACTIVE" }, select: { moduleId: true } } },
+      },
     },
   });
 
@@ -39,8 +41,8 @@ export async function GET(req: Request) {
 
   let processed = 0;
   for (const m of memberships) {
-    const plan = m.organization.plan as PlanKey;
-    const hasFinance = hasFeature(plan, "finance");
+    const moduleIds = m.organization.modules.map((x) => x.moduleId);
+    const hasFinance = hasFeatureByModules(moduleIds, "finance");
     const alerts = await getAlerts(m.organizationId, m.userId, hasFinance);
     const db = tenantDb(m.organizationId);
 
@@ -59,7 +61,7 @@ export async function GET(req: Request) {
 
     // HR digests go only to the managers (payroll/HR data is sensitive).
     const isManager = m.role === "OWNER" || m.role === "ADMIN";
-    if (isManager && hasFeature(plan, "hr")) {
+    if (isManager && hasFeatureByModules(moduleIds, "hr")) {
       if (!hrByOrg.has(m.organizationId)) {
         hrByOrg.set(m.organizationId, await hrAlertCounts(m.organizationId));
       }

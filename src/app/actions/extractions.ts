@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { audit } from "@/lib/audit";
-import { planConfig, assertFeature, type PlanKey } from "@/config/plans";
+import { planConfig, type PlanKey } from "@/config/plans";
+import { assertFeatureByModules } from "@/config/modules";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
 import { runExtractionToCompletion, MAX_TOTAL } from "@/lib/prospecting/runner";
 import { countLeadsSince, countJobsSince } from "@/lib/queries/extractions";
@@ -51,7 +52,7 @@ export async function startExtraction(input: ExtractionInput): Promise<Extractio
 
   const plan = ctx.organization.plan as PlanKey;
   try {
-    assertFeature(plan, "prospecting");
+    assertFeatureByModules(ctx.modules, "prospecting");
   } catch {
     return { ok: false, error: "forbidden" };
   }

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 import { whatsappAgentSchema } from "@/lib/validations/whatsapp-agent";
 
 export type WhatsappAgentResult =
@@ -16,7 +16,7 @@ const s = (v?: string) => (v && v.trim() ? v.trim() : null);
 export async function saveWhatsappAgent(connectionId: string, input: unknown): Promise<WhatsappAgentResult> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false, error: "unauthorized" };
-  if (!hasFeature(ctx.organization.plan as PlanKey, "whatsapp_agent")) return { ok: false, error: "forbidden" };
+  if (!hasFeatureByModules(ctx.modules, "whatsapp_agent")) return { ok: false, error: "forbidden" };
   const parsed = whatsappAgentSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   const d = parsed.data;

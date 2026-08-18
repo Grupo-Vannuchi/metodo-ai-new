@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { getOrgContext } from "@/lib/tenant";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
+import { type PlanKey } from "@/config/plans";
 import { makeRateLimiter } from "@/lib/ratelimit";
 import { getAnthropic } from "@/lib/assistant/client";
 import { ASSISTANT_MODEL, isAssistantConfigured } from "@/lib/assistant/config";
@@ -28,7 +29,7 @@ export async function POST(req: Request) {
   const ctx = await getOrgContext();
   if (!ctx) return json({ error: "unauthorized" }, 401);
 
-  if (!hasFeature(ctx.organization.plan as PlanKey, "assistant")) {
+  if (!hasFeatureByModules(ctx.modules, "assistant")) {
     return json({ error: "forbidden" }, 403);
   }
   if (!isAssistantConfigured()) return json({ error: "not_configured" }, 503);

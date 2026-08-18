@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Pencil, Wallet, LayoutTemplate } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getProposal, listProposalAttachments } from "@/lib/queries/proposals";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 import { ProposalStatusBar } from "@/components/proposals/proposal-status-bar";
 import { ProposalAttachments } from "@/components/proposals/proposal-attachments";
 import { ProposalExportMenu } from "@/components/proposals/proposal-export-menu";
@@ -24,7 +24,7 @@ export default async function ProposalDetailPage({
   const locale = resolveLocale(rawLocale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("proposals");
-  const canFinance = hasFeature(ctx.organization.plan as PlanKey, "finance");
+  const canFinance = hasFeatureByModules(ctx.modules, "finance");
 
   const [proposal, attachments] = await Promise.all([
     getProposal(ctx.organizationId, id),

@@ -14,7 +14,7 @@ import { SearchTrigger } from "@/components/app/search-trigger";
 import { BackBar } from "@/components/app/back-bar";
 import { PageTransition } from "@/components/app/page-transition";
 import { logout } from "@/app/actions/auth";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { availableScreens, hasFeatureByModules } from "@/config/modules";
 import type { OrgContext } from "@/lib/tenant";
 import type { Locale } from "@/i18n/routing";
 
@@ -29,14 +29,13 @@ export async function AppShell({
 }) {
   const t = await getTranslations("app.nav");
 
-  // Hide plan-gated screens the org can't use (finance = PLUS+). Access-template
-  // gating still applies on top of this.
-  const navScreens = ctx.allowedScreens.filter(
-    (s) => s !== "finance" || hasFeature(ctx.organization.plan as PlanKey, "finance"),
-  );
+  // Show only screens whose module the org installed (MetodoLoja); the member's
+  // access template still applies on top. Core screens are always available.
+  const available = availableScreens(ctx.modules);
+  const navScreens = ctx.allowedScreens.filter((s) => available.has(s));
 
   const collapsed = (await cookies()).get("sidebar_collapsed")?.value === "1";
-  const assistantEnabled = hasFeature(ctx.organization.plan as PlanKey, "assistant");
+  const assistantEnabled = hasFeatureByModules(ctx.modules, "assistant");
 
   return (
     <RealtimeProvider>

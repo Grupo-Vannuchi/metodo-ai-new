@@ -1,5 +1,5 @@
 import { getOrgContext } from "@/lib/tenant";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 import { makeRateLimiter } from "@/lib/ratelimit";
 import { executePlan, executeWrite, isWriteTool } from "@/lib/assistant/writes";
 
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   const ctx = await getOrgContext();
   if (!ctx) return json({ ok: false, message: "unauthorized" }, 401);
-  if (!hasFeature(ctx.organization.plan as PlanKey, "assistant")) {
+  if (!hasFeatureByModules(ctx.modules, "assistant")) {
     return json({ ok: false, message: "forbidden" }, 403);
   }
 

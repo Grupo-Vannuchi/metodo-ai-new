@@ -1,6 +1,6 @@
 import { requireOrgContext } from "@/lib/tenant";
 import { requireScreen } from "@/lib/access";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 import { FinanceNav } from "@/components/finance/finance-nav";
 import { redirect } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -16,8 +16,8 @@ export default async function FinanceLayout({
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   await requireScreen(ctx, "finance", locale);
-  if (!hasFeature(ctx.organization.plan as PlanKey, "finance")) {
-    redirect({ href: "/pricing", locale });
+  if (!hasFeatureByModules(ctx.modules, "finance")) {
+    redirect({ href: "/app", locale });
   }
 
   return (

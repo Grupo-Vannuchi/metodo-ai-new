@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { getOrgContext } from "@/lib/tenant";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 import { dashboardPie, PIE_MODELS, PIE_FINANCE_MODELS, type PieModel } from "@/lib/queries/dashboard";
 
 export const runtime = "nodejs";
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
   const model = new URL(req.url).searchParams.get("model") ?? "";
   if (!ALL.includes(model)) return new Response("Bad request", { status: 400 });
-  if (FINANCE.includes(model) && !hasFeature(ctx.organization.plan as PlanKey, "finance")) {
+  if (FINANCE.includes(model) && !hasFeatureByModules(ctx.modules, "finance")) {
     return new Response("Forbidden", { status: 403 });
   }
 

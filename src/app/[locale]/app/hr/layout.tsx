@@ -1,6 +1,6 @@
 import { requireOrgContext } from "@/lib/tenant";
 import { requireScreen } from "@/lib/access";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 import { HrNav } from "@/components/hr/hr-nav";
 import { redirect } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -16,8 +16,8 @@ export default async function HrLayout({
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   await requireScreen(ctx, "hr", locale);
-  if (!hasFeature(ctx.organization.plan as PlanKey, "hr")) {
-    redirect({ href: "/pricing", locale });
+  if (!hasFeatureByModules(ctx.modules, "hr")) {
+    redirect({ href: "/app", locale });
   }
 
   return (

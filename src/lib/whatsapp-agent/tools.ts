@@ -2,7 +2,7 @@ import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
 import { tenantDb } from "@/lib/tenant-db";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasModule } from "@/config/modules";
 import { formatBRL } from "@/lib/money";
 import { listSupplyItems } from "@/lib/queries/supply-items";
 
@@ -18,7 +18,7 @@ export type BotContext = {
   conversationId: string;
   contactId: string | null;
   ownerId: string | null;
-  plan: PlanKey;
+  modules: string[];
 };
 
 /**
@@ -28,9 +28,9 @@ export type BotContext = {
  * spends money, or mutates finance). `search_catalog` only appears when the org
  * has the Suprimentos module.
  */
-export function agentToolset(plan: PlanKey): Anthropic.Tool[] {
+export function agentToolset(modules: readonly string[]): Anthropic.Tool[] {
   const tools: Anthropic.Tool[] = [SAVE_LEAD, CREATE_OPPORTUNITY, HANDOFF];
-  if (hasFeature(plan, "supplies")) tools.unshift(SEARCH_CATALOG);
+  if (hasModule(modules, "supplies")) tools.unshift(SEARCH_CATALOG);
   return tools;
 }
 
@@ -111,7 +111,7 @@ export async function runAgentTool(
 }
 
 async function searchCatalog(ctx: BotContext, input: Record<string, unknown>): Promise<string> {
-  if (!hasFeature(ctx.plan, "supplies")) return "Catálogo indisponível.";
+  if (!hasModule(ctx.modules, "supplies")) return "Catálogo indisponível.";
   const query = typeof input.query === "string" ? input.query.trim() : "";
   if (query.length < 2) return "Termo de busca muito curto.";
   const items = await listSupplyItems(ctx.organizationId, query);

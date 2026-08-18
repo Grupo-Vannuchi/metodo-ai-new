@@ -1,7 +1,7 @@
 import { getOrgContext } from "@/lib/tenant";
 import { canAccessScreen } from "@/lib/access";
 import { globalSearch } from "@/lib/queries/search";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 
 export const runtime = "nodejs";
 
@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   if (!ctx) return new Response("Unauthorized", { status: 401 });
   const q = new URL(req.url).searchParams.get("q") ?? "";
   const canFinance =
-    hasFeature(ctx.organization.plan as PlanKey, "finance") && canAccessScreen(ctx, "finance");
+    hasFeatureByModules(ctx.modules, "finance") && canAccessScreen(ctx, "finance");
   const results = await globalSearch(ctx.organizationId, q, {
     allowed: (screen) => canAccessScreen(ctx, screen),
     canFinance,

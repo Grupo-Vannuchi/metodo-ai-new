@@ -5,7 +5,7 @@ import type { OrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { canAccessScreen } from "@/lib/access";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 import { formatBRL } from "@/lib/money";
 import { audit } from "@/lib/audit";
 import { moveOpportunity, setOpportunityStatus } from "@/app/actions/opportunities";
@@ -218,7 +218,7 @@ export function isWriteTool(name: string): boolean {
 /** Write tools available to this org (finance + messaging are access gated). */
 export function writeToolsFor(ctx: OrgContext): Anthropic.Tool[] {
   const tools = [...BASE_WRITE_TOOLS];
-  if (hasFeature(ctx.organization.plan as PlanKey, "finance") && canAccessScreen(ctx, "finance")) {
+  if (hasFeatureByModules(ctx.modules, "finance") && canAccessScreen(ctx, "finance")) {
     tools.push(FINANCE_WRITE_TOOL);
   }
   if (canAccessScreen(ctx, "inbox")) tools.push(WHATSAPP_WRITE_TOOL);
@@ -421,7 +421,7 @@ export async function executeWrite(
     }
 
     if (tool === "create_finance_entry") {
-      if (!hasFeature(ctx.organization.plan as PlanKey, "finance") || !canAccessScreen(ctx, "finance"))
+      if (!hasFeatureByModules(ctx.modules, "finance") || !canAccessScreen(ctx, "finance"))
         return { ok: false, message: "O Financeiro não está disponível no seu plano/acesso." };
       const description = str(args.description);
       const amount = num(args.amount);

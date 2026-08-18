@@ -4,7 +4,7 @@ import { Pencil } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getConnection } from "@/lib/queries/connections";
 import { getWhatsappAgent } from "@/lib/queries/whatsapp-agent";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 import { EvolutionConnect } from "@/components/integrations/evolution-connect";
 import { WhatsappAgentConfig } from "@/components/integrations/whatsapp-agent-config";
 import { PROVIDERS, type IntegrationProviderKey } from "@/lib/integrations/registry";
@@ -64,7 +64,7 @@ export default async function ConnectionDetailPage({
         </p>
       )}
 
-      {conn.provider === "EVOLUTION" && hasFeature(ctx.organization.plan as PlanKey, "whatsapp_agent") ? (
+      {conn.provider === "EVOLUTION" && hasFeatureByModules(ctx.modules, "whatsapp_agent") ? (
         <WhatsappAgentConfig connectionId={conn.id} initial={agent} />
       ) : null}
     </div>

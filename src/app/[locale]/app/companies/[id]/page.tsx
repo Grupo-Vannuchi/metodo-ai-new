@@ -4,7 +4,7 @@ import { Pencil } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getCompany } from "@/lib/queries/companies";
 import { getEntityFinance } from "@/lib/queries/finance";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { EntityFinanceCard } from "@/components/finance/entity-finance-card";
 import { buttonVariants } from "@/components/ui/button";
@@ -25,7 +25,7 @@ export default async function CompanyViewPage({
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("crm.companies");
 
-  const canFinance = hasFeature(ctx.organization.plan as PlanKey, "finance");
+  const canFinance = hasFeatureByModules(ctx.modules, "finance");
   const [company, finance] = await Promise.all([
     getCompany(ctx.organizationId, id),
     canFinance ? getEntityFinance(ctx.organizationId, { companyId: id }) : Promise.resolve(null),

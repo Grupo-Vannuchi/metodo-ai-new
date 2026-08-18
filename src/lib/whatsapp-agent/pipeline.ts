@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getAnthropic } from "@/lib/assistant/client";
 import { loadEvoCredsById } from "@/lib/integrations/evolution-creds";
 import { getChannelAdapter } from "@/lib/integrations/channels";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 import { isAgentOverDailyLimit } from "@/lib/whatsapp-agent/quota";
 import { agentToolset, runAgentTool, type BotContext } from "@/lib/whatsapp-agent/tools";
 import { isTranscriptionConfigured, transcribeAudio } from "@/lib/whatsapp-agent/transcribe";
@@ -54,8 +55,13 @@ async function runAgentReply(organizationId: string, connectionId: string, m: Pa
   if (!agent || !agent.prompt.trim()) return;
 
   // 2. Plan still entitles the feature (a downgrade silences the bot)?
-  const org = await prisma.organization.findUnique({ where: { id: organizationId }, select: { plan: true } });
-  if (!org || !hasFeature(org.plan as PlanKey, "whatsapp_agent")) return;
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { plan: true, modules: { where: { status: "ACTIVE" }, select: { moduleId: true } } },
+  });
+  if (!org) return;
+  const moduleIds = org.modules.map((m) => m.moduleId);
+  if (!hasFeatureByModules(moduleIds, "whatsapp_agent")) return;
 
   // 2b. Audio (voice note) → transcript. Gated behind the enabled agent above, so
   //     we never transcribe (and pay) for orgs without the bot. The transcript is
@@ -139,7 +145,7 @@ async function runAgentReply(organizationId: string, connectionId: string, m: Pa
       conversationId: conversation.id,
       contactId: conversation.contactId,
       ownerId,
-      plan: org.plan as PlanKey,
+      modules: moduleIds,
     };
     text = await generateReply(anthropic, agent, botCtx, messages);
   }
@@ -237,7 +243,7 @@ async function generateReply(
   ctx: BotContext,
   turns: Turn[],
 ): Promise<string> {
-  const tools = agentToolset(ctx.plan);
+  const tools = agentToolset(ctx.modules);
   const system = buildSystem(agent);
   const messages: Anthropic.MessageParam[] = turns.map((t) => ({ role: t.role, content: t.content }));
 

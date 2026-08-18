@@ -17,7 +17,7 @@ import { getSalesReport, type SalesPeriod } from "@/lib/queries/sales-report";
 import { getSalesLeaderboard, getMonthlyTrend } from "@/lib/queries/dashboard-extra";
 import { getGoals, currentMonth } from "@/lib/queries/goals";
 import { PIE_MODELS, PIE_FINANCE_MODELS } from "@/lib/queries/dashboard";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 import { PieCard } from "@/components/dashboard/pie-card";
 import { DashboardPeriod } from "@/components/dashboard/dashboard-period";
 import { Link } from "@/i18n/navigation";
@@ -74,7 +74,7 @@ export default async function DashboardPage({
 
   const pieModels: string[] = [
     ...PIE_MODELS,
-    ...(hasFeature(ctx.organization.plan as PlanKey, "finance") ? PIE_FINANCE_MODELS : []),
+    ...(hasFeatureByModules(ctx.modules, "finance") ? PIE_FINANCE_MODELS : []),
   ];
 
   const kpis = [

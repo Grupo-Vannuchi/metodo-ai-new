@@ -3,7 +3,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { OrgContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { canAccessScreen } from "@/lib/access";
-import { hasFeature, type PlanKey } from "@/config/plans";
+import { hasFeatureByModules } from "@/config/modules";
 import { formatBRL } from "@/lib/money";
 import { globalSearch } from "@/lib/queries/search";
 import { getSalesReport, type SalesPeriod } from "@/lib/queries/sales-report";
@@ -182,7 +182,7 @@ export async function runAssistantTool(
       const query = typeof input.query === "string" ? input.query : "";
       if (query.trim().length < 2) return "Informe um termo de busca com pelo menos 2 caracteres.";
       const canFinance =
-        hasFeature(ctx.organization.plan as PlanKey, "finance") && canAccessScreen(ctx, "finance");
+        hasFeatureByModules(ctx.modules, "finance") && canAccessScreen(ctx, "finance");
       const results = await globalSearch(ctx.organizationId, query, {
         allowed: (screen) => canAccessScreen(ctx, screen),
         canFinance,
@@ -341,7 +341,7 @@ export async function runAssistantTool(
     ]);
     if (
       supplyTools.has(name) &&
-      (!canAccessScreen(ctx, "supplies") || !hasFeature(ctx.organization.plan as PlanKey, "supplies"))
+      (!canAccessScreen(ctx, "supplies") || !hasFeatureByModules(ctx.modules, "supplies"))
     ) {
       return "Você não tem acesso a Suprimentos.";
     }

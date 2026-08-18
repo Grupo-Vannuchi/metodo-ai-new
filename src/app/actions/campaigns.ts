@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
-import { assertFeature, type PlanKey } from "@/config/plans";
+import { assertFeatureByModules } from "@/config/modules";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
 import {
   resolveChannelCredentials,
@@ -28,9 +28,9 @@ export type CampaignActionResult =
       error: "unauthorized" | "invalid" | "forbidden" | "no_connection" | "unknown";
     };
 
-function assertChannel(plan: PlanKey, channel: ChannelKey): boolean {
+function assertChannel(modules: readonly string[], channel: ChannelKey): boolean {
   try {
-    assertFeature(plan, CHANNEL_META[channel].feature);
+    assertFeatureByModules(modules, CHANNEL_META[channel].feature);
     return true;
   } catch {
     return false;
@@ -49,7 +49,7 @@ export async function createTemplate(
   if (!parsed.success) return { ok: false, error: "invalid" };
 
   const channel = parsed.data.channel as ChannelKey;
-  if (!assertChannel(ctx.organization.plan as PlanKey, channel)) {
+  if (!assertChannel(ctx.modules, channel)) {
     return { ok: false, error: "forbidden" };
   }
 
@@ -83,7 +83,7 @@ export async function updateTemplate(
   if (!parsed.success) return { ok: false, error: "invalid" };
 
   const channel = parsed.data.channel as ChannelKey;
-  if (!assertChannel(ctx.organization.plan as PlanKey, channel)) {
+  if (!assertChannel(ctx.modules, channel)) {
     return { ok: false, error: "forbidden" };
   }
 
@@ -138,7 +138,7 @@ export async function createCampaign(
   if (!parsed.success) return { ok: false, error: "invalid" };
 
   const channel = parsed.data.channel as ChannelKey;
-  if (!assertChannel(ctx.organization.plan as PlanKey, channel)) {
+  if (!assertChannel(ctx.modules, channel)) {
     return { ok: false, error: "forbidden" };
   }
 

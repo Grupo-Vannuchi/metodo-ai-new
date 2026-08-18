@@ -175,6 +175,22 @@ export function hasFeatureByModules(installed: readonly string[], feature: Featu
   return owner ? installed.includes(owner) : false;
 }
 
+/** Throws when the feature's owning module isn't installed. The module-model
+ *  replacement for `assertFeature` — use at the top of gated actions/jobs. */
+export function assertFeatureByModules(installed: readonly string[], feature: Feature): void {
+  if (!hasFeatureByModules(installed, feature)) {
+    throw new Error(`Módulo necessário para "${feature}" não está instalado`);
+  }
+}
+
+/** Screens available given the installed modules: the CORE plus every installed
+ *  module's screens. Nav should intersect this with the member's AccessTemplate. */
+export function availableScreens(installed: readonly string[]): Set<string> {
+  const set = new Set<string>(CORE_SCREENS);
+  for (const m of MODULES) if (installed.includes(m.id)) for (const s of m.screens) set.add(s);
+  return set;
+}
+
 /** The screen key → owning module id (for nav gating in Fase 1). */
 export const SCREEN_MODULE: Record<string, ModuleId> = Object.fromEntries(
   MODULES.flatMap((m) => m.screens.map((s) => [s, m.id])),
