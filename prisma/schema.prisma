@@ -46,6 +46,13 @@ enum Plan {
   ENTERPRISE
 }
 
+/// Install state of a module for an org. DORMANT = uninstalled but data kept, so
+/// reinstalling restores everything (no destructive uninstall).
+enum ModuleStatus {
+  ACTIVE
+  DORMANT
+}
+
 /// A tenant. All business data hangs off an organization via `organizationId`.
 model Organization {
   id        String   @id @default(cuid())
@@ -58,6 +65,7 @@ model Organization {
 
   memberships      Membership[]
   invitations      Invitation[]
+  modules              OrganizationModule[]
   notifications        Notification[]
   teamChats            TeamChat[]
   teamChatParticipants TeamChatParticipant[]
@@ -73,6 +81,26 @@ model Organization {
   pinnedItems          PinnedItem[]
 
   @@map("organizations")
+}
+
+/// A module installed by an org from the MetodoLoja. `moduleId` matches an id in
+/// src/config/modules.ts. Uninstalling flips status to DORMANT (data kept), so a
+/// reinstall restores everything. Price/gating are resolved from the registry.
+model OrganizationModule {
+  id             String       @id @default(cuid())
+  organizationId String
+  moduleId       String
+  status         ModuleStatus @default(ACTIVE)
+  installedAt    DateTime     @default(now())
+  uninstalledAt  DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, moduleId])
+  @@index([organizationId])
+  @@map("organization_modules")
 }
 
 /// A global user identity (login). Belongs to orgs through memberships.

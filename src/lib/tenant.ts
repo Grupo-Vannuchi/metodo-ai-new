@@ -24,6 +24,9 @@ export type OrgContext = {
   accessTemplateId: string | null;
   /** Screen keys this member can reach (see src/lib/access.ts). */
   allowedScreens: string[];
+  /** Module ids the org has installed (ACTIVE) — the MetodoLoja gating source
+   *  (see src/config/modules.ts). Replaces plan-based feature gating. */
+  modules: string[];
 };
 
 /**
@@ -49,7 +52,13 @@ export const getOrgContext = cache(async (): Promise<OrgContext | null> => {
       accessTemplate: { select: { screens: true } },
       user: { select: { id: true, name: true, email: true } },
       organization: {
-        select: { id: true, name: true, slug: true, plan: true },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          plan: true,
+          modules: { where: { status: "ACTIVE" }, select: { moduleId: true } },
+        },
       },
     },
   });
@@ -57,15 +66,17 @@ export const getOrgContext = cache(async (): Promise<OrgContext | null> => {
   if (!membership) return null;
 
   const templateScreens = membership.accessTemplate?.screens ?? null;
+  const { modules, ...organization } = membership.organization;
 
   return {
     userId: membership.user.id,
     organizationId: membership.organization.id,
     role: membership.role,
     user: membership.user,
-    organization: membership.organization,
+    organization,
     accessTemplateId: membership.accessTemplateId,
     allowedScreens: resolveAllowedScreens(membership.role, templateScreens),
+    modules: modules.map((m) => m.moduleId),
   };
 });
 
