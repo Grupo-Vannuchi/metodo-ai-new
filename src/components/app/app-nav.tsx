@@ -20,6 +20,7 @@ import {
   Workflow,
   Target,
   Boxes,
+  Store,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
@@ -54,6 +55,7 @@ type NavKey =
   | "supplyClientEquipment"
   | "supplyRegistries"
   | "suppliers"
+  | "loja"
   | "settings";
 type Item = { href: string; key: NavKey; icon: typeof LayoutDashboard };
 type GroupKey = "general" | "crm" | "comms" | "finance" | "hr" | "supplies" | "system";
@@ -105,6 +107,7 @@ const GROUPS: Group[] = [
   {
     key: "system",
     items: [
+      { href: "/app/loja", key: "loja", icon: Store },
       { href: "/app/connections", key: "connections", icon: Cable },
       { href: "/app/settings", key: "settings", icon: Settings },
     ],
@@ -112,7 +115,7 @@ const GROUPS: Group[] = [
 ];
 
 /** Screens that are never gated by access templates. */
-const ALWAYS_SHOWN: NavKey[] = ["dashboard", "my", "settings"];
+const ALWAYS_SHOWN: NavKey[] = ["dashboard", "my", "loja", "settings"];
 
 export function AppNav({ allowedScreens, collapsed = false }: { allowedScreens: string[]; collapsed?: boolean }) {
   const t = useTranslations("app.nav");

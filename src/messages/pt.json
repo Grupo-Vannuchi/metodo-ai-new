@@ -204,6 +204,30 @@
       }
     }
   },
+  "loja": {
+    "title": "MetodoLoja",
+    "subtitle": "Monte seu Método: instale só os módulos que sua empresa precisa.",
+    "yourSubscription": "Sua assinatura",
+    "perMonth": "/mês",
+    "free": "Grátis",
+    "install": "Instalar",
+    "remove": "Remover",
+    "installed": "Instalado",
+    "notInstalled": "Não instalado",
+    "presets": "Pacotes prontos",
+    "applyPreset": "Instalar pacote",
+    "manageHint": "Fale com um administrador para instalar ou remover módulos.",
+    "errGeneric": "Não foi possível concluir. Tente novamente.",
+    "errDependent": "Remova antes os módulos que dependem deste.",
+    "errForbidden": "Só o dono ou um administrador pode gerenciar módulos.",
+    "category": {
+      "comercial": "Comercial",
+      "operacao": "Operação",
+      "atendimento": "Atendimento",
+      "ia": "Inteligência Artificial",
+      "produtividade": "Produtividade"
+    }
+  },
   "app": {
     "nav": {
       "dashboard": "Painel",
@@ -230,6 +254,7 @@
       "supplyClientEquipment": "Equip. de clientes",
       "supplyRegistries": "Cadastros",
       "suppliers": "Fornecedores",
+      "loja": "Loja",
       "connections": "Conexões",
       "settings": "Configurações",
       "group": {

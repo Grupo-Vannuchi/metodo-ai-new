@@ -17,7 +17,7 @@ export default async function FinanceLayout({
   const ctx = await requireOrgContext(locale);
   await requireScreen(ctx, "finance", locale);
   if (!hasFeatureByModules(ctx.modules, "finance")) {
-    redirect({ href: "/app", locale });
+    redirect({ href: "/app/loja", locale });
   }
 
   return (

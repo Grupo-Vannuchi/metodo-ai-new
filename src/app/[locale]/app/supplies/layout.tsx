@@ -19,7 +19,7 @@ export default async function SuppliesLayout({
   const ctx = await requireOrgContext(locale);
   await requireScreen(ctx, "supplies", locale);
   if (!hasFeatureByModules(ctx.modules, "supplies")) {
-    redirect({ href: "/app", locale });
+    redirect({ href: "/app/loja", locale });
   }
   return (
     <div className="flex flex-col gap-6">

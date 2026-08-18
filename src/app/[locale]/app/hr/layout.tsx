@@ -17,7 +17,7 @@ export default async function HrLayout({
   const ctx = await requireOrgContext(locale);
   await requireScreen(ctx, "hr", locale);
   if (!hasFeatureByModules(ctx.modules, "hr")) {
-    redirect({ href: "/app", locale });
+    redirect({ href: "/app/loja", locale });
   }
 
   return (
