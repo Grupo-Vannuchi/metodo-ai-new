@@ -17,7 +17,8 @@ import { getSalesReport, type SalesPeriod } from "@/lib/queries/sales-report";
 import { getSalesLeaderboard, getMonthlyTrend } from "@/lib/queries/dashboard-extra";
 import { getGoals, currentMonth } from "@/lib/queries/goals";
 import { PIE_MODELS, PIE_FINANCE_MODELS } from "@/lib/queries/dashboard";
-import { hasFeatureByModules } from "@/config/modules";
+import { hasFeatureByModules, hasModule } from "@/config/modules";
+import { ModulesHome } from "@/components/dashboard/modules-home";
 import { PieCard } from "@/components/dashboard/pie-card";
 import { DashboardPeriod } from "@/components/dashboard/dashboard-period";
 import { Link } from "@/i18n/navigation";
@@ -39,6 +40,11 @@ export default async function DashboardPage({
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
+  // The default dashboard is the sales/CRM view. Without the CRM module, show a
+  // modular home (installed modules + a nudge to the Loja) instead.
+  if (!hasModule(ctx.modules, "crm")) {
+    return <ModulesHome installed={ctx.modules} userName={ctx.user.name} />;
+  }
   const t = await getTranslations("app.dashboard");
   const tr = await getTranslations("crm.reports");
   const period = asPeriod((await searchParams).period);

@@ -285,6 +285,10 @@
     "dashboard": {
       "title": "Dashboard",
       "welcome": "Welcome, {name}",
+      "myModules": "Your modules",
+      "addModules": "Add modules",
+      "installFirst": "Your company is still bare. Install your first module in the Store to start building your Método.",
+      "goToStore": "Go to the Store",
       "openCount": "Open opportunities",
       "openValue": "Open value",
       "forecast": "Weighted forecast",

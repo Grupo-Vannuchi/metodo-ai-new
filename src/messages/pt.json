@@ -285,6 +285,10 @@
     "dashboard": {
       "title": "Painel",
       "welcome": "Bem-vindo, {name}",
+      "myModules": "Seus módulos",
+      "addModules": "Adicionar módulos",
+      "installFirst": "Sua empresa ainda está crua. Instale seu primeiro módulo na Loja para começar a montar o seu Método.",
+      "goToStore": "Ir para a Loja",
       "openCount": "Oportunidades abertas",
       "openValue": "Valor em aberto",
       "forecast": "Previsão ponderada",
