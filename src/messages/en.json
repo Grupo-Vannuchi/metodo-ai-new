@@ -228,6 +228,15 @@
       "produtividade": "Productivity"
     }
   },
+  "onboarding": {
+    "welcome": "Welcome to Método, {org}!",
+    "subtitle": "Build your company's system: pick the modules you'll use. You can change it later in the Store.",
+    "quickStart": "Quick start with a package:",
+    "orPick": "or pick module by module:",
+    "total": "Total",
+    "start": "Get started",
+    "skip": "Skip for now"
+  },
   "app": {
     "nav": {
       "dashboard": "Dashboard",

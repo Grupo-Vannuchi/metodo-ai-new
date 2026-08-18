@@ -1,9 +1,22 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
 import { getOrgContext, assertRole } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { MODULE_BY_ID, MODULES, MODULE_PRESETS, type ModuleId } from "@/config/modules";
+
+/** Upsert a set of modules to ACTIVE (shared by install/preset/onboarding). */
+async function activateModules(db: ReturnType<typeof tenantDb>, organizationId: string, ids: string[]): Promise<void> {
+  for (const id of ids) {
+    const existing = await db.organizationModule.findFirst({ where: { moduleId: id }, select: { id: true } });
+    if (existing) {
+      await db.organizationModule.updateMany({ where: { moduleId: id }, data: { status: "ACTIVE", uninstalledAt: null } });
+    } else {
+      await db.organizationModule.create({ data: { organizationId, moduleId: id, status: "ACTIVE" } });
+    }
+  }
+}
 
 export type ModuleActionResult =
   | { ok: true }
@@ -25,20 +38,7 @@ export async function installModule(moduleId: string): Promise<ModuleActionResul
   try {
     const db = tenantDb(ctx.organizationId);
     // The module plus any hard dependencies, all set ACTIVE.
-    const ids = [...new Set<string>([mod.id, ...mod.dependsOn])];
-    for (const id of ids) {
-      const existing = await db.organizationModule.findFirst({ where: { moduleId: id }, select: { id: true } });
-      if (existing) {
-        await db.organizationModule.updateMany({
-          where: { moduleId: id },
-          data: { status: "ACTIVE", uninstalledAt: null },
-        });
-      } else {
-        await db.organizationModule.create({
-          data: { organizationId: ctx.organizationId, moduleId: id, status: "ACTIVE" },
-        });
-      }
-    }
+    await activateModules(db, ctx.organizationId, [...new Set<string>([mod.id, ...mod.dependsOn])]);
     revalidatePath("/app/loja");
     revalidatePath("/app", "layout");
     return { ok: true };
@@ -98,24 +98,54 @@ export async function applyPreset(presetId: string): Promise<ModuleActionResult>
 
   try {
     const db = tenantDb(ctx.organizationId);
-    for (const id of preset.modules) {
-      const existing = await db.organizationModule.findFirst({ where: { moduleId: id }, select: { id: true } });
-      if (existing) {
-        await db.organizationModule.updateMany({
-          where: { moduleId: id },
-          data: { status: "ACTIVE", uninstalledAt: null },
-        });
-      } else {
-        await db.organizationModule.create({
-          data: { organizationId: ctx.organizationId, moduleId: id, status: "ACTIVE" },
-        });
-      }
-    }
+    await activateModules(db, ctx.organizationId, preset.modules);
     revalidatePath("/app/loja");
     revalidatePath("/app", "layout");
     return { ok: true };
   } catch (error) {
     console.error("Failed to apply preset", error);
+    return { ok: false, error: "unknown" };
+  }
+}
+
+/** Finish the "monte seu Método" onboarding: install the chosen modules and mark
+ *  the org onboarded so the wizard stops showing. OWNER/ADMIN only. */
+export async function completeOnboarding(moduleIds: string[]): Promise<ModuleActionResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+  try {
+    assertRole(ctx, "ADMIN");
+  } catch {
+    return { ok: false, error: "forbidden" };
+  }
+  const valid = [...new Set(moduleIds)].filter((id) => MODULE_BY_ID[id as ModuleId]);
+  try {
+    const db = tenantDb(ctx.organizationId);
+    if (valid.length > 0) await activateModules(db, ctx.organizationId, valid);
+    await prisma.organization.update({ where: { id: ctx.organizationId }, data: { onboardedAt: new Date() } });
+    revalidatePath("/app", "layout");
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to complete onboarding", error);
+    return { ok: false, error: "unknown" };
+  }
+}
+
+/** Skip onboarding — the org starts "cru" and installs modules later in the Loja. */
+export async function skipOnboarding(): Promise<ModuleActionResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+  try {
+    assertRole(ctx, "ADMIN");
+  } catch {
+    return { ok: false, error: "forbidden" };
+  }
+  try {
+    await prisma.organization.update({ where: { id: ctx.organizationId }, data: { onboardedAt: new Date() } });
+    revalidatePath("/app", "layout");
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to skip onboarding", error);
     return { ok: false, error: "unknown" };
   }
 }

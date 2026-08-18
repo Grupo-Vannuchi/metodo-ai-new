@@ -60,6 +60,9 @@ model Organization {
   slug      String   @unique
   plan      Plan     @default(STANDARD)
   seatLimit Int      @default(3)
+  /// Null until the owner finishes the "monte seu Método" onboarding (picks the
+  /// first modules). Existing orgs are backfilled as already onboarded.
+  onboardedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

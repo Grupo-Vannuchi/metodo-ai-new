@@ -27,6 +27,8 @@ export type OrgContext = {
   /** Module ids the org has installed (ACTIVE) — the MetodoLoja gating source
    *  (see src/config/modules.ts). Replaces plan-based feature gating. */
   modules: string[];
+  /** False until the owner finishes the "monte seu Método" onboarding. */
+  onboarded: boolean;
 };
 
 /**
@@ -57,6 +59,7 @@ export const getOrgContext = cache(async (): Promise<OrgContext | null> => {
           name: true,
           slug: true,
           plan: true,
+          onboardedAt: true,
           modules: { where: { status: "ACTIVE" }, select: { moduleId: true } },
         },
       },
@@ -66,7 +69,7 @@ export const getOrgContext = cache(async (): Promise<OrgContext | null> => {
   if (!membership) return null;
 
   const templateScreens = membership.accessTemplate?.screens ?? null;
-  const { modules, ...organization } = membership.organization;
+  const { modules, onboardedAt, ...organization } = membership.organization;
 
   return {
     userId: membership.user.id,
@@ -77,6 +80,7 @@ export const getOrgContext = cache(async (): Promise<OrgContext | null> => {
     accessTemplateId: membership.accessTemplateId,
     allowedScreens: resolveAllowedScreens(membership.role, templateScreens),
     modules: modules.map((m) => m.moduleId),
+    onboarded: onboardedAt != null,
   };
 });
 

@@ -228,6 +228,15 @@
       "produtividade": "Produtividade"
     }
   },
+  "onboarding": {
+    "welcome": "Bem-vindo ao Método, {org}!",
+    "subtitle": "Monte o sistema da sua empresa: escolha os módulos que você vai usar. Dá pra mudar depois na Loja.",
+    "quickStart": "Comece rápido com um pacote:",
+    "orPick": "ou escolha módulo a módulo:",
+    "total": "Total",
+    "start": "Começar a usar",
+    "skip": "Pular por enquanto"
+  },
   "app": {
     "nav": {
       "dashboard": "Painel",
