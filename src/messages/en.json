@@ -17,11 +17,11 @@
   },
   "home": {
     "hero": {
-      "badge": "CRM + AI for sales",
-      "title": "From prospecting to closing, in a single flow",
-      "subtitle": "Find companies on Google, qualify them in the pipeline and reach out at scale — WhatsApp and email — with integrations, automation and per-team access control.",
+      "badge": "Modular management platform",
+      "title": "Build your company's system, module by module",
+      "subtitle": "Start with a bare Método and install only the modules you need — CRM, Finance, Supplies, People, WhatsApp support and AI. Each module comes and goes whenever you want, priced à la carte.",
       "ctaPrimary": "Start for free",
-      "ctaSecondary": "See pricing",
+      "ctaSecondary": "See modules",
       "note": "No credit card to get started."
     },
     "features": {
@@ -58,15 +58,15 @@
       "title": "Get started in minutes",
       "subtitle": "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
       "steps": {
-        "1": { "title": "Create your account", "desc": "Register your organization and invite your team in seconds." },
-        "2": { "title": "Connect your channels", "desc": "Plug in WhatsApp, email and your Google key for prospecting." },
-        "3": { "title": "Prospect and reach out", "desc": "Find customers, organize the pipeline and engage at scale." }
+        "1": { "title": "Create your account", "desc": "Register your company and invite your team in seconds." },
+        "2": { "title": "Pick your modules", "desc": "In the MetodoLoja, install only what your company uses — and build your Método your way." },
+        "3": { "title": "Adjust anytime", "desc": "Add or remove modules whenever you want; pay only for what you use." }
       }
     },
     "plans": {
-      "title": "Plans for every stage",
-      "subtitle": "Pick the right plan and change anytime. All include the MétodoAI core.",
-      "seeAll": "See full plan comparison"
+      "title": "À-la-carte pricing, no locked bundle",
+      "subtitle": "Start free and add modules when you need them — or install a ready-made package and adjust later.",
+      "seeAll": "See all modules and packages"
     },
     "testimonials": {
       "title": "Loved by teams",
@@ -1728,8 +1728,11 @@
     }
   },
   "pricing": {
-    "title": "Plans",
-    "subtitle": "Pick the plan that fits your operation. All include CRM, prospecting, campaigns and connections.",
+    "title": "Pricing",
+    "subtitle": "Start with a bare Método and install only the modules your company needs. No locked bundle — every module has its own price.",
+    "packages": "Ready-made packages",
+    "catalog": "Or build it your way",
+    "baseNote": "Install only what you need; add or remove modules anytime.",
     "recommended": "Recommended",
     "seats": "{n} seat(s)",
     "connections": "{n} connection(s)",

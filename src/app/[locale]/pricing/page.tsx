@@ -1,7 +1,7 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link, redirect } from "@/i18n/navigation";
 import { Logo } from "@/components/layout/logo";
-import { PlansGrid } from "@/components/marketing/plans-grid";
+import { ModulesGrid } from "@/components/marketing/modules-grid";
 import { getSession } from "@/lib/session";
 import { resolveLocale } from "@/i18n/routing";
 
@@ -28,7 +28,7 @@ export default async function PricingPage({
         <p className="max-w-2xl text-muted-foreground">{t("subtitle")}</p>
       </header>
 
-      <PlansGrid locale={locale} />
+      <ModulesGrid />
 
       <p className="text-center text-sm text-muted-foreground">
         <Link href="/" className="underline underline-offset-4">

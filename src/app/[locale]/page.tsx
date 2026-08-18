@@ -15,7 +15,7 @@ import { resolveLocale } from "@/i18n/routing";
 import { MarketingHeader } from "@/components/marketing/marketing-header";
 import { MarketingFooter } from "@/components/marketing/marketing-footer";
 import { BackgroundImage } from "@/components/layout/background-image";
-import { PlansGrid } from "@/components/marketing/plans-grid";
+import { ModulesGrid } from "@/components/marketing/modules-grid";
 import { buttonVariants } from "@/components/ui/button";
 
 const FEATURES = [
@@ -114,7 +114,7 @@ export default async function HomePage({
             <p className="mt-3 text-muted-foreground">{t("plans.subtitle")}</p>
           </div>
           <div className="mt-12">
-            <PlansGrid locale={locale} />
+            <ModulesGrid />
           </div>
           <p className="mt-6 text-center text-sm text-muted-foreground">
             <Link href="/pricing" className="underline underline-offset-4">{t("plans.seeAll")}</Link>

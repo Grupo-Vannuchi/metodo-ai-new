@@ -17,11 +17,11 @@
   },
   "home": {
     "hero": {
-      "badge": "CRM + IA para vendas",
-      "title": "Da prospecção ao fechamento, num fluxo só",
-      "subtitle": "Encontre empresas no Google, qualifique no funil e dispare contato em escala — WhatsApp e e-mail — com integrações, automações e controle de acesso por equipe.",
+      "badge": "Plataforma modular de gestão",
+      "title": "Monte o sistema da sua empresa, módulo a módulo",
+      "subtitle": "Comece com o Método cru e instale só os módulos que precisa — CRM, Financeiro, Suprimentos, Pessoas, Atendimento no WhatsApp e IA. Cada módulo entra e sai quando você quiser, com preço à la carte.",
       "ctaPrimary": "Criar conta grátis",
-      "ctaSecondary": "Ver planos",
+      "ctaSecondary": "Ver módulos",
       "note": "Sem cartão de crédito para começar."
     },
     "features": {
@@ -58,15 +58,15 @@
       "title": "Comece em minutos",
       "subtitle": "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
       "steps": {
-        "1": { "title": "Crie sua conta", "desc": "Cadastre sua organização e convide a equipe em segundos." },
-        "2": { "title": "Conecte seus canais", "desc": "Plugue WhatsApp, e-mail e sua chave do Google para prospecção." },
-        "3": { "title": "Prospecte e dispare", "desc": "Encontre clientes, organize no funil e converse em escala." }
+        "1": { "title": "Crie sua conta", "desc": "Cadastre sua empresa e convide a equipe em segundos." },
+        "2": { "title": "Escolha seus módulos", "desc": "Na MetodoLoja, instale só o que sua empresa usa — e monte o Método do seu jeito." },
+        "3": { "title": "Use e ajuste quando quiser", "desc": "Adicione ou remova módulos a qualquer momento; você paga só pelo que usa." }
       }
     },
     "plans": {
-      "title": "Planos para cada estágio",
-      "subtitle": "Escolha o plano ideal e mude quando quiser. Todos incluem o núcleo do MétodoAI.",
-      "seeAll": "Ver comparação completa de planos"
+      "title": "Preço à la carte, sem pacote fechado",
+      "subtitle": "Comece grátis e adicione módulos quando precisar — ou instale um pacote pronto e ajuste depois.",
+      "seeAll": "Ver todos os módulos e pacotes"
     },
     "testimonials": {
       "title": "Quem usa, recomenda",
@@ -1728,8 +1728,11 @@
     }
   },
   "pricing": {
-    "title": "Planos",
-    "subtitle": "Escolha o plano ideal para o tamanho da sua operação. Todos incluem CRM, prospecção, campanhas e conexões.",
+    "title": "Preços",
+    "subtitle": "Comece com o Método cru e instale só os módulos que sua empresa precisa. Sem pacote fechado — cada módulo tem seu preço.",
+    "packages": "Pacotes prontos",
+    "catalog": "Ou monte do seu jeito",
+    "baseNote": "Instale só o que precisa; adicione ou remova módulos quando quiser.",
     "recommended": "Recomendado",
     "seats": "{n} assento(s)",
     "connections": "{n} conexão(ões)",
