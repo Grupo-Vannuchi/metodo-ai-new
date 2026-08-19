@@ -4,7 +4,7 @@ import { Pencil } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getCompany } from "@/lib/queries/companies";
 import { getEntityFinance } from "@/lib/queries/finance";
-import { hasFeatureByModules } from "@/config/modules";
+import { hasFeatureByModules, hasModule } from "@/config/modules";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { EntityFinanceCard } from "@/components/finance/entity-finance-card";
 import { buttonVariants } from "@/components/ui/button";
@@ -26,6 +26,7 @@ export default async function CompanyViewPage({
   const t = await getTranslations("crm.companies");
 
   const canFinance = hasFeatureByModules(ctx.modules, "finance");
+  const canInbox = hasModule(ctx.modules, "inbox");
   const [company, finance] = await Promise.all([
     getCompany(ctx.organizationId, id),
     canFinance ? getEntityFinance(ctx.organizationId, { companyId: id }) : Promise.resolve(null),
@@ -56,7 +57,7 @@ export default async function CompanyViewPage({
           {addressLine ? <p className="mt-1 text-sm text-muted-foreground">{addressLine}</p> : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {company.phone ? <StartChatButton phone={company.phone} name={company.name} /> : null}
+          {canInbox && company.phone ? <StartChatButton phone={company.phone} name={company.name} /> : null}
           <Link href={`/app/companies/${company.id}/edit`} className={buttonVariants({ variant: "outline", size: "sm" })}>
             <Pencil className="size-4" />
             {t("edit")}

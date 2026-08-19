@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireOrgContext } from "@/lib/tenant";
-import { requireScreen } from "@/lib/access";
+import { requireScreen, requireModule } from "@/lib/access";
 import { listPipelinesWithStages } from "@/lib/queries/pipelines";
 import { productServiceOptions } from "@/lib/queries/crm";
 import { resolveLocale } from "@/i18n/routing";
@@ -19,6 +19,7 @@ export default async function ImportProspectingPage({
   const locale = resolveLocale(rawLocale);
   const ctx = await requireOrgContext(locale);
   await requireScreen(ctx, "prospecting", locale);
+  await requireModule(ctx, "marketing", locale);
 
   const leadIds = ((await searchParams).leads ?? "")
     .split(",")

@@ -29,7 +29,10 @@ export type BotContext = {
  * has the Suprimentos module.
  */
 export function agentToolset(modules: readonly string[]): Anthropic.Tool[] {
-  const tools: Anthropic.Tool[] = [SAVE_LEAD, CREATE_OPPORTUNITY, HANDOFF];
+  const tools: Anthropic.Tool[] = [SAVE_LEAD];
+  // Creating an opportunity needs the CRM module installed.
+  if (hasModule(modules, "crm")) tools.push(CREATE_OPPORTUNITY);
+  tools.push(HANDOFF);
   if (hasModule(modules, "supplies")) tools.unshift(SEARCH_CATALOG);
   return tools;
 }
@@ -235,33 +238,37 @@ async function handoff(ctx: BotContext, input: Record<string, unknown>): Promise
       where: { id: ctx.conversationId },
       data: { assignedToId: ctx.ownerId },
     });
-    const task = await db.task.create({
-      data: {
-        organizationId: ctx.organizationId,
-        title: "Atendimento humano solicitado no WhatsApp",
-        description: reason || null,
-        type: "FOLLOWUP",
-        priority: "HIGH",
-        status: "TODO",
-        recurrence: "NONE",
-        progress: 0,
-        assignedToId: ctx.ownerId,
-        createdById: ctx.ownerId,
-        contactId: ctx.contactId,
-      },
-      select: { id: true },
-    });
-    await db.notification
-      .create({
+    // A follow-up task + its notification only when the Tasks module is on;
+    // otherwise the assigned conversation itself flags the human in the inbox.
+    if (ctx.modules.includes("tasks")) {
+      const task = await db.task.create({
         data: {
           organizationId: ctx.organizationId,
-          userId: ctx.ownerId,
-          type: "TASK_ASSIGNED",
-          data: { actor: "Agente WhatsApp", title: "Atendimento humano solicitado no WhatsApp" },
-          link: `/app/tasks/${task.id}`,
+          title: "Atendimento humano solicitado no WhatsApp",
+          description: reason || null,
+          type: "FOLLOWUP",
+          priority: "HIGH",
+          status: "TODO",
+          recurrence: "NONE",
+          progress: 0,
+          assignedToId: ctx.ownerId,
+          createdById: ctx.ownerId,
+          contactId: ctx.contactId,
         },
-      })
-      .catch(() => {});
+        select: { id: true },
+      });
+      await db.notification
+        .create({
+          data: {
+            organizationId: ctx.organizationId,
+            userId: ctx.ownerId,
+            type: "TASK_ASSIGNED",
+            data: { actor: "Agente WhatsApp", title: "Atendimento humano solicitado no WhatsApp" },
+            link: `/app/tasks/${task.id}`,
+          },
+        })
+        .catch(() => {});
+    }
     return "Conversa transferida para um atendente. O bot não responderá mais aqui.";
   }
   return "Transferência registrada. Um atendente dará sequência.";

@@ -7,7 +7,7 @@ import { getConversationByContact } from "@/lib/queries/inbox";
 import { listTasks } from "@/lib/queries/tasks";
 import { listMembers } from "@/lib/queries/organizations";
 import { getEntityFinance } from "@/lib/queries/finance";
-import { hasFeatureByModules } from "@/config/modules";
+import { hasFeatureByModules, hasModule } from "@/config/modules";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { TasksManager } from "@/components/tasks/tasks-manager";
 import { EntityFinanceCard } from "@/components/finance/entity-finance-card";
@@ -29,11 +29,13 @@ export default async function ContactViewPage({
   const ti = await getTranslations("inbox");
 
   const canFinance = hasFeatureByModules(ctx.modules, "finance");
+  const canInbox = hasModule(ctx.modules, "inbox");
+  const canTasks = hasModule(ctx.modules, "tasks");
   const [contact, conversation, rawMembers, tasks, finance] = await Promise.all([
     getContact(ctx.organizationId, id),
-    getConversationByContact(ctx.organizationId, id, ctx.userId),
+    canInbox ? getConversationByContact(ctx.organizationId, id, ctx.userId) : Promise.resolve(null),
     listMembers(ctx.organizationId),
-    listTasks(ctx.organizationId, { contactId: id }),
+    canTasks ? listTasks(ctx.organizationId, { contactId: id }) : Promise.resolve([]),
     canFinance ? getEntityFinance(ctx.organizationId, { contactId: id }) : Promise.resolve(null),
   ]);
 
@@ -64,7 +66,7 @@ export default async function ContactViewPage({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {contact.phone ? (
+          {canInbox && contact.phone ? (
             <StartChatButton phone={contact.phone} name={contact.name} contactId={contact.id} />
           ) : null}
           <Link href={`/app/contacts/${contact.id}/edit`} className={buttonVariants({ variant: "outline", size: "sm" })}>
@@ -106,14 +108,16 @@ export default async function ContactViewPage({
 
       {finance ? <EntityFinanceCard data={finance} /> : null}
 
-      <section className="rounded-xl border border-border bg-card p-5">
-        <TasksManager
-          tasks={tasks}
-          members={members.map((m) => ({ id: m.userId, name: m.name }))}
-          fixed={{ contactId: contact.id }}
-          currentUserId={ctx.userId}
-        />
-      </section>
+      {canTasks ? (
+        <section className="rounded-xl border border-border bg-card p-5">
+          <TasksManager
+            tasks={tasks}
+            members={members.map((m) => ({ id: m.userId, name: m.name }))}
+            fixed={{ contactId: contact.id }}
+            currentUserId={ctx.userId}
+          />
+        </section>
+      ) : null}
     </div>
   );
 }

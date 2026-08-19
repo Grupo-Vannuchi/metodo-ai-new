@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { Target, Trophy, TrendingUp, Percent } from "lucide-react";
 import { requireOrgContext, hasRole } from "@/lib/tenant";
-import { requireScreen } from "@/lib/access";
+import { requireScreen, requireModule } from "@/lib/access";
 import { getGoals, currentMonth } from "@/lib/queries/goals";
 import { GoalsClient } from "@/components/crm/goals-client";
 import { GoalsMonthNav } from "@/components/crm/goals-month-nav";
@@ -20,6 +20,7 @@ export default async function GoalsPage({
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   await requireScreen(ctx, "crm", locale);
+  await requireModule(ctx, "crm", locale);
   const t = await getTranslations("crm.goals");
 
   const raw = (await searchParams)?.month;

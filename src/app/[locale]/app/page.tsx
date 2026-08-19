@@ -79,7 +79,7 @@ export default async function DashboardPage({
   const teamPct = teamTarget > 0 ? Math.min(100, Math.round((teamAchieved / teamTarget) * 100)) : 0;
 
   const pieModels: string[] = [
-    ...PIE_MODELS,
+    ...PIE_MODELS.filter((m) => m !== "tasks_by_priority" || hasModule(ctx.modules, "tasks")),
     ...(hasFeatureByModules(ctx.modules, "finance") ? PIE_FINANCE_MODELS : []),
   ];
 
@@ -98,7 +98,9 @@ export default async function DashboardPage({
   const secondary = [
     { icon: Building2, label: t("companies"), value: ins.crm.companies, href: "/app/companies" },
     { icon: Contact, label: t("contacts"), value: ins.crm.contacts, href: "/app/contacts" },
-    { icon: Send, label: t("dispatchMonth"), value: ins.campaigns.sentMonth, href: "/app/campaigns" },
+    ...(hasModule(ctx.modules, "marketing")
+      ? [{ icon: Send, label: t("dispatchMonth"), value: ins.campaigns.sentMonth, href: "/app/campaigns" }]
+      : []),
   ];
 
   return (

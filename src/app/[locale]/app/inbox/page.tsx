@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
-import { requireScreen } from "@/lib/access";
+import { requireScreen, requireModule } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { listConversations, listConversationFolders } from "@/lib/queries/inbox";
 import { listQuickReplies } from "@/lib/queries/quick-replies";
@@ -27,6 +27,7 @@ export default async function InboxPage({
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   await requireScreen(ctx, "inbox", locale);
+  await requireModule(ctx, "inbox", locale);
   const t = await getTranslations("teamChat");
 
   const { c, chat, mode = "whatsapp" } = await searchParams;

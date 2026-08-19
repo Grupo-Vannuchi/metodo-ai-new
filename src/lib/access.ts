@@ -3,6 +3,7 @@ import { redirect } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 import type { SessionRole } from "@/lib/session";
 import { GATEABLE_SCREENS, ALWAYS_ALLOWED, type Screen } from "@/config/screens";
+import { hasModule, type ModuleId } from "@/config/modules";
 
 /**
  * Screen-level access control via templates.
@@ -41,4 +42,18 @@ export async function requireScreen(
 ): Promise<void> {
   if (canAccessScreen(ctx, screen)) return;
   redirect({ href: "/app", locale });
+}
+
+/**
+ * Guard for a module's route. Redirects to the Loja when the org hasn't installed
+ * the module — so a screen can't be used by direct URL without its module. Call
+ * right after `requireScreen` in the screen's layout/page.
+ */
+export async function requireModule(
+  ctx: { modules: string[] },
+  moduleId: ModuleId,
+  locale: Locale,
+): Promise<void> {
+  if (hasModule(ctx.modules, moduleId)) return;
+  redirect({ href: "/app/loja", locale });
 }

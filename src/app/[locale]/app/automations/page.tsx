@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
-import { requireScreen } from "@/lib/access";
+import { requireScreen, requireModule } from "@/lib/access";
 import { listAutomationRules } from "@/lib/queries/automations";
 import { listPipelinesWithStages } from "@/lib/queries/pipelines";
 import { listQuickReplies } from "@/lib/queries/quick-replies";
@@ -15,6 +15,7 @@ export default async function AutomationsPage({ params }: { params: Promise<{ lo
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
   await requireScreen(ctx, "crm", locale);
+  await requireModule(ctx, "crm", locale);
   const t = await getTranslations("crm.automations");
 
   const [rules, pipelines, templates, members] = await Promise.all([
