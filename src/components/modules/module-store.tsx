@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   Target,
   Wallet,
@@ -14,6 +14,9 @@ import {
   Check,
   Plus,
   Loader2,
+  Info,
+  X,
+  Link2,
   type LucideIcon,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -25,6 +28,7 @@ import {
   MODULES,
   MODULE_PRESETS,
   MODULE_BY_ID,
+  MODULE_DETAILS,
   monthlyTotal,
   type ModuleDef,
   type ModuleId,
@@ -64,6 +68,7 @@ export function ModuleStore({ installed, canManage }: { installed: string[]; can
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("modules");
+  const [detailId, setDetailId] = useState<ModuleId | null>(null);
 
   const has = (id: string) => installed.includes(id);
   const total = monthlyTotal(installed);
@@ -140,6 +145,7 @@ export function ModuleStore({ installed, canManage }: { installed: string[]; can
               icon={ICONS[m.icon] ?? Boxes}
               onInstall={() => run(m.id, () => installModule(m.id))}
               onRemove={() => run(m.id, () => uninstallModule(m.id))}
+              onOpenDetail={() => setDetailId(m.id)}
               t={t}
             />
           ))}
@@ -194,6 +200,22 @@ export function ModuleStore({ installed, canManage }: { installed: string[]; can
           })}
         </div>
       )}
+
+      {detailId ? (
+        <ModuleDetailModal
+          module={MODULE_BY_ID[detailId]}
+          icon={ICONS[MODULE_BY_ID[detailId].icon] ?? Boxes}
+          installed={has(detailId)}
+          canManage={canManage}
+          busy={busyId === detailId}
+          disabled={pending}
+          priceLabel={priceLabel(MODULE_BY_ID[detailId].priceMonthly)}
+          onInstall={() => run(detailId, () => installModule(detailId))}
+          onRemove={() => run(detailId, () => uninstallModule(detailId))}
+          onClose={() => setDetailId(null)}
+          t={t}
+        />
+      ) : null}
     </div>
   );
 }
@@ -208,6 +230,7 @@ function ModuleCard({
   icon: Icon,
   onInstall,
   onRemove,
+  onOpenDetail,
   t,
 }: {
   module: ModuleDef;
@@ -219,6 +242,7 @@ function ModuleCard({
   icon: LucideIcon;
   onInstall: () => void;
   onRemove: () => void;
+  onOpenDetail: () => void;
   t: ReturnType<typeof useTranslations>;
 }) {
   return (
@@ -228,14 +252,24 @@ function ModuleCard({
         installed ? "border-brand/40" : "border-border",
       )}
     >
-      {/* Featured banner — per-module gradient + icon (photo-ready). */}
-      <div className={cn("relative flex h-28 items-center justify-center bg-gradient-to-br", THEME[m.id] ?? "from-slate-500 to-slate-700")}>
+      {/* Featured banner — per-module gradient + icon (photo-ready).
+          Clicking it opens the module's detail modal. */}
+      <button
+        type="button"
+        onClick={onOpenDetail}
+        aria-label={`${m.name} — ${t("detailsHint")}`}
+        className={cn(
+          "group/banner relative flex h-28 items-center justify-center bg-gradient-to-br",
+          "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70",
+          THEME[m.id] ?? "from-slate-500 to-slate-700",
+        )}
+      >
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 opacity-60"
           style={{ background: "radial-gradient(120% 90% at 15% 10%, rgba(255,255,255,0.25), transparent 55%)" }}
         />
-        <Icon className="size-11 text-white drop-shadow" />
+        <Icon className="size-11 text-white drop-shadow transition-transform duration-200 group-hover/banner:scale-110" />
         <span className="absolute right-3 top-3 rounded-full bg-black/25 px-2 py-0.5 text-xs font-semibold text-white backdrop-blur">
           {priceLabel}
         </span>
@@ -245,10 +279,20 @@ function ModuleCard({
             {t("installed")}
           </span>
         ) : null}
-      </div>
+        <span className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-black/30 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur transition-opacity duration-200 sm:opacity-0 sm:group-hover/banner:opacity-100">
+          <Info className="size-3" />
+          {t("detailsHint")}
+        </span>
+      </button>
 
       <div className="flex flex-1 flex-col gap-2 p-4">
-        <p className="font-semibold">{m.name}</p>
+        <button
+          type="button"
+          onClick={onOpenDetail}
+          className="self-start text-left font-semibold transition-colors hover:text-brand"
+        >
+          {m.name}
+        </button>
         <p className="flex-1 text-sm text-muted-foreground">{m.tagline}</p>
         {canManage ? (
           installed ? (
@@ -269,6 +313,168 @@ function ModuleCard({
               {t("install")}
             </Button>
           )
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** Detail modal opened by clicking a module's banner: explains the module, its
+ *  niche and every element that composes it, plus install/remove in place. */
+function ModuleDetailModal({
+  module: m,
+  icon: Icon,
+  installed,
+  canManage,
+  busy,
+  disabled,
+  priceLabel,
+  onInstall,
+  onRemove,
+  onClose,
+  t,
+}: {
+  module: ModuleDef;
+  icon: LucideIcon;
+  installed: boolean;
+  canManage: boolean;
+  busy: boolean;
+  disabled: boolean;
+  priceLabel: string;
+  onInstall: () => void;
+  onRemove: () => void;
+  onClose: () => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const detail = MODULE_DETAILS[m.id];
+
+  // Escape closes; lock body scroll while open.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  const requires = m.dependsOn.map((id) => MODULE_BY_ID[id].name);
+  const integrates = m.integratesWith.map((id) => MODULE_BY_ID[id].name);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={m.name}>
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label={t("close")}
+        onClick={onClose}
+        className="absolute inset-0 cursor-default bg-black/50 backdrop-blur-sm motion-safe:animate-overlay-in"
+      />
+      <div className="glass-strong relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-white/15 shadow-2xl motion-safe:animate-dialog-in">
+        {/* Header banner */}
+        <div className={cn("relative flex h-32 items-center gap-4 bg-gradient-to-br px-6", THEME[m.id] ?? "from-slate-500 to-slate-700")}>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-60"
+            style={{ background: "radial-gradient(120% 90% at 15% 10%, rgba(255,255,255,0.25), transparent 55%)" }}
+          />
+          <div className="relative flex size-14 shrink-0 items-center justify-center rounded-xl bg-white/15 backdrop-blur">
+            <Icon className="size-8 text-white drop-shadow" />
+          </div>
+          <div className="relative min-w-0">
+            <p className="text-lg font-bold text-white drop-shadow">{m.name}</p>
+            <p className="text-sm text-white/90">{priceLabel}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t("close")}
+            className="absolute right-3 top-3 inline-flex size-8 items-center justify-center rounded-full bg-black/25 text-white backdrop-blur transition-colors hover:bg-black/40"
+          >
+            <X className="size-4" />
+          </button>
+          {installed ? (
+            <span className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-brand">
+              <Check className="size-3" />
+              {t("installed")}
+            </span>
+          ) : null}
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          <p className="text-sm leading-relaxed text-muted-foreground">{detail.overview}</p>
+
+          <div className="mt-5 rounded-xl border border-border bg-muted/30 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("forWho")}</p>
+            <p className="mt-1 text-sm">{detail.niche}</p>
+          </div>
+
+          <div className="mt-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("whatsIncluded")}</p>
+            <ul className="mt-3 flex flex-col gap-3">
+              {detail.features.map((f) => (
+                <li key={f.title} className="flex gap-3">
+                  <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
+                    <Check className="size-3.5" />
+                  </span>
+                  <span className="text-sm">
+                    <span className="font-medium">{f.title}</span>
+                    <span className="text-muted-foreground"> — {f.desc}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {requires.length > 0 || integrates.length > 0 ? (
+            <div className="mt-5 flex flex-col gap-2 border-t border-border pt-4 text-sm">
+              {requires.length > 0 ? (
+                <p className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
+                  <span className="font-medium text-foreground">{t("requires")}:</span>
+                  {requires.join(", ")}
+                </p>
+              ) : null}
+              {integrates.length > 0 ? (
+                <p className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
+                  <Link2 className="size-3.5 shrink-0" />
+                  <span className="font-medium text-foreground">{t("integratesWith")}:</span>
+                  {integrates.join(", ")}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        {/* Footer action */}
+        {canManage ? (
+          <div className="flex justify-end gap-2 border-t border-border px-6 py-4">
+            <Button type="button" variant="outline" size="sm" onClick={onClose}>
+              {t("close")}
+            </Button>
+            {installed ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={disabled}
+                className="text-muted-foreground hover:text-red-500"
+                onClick={onRemove}
+              >
+                {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+                {t("remove")}
+              </Button>
+            ) : (
+              <Button type="button" size="sm" disabled={disabled} onClick={onInstall}>
+                {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+                {t("install")}
+              </Button>
+            )}
+          </div>
         ) : null}
       </div>
     </div>

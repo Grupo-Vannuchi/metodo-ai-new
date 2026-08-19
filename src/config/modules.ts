@@ -236,3 +236,123 @@ export const MODULE_PRESETS: ModulePreset[] = [
 export function monthlyTotal(installed: readonly string[]): number {
   return MODULES.filter((m) => installed.includes(m.id)).reduce((sum, m) => sum + m.priceMonthly, 0);
 }
+
+/** One element that composes a module — shown in the store's detail modal. */
+export type ModuleFeatureItem = { title: string; desc: string };
+
+/** Rich content for the "clique no módulo → detalhes" store modal: what the
+ *  module is, who it's for (niche) and the items that compose it. Kept in pt to
+ *  match the hardcoded name/tagline above. */
+export type ModuleDetail = {
+  /** A paragraph explaining the module and the problem it solves. */
+  overview: string;
+  /** The niche / who it's for. */
+  niche: string;
+  /** The elements that compose the module. */
+  features: ModuleFeatureItem[];
+};
+
+export const MODULE_DETAILS: Record<ModuleId, ModuleDetail> = {
+  crm: {
+    overview:
+      "O centro comercial do Método. Organiza todo o processo de venda em um funil visual: cada oportunidade avança por etapas até o ganho, gerando propostas, metas e um histórico completo do relacionamento com o cliente. Ao fechar, a venda pode virar um lançamento no Financeiro em um clique.",
+    niche:
+      "Times de vendas e consultores B2B que trabalham com pipeline — quem precisa acompanhar oportunidades, prazos e taxa de conversão de perto.",
+    features: [
+      { title: "Funil de vendas", desc: "Kanban de etapas personalizáveis, arraste as oportunidades entre as fases." },
+      { title: "Oportunidades", desc: "Código sequencial (NNNN/AA), valor, responsável e desfecho (ganho, perda ou cancelamento com motivo)." },
+      { title: "Propostas", desc: "Editor rico com catálogo de produtos e serviços; envie e acompanhe a aceitação." },
+      { title: "Contatos e Empresas", desc: "Agenda compartilhada que serve de base para todos os outros módulos." },
+      { title: "Metas", desc: "Defina alvos por período e acompanhe o realizado da equipe." },
+      { title: "Automações", desc: "Regras por etapa do funil para criar tarefas e disparar ações automaticamente." },
+    ],
+  },
+  finance: {
+    overview:
+      "A saúde financeira da empresa em um só lugar. Registre receitas e despesas como lançamentos (a fonte única da verdade), acompanhe o caixa no tempo e enxergue o resultado pelo DRE. Integra com CRM, Suprimentos e RH para que vendas, compras e folha virem lançamentos sem retrabalho.",
+    niche:
+      "Donos e financeiro de PMEs que querem controlar caixa e resultado sem planilhas soltas.",
+    features: [
+      { title: "Lançamentos", desc: "Receitas e despesas com vencimento, baixa e parcelamento — a fonte única do módulo." },
+      { title: "Fluxo de caixa", desc: "Entradas e saídas ao longo do tempo, previsto x realizado." },
+      { title: "DRE", desc: "Demonstrativo de resultado consolidado por período." },
+      { title: "Categorias e métodos", desc: "Classifique cada lançamento por categoria e forma de pagamento." },
+      { title: "Vínculo com o CRM", desc: "Amarre lançamentos a contato, empresa ou oportunidade (requer o módulo CRM)." },
+    ],
+  },
+  hr: {
+    overview:
+      "Gestão de pessoas do cadastro ao pagamento. Centraliza a ficha de cada funcionário, monta a folha com proventos e descontos e controla férias e documentos. Ao pagar a folha, o valor pode ser lançado direto no Financeiro.",
+    niche:
+      "Empresas com equipe própria que precisam organizar folha, férias e documentação sem depender só do contador.",
+    features: [
+      { title: "Funcionários", desc: "Cadastro completo, cargos, admissão e dados trabalhistas." },
+      { title: "Folha de pagamento", desc: "Proventos e descontos, aprovação e pagamento com baixa no Financeiro." },
+      { title: "Férias", desc: "Controle de períodos aquisitivos e agendamento." },
+      { title: "Documentos", desc: "Repositório dos documentos de cada colaborador." },
+    ],
+  },
+  supplies: {
+    overview:
+      "O ERP de bastidores do Método. Controla estoque, compras, patrimônio e manutenção — e ainda os equipamentos que ficam na casa dos clientes. As compras podem gerar lançamentos no Financeiro e o estoque suporta reservas para não vender o que não tem.",
+    niche:
+      "Operações que lidam com produtos físicos, ativos ou assistência técnica — comércio, indústria leve e prestadores com equipamentos.",
+    features: [
+      { title: "Estoque", desc: "Itens, saldos e reservas para evitar rupturas." },
+      { title: "Compras", desc: "Pedidos de compra com recebimento e lançamento no Financeiro." },
+      { title: "Patrimônio", desc: "Bens e ativos da empresa com histórico." },
+      { title: "Manutenção", desc: "Ordens e acompanhamento de manutenções." },
+      { title: "Equipamentos de clientes", desc: "Rastreie máquinas e itens instalados na base de clientes." },
+      { title: "Indicadores", desc: "Painéis de giro, custo e desempenho de suprimentos." },
+    ],
+  },
+  marketing: {
+    overview:
+      "Alcance e captação em um módulo só. Dispare campanhas de WhatsApp e e-mail para públicos segmentados, agende envios e prospecte novos leads a partir do Google Places com enriquecimento de dados. Combinado com o CRM, segmenta por etapa do funil.",
+    niche:
+      "Times de marketing e crescimento que fazem disparos em massa e prospecção ativa de clientes.",
+    features: [
+      { title: "Campanhas de WhatsApp", desc: "Disparos em massa por template para listas segmentadas." },
+      { title: "Campanhas de e-mail", desc: "E-mail marketing com o mesmo motor de segmentação." },
+      { title: "Agendamento avançado", desc: "Programe envios para a melhor data e hora." },
+      { title: "Segmentação de público", desc: "Filtre por tags, origem, dono e — com o CRM — etapa/status do funil." },
+      { title: "Prospecção de leads", desc: "Busca no Google Places com enriquecimento do site (chave própria, LGPD-friendly)." },
+    ],
+  },
+  inbox: {
+    overview:
+      "Todas as conversas de WhatsApp da empresa em uma caixa de entrada compartilhada. Conecte um ou mais números, atenda vários clientes ao mesmo tempo e mantenha o histórico ligado ao CRM. É a base sobre a qual o agente de IA responde os clientes.",
+    niche:
+      "Atendimento, suporte e comercial que conversam com clientes pelo WhatsApp e precisam de organização e histórico.",
+    features: [
+      { title: "Caixa de entrada", desc: "Multi-conversa com fila, status e busca." },
+      { title: "Conexão de números", desc: "Conecte números via Evolution direto na tela de Conversas." },
+      { title: "Atribuição e CRM", desc: "Auto-vínculo do contato e atribuição de conversas para a equipe." },
+      { title: "Mídia e áudio", desc: "Envie e receba imagens, arquivos e mensagens de voz." },
+    ],
+  },
+  ia: {
+    overview:
+      "A camada de inteligência do Método. Traz um copiloto que age dentro do sistema (consulta e executa ações por comando) e um agente que atende seus clientes no WhatsApp de forma autônoma, com transcrição de áudio e repasse para um humano quando necessário.",
+    niche:
+      "Empresas que querem ganhar escala no atendimento e na operação com automação inteligente, sem contratar mais gente.",
+    features: [
+      { title: "Copiloto no sistema", desc: "Assistente que lê e executa ações do CRM por function-calling." },
+      { title: "Agente no WhatsApp", desc: "Responde clientes automaticamente usando as ferramentas do CRM." },
+      { title: "Transcrição de áudio", desc: "Entende mensagens de voz recebidas dos clientes." },
+      { title: "Handoff para humano", desc: "Passa a conversa para um atendente quando a IA identifica o limite." },
+    ],
+  },
+  tasks: {
+    overview:
+      "O quadro de tarefas da equipe. Crie listas, atribua responsáveis e acompanhe prazos e status. Quando há CRM instalado, uma tarefa pode ser amarrada a um contato ou oportunidade — mas funciona sozinho como um to-do compartilhado.",
+    niche:
+      "Qualquer equipe que precise organizar o dia a dia e não perder pendências — do time comercial ao operacional.",
+    features: [
+      { title: "Listas e tarefas", desc: "Organize o trabalho em listas com itens acionáveis." },
+      { title: "Atribuição", desc: "Defina o responsável de cada tarefa dentro da equipe." },
+      { title: "Prazos e status", desc: "Datas de entrega e acompanhamento do andamento." },
+      { title: "Vínculo com o CRM", desc: "Ligue tarefas a contatos e oportunidades quando o CRM está instalado." },
+    ],
+  },
+};
