@@ -453,9 +453,6 @@ function ModuleDetailModal({
         {/* Footer action */}
         {canManage ? (
           <div className="flex justify-end gap-2 border-t border-border px-6 py-4">
-            <Button type="button" variant="outline" size="sm" onClick={onClose}>
-              {t("close")}
-            </Button>
             {installed ? (
               <Button
                 type="button"
