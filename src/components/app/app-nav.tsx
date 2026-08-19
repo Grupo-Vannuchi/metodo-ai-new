@@ -13,7 +13,6 @@ import {
   MessageCircle,
   Building2,
   Contact,
-  Cable,
   Wallet,
   UsersRound,
   Workflow,
@@ -85,7 +84,6 @@ const GROUPS: Group[] = [
     key: "comms",
     items: [
       { href: "/app/inbox", key: "inbox", icon: MessageCircle },
-      { href: "/app/connections", key: "connections", icon: Cable },
       { href: "/app/campaigns", key: "campaigns", icon: Send },
       { href: "/app/prospecting", key: "prospecting", icon: Radar },
     ],
