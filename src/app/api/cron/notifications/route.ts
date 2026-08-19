@@ -43,6 +43,9 @@ export async function GET(req: Request) {
   for (const m of memberships) {
     const moduleIds = m.organization.modules.map((x) => x.moduleId);
     const hasFinance = hasFeatureByModules(moduleIds, "finance");
+    const hasTasks = moduleIds.includes("tasks");
+    const hasCrm = moduleIds.includes("crm");
+    const hasInbox = moduleIds.includes("inbox");
     const alerts = await getAlerts(m.organizationId, m.userId, hasFinance);
     const db = tenantDb(m.organizationId);
 
@@ -57,7 +60,18 @@ export async function GET(req: Request) {
       { type: "OPP_STALE", count: alerts.staleOpps, link: "/app/crm" },
       { type: "FINANCE_OVERDUE", count: alerts.financeOverdue, link: "/app/finance/entries" },
       { type: "INBOX_UNREAD", count: alerts.unread, link: "/app/inbox" },
-    ].filter((r) => r.count > 0);
+    ]
+      .filter((r) => r.count > 0)
+      // Only notify about modules the org actually has installed.
+      .filter((r) =>
+        r.type.startsWith("TASK_")
+          ? hasTasks
+          : r.type === "OPP_STALE"
+            ? hasCrm
+            : r.type === "INBOX_UNREAD"
+              ? hasInbox
+              : true,
+      );
 
     // HR digests go only to the managers (payroll/HR data is sensitive).
     const isManager = m.role === "OWNER" || m.role === "ADMIN";

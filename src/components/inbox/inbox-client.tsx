@@ -138,11 +138,13 @@ export function InboxClient({
   initialFolders,
   initialSelectedId,
   quickReplies = [],
+  hasCrm = true,
 }: {
   initial: Conversation[];
   initialFolders: Folder[];
   initialSelectedId?: string | null;
   quickReplies?: QuickReply[];
+  hasCrm?: boolean;
 }) {
   const t = useTranslations("inbox");
   const confirm = useConfirm();
@@ -997,6 +999,7 @@ export function InboxClient({
               ) : null}
             </div>
 
+            {hasCrm ? (
             <div className="mt-8">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-sm">Oportunidades Ativas</h3>
@@ -1028,6 +1031,7 @@ export function InboxClient({
                 <p className="text-sm text-muted-foreground italic">Nenhuma oportunidade em andamento.</p>
               )}
             </div>
+            ) : null}
           </div>
         </aside>
       ) : null}

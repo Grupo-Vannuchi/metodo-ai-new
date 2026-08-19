@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
 import { requireScreen, requireModule } from "@/lib/access";
+import { hasModule } from "@/config/modules";
 import { prisma } from "@/lib/prisma";
 import { listConversations, listConversationFolders } from "@/lib/queries/inbox";
 import { listQuickReplies } from "@/lib/queries/quick-replies";
@@ -121,6 +122,7 @@ export default async function InboxPage({
               initialFolders={folders}
               initialSelectedId={c ?? null}
               quickReplies={quickReplies}
+              hasCrm={hasModule(ctx.modules, "crm")}
             />
           ) : (
             <TeamChatClient
