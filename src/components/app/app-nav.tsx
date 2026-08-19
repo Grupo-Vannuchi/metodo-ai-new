@@ -107,7 +107,7 @@ const GROUPS: Group[] = [
 
 /** Screens always shown in the sidebar (core, not gated by access templates).
  *  Settings + Loja live in the top bar now, not the sidebar. */
-const ALWAYS_SHOWN: NavKey[] = ["dashboard", "my"];
+const ALWAYS_SHOWN: NavKey[] = ["dashboard"];
 
 export function AppNav({ allowedScreens, collapsed = false }: { allowedScreens: string[]; collapsed?: boolean }) {
   const t = useTranslations("app.nav");
@@ -119,7 +119,9 @@ export function AppNav({ allowedScreens, collapsed = false }: { allowedScreens: 
     ALWAYS_SHOWN.includes(key) ||
     allowedScreens.includes(key) ||
     // Automations + goals act on the CRM funnel — show wherever the CRM is allowed.
-    ((key === "automations" || key === "goals") && allowedScreens.includes("crm"));
+    ((key === "automations" || key === "goals") && allowedScreens.includes("crm")) ||
+    // "Meus itens" is the personal Tasks hub — show it with the Tasks module.
+    (key === "my" && allowedScreens.includes("tasks"));
   const isActive = (href: string) => (href === "/app" ? pathname === "/app" : pathname.startsWith(href));
 
   // Live unread badge for the inbox item — pushed by the realtime stream.

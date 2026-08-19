@@ -37,6 +37,7 @@ export function MyHub({
   members,
   contacts,
   opportunities,
+  hasCrm = true,
 }: {
   userName: string;
   currentUserId: string;
@@ -48,6 +49,7 @@ export function MyHub({
   members: Option[];
   contacts: Option[];
   opportunities: Option[];
+  hasCrm?: boolean;
 }) {
   const t = useTranslations("my");
   const [tab, setTab] = useState<TabKey>("agenda");
@@ -90,8 +92,12 @@ export function MyHub({
           value={String(stats.overdue)}
           tone={stats.overdue > 0 ? "danger" : undefined}
         />
-        <Stat icon={CheckSquare} label={t("statOpenOpps")} value={String(stats.openOpps)} />
-        <Stat icon={TrendingUp} label={t("statForecast")} value={formatBRL(stats.forecast)} />
+        {hasCrm ? (
+          <>
+            <Stat icon={CheckSquare} label={t("statOpenOpps")} value={String(stats.openOpps)} />
+            <Stat icon={TrendingUp} label={t("statForecast")} value={formatBRL(stats.forecast)} />
+          </>
+        ) : null}
       </section>
 
       {/* Overdue / today highlight */}
@@ -151,7 +157,7 @@ export function MyHub({
           <div className="flex items-center gap-1 overflow-x-auto border-b border-border">
             <TabBtn active={tab === "agenda"} onClick={() => setTab("agenda")}>{t("tabAgenda")}</TabBtn>
             <TabBtn active={tab === "tasks"} onClick={() => setTab("tasks")}>{t("tabTasks")}</TabBtn>
-            <TabBtn active={tab === "opps"} onClick={() => setTab("opps")}>{t("tabOpps")}</TabBtn>
+            {hasCrm ? <TabBtn active={tab === "opps"} onClick={() => setTab("opps")}>{t("tabOpps")}</TabBtn> : null}
             <TabBtn active={tab === "notifications"} onClick={() => setTab("notifications")}>
               {t("tabNotifications")}
             </TabBtn>
@@ -173,7 +179,7 @@ export function MyHub({
             />
           ) : null}
 
-          {tab === "opps" ? <OppsTab opps={opps} /> : null}
+          {tab === "opps" && hasCrm ? <OppsTab opps={opps} /> : null}
 
           {tab === "notifications" ? <NotificationsTab notifications={notifications} /> : null}
         </div>

@@ -72,7 +72,7 @@ export const MODULES: ModuleDef[] = [
     dependsOn: [],
     integratesWith: ["marketing", "inbox", "finance"],
     unlocks: [],
-    screens: ["crm", "proposals"],
+    screens: ["crm", "proposals", "contacts", "companies"],
   },
   {
     id: "finance",
@@ -162,7 +162,7 @@ export const MODULES: ModuleDef[] = [
 
 /** Screens that belong to the CORE (always available, subject to AccessTemplate):
  *  no module owns them. Contacts/Companies are the shared base every module uses. */
-export const CORE_SCREENS = ["dashboard", "settings", "contacts", "companies", "feed"] as const;
+export const CORE_SCREENS = ["dashboard", "settings", "feed"] as const;
 
 export const MODULE_BY_ID: Record<ModuleId, ModuleDef> = Object.fromEntries(
   MODULES.map((m) => [m.id, m]),

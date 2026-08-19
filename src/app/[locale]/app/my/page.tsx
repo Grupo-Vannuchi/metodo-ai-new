@@ -1,4 +1,5 @@
 import { requireOrgContext } from "@/lib/tenant";
+import { requireModule } from "@/lib/access";
 import { hasModule } from "@/config/modules";
 import { listTasks } from "@/lib/queries/tasks";
 import { opportunityOptions } from "@/lib/queries/crm";
@@ -17,6 +18,8 @@ export default async function MyItemsPage({
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
+  // "Meus itens" is the personal Tasks hub — sold with the Tasks module.
+  await requireModule(ctx, "tasks", locale);
 
   const hasCrm = hasModule(ctx.modules, "crm");
   const hasTasks = hasModule(ctx.modules, "tasks");
@@ -45,6 +48,7 @@ export default async function MyItemsPage({
       members={members.map((m) => ({ id: m.userId, name: m.name }))}
       contacts={contacts}
       opportunities={opportunities}
+      hasCrm={hasCrm}
     />
   );
 }
