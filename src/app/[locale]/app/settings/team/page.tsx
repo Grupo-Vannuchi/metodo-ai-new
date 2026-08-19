@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { requireOrgContext, hasRole } from "@/lib/tenant";
 import { listMembers, listPendingInvitations } from "@/lib/queries/organizations";
 import { accessTemplateOptions } from "@/lib/queries/access-templates";
-import { InviteForm } from "@/components/app/invite-form";
+import { InvitePanel } from "@/components/app/invite-panel";
 import { PendingInvitations } from "@/components/app/pending-invitations";
 import { MembersAdmin } from "@/components/app/members-admin";
 import { resolveLocale } from "@/i18n/routing";
@@ -26,13 +26,8 @@ export default async function TeamPage({
   ]);
 
   return (
-    <div className="flex flex-col gap-8">
-      {isAdmin ? (
-        <section className="glass rounded-xl border border-border p-5 shadow-sm">
-          <h2 className="mb-4 text-sm font-semibold">{t("inviteTitle")}</h2>
-          <InviteForm />
-        </section>
-      ) : null}
+    <div className="flex flex-col gap-6">
+      {isAdmin ? <InvitePanel /> : null}
 
       {isAdmin ? <PendingInvitations invitations={pendingInvites} /> : null}
 

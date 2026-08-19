@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { Trash2, ChevronDown, ChevronRight, Search, Crown, ShieldCheck, UserRound } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/ui/confirm";
 import { Avatar } from "@/components/app/avatar";
+import { Input } from "@/components/ui/field";
 import { formatBrPhone } from "@/lib/phone";
 import { formatDocument } from "@/lib/document";
 import { removeMember, changeMemberRole } from "@/app/actions/organizations";
@@ -38,6 +39,23 @@ type Member = {
 
 type TemplateOpt = { id: string; name: string };
 
+const ROLE_ICON = { OWNER: Crown, ADMIN: ShieldCheck, MEMBER: UserRound } as const;
+const ROLE_STYLE = {
+  OWNER: "bg-amber-500/10 text-amber-600",
+  ADMIN: "bg-brand/10 text-brand",
+  MEMBER: "bg-muted text-muted-foreground",
+} as const;
+
+function RoleBadge({ role, label }: { role: Member["role"]; label: string }) {
+  const Icon = ROLE_ICON[role];
+  return (
+    <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium", ROLE_STYLE[role])}>
+      <Icon className="size-3" />
+      {label}
+    </span>
+  );
+}
+
 function ProfileDetail({ member }: { member: Member }) {
   const t = useTranslations("profile");
   const p = member.profile;
@@ -45,9 +63,7 @@ function ProfileDetail({ member }: { member: Member }) {
 
   const phone = p?.phone ? formatBrPhone(p.phone) : dash;
   const doc =
-    p?.documentType && p?.document
-      ? `${p.documentType}: ${formatDocument(p.documentType, p.document)}`
-      : dash;
+    p?.documentType && p?.document ? `${p.documentType}: ${formatDocument(p.documentType, p.document)}` : dash;
   const birth = p?.birthDate ? new Date(p.birthDate).toLocaleDateString() : dash;
   const address =
     p && (p.addressStreet || p.addressCity)
@@ -69,16 +85,13 @@ function ProfileDetail({ member }: { member: Member }) {
   ];
 
   return (
-    <div className="flex items-start gap-4 bg-muted/20 px-5 py-4">
-      <Avatar name={member.name} src={p?.avatarUrl ?? null} className="size-12" />
-      <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {fields.map((f) => (
-          <div key={f.label} className="flex flex-col">
-            <span className="text-xs text-muted-foreground">{f.label}</span>
-            <span className="text-sm">{f.value}</span>
-          </div>
-        ))}
-      </div>
+    <div className="grid gap-3 rounded-lg bg-muted/30 p-3 sm:grid-cols-2">
+      {fields.map((f) => (
+        <div key={f.label} className="flex flex-col">
+          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{f.label}</span>
+          <span className="text-sm">{f.value}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -99,6 +112,7 @@ export function MembersAdmin({
   const confirm = useConfirm();
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
   const [pending, start] = useTransition();
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
@@ -119,126 +133,141 @@ export function MembersAdmin({
     });
   }
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return members;
+    return members.filter((m) => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q));
+  }, [members, query]);
+
   const selectCls = cn(
     "rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm",
     "focus-visible:border-brand focus-visible:outline-none disabled:opacity-50",
   );
 
   return (
-    <div className="flex flex-col gap-3">
-      {error ? <p role="alert" className="text-sm text-red-500">{error}</p> : null}
-      <div className="overflow-x-auto rounded-xl border border-border bg-card">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-border text-muted-foreground">
-            <tr>
-              <th className="px-5 py-3 font-medium">{t("colName")}</th>
-              <th className="px-5 py-3 font-medium">{t("colRole")}</th>
-              <th className="px-5 py-3 font-medium">{t("colTemplate")}</th>
-              <th className="px-5 py-3" />
-            </tr>
-          </thead>
-          {members.map((m) => {
-              const isSelf = m.userId === currentUserId;
-              const isOwner = m.role === "OWNER";
-              const editable = !isSelf && !isOwner;
-              const canRole = editable && (currentRole === "OWNER" || m.role === "MEMBER");
-              const isOpen = expanded.has(m.membershipId);
-
-              return (
-                <tbody key={m.membershipId}>
-                  <tr className="border-b border-border last:border-0">
-                    <td className="px-5 py-3">
-                      <button
-                        type="button"
-                        onClick={() => toggle(m.membershipId)}
-                        className="flex items-center gap-3 text-left"
-                        aria-expanded={isOpen}
-                        title={t("viewProfile")}
-                      >
-                        {isOpen ? (
-                          <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-                        ) : (
-                          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                        )}
-                        <Avatar name={m.name} src={m.profile?.avatarUrl ?? null} className="size-8" />
-                        <span className="min-w-0">
-                          <span className="block font-medium">
-                            {m.name}{isSelf ? ` (${t("you")})` : ""}
-                          </span>
-                          <span className="block text-xs text-muted-foreground">{m.email}</span>
-                        </span>
-                      </button>
-                    </td>
-                    <td className="px-5 py-3">
-                      {canRole ? (
-                        <select
-                          className={selectCls}
-                          defaultValue={m.role}
-                          disabled={pending}
-                          onChange={(e) => run(() => changeMemberRole(m.membershipId, e.target.value))}
-                        >
-                          <option value="MEMBER">{t("role.MEMBER")}</option>
-                          <option value="ADMIN">{t("role.ADMIN")}</option>
-                        </select>
-                      ) : (
-                        <span className="text-muted-foreground">{t(`role.${m.role}`)}</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
-                      {m.role === "MEMBER" ? (
-                        <select
-                          className={selectCls}
-                          defaultValue={m.accessTemplateId ?? ""}
-                          disabled={pending}
-                          onChange={(e) =>
-                            run(() => setMemberTemplate(m.membershipId, e.target.value || null))
-                          }
-                        >
-                          <option value="">{t("fullAccess")}</option>
-                          {templates.map((tpl) => (
-                            <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span className="text-muted-foreground">{t("fullAccess")}</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      {editable ? (
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={async () => {
-                            if (
-                              await confirm({
-                                description: t("confirmRemove", { name: m.name }),
-                                confirmLabel: t("remove"),
-                                variant: "danger",
-                              })
-                            ) {
-                              run(() => removeMember(m.membershipId));
-                            }
-                          }}
-                          aria-label={t("remove")}
-                          className="inline-flex items-center rounded-lg px-2 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-red-600 disabled:opacity-50"
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
-                      ) : null}
-                    </td>
-                  </tr>
-                  {isOpen ? (
-                    <tr className="border-b border-border last:border-0">
-                      <td colSpan={4} className="p-0">
-                        <ProfileDetail member={m} />
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              );
-            })}
-        </table>
+    <div className="flex flex-col gap-4">
+      {/* Toolbar: search + count */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="relative w-full max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("searchPlaceholder")}
+            className="pl-9"
+          />
+        </div>
+        <p className="text-sm text-muted-foreground">{t("memberCount", { count: members.length })}</p>
       </div>
+
+      {error ? <p role="alert" className="text-sm text-red-500">{error}</p> : null}
+
+      {filtered.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+          {t("noResults")}
+        </p>
+      ) : (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {filtered.map((m) => {
+            const isSelf = m.userId === currentUserId;
+            const isOwner = m.role === "OWNER";
+            const editable = !isSelf && !isOwner;
+            const canRole = editable && (currentRole === "OWNER" || m.role === "MEMBER");
+            const isOpen = expanded.has(m.membershipId);
+
+            return (
+              <div key={m.membershipId} className="glass flex flex-col gap-3 rounded-xl border border-border p-4 shadow-sm">
+                {/* Identity row */}
+                <div className="flex items-start gap-3">
+                  <Avatar name={m.name} src={m.profile?.avatarUrl ?? null} className="size-11" />
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-2 font-medium">
+                      <span className="truncate">{m.name}</span>
+                      {isSelf ? <span className="text-xs text-muted-foreground">({t("you")})</span> : null}
+                    </p>
+                    <p className="truncate text-sm text-muted-foreground">{m.email}</p>
+                  </div>
+                  <RoleBadge role={m.role} label={t(`role.${m.role}`)} />
+                </div>
+
+                {/* Controls */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {canRole ? (
+                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      {t("colRole")}
+                      <select
+                        className={selectCls}
+                        defaultValue={m.role}
+                        disabled={pending}
+                        onChange={(e) => run(() => changeMemberRole(m.membershipId, e.target.value))}
+                      >
+                        <option value="MEMBER">{t("role.MEMBER")}</option>
+                        <option value="ADMIN">{t("role.ADMIN")}</option>
+                      </select>
+                    </label>
+                  ) : null}
+                  {m.role === "MEMBER" ? (
+                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      {t("colTemplate")}
+                      <select
+                        className={selectCls}
+                        defaultValue={m.accessTemplateId ?? ""}
+                        disabled={pending}
+                        onChange={(e) => run(() => setMemberTemplate(m.membershipId, e.target.value || null))}
+                      >
+                        <option value="">{t("fullAccess")}</option>
+                        {templates.map((tpl) => (
+                          <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">{t("fullAccess")}</span>
+                  )}
+                </div>
+
+                {/* Footer: expand + remove */}
+                <div className="flex items-center justify-between border-t border-border pt-2">
+                  <button
+                    type="button"
+                    onClick={() => toggle(m.membershipId)}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    aria-expanded={isOpen}
+                  >
+                    {isOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                    {isOpen ? t("hideProfile") : t("viewProfile")}
+                  </button>
+                  {editable ? (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={async () => {
+                        if (
+                          await confirm({
+                            description: t("confirmRemove", { name: m.name }),
+                            confirmLabel: t("remove"),
+                            variant: "danger",
+                          })
+                        ) {
+                          run(() => removeMember(m.membershipId));
+                        }
+                      }}
+                      aria-label={t("remove")}
+                      title={t("remove")}
+                      className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-red-600 disabled:opacity-50"
+                    >
+                      <Trash2 className="size-3.5" />
+                      {t("remove")}
+                    </button>
+                  ) : null}
+                </div>
+
+                {isOpen ? <ProfileDetail member={m} /> : null}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
