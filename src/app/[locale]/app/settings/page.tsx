@@ -1,8 +1,9 @@
 import { getTranslations } from "next-intl/server";
-import { Users, ScrollText, UserRound, ShieldCheck, ArrowRight, Building2, Gauge } from "lucide-react";
+import { Users, ScrollText, UserRound, ShieldCheck, ArrowRight, Building2, Gauge, CreditCard, Boxes } from "lucide-react";
 import { requireOrgContext, hasRole } from "@/lib/tenant";
 import { getUsageSummary, type UsageMetric } from "@/lib/queries/usage";
-import { hasFeatureByModules } from "@/config/modules";
+import { hasFeatureByModules, hasModule, monthlyTotal } from "@/config/modules";
+import { formatBRL } from "@/lib/money";
 import { LeaveTeamButton } from "@/components/app/leave-team-button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -48,14 +49,25 @@ export default async function SettingsPage({
   const isAdmin = hasRole(ctx.role, "ADMIN");
 
   const usage = await getUsageSummary(ctx.organizationId);
+  const total = monthlyTotal(ctx.modules);
+  const moduleCount = ctx.modules.length;
 
-  const stats = [
-    { icon: Building2, label: t("org"), value: ctx.organization.name, sub: ctx.organization.slug },
-    { icon: ShieldCheck, label: t("yourRole"), value: ctx.role, sub: null },
-  ];
+  // Usage rows relevant to what's installed — keeps the panel from listing
+  // metrics for modules the org doesn't have (mirrors the modular gating).
+  const hasInbox = hasModule(ctx.modules, "inbox");
+  const hasMarketing = hasModule(ctx.modules, "marketing");
+  const usageRows = [
+    { label: t("usage.seats"), metric: usage.seats, show: true },
+    { label: t("usage.connections"), metric: usage.connections, show: hasInbox },
+    { label: t("usage.dispatch"), metric: usage.dispatch, show: hasMarketing },
+    { label: t("usage.searches"), metric: usage.searches, show: hasMarketing },
+    { label: t("usage.prospecting"), metric: usage.prospecting, show: hasMarketing },
+    { label: t("usage.assistant"), metric: usage.assistant, show: hasFeatureByModules(ctx.modules, "assistant") },
+  ].filter((r) => r.show);
 
   const shortcuts = [
     { href: "/app/settings/profile", icon: UserRound, label: t("nav.profile"), desc: t("sections.profileDesc"), show: true },
+    { href: "/app/settings/billing", icon: CreditCard, label: t("nav.billing"), desc: t("sections.billingDesc"), show: true },
     { href: "/app/settings/team", icon: Users, label: t("nav.team"), desc: t("sections.teamDesc"), show: true },
     { href: "/app/settings/access", icon: ShieldCheck, label: t("nav.access"), desc: t("sections.accessDesc"), show: isAdmin },
     { href: "/app/settings/audit", icon: ScrollText, label: t("nav.audit"), desc: t("sections.auditDesc"), show: isAdmin },
@@ -63,17 +75,49 @@ export default async function SettingsPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <section className="stagger-children grid gap-4 sm:grid-cols-3">
-        {stats.map((s) => (
-          <div key={s.label} className="glass rounded-xl border border-border p-5 shadow-sm">
-            <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <s.icon className="size-4" />
-              {s.label}
-            </p>
-            <p className="mt-1 truncate text-lg font-semibold">{s.value}</p>
-            {s.sub ? <p className="truncate text-xs text-muted-foreground">{s.sub}</p> : null}
-          </div>
-        ))}
+      {/* Summary: org, role + subscription snapshot */}
+      <section className="stagger-children grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="glass rounded-xl border border-border p-5 shadow-sm">
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Building2 className="size-4" />
+            {t("org")}
+          </p>
+          <p className="mt-1 truncate text-lg font-semibold">{ctx.organization.name}</p>
+          <p className="truncate text-xs text-muted-foreground">{ctx.organization.slug}</p>
+        </div>
+
+        <div className="glass rounded-xl border border-border p-5 shadow-sm">
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <ShieldCheck className="size-4" />
+            {t("yourRole")}
+          </p>
+          <p className="mt-1 truncate text-lg font-semibold">{ctx.role}</p>
+        </div>
+
+        {/* Subscription snapshot — links straight to the billing tab. */}
+        <Link
+          href="/app/settings/billing"
+          className="hover-lift group relative overflow-hidden rounded-xl border border-brand/30 bg-brand/5 p-5 shadow-sm"
+        >
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-70"
+            style={{ background: "radial-gradient(120% 120% at 100% 0%, color-mix(in srgb, var(--brand) 18%, transparent), transparent 55%)" }}
+          />
+          <p className="relative flex items-center gap-2 text-sm text-muted-foreground">
+            <CreditCard className="size-4" />
+            {t("nav.billing")}
+          </p>
+          <p className="relative mt-1 text-2xl font-bold text-brand">
+            {formatBRL(total)}
+            <span className="text-sm font-normal text-muted-foreground">{t("billing.perMonth")}</span>
+          </p>
+          <p className="relative flex items-center gap-1 text-xs text-muted-foreground">
+            <Boxes className="size-3.5" />
+            {t("billing.moduleCount", { count: moduleCount })}
+            <ArrowRight className="size-3.5 -translate-x-1 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
+          </p>
+        </Link>
       </section>
 
       <section>
@@ -82,14 +126,9 @@ export default async function SettingsPage({
           {t("usageTitle")}
         </h2>
         <div className="grid gap-3 sm:grid-cols-2">
-          <UsageRow label={t("usage.seats")} metric={usage.seats} />
-          <UsageRow label={t("usage.connections")} metric={usage.connections} />
-          <UsageRow label={t("usage.dispatch")} metric={usage.dispatch} />
-          <UsageRow label={t("usage.searches")} metric={usage.searches} />
-          <UsageRow label={t("usage.prospecting")} metric={usage.prospecting} />
-          {hasFeatureByModules(ctx.modules, "assistant") ? (
-            <UsageRow label={t("usage.assistant")} metric={usage.assistant} />
-          ) : null}
+          {usageRows.map((r) => (
+            <UsageRow key={r.label} label={r.label} metric={r.metric} />
+          ))}
         </div>
         <p className="mt-2 text-xs text-muted-foreground">{t("usageHint")}</p>
       </section>

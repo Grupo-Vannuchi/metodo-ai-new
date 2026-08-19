@@ -2194,6 +2194,7 @@
     "sections": {
       "title": "Shortcuts",
       "profileDesc": "Your details, photo and account security",
+      "billingDesc": "Installed modules, price and subscription",
       "teamDesc": "Invite and manage members and roles",
       "accessDesc": "Per-screen access templates for the team",
       "auditDesc": "History of organization actions",
