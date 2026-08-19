@@ -218,6 +218,7 @@
     "applyPreset": "Install package",
     "tabModules": "Modules",
     "tabPackages": "Packages",
+    "recommended": "Recommended",
     "manageHint": "Ask an administrator to install or remove modules.",
     "errGeneric": "Couldn't complete. Please try again.",
     "errDependent": "Remove the modules that depend on this one first.",

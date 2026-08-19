@@ -218,6 +218,7 @@
     "applyPreset": "Instalar pacote",
     "tabModules": "Módulos",
     "tabPackages": "Pacotes",
+    "recommended": "Recomendado",
     "manageHint": "Fale com um administrador para instalar ou remover módulos.",
     "errGeneric": "Não foi possível concluir. Tente novamente.",
     "errDependent": "Remova antes os módulos que dependem deste.",
