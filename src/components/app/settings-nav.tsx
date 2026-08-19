@@ -9,9 +9,9 @@ const TABS = [
   { href: "/app/settings", key: "overview", icon: LayoutGrid, admin: false },
   { href: "/app/settings/profile", key: "profile", icon: UserRound, admin: false },
   { href: "/app/settings/team", key: "team", icon: Users, admin: false },
+  { href: "/app/settings/billing", key: "billing", icon: CreditCard, admin: false },
   { href: "/app/settings/access", key: "access", icon: ShieldCheck, admin: true },
   { href: "/app/settings/audit", key: "audit", icon: ScrollText, admin: true },
-  { href: "/app/settings/plans", key: "plans", icon: CreditCard, admin: false },
 ] as const;
 
 /** Shared tab bar across all Settings screens. Admin-only tabs are hidden for

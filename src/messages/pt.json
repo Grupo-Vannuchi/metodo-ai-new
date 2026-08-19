@@ -2163,9 +2163,27 @@
       "overview": "Visão geral",
       "profile": "Perfil",
       "team": "Equipe",
+      "billing": "Assinatura",
       "access": "Acesso",
-      "audit": "Auditoria",
-      "plans": "Planos"
+      "audit": "Auditoria"
+    },
+    "billing": {
+      "summaryFor": "Assinatura de {org}",
+      "perMonth": "/mês",
+      "free": "Grátis",
+      "moduleCount": "{count, plural, =0 {Nenhum módulo} =1 {# módulo instalado} other {# módulos instalados}}",
+      "goToStore": "Ir para a Loja",
+      "addModules": "Adicionar módulos",
+      "empty": "Você ainda não instalou nenhum módulo. Comece pela Loja.",
+      "remove": "Remover",
+      "removeTitle": "Remover {name}?",
+      "removeDesc": "O módulo fica dormente e seus dados são preservados. Você pode reinstalar depois sem perder nada.",
+      "blockedBy": "Remova antes {name}, que depende deste módulo.",
+      "manageHint": "Fale com um administrador para gerenciar a assinatura.",
+      "simulatedNote": "Cobrança simulada — nenhum valor real é cobrado nesta versão.",
+      "errDependent": "Remova antes os módulos que dependem deste.",
+      "errForbidden": "Só o dono ou um administrador pode gerenciar a assinatura.",
+      "errGeneric": "Não foi possível concluir. Tente novamente."
     },
     "open": "Abrir",
     "sections": {
