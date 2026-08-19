@@ -81,6 +81,8 @@ export type ConnectedAccount = {
 export type AccountSecurity = {
   hasPassword: boolean;
   emailVerified: Date | null;
+  /** A new e-mail awaiting confirmation (double opt-in), or null. */
+  pendingEmail: string | null;
   accounts: ConnectedAccount[];
   /** Providers offered for linking — only those with credentials configured. */
   providers: OAuthProvider[];
@@ -93,6 +95,7 @@ export async function getMyAccountSecurity(userId: string): Promise<AccountSecur
     select: {
       passwordHash: true,
       emailVerified: true,
+      pendingEmail: true,
       accounts: {
         select: { id: true, provider: true, createdAt: true },
         orderBy: { createdAt: "asc" },
@@ -103,6 +106,7 @@ export async function getMyAccountSecurity(userId: string): Promise<AccountSecur
   return {
     hasPassword: Boolean(user.passwordHash),
     emailVerified: user.emailVerified,
+    pendingEmail: user.pendingEmail,
     accounts: user.accounts,
     providers: configuredProviders(),
   };

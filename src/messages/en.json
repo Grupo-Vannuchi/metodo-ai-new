@@ -180,6 +180,19 @@
       "invalid": "Invalid or expired link.",
       "backToLogin": "Back to login"
     },
+    "verifyEmail": {
+      "title": "Confirm new email",
+      "subtitle": "Click below to confirm the change of your sign-in email.",
+      "confirm": "Confirm new email",
+      "confirming": "Confirming…",
+      "done": "Done! Your sign-in email is now {email}.",
+      "goToLogin": "Go to login",
+      "backToLogin": "Back to login",
+      "error": {
+        "invalid": "Invalid or expired link.",
+        "taken": "This email is already used by another account."
+      }
+    },
     "forgot": {
       "title": "Reset password",
       "subtitle": "Enter your email and we'll send a link to reset your password.",
@@ -1853,6 +1866,31 @@
         "current_required": "Enter your current password.",
         "current_invalid": "Current password is incorrect.",
         "unknown": "Couldn't save. Please try again."
+      }
+    },
+    "emailChange": {
+      "title": "Sign-in email",
+      "desc": "Change the email you use to sign in. We confirm the change via a link sent to the new address.",
+      "current": "Current email",
+      "open": "Change email",
+      "changeAgain": "Change to another email",
+      "newEmail": "New email",
+      "newEmailPlaceholder": "you@company.com",
+      "currentPassword": "Current password",
+      "cta": "Send confirmation",
+      "sending": "Sending…",
+      "dismiss": "Cancel",
+      "sent": "We sent a confirmation link to {email}. Your email only changes once you click it.",
+      "pending": "Pending change to {email}",
+      "pendingHint": "Confirm via the link sent to the new email to finish.",
+      "cancel": "Cancel change",
+      "error": {
+        "invalid": "Invalid email.",
+        "same": "That's already your current email.",
+        "taken": "This email is already used by another account.",
+        "wrong_password": "Current password is incorrect.",
+        "unauthorized": "Session expired. Please sign in again.",
+        "unknown": "Couldn't complete. Please try again."
       }
     },
     "accounts": {

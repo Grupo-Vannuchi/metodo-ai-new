@@ -180,6 +180,19 @@
       "invalid": "Link inválido ou expirado.",
       "backToLogin": "Voltar ao login"
     },
+    "verifyEmail": {
+      "title": "Confirmar novo e-mail",
+      "subtitle": "Clique abaixo para confirmar a alteração do seu e-mail de acesso.",
+      "confirm": "Confirmar novo e-mail",
+      "confirming": "Confirmando…",
+      "done": "Pronto! Seu e-mail de acesso agora é {email}.",
+      "goToLogin": "Ir para o login",
+      "backToLogin": "Voltar ao login",
+      "error": {
+        "invalid": "Link inválido ou expirado.",
+        "taken": "Este e-mail já está em uso por outra conta."
+      }
+    },
     "forgot": {
       "title": "Recuperar senha",
       "subtitle": "Informe seu e-mail e enviaremos um link para redefinir a senha.",
@@ -1853,6 +1866,31 @@
         "current_required": "Informe sua senha atual.",
         "current_invalid": "Senha atual incorreta.",
         "unknown": "Não foi possível salvar. Tente novamente."
+      }
+    },
+    "emailChange": {
+      "title": "E-mail de acesso",
+      "desc": "Altere o e-mail usado para entrar. Confirmamos a mudança por um link enviado ao novo endereço.",
+      "current": "E-mail atual",
+      "open": "Alterar e-mail",
+      "changeAgain": "Alterar para outro e-mail",
+      "newEmail": "Novo e-mail",
+      "newEmailPlaceholder": "voce@empresa.com",
+      "currentPassword": "Senha atual",
+      "cta": "Enviar confirmação",
+      "sending": "Enviando…",
+      "dismiss": "Cancelar",
+      "sent": "Enviamos um link de confirmação para {email}. O e-mail só muda depois que você clicar nele.",
+      "pending": "Alteração pendente para {email}",
+      "pendingHint": "Confirme pelo link enviado ao novo e-mail para concluir.",
+      "cancel": "Cancelar alteração",
+      "error": {
+        "invalid": "E-mail inválido.",
+        "same": "Este já é o seu e-mail atual.",
+        "taken": "Este e-mail já está em uso por outra conta.",
+        "wrong_password": "Senha atual incorreta.",
+        "unauthorized": "Sessão expirada. Entre novamente.",
+        "unknown": "Não foi possível concluir. Tente novamente."
       }
     },
     "accounts": {

@@ -107,6 +107,10 @@ model User {
   /// Null until the user confirms their e-mail (login is gated on this). Set
   /// automatically for invited users and OAuth sign-ins (the provider proves it).
   emailVerified DateTime?
+  /// A requested new e-mail awaiting confirmation (double opt-in). The change is
+  /// only applied when the link sent to this address is confirmed (EMAIL_CHANGE
+  /// token). Null when there's no pending change.
+  pendingEmail String?
   /// Presence (team chat): heartbeat timestamp — "online" when recent.
   lastSeenAt   DateTime?
   /// Transient typing indicator: which chat the user is typing in, and when.
@@ -151,6 +155,7 @@ model Account {
 enum AuthTokenPurpose {
   EMAIL_VERIFICATION
   PASSWORD_RESET
+  EMAIL_CHANGE
 }
 
 /// A single-use, expiring token for e-mail verification / password reset. Only

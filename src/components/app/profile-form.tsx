@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { ProfileCoreFields } from "@/components/auth/profile-core-fields";
 import { AvatarUploader } from "@/components/app/profile/avatar-uploader";
 import { ChangePasswordCard } from "@/components/app/profile/change-password-card";
+import { ChangeEmailCard } from "@/components/app/profile/change-email-card";
 import { ConnectedAccountsCard } from "@/components/app/profile/connected-accounts-card";
 import { updateProfile } from "@/app/actions/profile";
 import type { ProfileView } from "@/lib/queries/profile";
@@ -184,8 +185,13 @@ export function ProfileClient({ profile, security }: { profile: ProfileView; sec
         </div>
       </form>
 
-      {/* Security: photo lives in the header; here go password + linked accounts. */}
+      {/* Security: photo lives in the header; here go e-mail, password + accounts. */}
       <div className={cn("grid items-start gap-5 lg:grid-cols-2", tab !== "security" && "hidden")}>
+        <ChangeEmailCard
+          currentEmail={profile.email}
+          hasPassword={security.hasPassword}
+          pendingEmail={security.pendingEmail}
+        />
         <ChangePasswordCard hasPassword={security.hasPassword} />
         <ConnectedAccountsCard
           email={profile.email}

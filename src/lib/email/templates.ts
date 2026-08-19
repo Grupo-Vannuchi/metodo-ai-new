@@ -68,6 +68,26 @@ export function renderPasswordResetEmail(opts: { name: string; resetUrl: string 
   };
 }
 
+export function renderEmailChangeEmail(opts: { name: string; confirmUrl: string; newEmail: string }): {
+  subject: string;
+  html: string;
+} {
+  return {
+    subject: "Confirme seu novo e-mail — MétodoAI",
+    html: renderEmailLayout({
+      preview: "Confirme a alteração do seu e-mail de acesso.",
+      heading: `Olá, ${opts.name}`,
+      bodyHtml: paragraphs(
+        `Recebemos um pedido para alterar o e-mail de acesso da sua conta no MétodoAI para <strong>${opts.newEmail}</strong>.`,
+        `Clique no botão abaixo para confirmar. Só depois disso o e-mail será alterado.`,
+      ),
+      button: { label: "Confirmar novo e-mail", url: opts.confirmUrl },
+      footnote:
+        "O link expira em 24 horas. Se você não pediu esta alteração, ignore este e-mail — seu e-mail de acesso continua o mesmo.",
+    }),
+  };
+}
+
 export function renderWelcomeEmail(opts: { name: string; appUrl: string }): {
   subject: string;
   html: string;
