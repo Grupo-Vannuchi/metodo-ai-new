@@ -15,7 +15,6 @@ import {
   Loader2,
   Lock,
   Trash2,
-  Store,
   type LucideIcon,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -118,19 +117,13 @@ export function SubscriptionManager({
           className="pointer-events-none absolute inset-0 opacity-70"
           style={{ background: "radial-gradient(110% 110% at 100% 0%, color-mix(in srgb, var(--brand) 14%, transparent), transparent 55%)" }}
         />
-        <div className="relative flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("summaryFor", { org: orgName })}</p>
-            <p className="mt-1 text-3xl font-bold text-brand">
-              {formatBRL(total)}
-              <span className="text-base font-normal text-muted-foreground">{t("perMonth")}</span>
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">{t("moduleCount", { count: modules.length })}</p>
-          </div>
-          <Link href="/app/loja" className={cn(buttonVariants({ variant: "outline" }), "gap-2")}>
-            <Store className="size-4" />
-            {t("goToStore")}
-          </Link>
+        <div className="relative">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("summaryFor", { org: orgName })}</p>
+          <p className="mt-1 text-3xl font-bold text-brand">
+            {formatBRL(total)}
+            <span className="text-base font-normal text-muted-foreground">{t("perMonth")}</span>
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("moduleCount", { count: modules.length })}</p>
         </div>
       </div>
 

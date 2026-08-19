@@ -2,6 +2,7 @@ import { requireOrgContext, hasRole } from "@/lib/tenant";
 import { listAccessTemplates } from "@/lib/queries/access-templates";
 import { AccessTemplatesManager } from "@/components/app/access-templates-manager";
 import { GATEABLE_SCREENS } from "@/config/screens";
+import { availableScreens } from "@/config/modules";
 import { redirect } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 
@@ -24,9 +25,14 @@ export default async function AccessTemplatesPage({
     memberCount: r._count.memberships,
   }));
 
+  // Only offer screens the org actually has — a template can't grant a screen
+  // that belongs to a module the org hasn't installed (modular gating).
+  const available = availableScreens(ctx.modules);
+  const screens = [...GATEABLE_SCREENS].filter((s) => available.has(s));
+
   return (
     <div className="flex flex-col gap-6">
-      <AccessTemplatesManager templates={templates} screens={[...GATEABLE_SCREENS]} />
+      <AccessTemplatesManager templates={templates} screens={screens} />
     </div>
   );
 }

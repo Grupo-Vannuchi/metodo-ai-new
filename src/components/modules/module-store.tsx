@@ -17,6 +17,8 @@ import {
   Info,
   X,
   Link2,
+  BadgeCheck,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -61,7 +63,22 @@ const THEME: Record<string, string> = {
 
 type Tab = "modules" | "packages";
 
-export function ModuleStore({ installed, canManage }: { installed: string[]; canManage: boolean }) {
+/** A module's ownership state, driving the store's three visuals + flows. */
+export type ModuleState = "installed" | "obtained" | "new";
+
+/** What a pending terms acceptance refers to (a single module or a package). */
+type TermsTarget = { kind: "module"; id: ModuleId } | { kind: "preset"; id: string };
+
+export function ModuleStore({
+  installed,
+  obtained,
+  canManage,
+}: {
+  installed: string[];
+  /** DORMANT module ids — obtained before, uninstalled now (data kept). */
+  obtained: string[];
+  canManage: boolean;
+}) {
   const t = useTranslations("loja");
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -69,10 +86,14 @@ export function ModuleStore({ installed, canManage }: { installed: string[]; can
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("modules");
   const [detailId, setDetailId] = useState<ModuleId | null>(null);
+  const [termsTarget, setTermsTarget] = useState<TermsTarget | null>(null);
 
   const has = (id: string) => installed.includes(id);
   const total = monthlyTotal(installed);
   const priceLabel = (v: number) => (v === 0 ? t("free") : `${formatBRL(v)}${t("perMonth")}`);
+
+  const stateOf = (id: string): ModuleState =>
+    installed.includes(id) ? "installed" : obtained.includes(id) ? "obtained" : "new";
 
   function run(id: string, fn: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
@@ -88,6 +109,41 @@ export function ModuleStore({ installed, canManage }: { installed: string[]; can
       }
       router.refresh();
     });
+  }
+
+  /** Install flow: a brand-new module must accept the purchase terms first; an
+   *  already-obtained (dormant) one just reactivates (terms were accepted before). */
+  function requestInstall(id: ModuleId) {
+    if (stateOf(id) === "new") {
+      setDetailId(null);
+      setTermsTarget({ kind: "module", id });
+    } else {
+      run(id, () => installModule(id));
+    }
+  }
+
+  /** Package flow: if it adds any new/dormant module to the bill, confirm terms. */
+  function requestPreset(pid: string) {
+    const preset = MODULE_PRESETS.find((p) => p.id === pid);
+    if (!preset) return;
+    const adds = preset.modules.some((mid) => !installed.includes(mid));
+    if (adds) setTermsTarget({ kind: "preset", id: pid });
+    else run(`preset:${pid}`, () => applyPreset(pid));
+  }
+
+  // Modules newly added to the bill by the pending terms target (for the modal).
+  const addedIds: ModuleId[] = termsTarget
+    ? termsTarget.kind === "module"
+      ? [...new Set<ModuleId>([termsTarget.id, ...MODULE_BY_ID[termsTarget.id].dependsOn])].filter((id) => !installed.includes(id))
+      : (MODULE_PRESETS.find((p) => p.id === termsTarget.id)?.modules ?? []).filter((id) => !installed.includes(id))
+    : [];
+
+  function acceptTerms() {
+    if (!termsTarget) return;
+    const target = termsTarget;
+    setTermsTarget(null);
+    if (target.kind === "module") run(target.id, () => installModule(target.id));
+    else run(`preset:${target.id}`, () => applyPreset(target.id));
   }
 
   return (
@@ -137,13 +193,13 @@ export function ModuleStore({ installed, canManage }: { installed: string[]; can
             <ModuleCard
               key={m.id}
               module={m}
-              installed={has(m.id)}
+              state={stateOf(m.id)}
               busy={busyId === m.id}
               disabled={pending}
               canManage={canManage}
               priceLabel={priceLabel(m.priceMonthly)}
               icon={ICONS[m.icon] ?? Boxes}
-              onInstall={() => run(m.id, () => installModule(m.id))}
+              onInstall={() => requestInstall(m.id)}
               onRemove={() => run(m.id, () => uninstallModule(m.id))}
               onOpenDetail={() => setDetailId(m.id)}
               t={t}
@@ -189,7 +245,7 @@ export function ModuleStore({ installed, canManage }: { installed: string[]; can
                     variant={highlight ? "primary" : "outline"}
                     className="mt-5"
                     disabled={pending}
-                    onClick={() => run(`preset:${p.id}`, () => applyPreset(p.id))}
+                    onClick={() => requestPreset(p.id)}
                   >
                     {busyId === `preset:${p.id}` ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
                     {t("applyPreset")}
@@ -205,14 +261,27 @@ export function ModuleStore({ installed, canManage }: { installed: string[]; can
         <ModuleDetailModal
           module={MODULE_BY_ID[detailId]}
           icon={ICONS[MODULE_BY_ID[detailId].icon] ?? Boxes}
-          installed={has(detailId)}
+          state={stateOf(detailId)}
           canManage={canManage}
           busy={busyId === detailId}
           disabled={pending}
           priceLabel={priceLabel(MODULE_BY_ID[detailId].priceMonthly)}
-          onInstall={() => run(detailId, () => installModule(detailId))}
+          onInstall={() => requestInstall(detailId)}
           onRemove={() => run(detailId, () => uninstallModule(detailId))}
           onClose={() => setDetailId(null)}
+          t={t}
+        />
+      ) : null}
+
+      {termsTarget ? (
+        <TermsModal
+          title={termsTarget.kind === "preset" ? MODULE_PRESETS.find((p) => p.id === termsTarget.id)?.name ?? "" : MODULE_BY_ID[termsTarget.id].name}
+          addedModules={addedIds.map((id) => ({ id, name: MODULE_BY_ID[id].name, price: MODULE_BY_ID[id].priceMonthly }))}
+          currentTotal={total}
+          newTotal={monthlyTotal([...installed, ...addedIds])}
+          busy={pending}
+          onAccept={acceptTerms}
+          onClose={() => setTermsTarget(null)}
           t={t}
         />
       ) : null}
@@ -222,7 +291,7 @@ export function ModuleStore({ installed, canManage }: { installed: string[]; can
 
 function ModuleCard({
   module: m,
-  installed,
+  state,
   busy,
   disabled,
   canManage,
@@ -234,7 +303,7 @@ function ModuleCard({
   t,
 }: {
   module: ModuleDef;
-  installed: boolean;
+  state: ModuleState;
   busy: boolean;
   disabled: boolean;
   canManage: boolean;
@@ -245,11 +314,13 @@ function ModuleCard({
   onOpenDetail: () => void;
   t: ReturnType<typeof useTranslations>;
 }) {
+  const installed = state === "installed";
+  const obtained = state === "obtained";
   return (
     <div
       className={cn(
         "flex flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-md",
-        installed ? "border-brand/40" : "border-border",
+        installed ? "border-brand/40" : obtained ? "border-sky-500/40" : "border-border",
       )}
     >
       {/* Featured banner — per-module gradient + icon (photo-ready).
@@ -277,6 +348,11 @@ function ModuleCard({
           <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-brand">
             <Check className="size-3" />
             {t("installed")}
+          </span>
+        ) : obtained ? (
+          <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-sky-600">
+            <BadgeCheck className="size-3" />
+            {t("obtained")}
           </span>
         ) : null}
         <span className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-black/30 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur transition-opacity duration-200 sm:opacity-0 sm:group-hover/banner:opacity-100">
@@ -310,10 +386,11 @@ function ModuleCard({
           ) : (
             <Button type="button" size="sm" className="mt-1 self-start" disabled={disabled} onClick={onInstall}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-              {t("install")}
+              {obtained ? t("reinstall") : t("install")}
             </Button>
           )
         ) : null}
+        {obtained ? <p className="text-xs text-sky-600">{t("obtainedHint")}</p> : null}
       </div>
     </div>
   );
@@ -324,7 +401,7 @@ function ModuleCard({
 function ModuleDetailModal({
   module: m,
   icon: Icon,
-  installed,
+  state,
   canManage,
   busy,
   disabled,
@@ -336,7 +413,7 @@ function ModuleDetailModal({
 }: {
   module: ModuleDef;
   icon: LucideIcon;
-  installed: boolean;
+  state: ModuleState;
   canManage: boolean;
   busy: boolean;
   disabled: boolean;
@@ -347,6 +424,8 @@ function ModuleDetailModal({
   t: ReturnType<typeof useTranslations>;
 }) {
   const detail = MODULE_DETAILS[m.id];
+  const installed = state === "installed";
+  const obtained = state === "obtained";
 
   // Escape closes; lock body scroll while open.
   useEffect(() => {
@@ -401,6 +480,11 @@ function ModuleDetailModal({
             <span className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-brand">
               <Check className="size-3" />
               {t("installed")}
+            </span>
+          ) : obtained ? (
+            <span className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-sky-600">
+              <BadgeCheck className="size-3" />
+              {t("obtained")}
             </span>
           ) : null}
         </div>
@@ -468,11 +552,119 @@ function ModuleDetailModal({
             ) : (
               <Button type="button" size="sm" disabled={disabled} onClick={onInstall}>
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-                {t("install")}
+                {obtained ? t("reinstall") : t("install")}
               </Button>
             )}
           </div>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** Purchase-terms confirmation shown BEFORE obtaining a new module/package.
+ *  Explains what's being added, the billing impact (next cycle) and requires an
+ *  explicit "I agree" before installing. */
+function TermsModal({
+  title,
+  addedModules,
+  currentTotal,
+  newTotal,
+  busy,
+  onAccept,
+  onClose,
+  t,
+}: {
+  title: string;
+  addedModules: { id: string; name: string; price: number }[];
+  currentTotal: number;
+  newTotal: number;
+  busy: boolean;
+  onAccept: () => void;
+  onClose: () => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const [agreed, setAgreed] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  const priceLabel = (v: number) => (v === 0 ? t("free") : `${formatBRL(v)}${t("perMonth")}`);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={t("terms.title")}>
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label={t("close")}
+        onClick={onClose}
+        className="absolute inset-0 cursor-default bg-black/50 backdrop-blur-sm motion-safe:animate-overlay-in"
+      />
+      <div className="glass-strong relative flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/15 shadow-2xl motion-safe:animate-dialog-in">
+        <div className="flex items-center gap-3 border-b border-border px-6 py-4">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
+            <ShieldCheck className="size-5" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold">{t("terms.title")}</h2>
+            <p className="truncate text-xs text-muted-foreground">{t("terms.subtitle", { name: title })}</p>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("terms.adding")}</p>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {addedModules.map((mod) => (
+              <li key={mod.id} className="flex items-center justify-between gap-3 text-sm">
+                <span className="flex items-center gap-2">
+                  <Plus className="size-3.5 text-brand" />
+                  {mod.name}
+                </span>
+                <span className="tabular-nums text-muted-foreground">{priceLabel(mod.price)}</span>
+              </li>
+            ))}
+          </ul>
+
+          {/* Billing impact */}
+          <div className="mt-4 rounded-xl border border-brand/30 bg-brand/5 p-4">
+            <p className="text-sm">{t("terms.billing")}</p>
+            <p className="mt-2 flex items-baseline gap-2">
+              <span className="text-muted-foreground line-through">{formatBRL(currentTotal)}</span>
+              <span className="text-xl font-bold text-brand">{formatBRL(newTotal)}</span>
+              <span className="text-sm text-muted-foreground">{t("perMonth")}</span>
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">{t("terms.nextCycle")}</p>
+          </div>
+
+          <p className="mt-4 text-xs leading-relaxed text-muted-foreground">{t("terms.legal")}</p>
+
+          <label className="mt-4 flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-0.5 size-4 accent-brand" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+            <span>{t("terms.agree")}</span>
+          </label>
+
+          <p className="mt-3 text-xs text-muted-foreground">{t("terms.simulated")}</p>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-border px-6 py-4">
+          <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={busy}>
+            {t("terms.cancel")}
+          </Button>
+          <Button type="button" size="sm" onClick={onAccept} disabled={!agreed || busy}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+            {t("terms.accept")}
+          </Button>
+        </div>
       </div>
     </div>
   );

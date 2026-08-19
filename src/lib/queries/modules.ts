@@ -12,6 +12,17 @@ export async function orgModuleIds(organizationId: string): Promise<string[]> {
   return rows.map((r) => r.moduleId);
 }
 
+/** The org's DORMANT module ids — "obtained but not installed": previously
+ *  installed, later uninstalled (data kept). Used by the store to show the
+ *  three states (new · obtained · installed). */
+export async function orgDormantModuleIds(organizationId: string): Promise<string[]> {
+  const rows = await prisma.organizationModule.findMany({
+    where: { organizationId, status: "DORMANT" },
+    select: { moduleId: true },
+  });
+  return rows.map((r) => r.moduleId);
+}
+
 /** True when the org has the module installed (ACTIVE). */
 export async function orgHasModule(organizationId: string, moduleId: ModuleId): Promise<boolean> {
   const row = await prisma.organizationModule.findFirst({
