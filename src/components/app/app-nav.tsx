@@ -16,11 +16,9 @@ import {
   Cable,
   Wallet,
   UsersRound,
-  Settings,
   Workflow,
   Target,
   Boxes,
-  Store,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
@@ -87,6 +85,7 @@ const GROUPS: Group[] = [
     key: "comms",
     items: [
       { href: "/app/inbox", key: "inbox", icon: MessageCircle },
+      { href: "/app/connections", key: "connections", icon: Cable },
       { href: "/app/campaigns", key: "campaigns", icon: Send },
       { href: "/app/prospecting", key: "prospecting", icon: Radar },
     ],
@@ -104,18 +103,11 @@ const GROUPS: Group[] = [
     key: "supplies",
     items: [{ href: "/app/supplies", key: "supplies", icon: Boxes }],
   },
-  {
-    key: "system",
-    items: [
-      { href: "/app/loja", key: "loja", icon: Store },
-      { href: "/app/connections", key: "connections", icon: Cable },
-      { href: "/app/settings", key: "settings", icon: Settings },
-    ],
-  },
 ];
 
-/** Screens that are never gated by access templates. */
-const ALWAYS_SHOWN: NavKey[] = ["dashboard", "my", "loja", "settings"];
+/** Screens always shown in the sidebar (core, not gated by access templates).
+ *  Settings + Loja live in the top bar now, not the sidebar. */
+const ALWAYS_SHOWN: NavKey[] = ["dashboard", "my"];
 
 export function AppNav({ allowedScreens, collapsed = false }: { allowedScreens: string[]; collapsed?: boolean }) {
   const t = useTranslations("app.nav");

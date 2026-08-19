@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { getTranslations } from "next-intl/server";
-import { LogOut } from "lucide-react";
+import { LogOut, Store, Settings } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MobileNav } from "@/components/app/mobile-nav";
@@ -14,6 +14,7 @@ import { SearchTrigger } from "@/components/app/search-trigger";
 import { BackBar } from "@/components/app/back-bar";
 import { PageTransition } from "@/components/app/page-transition";
 import { logout } from "@/app/actions/auth";
+import { Link } from "@/i18n/navigation";
 import { availableScreens, hasFeatureByModules } from "@/config/modules";
 import type { OrgContext } from "@/lib/tenant";
 import type { Locale } from "@/i18n/routing";
@@ -71,9 +72,15 @@ export async function AppShell({
             <MobileNav allowedScreens={navScreens} />
             <Logo className="text-lg" />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <SearchTrigger variant="icon" />
             <NotificationBell />
+            <Link href="/app/loja" aria-label={t("loja")} title={t("loja")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+              <Store className="size-5" />
+            </Link>
+            <Link href="/app/settings" aria-label={t("settings")} title={t("settings")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+              <Settings className="size-5" />
+            </Link>
             <ThemeToggle />
             <form action={logout.bind(null, locale)}>
               <button type="submit" aria-label={t("signOut")} className="text-muted-foreground">
@@ -82,6 +89,28 @@ export async function AppShell({
             </form>
           </div>
         </header>
+
+        {/* Desktop top bar — config cluster (Loja, Configurações) beside the theme
+            toggle. The sidebar is reserved for modules and their pages. */}
+        <header className="hidden items-center justify-end gap-1 border-b border-border px-6 py-2.5 md:flex">
+          <Link
+            href="/app/loja"
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Store className="size-4" />
+            {t("loja")}
+          </Link>
+          <Link
+            href="/app/settings"
+            aria-label={t("settings")}
+            title={t("settings")}
+            className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Settings className="size-4" />
+          </Link>
+          <ThemeToggle />
+        </header>
+
         <main className="min-h-0 flex-1 overflow-y-auto p-6 sm:p-8">
           <BackBar />
           <PageTransition>{children}</PageTransition>

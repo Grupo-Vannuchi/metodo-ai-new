@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { AppNav } from "@/components/app/app-nav";
 import { NotificationBell } from "@/components/app/notification-bell";
 import { SearchTrigger } from "@/components/app/search-trigger";
@@ -93,17 +92,12 @@ export function Sidebar({
       </div>
 
       <div className="flex w-full flex-col gap-2 border-t border-border pt-3">
-        {collapsed ? (
-          <div className="flex w-full justify-center">
-            <ThemeToggle />
-          </div>
-        ) : (
+        {collapsed ? null : (
           <div className="flex items-center justify-between gap-2 px-3 py-1">
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{userName}</p>
               <p className="truncate text-xs text-muted-foreground">{userEmail}</p>
             </div>
-            <ThemeToggle className="shrink-0" />
           </div>
         )}
         <form action={logoutAction}>
