@@ -138,7 +138,7 @@ export default async function InboxPage({
       </div>
 
       {configView && myConn ? (
-        <div className="flex max-w-2xl flex-col gap-6">
+        <div className="flex w-full flex-col gap-6">
           <EvolutionConnect id={myConn.id} initialActive={myConn.status === "ACTIVE"} />
           {hasFeatureByModules(ctx.modules, "whatsapp_agent") ? (
             <WhatsappAgentConfig connectionId={myConn.id} initial={agent} />
