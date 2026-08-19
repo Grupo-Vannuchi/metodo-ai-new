@@ -41,6 +41,7 @@ export function EntryForm({
   entryId,
   defaults,
   options,
+  hasCrm = true,
 }: {
   mode: "create" | "edit";
   entryId?: string;
@@ -51,6 +52,7 @@ export function EntryForm({
     opportunities: { id: string; title: string }[];
     categories: Category[];
   };
+  hasCrm?: boolean;
 }) {
   const t = useTranslations("finance");
   const router = useRouter();
@@ -202,7 +204,8 @@ export function EntryForm({
         </div>
       </div>
 
-      {/* CRM links */}
+      {/* CRM links — only when the CRM module is installed. */}
+      {hasCrm ? (
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
           <Label htmlFor="contactId">{t("field.contact")}</Label>
@@ -232,6 +235,7 @@ export function EntryForm({
           </select>
         </div>
       </div>
+      ) : null}
 
       <div>
         <Label htmlFor="notes">{t("field.notes")}</Label>

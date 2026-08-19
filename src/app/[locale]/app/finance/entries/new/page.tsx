@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
+import { hasModule } from "@/config/modules";
 import { financeFormOptions } from "@/lib/queries/finance";
 import { EntryForm, type EntryDefaults } from "@/components/finance/entry-form";
 import { resolveLocale } from "@/i18n/routing";
@@ -48,7 +49,7 @@ export default async function NewEntryPage({
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold tracking-tight">{t("newEntry")}</h1>
-      <EntryForm mode="create" defaults={defaults} options={options} />
+      <EntryForm mode="create" defaults={defaults} options={options} hasCrm={hasModule(ctx.modules, "crm")} />
     </div>
   );
 }

@@ -23,10 +23,12 @@ export function PayrollRunActions({
   id,
   status,
   totalNet,
+  hasFinance = true,
 }: {
   id: string;
   status: PayrollStatusKey;
   totalNet: number;
+  hasFinance?: boolean;
 }) {
   const t = useTranslations("hr");
   const router = useRouter();
@@ -93,22 +95,24 @@ export function PayrollRunActions({
               <Undo2 className="size-4" />
               {t("payroll.reopen")}
             </button>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={async () => {
-                const ok = await confirm({
-                  description: t("payroll.confirmPay", { total: formatBRL(totalNet) }),
-                  confirmLabel: t("payroll.pay"),
-                });
-                if (!ok) return;
-                run(() => payPayrollRun(id));
-              }}
-              className={cn(buttonVariants({ size: "sm" }), "disabled:opacity-50")}
-            >
-              {pending ? <Spinner className="size-4" /> : <Wallet className="size-4" />}
-              {t("payroll.pay")}
-            </button>
+            {hasFinance ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={async () => {
+                  const ok = await confirm({
+                    description: t("payroll.confirmPay", { total: formatBRL(totalNet) }),
+                    confirmLabel: t("payroll.pay"),
+                  });
+                  if (!ok) return;
+                  run(() => payPayrollRun(id));
+                }}
+                className={cn(buttonVariants({ size: "sm" }), "disabled:opacity-50")}
+              >
+                {pending ? <Spinner className="size-4" /> : <Wallet className="size-4" />}
+                {t("payroll.pay")}
+              </button>
+            ) : null}
           </>
         ) : null}
       </div>

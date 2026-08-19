@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { Wallet } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
+import { hasFeatureByModules } from "@/config/modules";
 import { getPayrollRun } from "@/lib/queries/payroll";
 import { PayrollItems } from "@/components/hr/payroll-items";
 import { PayrollRunActions } from "@/components/hr/payroll-run-actions";
@@ -32,6 +33,8 @@ export default async function PayrollRunPage({
   const run = await getPayrollRun(ctx.organizationId, id);
   if (!run) notFound();
 
+  const hasFinance = hasFeatureByModules(ctx.modules, "finance");
+
   const fmtDate = (d: Date | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
   const competencia = `${String(run.month).padStart(2, "0")}/${run.year}`;
 
@@ -56,6 +59,7 @@ export default async function PayrollRunPage({
           id={run.id}
           status={run.status}
           totalNet={run.totalNet}
+          hasFinance={hasFinance}
         />
       </div>
 
@@ -68,9 +72,11 @@ export default async function PayrollRunPage({
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">{t("payroll.paidHint")}</p>
           </div>
-          <Link href="/app/finance/entries" className={buttonVariants({ variant: "outline", size: "sm" })}>
-            {t("payroll.seeInFinance")}
-          </Link>
+          {hasFinance ? (
+            <Link href="/app/finance/entries" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              {t("payroll.seeInFinance")}
+            </Link>
+          ) : null}
         </div>
       ) : null}
 

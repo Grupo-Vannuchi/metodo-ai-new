@@ -24,12 +24,14 @@ export function CampaignForm({
   facets,
   stages,
   members,
+  hasCrm = true,
 }: {
   templates: TemplateOption[];
   folders: Option[];
   facets: { tags: string[]; sources: string[] };
   stages: Option[];
   members: Option[];
+  hasCrm?: boolean;
 }) {
   const t = useTranslations("campaigns");
   const tv = useTranslations("validation");
@@ -187,7 +189,7 @@ export function CampaignForm({
                 </select>
               </div>
             ) : null}
-            {stages.length > 0 ? (
+            {hasCrm && stages.length > 0 ? (
               <div>
                 <Label htmlFor="stageId">{t("audienceStage")}</Label>
                 <select id="stageId" className={selectCls} value={stageId} onChange={(e) => setStageId(e.target.value)}>
@@ -198,15 +200,17 @@ export function CampaignForm({
                 </select>
               </div>
             ) : null}
-            <div>
-              <Label htmlFor="oppStatus">{t("audienceStatus")}</Label>
-              <select id="oppStatus" className={selectCls} value={oppStatus} onChange={(e) => setOppStatus(e.target.value)}>
-                <option value="">{t("audienceAny")}</option>
-                {OPP_STATUSES.map((s) => (
-                  <option key={s} value={s}>{t(`status.${s}`)}</option>
-                ))}
-              </select>
-            </div>
+            {hasCrm ? (
+              <div>
+                <Label htmlFor="oppStatus">{t("audienceStatus")}</Label>
+                <select id="oppStatus" className={selectCls} value={oppStatus} onChange={(e) => setOppStatus(e.target.value)}>
+                  <option value="">{t("audienceAny")}</option>
+                  {OPP_STATUSES.map((s) => (
+                    <option key={s} value={s}>{t(`status.${s}`)}</option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             {members.length > 0 ? (
               <div>
                 <Label htmlFor="ownerId">{t("audienceOwner")}</Label>

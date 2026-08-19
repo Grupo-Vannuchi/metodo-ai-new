@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
+import { hasModule } from "@/config/modules";
 import { templateOptions, audienceFacets } from "@/lib/queries/campaigns";
 import { contactFolderOptions } from "@/lib/queries/contact-folders";
 import { stageOptions } from "@/lib/queries/crm";
@@ -43,6 +44,7 @@ export default async function NewCampaignPage({
           folders={folders}
           facets={facets}
           stages={stages}
+          hasCrm={hasModule(ctx.modules, "crm")}
           members={members.map((m) => ({ id: m.userId, name: m.name }))}
         />
       )}

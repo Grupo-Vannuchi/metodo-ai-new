@@ -18,7 +18,7 @@ import {
 import { statusBadgeCls } from "@/components/supplies/purchase-status";
 import type { PurchaseOrderDetail } from "@/lib/queries/purchases";
 
-export function PurchaseDetail({ order }: { order: PurchaseOrderDetail }) {
+export function PurchaseDetail({ order, hasFinance = true }: { order: PurchaseOrderDetail; hasFinance?: boolean }) {
   const t = useTranslations("supplies.purchases");
   const locale = useLocale();
   const router = useRouter();
@@ -40,7 +40,7 @@ export function PurchaseDetail({ order }: { order: PurchaseOrderDetail }) {
   const canCancel = st === "DRAFT" || st === "APPROVED" || st === "ORDERED" || st === "PARTIAL";
   const canDelete = st === "DRAFT" || st === "CANCELED";
   const posted = !!order.financeEntryId;
-  const canPost = !posted && order.total > 0 && (st === "APPROVED" || st === "ORDERED" || st === "PARTIAL" || st === "RECEIVED");
+  const canPost = hasFinance && !posted && order.total > 0 && (st === "APPROVED" || st === "ORDERED" || st === "PARTIAL" || st === "RECEIVED");
 
   function post() {
     setError(null);
@@ -155,7 +155,7 @@ export function PurchaseDetail({ order }: { order: PurchaseOrderDetail }) {
               {t("postFinance")}
             </Button>
           ) : null}
-          {posted ? (
+          {posted && hasFinance ? (
             <Link
               href="/app/finance/entries"
               className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/15 px-3 py-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-400"
