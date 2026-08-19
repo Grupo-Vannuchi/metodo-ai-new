@@ -53,6 +53,7 @@ export function TasksManager({
   currentUserId,
   showTabs = false,
   pageSize,
+  hasCrm = true,
 }: {
   tasks: TaskRow[];
   members: Option[];
@@ -63,6 +64,8 @@ export function TasksManager({
   showTabs?: boolean;
   /** When set, paginate the list at this size (opt-in; default = no paging). */
   pageSize?: number;
+  /** Show the CRM links (contact/opportunity) — only with the CRM module. */
+  hasCrm?: boolean;
 }) {
   const t = useTranslations("tasks");
   const router = useRouter();
@@ -242,7 +245,7 @@ export function TasksManager({
                 ))}
               </select>
             </div>
-            {!fixed ? (
+            {!fixed && hasCrm ? (
               <>
                 <div>
                   <Label htmlFor="contactId">{t("field.contact")}</Label>
@@ -372,7 +375,7 @@ export function TasksManager({
                       </span>
                     ) : null}
                     {task.assignedToName ? <span>· {task.assignedToName}</span> : null}
-                    {!fixed && (task.opportunityTitle || task.contactName) ? (
+                    {!fixed && hasCrm && (task.opportunityTitle || task.contactName) ? (
                       <span className="inline-flex items-center gap-0.5">
                         <Link2 className="size-3" />
                         {task.opportunityId ? (

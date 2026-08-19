@@ -176,6 +176,7 @@ export function MyHub({
               currentUserId={currentUserId}
               showTabs
               pageSize={8}
+              hasCrm={hasCrm}
             />
           ) : null}
 

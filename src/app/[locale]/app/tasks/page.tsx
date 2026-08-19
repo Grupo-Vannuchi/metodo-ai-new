@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { LayoutGrid, List } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
+import { hasModule } from "@/config/modules";
 import { listTasks } from "@/lib/queries/tasks";
 import { listMembers } from "@/lib/queries/organizations";
 import { contactOptions } from "@/lib/queries/contacts";
@@ -29,11 +30,12 @@ export default async function TasksPage({
   const t = await getTranslations("tasks");
   const view = (await searchParams)?.view === "kanban" ? "kanban" : "list";
 
+  const hasCrm = hasModule(ctx.modules, "crm");
   const [tasks, rawMembers, contacts, opportunities] = await Promise.all([
     listTasks(ctx.organizationId, { scope: "all" }),
     listMembers(ctx.organizationId),
-    contactOptions(ctx.organizationId),
-    opportunityOptions(ctx.organizationId),
+    hasCrm ? contactOptions(ctx.organizationId) : Promise.resolve([]),
+    hasCrm ? opportunityOptions(ctx.organizationId) : Promise.resolve([]),
   ]);
 
   // Anyone can assign a task to any member (users hand tasks to each other).
@@ -80,6 +82,7 @@ export default async function TasksPage({
         opportunities={opportunities}
         currentUserId={ctx.userId}
         showTabs
+        hasCrm={hasCrm}
       />
     </div>
   );

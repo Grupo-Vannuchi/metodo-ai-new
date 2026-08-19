@@ -117,7 +117,7 @@ export default async function InboxPage({
                 {t("tab")}
               </Link>
             </div>
-            {mode === "whatsapp" ? <ExportMenu groups={exportGroups} /> : null}
+            {mode === "whatsapp" && hasModule(ctx.modules, "crm") ? <ExportMenu groups={exportGroups} /> : null}
             {mode === "whatsapp" && myConn ? (
               <Link
                 href={configView ? "/app/inbox?mode=whatsapp" : "/app/inbox?mode=whatsapp&config=1"}
