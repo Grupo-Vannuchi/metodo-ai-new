@@ -18,15 +18,16 @@ import {
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatBRL } from "@/lib/money";
 import {
   MODULES,
   MODULE_PRESETS,
+  MODULE_BY_ID,
   monthlyTotal,
-  type ModuleCategory,
   type ModuleDef,
+  type ModuleId,
 } from "@/config/modules";
 import { installModule, uninstallModule, applyPreset } from "@/app/actions/modules";
 
@@ -41,7 +42,20 @@ const ICONS: Record<string, LucideIcon> = {
   CheckSquare,
 };
 
-const CATEGORY_ORDER: ModuleCategory[] = ["comercial", "operacao", "atendimento", "ia", "produtividade"];
+/** Per-module visual identity for the featured banner. A real photo can replace
+ *  the gradient later by dropping /public/modules/<id>.jpg and swapping the div. */
+const THEME: Record<string, string> = {
+  crm: "from-blue-500 to-indigo-600",
+  finance: "from-emerald-500 to-teal-600",
+  hr: "from-violet-500 to-purple-600",
+  supplies: "from-amber-500 to-orange-600",
+  marketing: "from-pink-500 to-rose-600",
+  inbox: "from-sky-500 to-cyan-600",
+  ia: "from-fuchsia-500 to-violet-600",
+  tasks: "from-slate-500 to-slate-700",
+};
+
+type Tab = "modules" | "packages";
 
 export function ModuleStore({ installed, canManage }: { installed: string[]; canManage: boolean }) {
   const t = useTranslations("loja");
@@ -49,9 +63,11 @@ export function ModuleStore({ installed, canManage }: { installed: string[]; can
   const [pending, start] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("modules");
 
   const has = (id: string) => installed.includes(id);
   const total = monthlyTotal(installed);
+  const priceLabel = (v: number) => (v === 0 ? t("free") : `${formatBRL(v)}${t("perMonth")}`);
 
   function run(id: string, fn: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
@@ -69,11 +85,9 @@ export function ModuleStore({ installed, canManage }: { installed: string[]; can
     });
   }
 
-  const price = (m: ModuleDef) => (m.priceMonthly === 0 ? t("free") : `${formatBRL(m.priceMonthly)}${t("perMonth")}`);
-
   return (
     <div className="flex flex-col gap-6">
-      {/* Header + subscription summary */}
+      {/* Store header + running subscription total. */}
       <div className="glass flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border p-5 shadow-sm">
         <div>
           <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{t("title")}</h1>
@@ -95,107 +109,168 @@ export function ModuleStore({ installed, canManage }: { installed: string[]; can
       ) : null}
       {error ? <p className="rounded-xl border border-red-500/40 bg-red-500/5 p-3 text-sm text-red-500">{error}</p> : null}
 
-      {/* Presets (the old plans, reborn as packages) */}
-      {canManage ? (
-        <section>
-          <h2 className="mb-2 text-sm font-semibold text-muted-foreground">{t("presets")}</h2>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {MODULE_PRESETS.map((p) => (
-              <div key={p.id} className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
-                <p className="font-semibold">{p.name}</p>
-                <p className="flex-1 text-xs text-muted-foreground">{p.tagline}</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={pending}
-                  onClick={() => run(`preset:${p.id}`, () => applyPreset(p.id))}
-                >
-                  {busyId === `preset:${p.id}` ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-                  {t("applyPreset")}
-                </Button>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
+      {/* Tabs: Modules · Packages */}
+      <div className="flex w-fit items-center gap-1 rounded-lg border border-border bg-muted/40 p-1">
+        {(["modules", "packages"] as Tab[]).map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setTab(k)}
+            className={cn(
+              "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+              tab === k ? "bg-brand text-brand-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t(k === "modules" ? "tabModules" : "tabPackages")}
+          </button>
+        ))}
+      </div>
 
-      {/* Modules by category */}
-      {CATEGORY_ORDER.map((cat) => {
-        const mods = MODULES.filter((m) => m.category === cat);
-        if (mods.length === 0) return null;
-        return (
-          <section key={cat}>
-            <h2 className="mb-2 text-sm font-semibold text-muted-foreground">{t(`category.${cat}`)}</h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {mods.map((m) => {
-                const Icon = ICONS[m.icon] ?? Boxes;
-                const installedNow = has(m.id);
-                const busy = busyId === m.id;
-                return (
-                  <div
-                    key={m.id}
-                    className={cn(
-                      "flex flex-col gap-3 rounded-xl border bg-card p-4 transition-colors",
-                      installedNow ? "border-brand/40" : "border-border",
-                    )}
+      {tab === "modules" ? (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {MODULES.map((m) => (
+            <ModuleCard
+              key={m.id}
+              module={m}
+              installed={has(m.id)}
+              busy={busyId === m.id}
+              disabled={pending}
+              canManage={canManage}
+              priceLabel={priceLabel(m.priceMonthly)}
+              icon={ICONS[m.icon] ?? Boxes}
+              onInstall={() => run(m.id, () => installModule(m.id))}
+              onRemove={() => run(m.id, () => uninstallModule(m.id))}
+              t={t}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-5 md:grid-cols-3">
+          {MODULE_PRESETS.map((p) => {
+            const highlight = p.id === "completo";
+            return (
+              <div
+                key={p.id}
+                className={cn(
+                  "flex flex-col rounded-2xl border bg-card p-5 shadow-sm",
+                  highlight ? "border-brand" : "border-border",
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold">{p.name}</h3>
+                  {highlight ? (
+                    <span className="rounded-full bg-brand px-2 py-0.5 text-xs font-medium text-brand-foreground">
+                      {t("recommended")}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">{p.tagline}</p>
+                <p className="mt-3 text-2xl font-bold">
+                  {formatBRL(monthlyTotal(p.modules))}
+                  <span className="text-sm font-normal text-muted-foreground">{t("perMonth")}</span>
+                </p>
+                <ul className="mt-4 flex flex-1 flex-col gap-2 text-sm">
+                  {p.modules.map((id) => (
+                    <li key={id} className="flex items-center gap-2">
+                      <Check className="size-4 shrink-0 text-brand" />
+                      <span className={has(id) ? "text-muted-foreground" : ""}>{MODULE_BY_ID[id as ModuleId].name}</span>
+                    </li>
+                  ))}
+                </ul>
+                {canManage ? (
+                  <Button
+                    type="button"
+                    variant={highlight ? "primary" : "outline"}
+                    className="mt-5"
+                    disabled={pending}
+                    onClick={() => run(`preset:${p.id}`, () => applyPreset(p.id))}
                   >
-                    <div className="flex items-start gap-3">
-                      <span
-                        className={cn(
-                          "flex size-10 shrink-0 items-center justify-center rounded-xl",
-                          installedNow ? "bg-brand/10 text-brand" : "bg-muted text-muted-foreground",
-                        )}
-                      >
-                        <Icon className="size-5" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold">{m.name}</p>
-                          {installedNow ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
-                              <Check className="size-3" />
-                              {t("installed")}
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{m.tagline}</p>
-                      </div>
-                    </div>
-                    <div className="mt-auto flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold">{price(m)}</span>
-                      {canManage ? (
-                        installedNow ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            disabled={pending}
-                            className="text-muted-foreground hover:text-red-500"
-                            onClick={() => run(m.id, () => uninstallModule(m.id))}
-                          >
-                            {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-                            {t("remove")}
-                          </Button>
-                        ) : (
-                          <Button type="button" size="sm" disabled={pending} onClick={() => run(m.id, () => installModule(m.id))}>
-                            {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-                            {t("install")}
-                          </Button>
-                        )
-                      ) : (
-                        <span className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "pointer-events-none opacity-60")}>
-                          {installedNow ? t("installed") : t("notInstalled")}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        );
-      })}
+                    {busyId === `preset:${p.id}` ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+                    {t("applyPreset")}
+                  </Button>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ModuleCard({
+  module: m,
+  installed,
+  busy,
+  disabled,
+  canManage,
+  priceLabel,
+  icon: Icon,
+  onInstall,
+  onRemove,
+  t,
+}: {
+  module: ModuleDef;
+  installed: boolean;
+  busy: boolean;
+  disabled: boolean;
+  canManage: boolean;
+  priceLabel: string;
+  icon: LucideIcon;
+  onInstall: () => void;
+  onRemove: () => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-md",
+        installed ? "border-brand/40" : "border-border",
+      )}
+    >
+      {/* Featured banner — per-module gradient + icon (photo-ready). */}
+      <div className={cn("relative flex h-28 items-center justify-center bg-gradient-to-br", THEME[m.id] ?? "from-slate-500 to-slate-700")}>
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-60"
+          style={{ background: "radial-gradient(120% 90% at 15% 10%, rgba(255,255,255,0.25), transparent 55%)" }}
+        />
+        <Icon className="size-11 text-white drop-shadow" />
+        <span className="absolute right-3 top-3 rounded-full bg-black/25 px-2 py-0.5 text-xs font-semibold text-white backdrop-blur">
+          {priceLabel}
+        </span>
+        {installed ? (
+          <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-brand">
+            <Check className="size-3" />
+            {t("installed")}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="flex flex-1 flex-col gap-2 p-4">
+        <p className="font-semibold">{m.name}</p>
+        <p className="flex-1 text-sm text-muted-foreground">{m.tagline}</p>
+        {canManage ? (
+          installed ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={disabled}
+              className="mt-1 self-start text-muted-foreground hover:text-red-500"
+              onClick={onRemove}
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+              {t("remove")}
+            </Button>
+          ) : (
+            <Button type="button" size="sm" className="mt-1 self-start" disabled={disabled} onClick={onInstall}>
+              {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+              {t("install")}
+            </Button>
+          )
+        ) : null}
+      </div>
     </div>
   );
 }

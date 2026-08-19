@@ -216,6 +216,8 @@
     "notInstalled": "Not installed",
     "presets": "Ready-made packages",
     "applyPreset": "Install package",
+    "tabModules": "Modules",
+    "tabPackages": "Packages",
     "manageHint": "Ask an administrator to install or remove modules.",
     "errGeneric": "Couldn't complete. Please try again.",
     "errDependent": "Remove the modules that depend on this one first.",

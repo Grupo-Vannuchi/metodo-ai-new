@@ -216,6 +216,8 @@
     "notInstalled": "Não instalado",
     "presets": "Pacotes prontos",
     "applyPreset": "Instalar pacote",
+    "tabModules": "Módulos",
+    "tabPackages": "Pacotes",
     "manageHint": "Fale com um administrador para instalar ou remover módulos.",
     "errGeneric": "Não foi possível concluir. Tente novamente.",
     "errDependent": "Remova antes os módulos que dependem deste.",
