@@ -1,4 +1,5 @@
 import { requireOrgContext } from "@/lib/tenant";
+import { hasModule } from "@/config/modules";
 import { listTasks } from "@/lib/queries/tasks";
 import { opportunityOptions } from "@/lib/queries/crm";
 import { myOpportunities, recentNotifications, listPinned } from "@/lib/queries/hub";
@@ -17,14 +18,16 @@ export default async function MyItemsPage({
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
 
+  const hasCrm = hasModule(ctx.modules, "crm");
+  const hasTasks = hasModule(ctx.modules, "tasks");
   const [tasks, opps, notifications, pins, rawMembers, contacts, opportunities] = await Promise.all([
-    listTasks(ctx.organizationId, { assignedToId: ctx.userId, scope: "all" }),
-    myOpportunities(ctx.organizationId, ctx.userId),
+    hasTasks ? listTasks(ctx.organizationId, { assignedToId: ctx.userId, scope: "all" }) : Promise.resolve([]),
+    hasCrm ? myOpportunities(ctx.organizationId, ctx.userId) : Promise.resolve([]),
     recentNotifications(ctx.organizationId, ctx.userId),
     listPinned(ctx.organizationId, ctx.userId),
     listMembers(ctx.organizationId),
     contactOptions(ctx.organizationId),
-    opportunityOptions(ctx.organizationId),
+    hasCrm ? opportunityOptions(ctx.organizationId) : Promise.resolve([]),
   ]);
 
   // Anyone can assign a task to any member (users hand tasks to each other).

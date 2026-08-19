@@ -1,5 +1,6 @@
 import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
+import { orgHasFeature } from "@/lib/queries/modules";
 import { getChannelAdapter } from "@/lib/integrations/channels";
 import { loadEvoCredsById } from "@/lib/integrations/evolution-creds";
 import { parseActions, parseConfig, type RuleAction } from "@/lib/automation/types";
@@ -218,6 +219,8 @@ async function runAction(
   }
 
   if (action.type === "create_finance_entry") {
+    // Skip when the org doesn't have the Financeiro module — no orphan entries.
+    if (!(await orgHasFeature(organizationId, "finance"))) return;
     const amount = action.useOppValue === false && action.amount !== undefined ? action.amount : Number(opp.value ?? 0);
     if (!(amount > 0)) return;
     await db.financeEntry.create({

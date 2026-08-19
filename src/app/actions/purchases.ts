@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { Prisma, type PurchaseOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { orgHasFeature } from "@/lib/queries/modules";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb, type TenantDb } from "@/lib/tenant-db";
 import { purchaseOrderSchema, receiveSchema, type PurchaseOrderInput } from "@/lib/validations/purchase";
@@ -294,6 +295,7 @@ export async function postPurchaseToFinance(id: string): Promise<PurchaseResult>
     if (!["APPROVED", "ORDERED", "PARTIAL", "RECEIVED"].includes(po.status)) return { ok: false, error: "state" };
     const amount = money(Number(po.total));
     if (amount <= 0) return { ok: false, error: "nothing" };
+    if (!(await orgHasFeature(org, "finance"))) return { ok: false, error: "unknown" };
 
     const supplier = po.supplierId
       ? await prisma.supplier.findFirst({ where: { id: po.supplierId, organizationId: org }, select: { name: true } })

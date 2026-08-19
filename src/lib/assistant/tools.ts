@@ -3,7 +3,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { OrgContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { canAccessScreen } from "@/lib/access";
-import { hasFeatureByModules } from "@/config/modules";
+import { hasFeatureByModules, hasModule } from "@/config/modules";
 import { formatBRL } from "@/lib/money";
 import { globalSearch } from "@/lib/queries/search";
 import { getSalesReport, type SalesPeriod } from "@/lib/queries/sales-report";
@@ -201,7 +201,7 @@ export async function runAssistantTool(
     }
 
     if (name === "get_pipeline_summary") {
-      if (!canAccessScreen(ctx, "crm")) return "Você não tem acesso ao CRM.";
+      if (!canAccessScreen(ctx, "crm") || !hasModule(ctx.modules, "crm")) return "Você não tem acesso ao CRM.";
       const period = asPeriod(input.period);
       const r = await getSalesReport(ctx.organizationId, period);
       return JSON.stringify({
@@ -219,7 +219,7 @@ export async function runAssistantTool(
     }
 
     if (name === "get_opportunity") {
-      if (!canAccessScreen(ctx, "crm")) return "Você não tem acesso ao CRM.";
+      if (!canAccessScreen(ctx, "crm") || !hasModule(ctx.modules, "crm")) return "Você não tem acesso ao CRM.";
       const id = typeof input.id === "string" ? input.id.trim() : "";
       if (!id) return "Informe o id da oportunidade (do link retornado pela busca).";
       const o = await getOpportunity(ctx.organizationId, id);
@@ -242,7 +242,7 @@ export async function runAssistantTool(
     }
 
     if (name === "list_my_tasks") {
-      if (!canAccessScreen(ctx, "tasks")) return "Você não tem acesso às Tarefas.";
+      if (!canAccessScreen(ctx, "tasks") || !hasModule(ctx.modules, "tasks")) return "Você não tem acesso às Tarefas.";
       const scope = asTaskScope(input.scope);
       const rows = await listTasks(ctx.organizationId, { assignedToId: ctx.userId, scope });
       if (rows.length === 0) return "Nenhuma tarefa encontrada nesse filtro.";
@@ -268,7 +268,7 @@ export async function runAssistantTool(
     }
 
     if (name === "list_pipeline_stages") {
-      if (!canAccessScreen(ctx, "crm")) return "Você não tem acesso ao CRM.";
+      if (!canAccessScreen(ctx, "crm") || !hasModule(ctx.modules, "crm")) return "Você não tem acesso ao CRM.";
       const { stages } = await stageOptions(ctx.organizationId);
       if (stages.length === 0) return "Nenhuma etapa encontrada.";
       return JSON.stringify(stages.map((s) => ({ id: s.id, etapa: s.name })));

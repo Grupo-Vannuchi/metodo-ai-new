@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
+import { orgHasFeature } from "@/lib/queries/modules";
 import {
   payrollRunSchema,
   payrollLinesSchema,
@@ -246,6 +247,7 @@ export async function payPayrollRun(id: string): Promise<PayrollActionResult> {
     });
     if (!run) return { ok: false, error: "unknown" };
     if (run.status !== "APPROVED") return { ok: false, error: "locked" };
+    if (!(await orgHasFeature(org, "finance"))) return { ok: false, error: "unknown" };
 
     const mm = String(run.month).padStart(2, "0");
     const pending = run.items.filter((it) => !it.financeEntryId && Number(it.netPay) > 0);
