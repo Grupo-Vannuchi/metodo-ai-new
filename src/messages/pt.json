@@ -1312,6 +1312,7 @@
       "title": "Funil de Vendas",
       "noPipeline": "Nenhum funil configurado.",
       "newOpportunity": "Nova oportunidade",
+      "addInColumn": "Nova aqui",
       "searchPlaceholder": "Buscar oportunidade…",
       "searchClear": "Limpar busca",
       "allDeals": "Todas",

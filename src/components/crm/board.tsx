@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { moveOpportunity } from "@/app/actions/opportunities";
 import { updateStage } from "@/app/actions/pipelines";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
+import { useOpportunityCreate } from "@/components/crm/opportunity-create";
 import { useRealtime } from "@/components/app/realtime-provider";
 import { Input } from "@/components/ui/field";
 import type { BoardColumn } from "@/lib/queries/crm";
@@ -19,6 +21,7 @@ const brl = new Intl.NumberFormat("pt-BR", {
 export function Board({ columns }: { columns: BoardColumn[] }) {
   const t = useTranslations("crm.board");
   const router = useRouter();
+  const create = useOpportunityCreate();
   const [cols, setCols] = useState(columns);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
@@ -218,7 +221,18 @@ export function Board({ columns }: { columns: BoardColumn[] }) {
                 ) : null}
               </div>
 
-              <p className="mx-2 mt-3 px-1 text-xs text-muted-foreground">
+              {create.enabled ? (
+                <button
+                  type="button"
+                  onClick={() => create.open(col.id)}
+                  className="mx-2 mt-2 flex items-center justify-center gap-1 rounded-lg border border-dashed border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-brand/50 hover:text-brand"
+                >
+                  <Plus className="size-3.5" />
+                  {t("addInColumn")}
+                </button>
+              ) : null}
+
+              <p className="mx-2 mt-2 px-1 text-xs text-muted-foreground">
                 {t("columnTotal", { total: brl.format(total) })}
               </p>
             </div>

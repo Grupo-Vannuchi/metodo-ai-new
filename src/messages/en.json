@@ -1312,6 +1312,7 @@
       "title": "Sales Pipeline",
       "noPipeline": "No pipeline configured.",
       "newOpportunity": "New opportunity",
+      "addInColumn": "Add here",
       "searchPlaceholder": "Search opportunity…",
       "searchClear": "Clear search",
       "allDeals": "All",
