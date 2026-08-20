@@ -82,7 +82,12 @@ export async function updateCompany(
 
 /** Company fields we can derive from a CNPJ (subset of the form values). */
 export type CnpjCompanyData = {
+  /** Display name: nome fantasia when present, else razão social. */
   name: string;
+  /** Razão social (legal name) — kept separate for forms that split the two. */
+  legalName: string;
+  /** Nome fantasia (trade name). */
+  tradeName: string;
   email: string;
   phone: string;
   street: string;
@@ -148,6 +153,8 @@ export async function lookupCnpj(cnpj: string): Promise<CnpjLookupResult> {
       ok: true,
       data: {
         name: (j.nome_fantasia || j.razao_social || "").trim(),
+        legalName: (j.razao_social || "").trim(),
+        tradeName: (j.nome_fantasia || "").trim(),
         email: EMAIL_RE.test(email) ? email : "",
         phone: formatPhoneBR(j.ddd_telefone_1 ?? ""),
         street,

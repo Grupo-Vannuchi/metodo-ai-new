@@ -2,15 +2,32 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Pencil, Trash2, Plus, X, Mail, Phone, MapPin } from "lucide-react";
+import { Pencil, Trash2, Plus, X, Mail, Phone, MapPin, Search, Loader2 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { useConfirm } from "@/components/ui/confirm";
 import { useNotify } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
+import { onlyDigits, formatCnpj } from "@/lib/cnpj";
 import { createSupplier, updateSupplier, deleteSupplier } from "@/app/actions/suppliers";
+import { lookupCnpj } from "@/app/actions/companies";
 import type { SupplierRow } from "@/lib/queries/suppliers";
+
+type SupplierFormValues = {
+  name: string;
+  tradeName: string;
+  document: string;
+  email: string;
+  phone: string;
+  contactName: string;
+  city: string;
+  uf: string;
+  notes: string;
+  active: boolean;
+};
+
+type CnpjState = "idle" | "loading" | "done" | "notFound" | "error";
 
 export function SuppliersManager({ suppliers }: { suppliers: SupplierRow[] }) {
   const t = useTranslations("supplies.suppliers");
@@ -33,21 +50,7 @@ export function SuppliersManager({ suppliers }: { suppliers: SupplierRow[] }) {
     setFormKey((k) => k + 1);
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const input = {
-      name: String(fd.get("name") ?? ""),
-      tradeName: String(fd.get("tradeName") ?? ""),
-      document: String(fd.get("document") ?? ""),
-      email: String(fd.get("email") ?? ""),
-      phone: String(fd.get("phone") ?? ""),
-      contactName: String(fd.get("contactName") ?? ""),
-      city: String(fd.get("city") ?? ""),
-      uf: String(fd.get("uf") ?? ""),
-      notes: String(fd.get("notes") ?? ""),
-      active: fd.get("active") === "on",
-    };
+  function submit(input: SupplierFormValues) {
     setError(null);
     start(async () => {
       const r = editing ? await updateSupplier(editing.id, input) : await createSupplier(input);
@@ -82,63 +85,15 @@ export function SuppliersManager({ suppliers }: { suppliers: SupplierRow[] }) {
       </div>
 
       {formOpen ? (
-        <form key={formKey} onSubmit={onSubmit} className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <Label htmlFor="name">{t("name")}</Label>
-              <Input id="name" name="name" defaultValue={editing?.name ?? ""} required maxLength={160} />
-            </div>
-            <div>
-              <Label htmlFor="tradeName">{t("tradeName")}</Label>
-              <Input id="tradeName" name="tradeName" defaultValue={editing?.tradeName ?? ""} maxLength={160} />
-            </div>
-            <div>
-              <Label htmlFor="document">{t("document")}</Label>
-              <Input id="document" name="document" defaultValue={editing?.document ?? ""} maxLength={32} />
-            </div>
-            <div>
-              <Label htmlFor="email">{t("email")}</Label>
-              <Input id="email" name="email" type="email" defaultValue={editing?.email ?? ""} maxLength={160} />
-            </div>
-            <div>
-              <Label htmlFor="phone">{t("phone")}</Label>
-              <Input id="phone" name="phone" defaultValue={editing?.phone ?? ""} maxLength={40} />
-            </div>
-            <div>
-              <Label htmlFor="contactName">{t("contactName")}</Label>
-              <Input id="contactName" name="contactName" defaultValue={editing?.contactName ?? ""} maxLength={120} />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2">
-                <Label htmlFor="city">{t("city")}</Label>
-                <Input id="city" name="city" defaultValue={editing?.city ?? ""} maxLength={80} />
-              </div>
-              <div>
-                <Label htmlFor="uf">{t("uf")}</Label>
-                <Input id="uf" name="uf" defaultValue={editing?.uf ?? ""} maxLength={2} />
-              </div>
-            </div>
-            <div className="sm:col-span-2">
-              <Label htmlFor="notes">{t("notes")}</Label>
-              <Textarea id="notes" name="notes" rows={2} defaultValue={editing?.notes ?? ""} maxLength={2000} />
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="active" defaultChecked={editing?.active ?? true} className="size-4 accent-brand" />
-              {t("active")}
-            </label>
-          </div>
-
-          {error ? <p role="alert" className="text-sm text-red-500">{error}</p> : null}
-          <div className="flex gap-2">
-            <Button type="submit" size="sm" disabled={pending}>
-              {pending ? t("saving") : t("save")}
-            </Button>
-            <button type="button" onClick={close} className="inline-flex items-center gap-1 px-2 text-sm text-muted-foreground hover:text-foreground">
-              <X className="size-4" />
-              {t("cancel")}
-            </button>
-          </div>
-        </form>
+        <SupplierForm
+          key={formKey}
+          editing={editing}
+          pending={pending}
+          error={error}
+          onSubmit={submit}
+          onCancel={close}
+          t={t}
+        />
       ) : null}
 
       {suppliers.length === 0 && !formOpen ? (
@@ -212,5 +167,169 @@ export function SuppliersManager({ suppliers }: { suppliers: SupplierRow[] }) {
         </ul>
       )}
     </div>
+  );
+}
+
+/** Controlled supplier form (keyed remount resets it). The document field
+ *  doubles as a CNPJ lookup: a valid CNPJ auto-fills the blank fields. */
+function SupplierForm({
+  editing,
+  pending,
+  error,
+  onSubmit,
+  onCancel,
+  t,
+}: {
+  editing: SupplierRow | null;
+  pending: boolean;
+  error: string | null;
+  onSubmit: (input: SupplierFormValues) => void;
+  onCancel: () => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const [f, setF] = useState<SupplierFormValues>(() => ({
+    name: editing?.name ?? "",
+    tradeName: editing?.tradeName ?? "",
+    document: editing?.document ?? "",
+    email: editing?.email ?? "",
+    phone: editing?.phone ?? "",
+    contactName: editing?.contactName ?? "",
+    city: editing?.city ?? "",
+    uf: editing?.uf ?? "",
+    notes: editing?.notes ?? "",
+    active: editing?.active ?? true,
+  }));
+  const [cnpjState, setCnpjState] = useState<CnpjState>("idle");
+
+  const set = <K extends keyof SupplierFormValues>(k: K, v: SupplierFormValues[K]) =>
+    setF((prev) => ({ ...prev, [k]: v }));
+
+  async function runCnpjLookup() {
+    const digits = onlyDigits(f.document);
+    if (digits.length !== 14) return;
+    setCnpjState("loading");
+    const r = await lookupCnpj(digits);
+    if (!r.ok) {
+      setCnpjState(r.error === "notFound" ? "notFound" : "error");
+      return;
+    }
+    // Fill blanks only — never clobber what the user already typed.
+    setF((prev) => ({
+      ...prev,
+      document: formatCnpj(digits),
+      name: prev.name.trim() || r.data.legalName || r.data.name,
+      tradeName: prev.tradeName.trim() || r.data.tradeName,
+      email: prev.email.trim() || r.data.email,
+      phone: prev.phone.trim() || r.data.phone,
+      city: prev.city.trim() || r.data.city,
+      uf: prev.uf.trim() || r.data.uf,
+    }));
+    setCnpjState("done");
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit(f);
+      }}
+      className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <Label htmlFor="document">{t("document")}</Label>
+          <div className="relative">
+            <Input
+              id="document"
+              value={f.document}
+              onChange={(e) => {
+                set("document", e.target.value);
+                if (cnpjState !== "idle") setCnpjState("idle");
+              }}
+              onBlur={() => {
+                if (cnpjState === "idle") void runCnpjLookup();
+              }}
+              inputMode="numeric"
+              placeholder="00.000.000/0000-00"
+              className="pr-10"
+              maxLength={32}
+            />
+            <button
+              type="button"
+              onClick={() => void runCnpjLookup()}
+              disabled={cnpjState === "loading"}
+              title={t("cnpjLookup")}
+              aria-label={t("cnpjLookup")}
+              className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            >
+              {cnpjState === "loading" ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
+            </button>
+          </div>
+          {cnpjState === "done" ? (
+            <p className="mt-1 text-xs text-green-600 dark:text-green-400">{t("cnpjFilled")}</p>
+          ) : cnpjState === "notFound" ? (
+            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{t("cnpjNotFound")}</p>
+          ) : cnpjState === "error" ? (
+            <p className="mt-1 text-xs text-red-500">{t("cnpjError")}</p>
+          ) : (
+            <p className="mt-1 text-xs text-muted-foreground">{t("cnpjHint")}</p>
+          )}
+        </div>
+        <div>
+          <Label htmlFor="name">{t("name")}</Label>
+          <Input id="name" value={f.name} onChange={(e) => set("name", e.target.value)} required maxLength={160} />
+        </div>
+        <div>
+          <Label htmlFor="tradeName">{t("tradeName")}</Label>
+          <Input id="tradeName" value={f.tradeName} onChange={(e) => set("tradeName", e.target.value)} maxLength={160} />
+        </div>
+        <div>
+          <Label htmlFor="email">{t("email")}</Label>
+          <Input id="email" type="email" value={f.email} onChange={(e) => set("email", e.target.value)} maxLength={160} />
+        </div>
+        <div>
+          <Label htmlFor="phone">{t("phone")}</Label>
+          <Input id="phone" value={f.phone} onChange={(e) => set("phone", e.target.value)} maxLength={40} />
+        </div>
+        <div>
+          <Label htmlFor="contactName">{t("contactName")}</Label>
+          <Input id="contactName" value={f.contactName} onChange={(e) => set("contactName", e.target.value)} maxLength={120} />
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="col-span-2">
+            <Label htmlFor="city">{t("city")}</Label>
+            <Input id="city" value={f.city} onChange={(e) => set("city", e.target.value)} maxLength={80} />
+          </div>
+          <div>
+            <Label htmlFor="uf">{t("uf")}</Label>
+            <Input id="uf" value={f.uf} onChange={(e) => set("uf", e.target.value.toUpperCase())} maxLength={2} className="uppercase" />
+          </div>
+        </div>
+        <div className="sm:col-span-2">
+          <Label htmlFor="notes">{t("notes")}</Label>
+          <Textarea id="notes" rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} maxLength={2000} />
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={f.active}
+            onChange={(e) => set("active", e.target.checked)}
+            className="size-4 accent-brand"
+          />
+          {t("active")}
+        </label>
+      </div>
+
+      {error ? <p role="alert" className="text-sm text-red-500">{error}</p> : null}
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={pending}>
+          {pending ? t("saving") : t("save")}
+        </Button>
+        <button type="button" onClick={onCancel} className="inline-flex items-center gap-1 px-2 text-sm text-muted-foreground hover:text-foreground">
+          <X className="size-4" />
+          {t("cancel")}
+        </button>
+      </div>
+    </form>
   );
 }
