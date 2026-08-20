@@ -7,7 +7,7 @@ import { Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea, FieldError } from "@/components/ui/field";
 import { Link, useRouter } from "@/i18n/navigation";
-import { onlyDigits, formatCnpj } from "@/lib/cnpj";
+import { onlyDigits, formatCnpj, formatCep } from "@/lib/cnpj";
 import { useRegisterAssistantForm } from "@/components/app/assistant/form-store";
 import type { FormBridge } from "@/lib/assistant/form-bridge";
 import {
@@ -20,8 +20,10 @@ import {
   lookupCnpj,
   type CompanyActionResult,
 } from "@/app/actions/companies";
+import { lookupCep } from "@/app/actions/address";
 
 type CnpjState = "idle" | "loading" | "done" | "notFound" | "error";
+type CepState = "idle" | "loading" | "done" | "notFound" | "error";
 
 /** Form fields the CNPJ lookup can populate (only the empty ones get filled). */
 const CNPJ_FILLABLE = ["name", "email", "phone", "street", "city", "uf", "zip"] as const;
@@ -41,6 +43,7 @@ export function CompanyForm({
   const [serverError, setServerError] = useState<string | null>(null);
 
   const [cnpjState, setCnpjState] = useState<CnpjState>("idle");
+  const [cepState, setCepState] = useState<CepState>("idle");
 
   const {
     register,
@@ -101,6 +104,24 @@ export function CompanyForm({
       }
     }
     setCnpjState("done");
+  }
+
+  async function runCepLookup() {
+    const digits = onlyDigits(getValues("zip"));
+    if (digits.length !== 8) return;
+    setCepState("loading");
+    const result = await lookupCep(digits);
+    if (!result.ok) {
+      setCepState(result.error === "notFound" ? "notFound" : "error");
+      return;
+    }
+    setValue("zip", formatCep(digits));
+    // Fill blanks only — never clobber what the user already typed.
+    const street = [result.data.street, result.data.neighborhood].filter(Boolean).join(" - ");
+    if (street && !getValues("street").trim()) setValue("street", street, { shouldDirty: true });
+    if (result.data.city && !getValues("city").trim()) setValue("city", result.data.city, { shouldDirty: true });
+    if (result.data.uf && !getValues("uf").trim()) setValue("uf", result.data.uf, { shouldDirty: true });
+    setCepState("done");
   }
 
   async function onSubmit(values: CompanyFormValues) {
@@ -188,23 +209,53 @@ export function CompanyForm({
       <fieldset className="rounded-xl border border-border bg-card p-5">
         <legend className="px-1 text-sm font-semibold">{t("sectionAddress")}</legend>
         <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="zip">{t("zip")}</Label>
+            <div className="relative">
+              <Input
+                id="zip"
+                inputMode="numeric"
+                placeholder="00000-000"
+                className="pr-10"
+                {...register("zip", {
+                  onChange: () => setCepState((s) => (s === "idle" ? s : "idle")),
+                  onBlur: () => {
+                    if (cepState === "idle") void runCepLookup();
+                  },
+                })}
+              />
+              <button
+                type="button"
+                onClick={() => void runCepLookup()}
+                disabled={cepState === "loading"}
+                title={t("cepLookup")}
+                aria-label={t("cepLookup")}
+                className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+              >
+                {cepState === "loading" ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
+              </button>
+            </div>
+            {cepState === "done" ? (
+              <p className="mt-1 text-xs text-green-600 dark:text-green-400">{t("cepFilled")}</p>
+            ) : cepState === "notFound" ? (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{t("cepNotFound")}</p>
+            ) : cepState === "error" ? (
+              <p className="mt-1 text-xs text-red-500">{t("cepError")}</p>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground">{t("cepHint")}</p>
+            )}
+          </div>
+          <div>
+            <Label htmlFor="uf">{t("uf")}</Label>
+            <Input id="uf" maxLength={2} className="uppercase" {...register("uf")} />
+          </div>
           <div className="sm:col-span-2">
             <Label htmlFor="street">{t("street")}</Label>
             <Input id="street" {...register("street")} />
           </div>
-          <div>
+          <div className="sm:col-span-2">
             <Label htmlFor="city">{t("city")}</Label>
             <Input id="city" {...register("city")} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="uf">{t("uf")}</Label>
-              <Input id="uf" maxLength={2} {...register("uf")} />
-            </div>
-            <div>
-              <Label htmlFor="zip">{t("zip")}</Label>
-              <Input id="zip" {...register("zip")} />
-            </div>
           </div>
         </div>
       </fieldset>
