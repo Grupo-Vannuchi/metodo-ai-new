@@ -1,5 +1,4 @@
 import { getTranslations } from "next-intl/server";
-import { Plus } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getCompaniesBoard } from "@/lib/queries/company-folders";
 import { findCompanyDuplicates } from "@/lib/queries/duplicates";
@@ -7,8 +6,7 @@ import { ExportButton } from "@/components/ui/export-button";
 import { CompaniesGrid } from "@/components/crm/companies-grid";
 import { CsvImport } from "@/components/crm/csv-import";
 import { DuplicatesModal } from "@/components/crm/duplicates-modal";
-import { buttonVariants } from "@/components/ui/button";
-import { Link } from "@/i18n/navigation";
+import { QuickCreateCompany } from "@/components/crm/quick-create";
 import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
@@ -39,10 +37,7 @@ export default async function CompaniesPage({
           {dupes.length > 0 ? <DuplicatesModal entity="companies" groups={dupes} /> : null}
           <CsvImport entity="companies" />
           <ExportButton endpoint="/api/crm/export" params={{ entity: "companies" }} label={t("export")} />
-          <Link href="/app/companies/new" className={buttonVariants()}>
-            <Plus className="size-4" />
-            {t("new")}
-          </Link>
+          <QuickCreateCompany />
         </div>
       </div>
 

@@ -1,14 +1,13 @@
 import { getTranslations } from "next-intl/server";
-import { Plus } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getContactsBoard } from "@/lib/queries/contact-folders";
+import { companyOptions } from "@/lib/queries/companies";
 import { findContactDuplicates } from "@/lib/queries/duplicates";
 import { ContactsGrid } from "@/components/crm/contacts-grid";
 import { CsvImport } from "@/components/crm/csv-import";
 import { DuplicatesModal } from "@/components/crm/duplicates-modal";
+import { QuickCreateContact } from "@/components/crm/quick-create";
 import { ExportButton } from "@/components/ui/export-button";
-import { buttonVariants } from "@/components/ui/button";
-import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
@@ -22,9 +21,10 @@ export default async function ContactsPage({
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("crm.contacts");
 
-  const [{ columns }, dupes] = await Promise.all([
+  const [{ columns }, dupes, companies] = await Promise.all([
     getContactsBoard(ctx.organizationId),
     findContactDuplicates(ctx.organizationId),
+    companyOptions(ctx.organizationId),
   ]);
 
   return (
@@ -38,10 +38,7 @@ export default async function ContactsPage({
           {dupes.length > 0 ? <DuplicatesModal entity="contacts" groups={dupes} /> : null}
           <CsvImport entity="contacts" />
           <ExportButton endpoint="/api/crm/export" params={{ entity: "contacts" }} label={t("export")} />
-          <Link href="/app/contacts/new" className={buttonVariants()}>
-            <Plus className="size-4" />
-            {t("new")}
-          </Link>
+          <QuickCreateContact companies={companies} />
         </div>
       </div>
 

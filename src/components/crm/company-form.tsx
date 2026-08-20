@@ -32,10 +32,16 @@ export function CompanyForm({
   mode,
   companyId,
   defaultValues,
+  onCreated,
+  onCancel,
 }: {
   mode: "create" | "edit";
   companyId?: string;
   defaultValues: CompanyFormValues;
+  /** Drawer/inline usage: called with the new id instead of navigating away. */
+  onCreated?: (id: string, name: string) => void;
+  /** Replaces the "cancel" link (e.g. to close a drawer) when provided. */
+  onCancel?: () => void;
 }) {
   const t = useTranslations("crm.companies");
   const tv = useTranslations("validation");
@@ -133,6 +139,11 @@ export function CompanyForm({
         : await createCompany(input);
 
     if (result.ok) {
+      if (mode === "create" && onCreated) {
+        onCreated(result.id, input.name);
+        router.refresh();
+        return;
+      }
       router.push(mode === "edit" && companyId ? `/app/companies/${companyId}` : "/app/companies");
       router.refresh();
     } else {
@@ -273,12 +284,22 @@ export function CompanyForm({
         <Button type="submit" size="lg" disabled={isSubmitting}>
           {isSubmitting ? t("saving") : mode === "create" ? t("create") : t("save")}
         </Button>
-        <Link
-          href={mode === "edit" && companyId ? `/app/companies/${companyId}` : "/app/companies"}
-          className="inline-flex h-13 items-center px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          {t("cancel")}
-        </Link>
+        {onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex h-13 items-center px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {t("cancel")}
+          </button>
+        ) : (
+          <Link
+            href={mode === "edit" && companyId ? `/app/companies/${companyId}` : "/app/companies"}
+            className="inline-flex h-13 items-center px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {t("cancel")}
+          </Link>
+        )}
       </div>
     </form>
   );
