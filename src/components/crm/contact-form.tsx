@@ -25,17 +25,11 @@ export function ContactForm({
   contactId,
   defaultValues,
   companies,
-  onCreated,
-  onCancel,
 }: {
   mode: "create" | "edit";
   contactId?: string;
   defaultValues: ContactFormValues;
   companies: { id: string; name: string }[];
-  /** Drawer/inline usage: called with the new id instead of navigating away. */
-  onCreated?: (id: string, name: string) => void;
-  /** Replaces the "cancel" link (e.g. to close a drawer) when provided. */
-  onCancel?: () => void;
 }) {
   const t = useTranslations("crm.contacts");
   const tv = useTranslations("validation");
@@ -93,11 +87,6 @@ export function ContactForm({
         : await createContact(input);
 
     if (result.ok) {
-      if (mode === "create" && onCreated) {
-        onCreated(result.id, input.name);
-        router.refresh();
-        return;
-      }
       router.push(mode === "edit" && contactId ? `/app/contacts/${contactId}` : "/app/contacts");
       router.refresh();
     } else {
@@ -173,22 +162,12 @@ export function ContactForm({
         <Button type="submit" size="lg" disabled={isSubmitting}>
           {isSubmitting ? t("saving") : mode === "create" ? t("create") : t("save")}
         </Button>
-        {onCancel ? (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="inline-flex h-13 items-center px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            {t("cancel")}
-          </button>
-        ) : (
-          <Link
-            href={mode === "edit" && contactId ? `/app/contacts/${contactId}` : "/app/contacts"}
-            className="inline-flex h-13 items-center px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            {t("cancel")}
-          </Link>
-        )}
+        <Link
+          href={mode === "edit" && contactId ? `/app/contacts/${contactId}` : "/app/contacts"}
+          className="inline-flex h-13 items-center px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {t("cancel")}
+        </Link>
       </div>
     </form>
   );

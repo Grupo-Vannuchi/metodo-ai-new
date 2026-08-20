@@ -41,8 +41,6 @@
   /* Modal/dialog entrance. */
   --animate-overlay-in: fade-in 0.12s ease-out both;
   --animate-dialog-in: dialog-in 0.16s ease-out both;
-  /* Right-side slide-over (drawer) entrance. */
-  --animate-drawer-in: drawer-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
   /* Screen-to-screen transition (in-app navigation). `backwards` (not `both`)
    * so no residual transform lingers after the animation — otherwise the
    * wrapper stays a containing block for `position: fixed` children and shifts
@@ -141,17 +139,6 @@
     to {
       opacity: 1;
       transform: translateY(0);
-    }
-  }
-
-  @keyframes drawer-in {
-    from {
-      opacity: 0.4;
-      transform: translateX(100%);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
     }
   }
 

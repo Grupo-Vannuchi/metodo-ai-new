@@ -49,10 +49,7 @@ export function NewOpportunityForm({
   productServices,
   initialContactId,
   initialCompanyId,
-  initialStageId,
   isMemberRole,
-  onCreated,
-  onCancel,
 }: {
   stages: Option[];
   companies: Option[];
@@ -61,12 +58,7 @@ export function NewOpportunityForm({
   productServices: ProductOption[];
   initialContactId?: string;
   initialCompanyId?: string;
-  initialStageId?: string;
   isMemberRole?: boolean;
-  /** Drawer usage: called on success instead of navigating to the board. */
-  onCreated?: () => void;
-  /** Replaces the "cancel" link (e.g. to close a drawer) when provided. */
-  onCancel?: () => void;
 }) {
   const t = useTranslations("crm.board");
   const tf = useTranslations("crm.opportunity");
@@ -105,7 +97,7 @@ export function NewOpportunityForm({
     defaultValues: {
       title: "",
       value: "",
-      stageId: initialStageId ?? stages[0]?.id ?? "",
+      stageId: stages[0]?.id ?? "",
       companyId: initialCompanyId ?? "",
       contactId: initialContactId ?? "",
       productServiceId: "",
@@ -248,11 +240,6 @@ export function NewOpportunityForm({
       notes: values.notes,
     });
     if (result.ok) {
-      if (onCreated) {
-        onCreated();
-        router.refresh();
-        return;
-      }
       router.push("/app/crm");
       router.refresh();
     } else {
@@ -385,22 +372,12 @@ export function NewOpportunityForm({
         <Button type="submit" size="lg" disabled={isSubmitting}>
           {isSubmitting ? t("creating") : t("create")}
         </Button>
-        {onCancel ? (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="inline-flex h-13 items-center px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            {t("cancel")}
-          </button>
-        ) : (
-          <Link
-            href="/app/crm"
-            className="inline-flex h-13 items-center px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            {t("cancel")}
-          </Link>
-        )}
+        <Link
+          href="/app/crm"
+          className="inline-flex h-13 items-center px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {t("cancel")}
+        </Link>
       </div>
     </form>
   );
