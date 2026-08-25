@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
+import { Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { MoneyInput } from "@/components/ui/money-input";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
+import { onlyDigits, formatCep } from "@/lib/cnpj";
 import { createEmployee, updateEmployee } from "@/app/actions/hr";
+import { lookupCep } from "@/app/actions/address";
 import {
   EMPLOYEE_STATUSES,
   CONTRACT_TYPES,
@@ -70,11 +73,32 @@ export function EmployeeForm({
   const {
     register,
     handleSubmit,
+    setValue,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<Fields>({ defaultValues: defaults });
 
   const [serverError, setServerError] = useState<string | null>(null);
   const [baseSalary, setBaseSalary] = useState(defaults.baseSalary);
+  const [cepState, setCepState] = useState<"idle" | "loading" | "done" | "notFound" | "error">("idle");
+
+  async function runCepLookup() {
+    const digits = onlyDigits(getValues("addressZip"));
+    if (digits.length !== 8) return;
+    setCepState("loading");
+    const result = await lookupCep(digits);
+    if (!result.ok) {
+      setCepState(result.error === "notFound" ? "notFound" : "error");
+      return;
+    }
+    setValue("addressZip", formatCep(digits));
+    // Fill blanks only — never clobber what the user already typed.
+    const street = [result.data.street, result.data.neighborhood].filter(Boolean).join(" - ");
+    if (street && !getValues("addressStreet").trim()) setValue("addressStreet", street, { shouldDirty: true });
+    if (result.data.city && !getValues("addressCity").trim()) setValue("addressCity", result.data.city, { shouldDirty: true });
+    if (result.data.uf && !getValues("addressState").trim()) setValue("addressState", result.data.uf, { shouldDirty: true });
+    setCepState("done");
+  }
 
   // Termination fields only make sense once the employee is marked TERMINATED.
   // Mirrored in local state (instead of RHF's `watch`, which opts the component
@@ -153,7 +177,37 @@ export function EmployeeForm({
         <div className="mt-2 grid gap-4 sm:grid-cols-6">
           <div className="sm:col-span-2">
             <Label htmlFor="addressZip">{t("form.zip")}</Label>
-            <Input id="addressZip" {...register("addressZip")} />
+            <div className="relative">
+              <Input
+                id="addressZip"
+                inputMode="numeric"
+                placeholder="00000-000"
+                className="pr-10"
+                {...register("addressZip", {
+                  onChange: () => setCepState((s) => (s === "idle" ? s : "idle")),
+                  onBlur: () => {
+                    if (cepState === "idle") void runCepLookup();
+                  },
+                })}
+              />
+              <button
+                type="button"
+                onClick={() => void runCepLookup()}
+                disabled={cepState === "loading"}
+                title={t("form.cepLookup")}
+                aria-label={t("form.cepLookup")}
+                className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+              >
+                {cepState === "loading" ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
+              </button>
+            </div>
+            {cepState === "done" ? (
+              <p className="mt-1 text-xs text-green-600 dark:text-green-400">{t("form.cepFilled")}</p>
+            ) : cepState === "notFound" ? (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{t("form.cepNotFound")}</p>
+            ) : cepState === "error" ? (
+              <p className="mt-1 text-xs text-red-500">{t("form.cepError")}</p>
+            ) : null}
           </div>
           <div className="sm:col-span-3">
             <Label htmlFor="addressStreet">{t("form.street")}</Label>
