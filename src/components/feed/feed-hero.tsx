@@ -34,8 +34,10 @@ export function FeedHero({
   avatarUrl: string | null;
   position: string | null;
   location: string | null;
-  taskStat: string;
-  oppStat: string;
+  /** Null when the Tarefas module isn't installed. */
+  taskStat: string | null;
+  /** Null when the CRM module isn't installed. */
+  oppStat: string | null;
 }) {
   const [index, setIndex] = useState(0);
 
@@ -68,16 +70,22 @@ export function FeedHero({
         <div className="min-w-0">
           <p className="text-xl font-bold tracking-tight sm:text-2xl">{title}</p>
           <p className="mt-1 max-w-md text-sm text-white/75">{subtitle}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-medium backdrop-blur-sm">
-              <CheckSquare className="size-3.5" />
-              {taskStat}
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-medium backdrop-blur-sm">
-              <KanbanSquare className="size-3.5" />
-              {oppStat}
-            </span>
-          </div>
+          {taskStat || oppStat ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {taskStat ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-medium backdrop-blur-sm">
+                  <CheckSquare className="size-3.5" />
+                  {taskStat}
+                </span>
+              ) : null}
+              {oppStat ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-medium backdrop-blur-sm">
+                  <KanbanSquare className="size-3.5" />
+                  {oppStat}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="hidden shrink-0 flex-col items-center gap-1.5 rounded-xl bg-white/10 p-3 text-center backdrop-blur-sm sm:flex">

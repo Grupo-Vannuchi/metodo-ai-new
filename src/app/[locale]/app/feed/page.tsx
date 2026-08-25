@@ -1,9 +1,10 @@
 import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
 import { requireScreen } from "@/lib/access";
+import { hasModule } from "@/config/modules";
 import { tenantDb } from "@/lib/tenant-db";
 import { listFeed } from "@/lib/queries/feed";
-import { listTeamMembers } from "@/lib/queries/team-chat";
+import { listTeamMembers, type AttachKind } from "@/lib/queries/team-chat";
 import { getMyProfile } from "@/lib/queries/profile";
 import { FeedClient } from "@/components/feed/feed-client";
 import { FeedHero } from "@/components/feed/feed-hero";
@@ -22,13 +23,24 @@ export default async function FeedPage({
   const t = await getTranslations("feed");
   const db = tenantDb(ctx.organizationId);
 
+  // Cross-module features in the wall are gated by installed modules: the hero
+  // stats and the attach picker only expose entities from modules the org has.
+  const hasTasks = hasModule(ctx.modules, "tasks");
+  const hasCrm = hasModule(ctx.modules, "crm");
+  const hasMarketing = hasModule(ctx.modules, "marketing");
+
   const [posts, members, profile, taskCount, oppCount] = await Promise.all([
     listFeed(ctx.organizationId, ctx.userId),
     listTeamMembers(ctx.organizationId),
     getMyProfile(ctx.userId),
-    db.task.count({ where: { assignedToId: ctx.userId, doneAt: null } }),
-    db.opportunity.count({ where: { ownerId: ctx.userId, status: "OPEN" } }),
+    hasTasks ? db.task.count({ where: { assignedToId: ctx.userId, doneAt: null } }) : Promise.resolve(0),
+    hasCrm ? db.opportunity.count({ where: { ownerId: ctx.userId, status: "OPEN" } }) : Promise.resolve(0),
   ]);
+
+  const attachKinds: AttachKind[] = [];
+  if (hasTasks) attachKinds.push("TASK");
+  if (hasCrm) attachKinds.push("OPP", "CONTACT", "COMPANY");
+  if (hasMarketing) attachKinds.push("LEAD");
 
   const canPost = ctx.role === "OWNER" || ctx.role === "ADMIN";
   const location = [profile?.addressCity, profile?.addressState].filter(Boolean).join(", ") || null;
@@ -42,8 +54,8 @@ export default async function FeedPage({
         avatarUrl={profile?.avatarUrl ?? null}
         position={profile?.position ?? null}
         location={location}
-        taskStat={t("statTasks", { count: taskCount })}
-        oppStat={t("statOpps", { count: oppCount })}
+        taskStat={hasTasks ? t("statTasks", { count: taskCount }) : null}
+        oppStat={hasCrm ? t("statOpps", { count: oppCount }) : null}
       />
 
       <FeedClient
@@ -51,6 +63,7 @@ export default async function FeedPage({
         members={members.map((m) => ({ userId: m.userId, name: m.name, avatarUrl: m.avatarUrl }))}
         currentUserId={ctx.userId}
         canPost={canPost}
+        attachKinds={attachKinds}
       />
     </div>
   );

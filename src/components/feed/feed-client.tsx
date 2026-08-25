@@ -74,11 +74,14 @@ export function FeedClient({
   members,
   currentUserId,
   canPost,
+  attachKinds,
 }: {
   initialPosts: FeedPostView[];
   members: Member[];
   currentUserId: string;
   canPost: boolean;
+  /** Attach types the org can link (gated by installed modules). Empty = no attach. */
+  attachKinds: AttachKind[];
 }) {
   const t = useTranslations("feed");
 
@@ -113,7 +116,7 @@ export function FeedClient({
 
   return (
     <div className="flex flex-col gap-5">
-      {canPost ? <Composer members={members} currentUserId={currentUserId} onPosted={refetch} /> : null}
+      {canPost ? <Composer members={members} currentUserId={currentUserId} onPosted={refetch} attachKinds={attachKinds} /> : null}
 
       {posts.length > 0 ? (
         <div className="flex flex-col gap-3">
@@ -179,10 +182,12 @@ function Composer({
   members,
   currentUserId,
   onPosted,
+  attachKinds,
 }: {
   members: Member[];
   currentUserId: string;
   onPosted: () => void;
+  attachKinds: AttachKind[];
 }) {
   const t = useTranslations("feed");
   const [body, setBody] = useState("");
@@ -367,9 +372,11 @@ function Composer({
       {/* Toolbar */}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          <ToolToggle active={false} onClick={() => setAttachOpen(true)} title={t("attach")}>
-            <Paperclip className="size-4" />
-          </ToolToggle>
+          {attachKinds.length > 0 ? (
+            <ToolToggle active={false} onClick={() => setAttachOpen(true)} title={t("attach")}>
+              <Paperclip className="size-4" />
+            </ToolToggle>
+          ) : null}
           <ToolToggle active={pollOn} onClick={() => setPollOn((v) => !v)} title={t("poll.toggle")}>
             <BarChart3 className="size-4" />
           </ToolToggle>
@@ -396,6 +403,7 @@ function Composer({
 
       {attachOpen ? (
         <AttachPicker
+          allowedKinds={attachKinds}
           onPick={(type, id, label) => {
             setAttachments((prev) => (prev.some((a) => a.type === type && a.id === id) ? prev : [...prev, { type, id, label }]));
             setAttachOpen(false);

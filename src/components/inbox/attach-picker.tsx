@@ -14,15 +14,19 @@ const TYPES: { kind: AttachKind; icon: typeof CheckSquare }[] = [
   { kind: "LEAD", icon: Radar },
 ];
 
-/** Modal to pick a CRM entity to attach to a team-chat message. */
+/** Modal to pick a CRM entity to attach to a team-chat message or feed post.
+ *  `allowedKinds` limits the offered types to modules the org has installed. */
 export function AttachPicker({
   onPick,
   onClose,
+  allowedKinds,
 }: {
   onPick: (type: AttachKind, id: string, label: string) => void;
   onClose: () => void;
+  allowedKinds?: AttachKind[];
 }) {
   const t = useTranslations("teamChat");
+  const types = allowedKinds ? TYPES.filter((tp) => allowedKinds.includes(tp.kind)) : TYPES;
   const [kind, setKind] = useState<AttachKind | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AttachOption[]>([]);
@@ -75,7 +79,7 @@ export function AttachPicker({
 
         {!kind ? (
           <div className="flex flex-col gap-1 p-2">
-            {TYPES.map(({ kind: k, icon: Icon }) => (
+            {types.map(({ kind: k, icon: Icon }) => (
               <button
                 key={k}
                 type="button"
