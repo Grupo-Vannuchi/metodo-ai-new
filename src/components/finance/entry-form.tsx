@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -67,6 +67,18 @@ export function EntryForm({
 
   const typeCategories = categories.filter((c) => c.type === type);
 
+  // Due-date quick shortcuts write directly to the uncontrolled date input.
+  const dueDateRef = useRef<HTMLInputElement>(null);
+  function setDueDate(d: Date) {
+    if (dueDateRef.current) dueDateRef.current.value = d.toISOString().slice(0, 10);
+  }
+  const DATE_SHORTCUTS: { key: string; make: () => Date }[] = [
+    { key: "today", make: () => new Date() },
+    { key: "week", make: () => new Date(Date.now() + 7 * 86_400_000) },
+    { key: "month", make: () => new Date(Date.now() + 30 * 86_400_000) },
+    { key: "endOfMonth", make: () => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth() + 1, 0); } },
+  ];
+
   async function onNewCategory() {
     const name = await prompt({ title: t("newCategory"), placeholder: t("categoryName") });
     if (!name) return;
@@ -131,7 +143,19 @@ export function EntryForm({
         </div>
         <div>
           <Label htmlFor="dueDate">{t("field.dueDate")}</Label>
-          <Input id="dueDate" name="dueDate" type="date" defaultValue={defaults.dueDate} required />
+          <Input ref={dueDateRef} id="dueDate" name="dueDate" type="date" defaultValue={defaults.dueDate} required />
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {DATE_SHORTCUTS.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setDueDate(s.make())}
+                className="rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:border-brand/50 hover:text-brand"
+              >
+                {t(`dateShortcut.${s.key}`)}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

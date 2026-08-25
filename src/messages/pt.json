@@ -2002,6 +2002,17 @@
       "monthResult": "Resultado do mês"
     },
     "thisMonth": "Este mês",
+    "totals": {
+      "income": "Entradas (filtro)",
+      "expense": "Saídas (filtro)",
+      "net": "Saldo (filtro)"
+    },
+    "dateShortcut": {
+      "today": "Hoje",
+      "week": "+7 dias",
+      "month": "+30 dias",
+      "endOfMonth": "Fim do mês"
+    },
     "newEntry": "Novo lançamento",
     "editEntry": "Editar lançamento",
     "newCategory": "Nova categoria",

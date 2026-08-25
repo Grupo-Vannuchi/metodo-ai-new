@@ -2002,6 +2002,17 @@
       "monthResult": "Month result"
     },
     "thisMonth": "This month",
+    "totals": {
+      "income": "Income (filter)",
+      "expense": "Expense (filter)",
+      "net": "Balance (filter)"
+    },
+    "dateShortcut": {
+      "today": "Today",
+      "week": "+7 days",
+      "month": "+30 days",
+      "endOfMonth": "End of month"
+    },
     "newEntry": "New entry",
     "editEntry": "Edit entry",
     "newCategory": "New category",

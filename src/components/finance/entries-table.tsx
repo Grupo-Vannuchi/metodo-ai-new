@@ -30,6 +30,11 @@ export function EntriesTable({ rows }: { rows: EntryRow[] }) {
     (r) => (typeTab === "ALL" || r.type === typeTab) && (statusTab === "ALL" || r.status === statusTab),
   );
 
+  // Totals for the current filter — a live read of what's on screen.
+  const totalIncome = filtered.reduce((s, r) => (r.type === "INCOME" ? s + r.amount : s), 0);
+  const totalExpense = filtered.reduce((s, r) => (r.type === "EXPENSE" ? s + r.amount : s), 0);
+  const net = totalIncome - totalExpense;
+
   function onSettle(r: EntryRow) {
     start(async () => {
       await settleEntry(r.id, r.status !== "SETTLED");
@@ -75,6 +80,25 @@ export function EntriesTable({ rows }: { rows: EntryRow[] }) {
           {t("empty")}
         </p>
       ) : (
+        <>
+        {/* Live totals for the filtered set. */}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground">{t("totals.income")}</p>
+            <p className="mt-0.5 text-lg font-semibold tabular-nums text-green-600">+ {formatBRL(totalIncome)}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground">{t("totals.expense")}</p>
+            <p className="mt-0.5 text-lg font-semibold tabular-nums text-red-600">− {formatBRL(totalExpense)}</p>
+          </div>
+          <div className="rounded-xl border border-brand/30 bg-brand/5 p-4">
+            <p className="text-xs text-muted-foreground">{t("totals.net")}</p>
+            <p className={cn("mt-0.5 text-lg font-bold tabular-nums", net >= 0 ? "text-green-600" : "text-red-600")}>
+              {net >= 0 ? "+" : "−"} {formatBRL(Math.abs(net))}
+            </p>
+          </div>
+        </div>
+
         <div className="overflow-x-auto rounded-xl border border-border bg-card">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-border text-muted-foreground">
@@ -148,6 +172,7 @@ export function EntriesTable({ rows }: { rows: EntryRow[] }) {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );
