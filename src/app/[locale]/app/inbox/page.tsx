@@ -13,7 +13,7 @@ import { WhatsappQuickConnect } from "@/components/integrations/whatsapp-quick-c
 import { EvolutionConnect } from "@/components/integrations/evolution-connect";
 import { WhatsappAgentConfig } from "@/components/integrations/whatsapp-agent-config";
 import { resolveLocale } from "@/i18n/routing";
-import { listTeamChats, listTeamMembers, listTeamChatFolders } from "@/lib/queries/team-chat";
+import { listTeamChats, listTeamMembers, listTeamChatFolders, type AttachKind } from "@/lib/queries/team-chat";
 import { Link } from "@/i18n/navigation";
 import { MessageCircle, Users, MessagesSquare, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -163,6 +163,11 @@ export default async function InboxPage({
               initialChats={teamChats}
               initialSelectedId={chat ?? null}
               currentUserId={ctx.userId}
+              attachKinds={[
+                ...(hasModule(ctx.modules, "tasks") ? (["TASK"] as AttachKind[]) : []),
+                ...(hasModule(ctx.modules, "crm") ? (["OPP", "CONTACT", "COMPANY"] as AttachKind[]) : []),
+                ...(hasModule(ctx.modules, "marketing") ? (["LEAD"] as AttachKind[]) : []),
+              ]}
             />
           )}
         </div>

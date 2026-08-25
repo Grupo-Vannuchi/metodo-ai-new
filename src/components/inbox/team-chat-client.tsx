@@ -178,12 +178,15 @@ export function TeamChatClient({
   initialChats,
   initialSelectedId,
   currentUserId,
+  attachKinds,
 }: {
   members: TeamMember[];
   folders: TeamChatFolderRow[];
   initialChats: TeamChatSummary[];
   initialSelectedId: string | null;
   currentUserId: string;
+  /** Attach types the org can link (gated by installed modules). Empty = no attach. */
+  attachKinds: AttachKind[];
 }) {
   const t = useTranslations("teamChat");
   const router = useRouter();
@@ -1135,15 +1138,17 @@ export function TeamChatClient({
                   if (f) void onSendFile(f);
                 }}
               />
-              <button
-                type="button"
-                onClick={() => setAttachOpen(true)}
-                title={t("attach")}
-                aria-label={t("attach")}
-                className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <FileText className="size-4" />
-              </button>
+              {attachKinds.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setAttachOpen(true)}
+                  title={t("attach")}
+                  aria-label={t("attach")}
+                  className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <FileText className="size-4" />
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -1406,7 +1411,7 @@ export function TeamChatClient({
         </aside>
       ) : null}
 
-      {attachOpen ? <AttachPicker onPick={sendAttachment} onClose={() => setAttachOpen(false)} /> : null}
+      {attachOpen ? <AttachPicker allowedKinds={attachKinds} onPick={sendAttachment} onClose={() => setAttachOpen(false)} /> : null}
       {creatingChannel ? (
         <CreateChannelModal members={visible} onCreate={submitChannel} onClose={() => setCreatingChannel(false)} />
       ) : null}
