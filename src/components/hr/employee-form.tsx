@@ -10,6 +10,8 @@ import { MoneyInput } from "@/components/ui/money-input";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { onlyDigits, formatCep } from "@/lib/cnpj";
+import { formatBrPhone } from "@/lib/phone";
+import { formatDocument } from "@/lib/document";
 import { createEmployee, updateEmployee } from "@/app/actions/hr";
 import { lookupCep } from "@/app/actions/address";
 import {
@@ -106,6 +108,12 @@ export function EmployeeForm({
   const [status, setStatus] = useState<EmployeeStatusKey>(defaults.status);
   const statusField = register("status");
 
+  // Document type mirrored in state so the document field can mask CPF/CNPJ.
+  const [docType, setDocType] = useState<"" | "CPF" | "CNPJ">(defaults.documentType);
+  const docTypeField = register("documentType");
+  const phoneField = register("phone");
+  const documentField = register("document");
+
   async function onSubmit(values: Fields) {
     setServerError(null);
     const payload = {
@@ -140,11 +148,29 @@ export function EmployeeForm({
           </div>
           <div>
             <Label htmlFor="phone">{t("form.phone")}</Label>
-            <Input id="phone" {...register("phone")} />
+            <Input
+              id="phone"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="(11) 91234-5678"
+              {...phoneField}
+              onChange={(e) => {
+                e.target.value = formatBrPhone(e.target.value);
+                void phoneField.onChange(e);
+              }}
+            />
           </div>
           <div>
             <Label htmlFor="documentType">{t("form.documentType")}</Label>
-            <select id="documentType" className={selectCls} {...register("documentType")}>
+            <select
+              id="documentType"
+              className={selectCls}
+              {...docTypeField}
+              onChange={(e) => {
+                void docTypeField.onChange(e);
+                setDocType(e.target.value as "" | "CPF" | "CNPJ");
+              }}
+            >
               <option value="">{t("form.none")}</option>
               <option value="CPF">CPF</option>
               <option value="CNPJ">CNPJ</option>
@@ -152,7 +178,16 @@ export function EmployeeForm({
           </div>
           <div>
             <Label htmlFor="document">{t("form.document")}</Label>
-            <Input id="document" {...register("document")} />
+            <Input
+              id="document"
+              inputMode="numeric"
+              placeholder={docType === "CNPJ" ? "00.000.000/0000-00" : docType === "CPF" ? "000.000.000-00" : undefined}
+              {...documentField}
+              onChange={(e) => {
+                if (docType === "CPF" || docType === "CNPJ") e.target.value = formatDocument(docType, e.target.value);
+                void documentField.onChange(e);
+              }}
+            />
           </div>
           <div>
             <Label htmlFor="birthDate">{t("form.birthDate")}</Label>
