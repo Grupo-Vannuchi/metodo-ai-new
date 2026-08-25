@@ -4,9 +4,10 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Textarea, FieldError } from "@/components/ui/field";
+import { Input, Label, FieldError } from "@/components/ui/field";
 import { Link, useRouter } from "@/i18n/navigation";
 import { CHANNEL_META, type ChannelKey } from "@/lib/integrations/channels/meta";
+import { TemplateBodyField } from "@/components/campaigns/template-body-field";
 import { updateTemplate } from "@/app/actions/campaigns";
 
 type Values = { name: string; subject: string; body: string };
@@ -32,6 +33,8 @@ export function TemplateEditForm({
   const {
     register,
     handleSubmit,
+    setValue,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<Values>({ defaultValues: { name, subject, body } });
 
@@ -73,15 +76,7 @@ export function TemplateEditForm({
               <Input id="subject" {...register("subject")} />
             </div>
           ) : null}
-          <div>
-            <Label htmlFor="body">{t("body")}</Label>
-            <Textarea id="body" aria-invalid={Boolean(errors.body)} {...register("body", { required: tv("required") })} />
-            <FieldError>{errors.body?.message}</FieldError>
-            <p className="mt-1 text-xs text-muted-foreground">{t("bodyHint")}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t("spintaxHint")} <code className="rounded bg-muted px-1">{"{oi|olá|e aí}"}</code>
-            </p>
-          </div>
+          <TemplateBodyField register={register} setValue={setValue} getValues={getValues} error={errors.body?.message} />
         </div>
       </fieldset>
 

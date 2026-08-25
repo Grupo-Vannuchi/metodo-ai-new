@@ -1744,6 +1744,8 @@
     "templateName": "Nome do template",
     "subject": "Assunto",
     "body": "Mensagem",
+    "insertVar": "Inserir:",
+    "insertSpintax": "Variação",
     "bodyHint": "Use '{{nome}}' e '{{empresa}}' para personalizar.",
     "spintaxHint": "Anti-spam: varie o texto com spintax — o sistema sorteia uma opção por envio. Ex.:",
     "createTemplate": "Criar template",
