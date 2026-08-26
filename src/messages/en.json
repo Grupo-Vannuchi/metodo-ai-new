@@ -217,6 +217,22 @@
       }
     }
   },
+  "companies": {
+    "switchTitle": "Switch company",
+    "moduleCount": "{count, plural, =0 {No modules} =1 {# module} other {# modules}}",
+    "newCompany": "New company",
+    "namePlaceholder": "Company name",
+    "create": "Create",
+    "cancel": "Cancel",
+    "limitReached": "You've reached the account's company limit.",
+    "error": {
+      "invalid": "Enter a valid name.",
+      "limit": "You've reached the account's company limit.",
+      "forbidden": "You don't have access to this company.",
+      "unauthorized": "Session expired. Please sign in again.",
+      "unknown": "Couldn't complete. Please try again."
+    }
+  },
   "loja": {
     "title": "MetodoLoja",
     "subtitle": "Build your Método: install only the modules your company needs.",

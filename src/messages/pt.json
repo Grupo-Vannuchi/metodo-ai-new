@@ -217,6 +217,22 @@
       }
     }
   },
+  "companies": {
+    "switchTitle": "Trocar de empresa",
+    "moduleCount": "{count, plural, =0 {Sem módulos} =1 {# módulo} other {# módulos}}",
+    "newCompany": "Nova empresa",
+    "namePlaceholder": "Nome da empresa",
+    "create": "Criar",
+    "cancel": "Cancelar",
+    "limitReached": "Você atingiu o limite de empresas da conta.",
+    "error": {
+      "invalid": "Informe um nome válido.",
+      "limit": "Você atingiu o limite de empresas da conta.",
+      "forbidden": "Você não tem acesso a esta empresa.",
+      "unauthorized": "Sessão expirada. Entre novamente.",
+      "unknown": "Não foi possível concluir. Tente novamente."
+    }
+  },
   "loja": {
     "title": "MetodoLoja",
     "subtitle": "Monte seu Método: instale só os módulos que sua empresa precisa.",

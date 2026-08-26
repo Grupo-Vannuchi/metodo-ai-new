@@ -16,6 +16,8 @@ import { PageTransition } from "@/components/app/page-transition";
 import { logout } from "@/app/actions/auth";
 import { Link } from "@/i18n/navigation";
 import { availableScreens, hasFeatureByModules } from "@/config/modules";
+import { listAccountCompanies } from "@/lib/queries/accounts";
+import { LIMITS } from "@/config/limits";
 import type { OrgContext } from "@/lib/tenant";
 import type { Locale } from "@/i18n/routing";
 
@@ -38,6 +40,10 @@ export async function AppShell({
   const collapsed = (await cookies()).get("sidebar_collapsed")?.value === "1";
   const assistantEnabled = hasFeatureByModules(ctx.modules, "assistant");
 
+  // Company switcher (owner-only): the account's companies + whether a new one fits.
+  const companies = ctx.isAccountOwner ? await listAccountCompanies(ctx.userId) : [];
+  const canCreateCompany = companies.length < LIMITS.companiesPerAccount;
+
   return (
     <RealtimeProvider>
     <NotificationSound />
@@ -59,6 +65,10 @@ export async function AppShell({
           mismatched tones. Collapsible to an icon rail. */}
       <Sidebar
         orgName={ctx.organization.name}
+        orgId={ctx.organizationId}
+        companies={companies}
+        isAccountOwner={ctx.isAccountOwner}
+        canCreateCompany={canCreateCompany}
         userName={ctx.user.name}
         userEmail={ctx.user.email}
         navScreens={navScreens}

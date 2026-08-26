@@ -7,7 +7,10 @@ import { Logo } from "@/components/layout/logo";
 import { AppNav } from "@/components/app/app-nav";
 import { NotificationBell } from "@/components/app/notification-bell";
 import { SearchTrigger } from "@/components/app/search-trigger";
+import { CompanySwitcher } from "@/components/app/company-switcher";
 import { cn } from "@/lib/utils";
+
+type Company = { id: string; name: string; slug: string; activeModules: number };
 
 /**
  * The desktop sidebar. Collapsible to an icon rail — the main content is
@@ -17,6 +20,10 @@ import { cn } from "@/lib/utils";
  */
 export function Sidebar({
   orgName,
+  orgId,
+  companies,
+  isAccountOwner,
+  canCreateCompany,
   userName,
   userEmail,
   navScreens,
@@ -24,6 +31,11 @@ export function Sidebar({
   initialCollapsed,
 }: {
   orgName: string;
+  orgId: string;
+  /** The account's companies (owner-only switcher). */
+  companies: Company[];
+  isAccountOwner: boolean;
+  canCreateCompany: boolean;
   userName: string;
   userEmail: string;
   navScreens: string[];
@@ -71,8 +83,14 @@ export function Sidebar({
           <NotificationBell align="left" />
         </div>
       ) : (
-        <div className="mt-4 w-full rounded-lg border border-border bg-muted/40 px-3 py-2">
-          <p className="truncate text-sm font-medium">{orgName}</p>
+        <div className="mt-4 w-full">
+          {isAccountOwner ? (
+            <CompanySwitcher companies={companies} currentId={orgId} currentName={orgName} canCreate={canCreateCompany} />
+          ) : (
+            <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+              <p className="truncate text-sm font-medium">{orgName}</p>
+            </div>
+          )}
         </div>
       )}
 
