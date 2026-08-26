@@ -1572,6 +1572,19 @@
       "prompt": "Personalidade / instruções (prompt)",
       "promptPlaceholder": "Você é a Bia, consultora virtual da Empresa X. Atende via WhatsApp de forma cordial e objetiva. Sua missão é…",
       "promptHint": "Descreva quem é o agente, o tom, o que ele pode responder e quando passar para um humano.",
+      "presetLabel": "Começar de um modelo:",
+      "presetReplace": "Substituir o texto atual do prompt por este modelo?",
+      "presetReplaceOk": "Substituir",
+      "presetName": {
+        "comercial": "Comercial",
+        "suporte": "Suporte",
+        "agendamento": "Agendamento"
+      },
+      "presetBody": {
+        "comercial": "Você é o assistente comercial da nossa empresa e atende clientes pelo WhatsApp. Seja cordial, objetivo e humano. Qualifique o interesse do cliente, tire dúvidas sobre produtos e serviços e conduza a conversa para o próximo passo (agendar uma conversa ou enviar uma proposta). Nunca invente informações: quando não souber, ofereça encaminhar para um atendente.",
+        "suporte": "Você é o suporte da nossa empresa e atende clientes pelo WhatsApp. Ajude a resolver problemas com paciência e clareza, peça as informações necessárias e explique o passo a passo. Se o caso for complexo, exigir acesso a dados internos ou o cliente ficar insatisfeito, encaminhe para um atendente humano.",
+        "agendamento": "Você é o assistente de agendamento da nossa empresa e atende pelo WhatsApp. Ajude o cliente a marcar ou remarcar horários: confirme nome, serviço desejado e data/hora de preferência, e resuma o agendamento ao final. Se não houver disponibilidade no horário pedido, ofereça alternativas próximas."
+      },
       "handoff": "Silêncio após atendimento humano (minutos)",
       "handoffHint": "Quando alguém da equipe responder a conversa, o agente fica em silêncio por este tempo.",
       "save": "Salvar agente",

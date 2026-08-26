@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Bot } from "lucide-react";
+import { Bot, Sparkles } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { useNotify } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,9 @@ const selectCls = cn(
   "focus-visible:border-brand focus-visible:outline-none",
 );
 
+/** Starter prompts to spare the user the blank page — content comes from i18n. */
+const PROMPT_PRESETS = ["comercial", "suporte", "agendamento"] as const;
+
 export function WhatsappAgentConfig({
   connectionId,
   initial,
@@ -27,9 +31,21 @@ export function WhatsappAgentConfig({
   const t = useTranslations("connections.agent");
   const router = useRouter();
   const notify = useNotify();
+  const confirm = useConfirm();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [enabled, setEnabled] = useState(initial?.enabled ?? false);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+
+  async function applyPreset(key: string) {
+    const el = promptRef.current;
+    if (!el) return;
+    if (el.value.trim() && !(await confirm({ description: t("presetReplace"), confirmLabel: t("presetReplaceOk"), variant: "danger" }))) {
+      return;
+    }
+    el.value = t(`presetBody.${key}`);
+    el.focus();
+  }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -103,7 +119,22 @@ export function WhatsappAgentConfig({
 
       <div>
         <Label htmlFor="ag-prompt">{t("prompt")}</Label>
+        <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+          <span className="mr-0.5 text-xs text-muted-foreground">{t("presetLabel")}</span>
+          {PROMPT_PRESETS.map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => void applyPreset(k)}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-brand/50 hover:text-brand"
+            >
+              <Sparkles className="size-3.5" />
+              {t(`presetName.${k}`)}
+            </button>
+          ))}
+        </div>
         <Textarea
+          ref={promptRef}
           id="ag-prompt"
           name="prompt"
           defaultValue={initial?.prompt ?? ""}

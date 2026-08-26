@@ -1572,6 +1572,19 @@
       "prompt": "Personality / instructions (prompt)",
       "promptPlaceholder": "You are Bia, virtual consultant at Company X. You answer over WhatsApp politely and objectively. Your mission is…",
       "promptHint": "Describe who the agent is, the tone, what it can answer, and when to hand off to a human.",
+      "presetLabel": "Start from a template:",
+      "presetReplace": "Replace the current prompt text with this template?",
+      "presetReplaceOk": "Replace",
+      "presetName": {
+        "comercial": "Sales",
+        "suporte": "Support",
+        "agendamento": "Scheduling"
+      },
+      "presetBody": {
+        "comercial": "You are our company's sales assistant and you serve customers over WhatsApp. Be warm, concise and human. Qualify the customer's interest, answer questions about products and services, and guide the conversation to the next step (book a call or send a proposal). Never make up information: when you don't know, offer to hand off to a human agent.",
+        "suporte": "You are our company's support and you serve customers over WhatsApp. Help solve problems patiently and clearly, ask for the information you need, and explain the steps. If the case is complex, requires internal data, or the customer is unhappy, hand off to a human agent.",
+        "agendamento": "You are our company's scheduling assistant on WhatsApp. Help the customer book or reschedule: confirm the name, the desired service and the preferred date/time, and summarize the booking at the end. If the requested time isn't available, offer nearby alternatives."
+      },
       "handoff": "Silence after a human replies (minutes)",
       "handoffHint": "When a team member replies to a chat, the agent stays silent for this long.",
       "save": "Save agent",
