@@ -127,9 +127,6 @@ export async function signup(
   let userId: string;
   try {
     userId = await prisma.$transaction(async (tx) => {
-      const org = await tx.organization.create({
-        data: { name: organizationName, slug },
-      });
       const user = await tx.user.create({
         data: {
           name,
@@ -138,6 +135,10 @@ export async function signup(
           // emailVerified stays null — the account is gated until confirmed.
           profile: { create: coreProfileData(parsed.data) },
         },
+      });
+      const org = await tx.organization.create({
+        // The signup user is the account owner of their first company.
+        data: { name: organizationName, slug, ownerId: user.id },
       });
       await tx.membership.create({
         data: { organizationId: org.id, userId: user.id, role: "OWNER" },

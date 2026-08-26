@@ -21,6 +21,8 @@ export const LIMITS: {
   assistantDailyLimit: number;
   /** WhatsApp AI agent auto-replies per day (org-wide). */
   whatsappAgentDailyLimit: number;
+  /** Companies (organizations) an account owner can have. */
+  companiesPerAccount: number;
 } = {
   seatLimit: 25,
   connectionsLimit: null,
@@ -30,4 +32,5 @@ export const LIMITS: {
   extractionsPerMonth: 500,
   assistantDailyLimit: 750,
   whatsappAgentDailyLimit: 2_000,
+  companiesPerAccount: 5,
 };

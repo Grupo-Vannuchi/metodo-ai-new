@@ -51,6 +51,11 @@ model Organization {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
+  /// The account owner (the user who created/owns this company). A single account
+  /// (owner) can have several companies — the company switcher lists them. Module
+  /// entitlements are billed at the account level (see AccountModule). Nullable
+  /// only for the migration backfill; always set for orgs created afterwards.
+  ownerId   String?
   /// Null until the owner finishes the "monte seu Método" onboarding (picks the
   /// first modules). Existing orgs are backfilled as already onboarded.
   onboardedAt DateTime?
@@ -74,7 +79,25 @@ model Organization {
   feedPollVotes        FeedPollVote[]
   pinnedItems          PinnedItem[]
 
+  @@index([ownerId])
   @@map("organizations")
+}
+
+/// A module PURCHASED at the account level (by the owner). Billed once per module
+/// regardless of how many of the account's companies install it. What a company
+/// can actually install (OrganizationModule) is constrained to the account's
+/// owned modules. Uninstalling from a company keeps the entitlement.
+model AccountModule {
+  id          String   @id @default(cuid())
+  ownerUserId String
+  moduleId    String
+  createdAt   DateTime @default(now())
+
+  owner User @relation("AccountModules", fields: [ownerUserId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerUserId, moduleId])
+  @@index([ownerUserId])
+  @@map("account_modules")
 }
 
 /// A module installed by an org from the MetodoLoja. `moduleId` matches an id in
@@ -131,6 +154,7 @@ model User {
   feedPollVotes        FeedPollVote[]
   authTokens           AuthToken[]
   accounts             Account[]
+  accountModules       AccountModule[] @relation("AccountModules")
 
   @@map("users")
 }
@@ -230,9 +254,10 @@ model Membership {
   accessTemplate AccessTemplate? @relation(fields: [accessTemplateId], references: [id], onDelete: SetNull)
   teamFolder     TeamChatFolder? @relation(fields: [teamFolderId], references: [id], onDelete: SetNull)
 
-  // One team per user: a user has at most one membership.
+  // A user can belong to several companies (the account's companies + any org
+  // they were invited to). Uniqueness is per (org, user) — not per user.
   @@unique([organizationId, userId])
-  @@unique([userId])
+  @@index([userId])
   @@index([accessTemplateId])
   @@index([teamFolderId])
   @@map("memberships")

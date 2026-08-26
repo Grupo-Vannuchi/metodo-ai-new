@@ -20,6 +20,12 @@ export type OrgContext = {
   role: SessionRole;
   user: { id: string; name: string; email: string };
   organization: { id: string; name: string; slug: string };
+  /** The account owner of the current company (Organization.ownerId). Module
+   *  entitlements are keyed by this (see AccountModule). */
+  accountOwnerId: string | null;
+  /** True when the signed-in user is the account owner of this company — gates
+   *  the company switcher, "create company" and account-level module purchase. */
+  isAccountOwner: boolean;
   /** Access template assigned to this membership (null = full access). */
   accessTemplateId: string | null;
   /** Screen keys this member can reach (see src/lib/access.ts). */
@@ -58,6 +64,7 @@ export const getOrgContext = cache(async (): Promise<OrgContext | null> => {
           id: true,
           name: true,
           slug: true,
+          ownerId: true,
           onboardedAt: true,
           modules: { where: { status: "ACTIVE" }, select: { moduleId: true } },
         },
@@ -68,7 +75,7 @@ export const getOrgContext = cache(async (): Promise<OrgContext | null> => {
   if (!membership) return null;
 
   const templateScreens = membership.accessTemplate?.screens ?? null;
-  const { modules, onboardedAt, ...organization } = membership.organization;
+  const { modules, onboardedAt, ownerId, ...organization } = membership.organization;
 
   return {
     userId: membership.user.id,
@@ -76,6 +83,8 @@ export const getOrgContext = cache(async (): Promise<OrgContext | null> => {
     role: membership.role,
     user: membership.user,
     organization,
+    accountOwnerId: ownerId,
+    isAccountOwner: ownerId != null && ownerId === membership.user.id,
     accessTemplateId: membership.accessTemplateId,
     allowedScreens: resolveAllowedScreens(membership.role, templateScreens),
     modules: modules.map((m) => m.moduleId),
