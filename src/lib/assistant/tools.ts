@@ -2,8 +2,10 @@ import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { OrgContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
-import { canAccessScreen } from "@/lib/access";
+import { canAccessScreen, resolveAllowedScreens } from "@/lib/access";
 import { hasFeatureByModules, hasModule } from "@/config/modules";
+import { listAccountCompanies } from "@/lib/queries/accounts";
+import { orgModuleIds } from "@/lib/queries/modules";
 import { formatBRL } from "@/lib/money";
 import { globalSearch } from "@/lib/queries/search";
 import { getSalesReport, type SalesPeriod } from "@/lib/queries/sales-report";
@@ -160,7 +162,26 @@ export const assistantTools: Anthropic.Tool[] = [
       "Lista manutenções e calibrações agendadas dos ativos, com destaque para as vencidas: ativo, tipo (manutenção/calibração), data prevista e se está vencida. Use para responder o que está vencido ou próximo do vencimento.",
     input_schema: { type: "object", properties: {} },
   },
+  {
+    name: "list_companies",
+    description:
+      "Lista as empresas da conta (o dono pode ter várias). Retorna id, nome e nº de módulos ativos de cada. Use para descobrir os ids e então passar 'companyId' nas outras ferramentas para consultar os dados de uma empresa específica sem sair da empresa atual.",
+    input_schema: { type: "object", properties: {} },
+  },
 ];
+
+// Cross-company reads: every tool (except list_companies) accepts an optional
+// `companyId` to target another company of the account. The dispatcher rebuilds
+// the org context for that company before running the tool.
+const COMPANY_PARAM = {
+  type: "string",
+  description:
+    "Opcional. Id de outra empresa da sua conta (obtido de list_companies) para consultar os dados dela em vez da empresa atual. Só o dono da conta pode consultar outras empresas.",
+} as const;
+for (const tool of assistantTools) {
+  if (tool.name === "list_companies") continue;
+  (tool.input_schema.properties as Record<string, unknown>).companyId = COMPANY_PARAM;
+}
 
 function asPeriod(v: unknown): SalesPeriod {
   return v === "30D" || v === "YEAR" || v === "ALL" ? v : "MONTH";
@@ -171,13 +192,63 @@ function asTaskScope(v: unknown): TaskScope {
     : "open";
 }
 
-/** Execute a tool call under the caller's org context. Never throws. */
+/**
+ * Build an org context for ANOTHER company of the account (cross-company reads).
+ * Owner-only: returns null unless the caller is the account owner and the target
+ * is one of their companies. The owner has full access in each of their
+ * companies, so gating reduces to the target company's installed modules.
+ */
+async function resolveAccountCompanyCtx(base: OrgContext, targetOrgId: string): Promise<OrgContext | null> {
+  if (!base.isAccountOwner || base.accountOwnerId !== base.userId) return null;
+  const org = await prisma.organization.findFirst({
+    where: { id: targetOrgId, ownerId: base.userId },
+    select: { id: true, name: true, slug: true },
+  });
+  if (!org) return null;
+  const modules = await orgModuleIds(org.id);
+  return {
+    ...base,
+    organizationId: org.id,
+    role: "OWNER",
+    organization: { id: org.id, name: org.name, slug: org.slug },
+    accountOwnerId: base.userId,
+    isAccountOwner: true,
+    accessTemplateId: null,
+    allowedScreens: resolveAllowedScreens("OWNER", null),
+    modules,
+    onboarded: true,
+  };
+}
+
+/** Execute a tool call under the caller's org context. Never throws. A read tool
+ *  may target another company of the account via `input.companyId` (owner-only). */
 export async function runAssistantTool(
-  ctx: OrgContext,
+  baseCtx: OrgContext,
   name: string,
   input: Record<string, unknown>,
 ): Promise<string> {
   try {
+    // Resolve the effective company context (cross-company reads, owner-only).
+    let ctx = baseCtx;
+    const companyId = typeof input.companyId === "string" ? input.companyId.trim() : "";
+    if (name !== "list_companies" && companyId && companyId !== baseCtx.organizationId) {
+      const eff = await resolveAccountCompanyCtx(baseCtx, companyId);
+      if (!eff) return "Empresa não encontrada na sua conta, ou você não é o dono da conta.";
+      ctx = eff;
+    }
+
+    if (name === "list_companies") {
+      const owner = baseCtx.accountOwnerId ?? baseCtx.userId;
+      const companies = baseCtx.isAccountOwner ? await listAccountCompanies(owner) : [];
+      const list =
+        companies.length > 0
+          ? companies
+          : [{ id: baseCtx.organizationId, name: baseCtx.organization.name, slug: baseCtx.organization.slug, activeModules: baseCtx.modules.length }];
+      return JSON.stringify(
+        list.map((c) => ({ id: c.id, nome: c.name, atual: c.id === baseCtx.organizationId, modulosAtivos: c.activeModules })),
+      );
+    }
+
     if (name === "search_crm") {
       const query = typeof input.query === "string" ? input.query : "";
       if (query.trim().length < 2) return "Informe um termo de busca com pelo menos 2 caracteres.";
