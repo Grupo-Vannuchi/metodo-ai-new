@@ -23,7 +23,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm";
 import { cn } from "@/lib/utils";
 import { formatBRL } from "@/lib/money";
-import { uninstallModule } from "@/app/actions/modules";
+import { cancelAccountModule } from "@/app/actions/modules";
 import type { ModuleCategory } from "@/config/modules";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -97,7 +97,7 @@ export function SubscriptionManager({
       if (!ok) return;
       setBusyId(mod.id);
       start(async () => {
-        const r = await uninstallModule(mod.id);
+        const r = await cancelAccountModule(mod.id);
         setBusyId(null);
         if (!r.ok) {
           setError(r.error === "has_dependent" ? t("errDependent") : r.error === "forbidden" ? t("errForbidden") : t("errGeneric"));
@@ -124,6 +124,7 @@ export function SubscriptionManager({
             <span className="text-base font-normal text-muted-foreground">{t("perMonth")}</span>
           </p>
           <p className="mt-1 text-sm text-muted-foreground">{t("moduleCount", { count: modules.length })}</p>
+          <p className="mt-2 max-w-xl text-xs text-muted-foreground">{t("accountNote")}</p>
         </div>
       </div>
 

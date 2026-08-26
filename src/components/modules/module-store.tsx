@@ -71,12 +71,13 @@ type TermsTarget = { kind: "module"; id: ModuleId } | { kind: "preset"; id: stri
 
 export function ModuleStore({
   installed,
-  obtained,
+  owned,
   canManage,
 }: {
+  /** Modules ACTIVE in the CURRENT company. */
   installed: string[];
-  /** DORMANT module ids — obtained before, uninstalled now (data kept). */
-  obtained: string[];
+  /** Modules the ACCOUNT has purchased (billed once; installable in any company). */
+  owned: string[];
   canManage: boolean;
 }) {
   const t = useTranslations("loja");
@@ -89,11 +90,14 @@ export function ModuleStore({
   const [termsTarget, setTermsTarget] = useState<TermsTarget | null>(null);
 
   const has = (id: string) => installed.includes(id);
-  const total = monthlyTotal(installed);
+  // The bill is account-level: sum of PURCHASED modules, once — not per company.
+  const total = monthlyTotal(owned);
   const priceLabel = (v: number) => (v === 0 ? t("free") : `${formatBRL(v)}${t("perMonth")}`);
 
+  // installed = active here · obtained = owned by the account but not active here
+  // (install free) · new = not owned yet (buying it adds to the bill).
   const stateOf = (id: string): ModuleState =>
-    installed.includes(id) ? "installed" : obtained.includes(id) ? "obtained" : "new";
+    installed.includes(id) ? "installed" : owned.includes(id) ? "obtained" : "new";
 
   function run(id: string, fn: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
@@ -122,20 +126,21 @@ export function ModuleStore({
     }
   }
 
-  /** Package flow: if it adds any new/dormant module to the bill, confirm terms. */
+  /** Package flow: if it buys any not-yet-owned module (adds to the bill), confirm
+   *  terms; otherwise it only installs owned modules here — apply directly. */
   function requestPreset(pid: string) {
     const preset = MODULE_PRESETS.find((p) => p.id === pid);
     if (!preset) return;
-    const adds = preset.modules.some((mid) => !installed.includes(mid));
-    if (adds) setTermsTarget({ kind: "preset", id: pid });
+    const buys = preset.modules.some((mid) => !owned.includes(mid));
+    if (buys) setTermsTarget({ kind: "preset", id: pid });
     else run(`preset:${pid}`, () => applyPreset(pid));
   }
 
-  // Modules newly added to the bill by the pending terms target (for the modal).
+  // Modules newly PURCHASED (added to the bill) by the pending terms target.
   const addedIds: ModuleId[] = termsTarget
     ? termsTarget.kind === "module"
-      ? [...new Set<ModuleId>([termsTarget.id, ...MODULE_BY_ID[termsTarget.id].dependsOn])].filter((id) => !installed.includes(id))
-      : (MODULE_PRESETS.find((p) => p.id === termsTarget.id)?.modules ?? []).filter((id) => !installed.includes(id))
+      ? [...new Set<ModuleId>([termsTarget.id, ...MODULE_BY_ID[termsTarget.id].dependsOn])].filter((id) => !owned.includes(id))
+      : (MODULE_PRESETS.find((p) => p.id === termsTarget.id)?.modules ?? []).filter((id) => !owned.includes(id))
     : [];
 
   function acceptTerms() {
@@ -278,7 +283,7 @@ export function ModuleStore({
           title={termsTarget.kind === "preset" ? MODULE_PRESETS.find((p) => p.id === termsTarget.id)?.name ?? "" : MODULE_BY_ID[termsTarget.id].name}
           addedModules={addedIds.map((id) => ({ id, name: MODULE_BY_ID[id].name, price: MODULE_BY_ID[id].priceMonthly }))}
           currentTotal={total}
-          newTotal={monthlyTotal([...installed, ...addedIds])}
+          newTotal={monthlyTotal([...owned, ...addedIds])}
           busy={pending}
           onAccept={acceptTerms}
           onClose={() => setTermsTarget(null)}

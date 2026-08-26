@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { Users, ScrollText, UserRound, ShieldCheck, ArrowRight, Building2, Gauge, CreditCard, Boxes } from "lucide-react";
 import { requireOrgContext, hasRole } from "@/lib/tenant";
 import { getUsageSummary, type UsageMetric } from "@/lib/queries/usage";
+import { accountOwnedModuleIds } from "@/lib/queries/accounts";
 import { hasFeatureByModules, hasModule, monthlyTotal } from "@/config/modules";
 import { formatBRL } from "@/lib/money";
 import { LeaveTeamButton } from "@/components/app/leave-team-button";
@@ -49,8 +50,10 @@ export default async function SettingsPage({
   const isAdmin = hasRole(ctx.role, "ADMIN");
 
   const usage = await getUsageSummary(ctx.organizationId);
-  const total = monthlyTotal(ctx.modules);
-  const moduleCount = ctx.modules.length;
+  // Subscription is account-level: purchased modules, billed once.
+  const ownedModules = ctx.accountOwnerId ? await accountOwnedModuleIds(ctx.accountOwnerId) : [];
+  const total = monthlyTotal(ownedModules);
+  const moduleCount = ownedModules.length;
 
   // Usage rows relevant to what's installed — keeps the panel from listing
   // metrics for modules the org doesn't have (mirrors the modular gating).

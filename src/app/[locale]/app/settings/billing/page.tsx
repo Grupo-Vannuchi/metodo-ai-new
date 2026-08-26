@@ -1,5 +1,6 @@
-import { requireOrgContext, hasRole } from "@/lib/tenant";
+import { requireOrgContext } from "@/lib/tenant";
 import { MODULES, monthlyTotal } from "@/config/modules";
+import { accountOwnedModuleIds } from "@/lib/queries/accounts";
 import { SubscriptionManager, type BillingModule } from "@/components/settings/subscription-manager";
 import { resolveLocale } from "@/i18n/routing";
 
@@ -12,12 +13,14 @@ export default async function BillingPage({
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
-  const canManage = hasRole(ctx.role, "ADMIN");
-  const installed = ctx.modules;
+  // Billing is account-level: the modules PURCHASED by the account (not per company).
+  // Only the account owner can cancel a module for the whole account.
+  const canManage = ctx.isAccountOwner;
+  const owned = ctx.accountOwnerId ? await accountOwnedModuleIds(ctx.accountOwnerId) : [];
 
-  const modules: BillingModule[] = MODULES.filter((m) => installed.includes(m.id)).map((m) => {
-    // A module can't be removed while another installed module hard-depends on it.
-    const blocker = MODULES.find((d) => installed.includes(d.id) && d.dependsOn.includes(m.id));
+  const modules: BillingModule[] = MODULES.filter((m) => owned.includes(m.id)).map((m) => {
+    // Can't cancel while another OWNED module hard-depends on it.
+    const blocker = MODULES.find((d) => owned.includes(d.id) && d.dependsOn.includes(m.id));
     return {
       id: m.id,
       name: m.name,
@@ -32,7 +35,7 @@ export default async function BillingPage({
   return (
     <SubscriptionManager
       modules={modules}
-      total={monthlyTotal(installed)}
+      total={monthlyTotal(owned)}
       canManage={canManage}
       orgName={ctx.organization.name}
     />
