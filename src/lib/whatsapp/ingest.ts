@@ -170,7 +170,7 @@ export async function ingestInbound(
       key: { id: m.providerMessageId, remoteJid: m.remoteJid, fromMe: m.fromMe },
     };
     try {
-      await enqueue("whatsapp-media", job, { deduplicationId: `media:${message.id}` });
+      await enqueue("whatsapp-media", job, { deduplicationId: `media-${message.id}` });
     } catch (error) {
       console.error("[ingest] failed to enqueue media job", error);
     }

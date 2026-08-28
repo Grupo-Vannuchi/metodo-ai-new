@@ -39,11 +39,16 @@ export async function enqueue(
   opts: EnqueueOptions = {},
 ): Promise<void> {
   const url = `${env.NEXT_PUBLIC_SITE_URL}/api/jobs/${job}`;
+  // QStash rejects deduplication ids with characters like ":" — keep only a safe
+  // alphabet so any caller's id (e.g. "media:<id>") is always accepted.
+  const deduplicationId = opts.deduplicationId
+    ? opts.deduplicationId.replace(/[^A-Za-z0-9_-]/g, "-")
+    : undefined;
   await getClient().publishJSON({
     url,
     body,
     delay: opts.delaySeconds,
-    deduplicationId: opts.deduplicationId,
+    deduplicationId,
   });
 }
 
