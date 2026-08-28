@@ -541,7 +541,9 @@ export function InboxClient({
       void loadConversations(); // the poll replaces the temp with the persisted message
     } else {
       setMessages((prev) => prev.map((m) => (m.id === temp.id ? { ...m, status: "FAILED" } : m)));
-      setSendError(t(`sendError.${r.error}`));
+      // Surface the underlying reason (Evolution message / exception) when present,
+      // so send failures are diagnosable straight from the screen.
+      setSendError(r.detail ? `${t(`sendError.${r.error}`)} — ${r.detail}` : t(`sendError.${r.error}`));
     }
   }
 

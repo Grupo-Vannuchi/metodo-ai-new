@@ -31,7 +31,12 @@ export async function markConversationRead(id: string): Promise<{ ok: boolean }>
 
 export type SendResult =
   | { ok: true }
-  | { ok: false; error: "unauthorized" | "empty" | "not_found" | "no_connection" | "send_failed" };
+  | {
+      ok: false;
+      error: "unauthorized" | "empty" | "not_found" | "no_connection" | "send_failed";
+      /** The underlying reason (Evolution message or exception), for troubleshooting. */
+      detail?: string;
+    };
 
 const MAX_LEN = 4096;
 
@@ -113,7 +118,10 @@ export async function sendMessage(
     const to = convo.isGroup ? convo.remoteJid : (convo.remoteJid.split("@")[0] ?? "");
     const adapter = getChannelAdapter("WHATSAPP_EVOLUTION");
     const result = await adapter.send(creds, { to, body: body.slice(0, MAX_LEN), quoted });
-    if (!result.ok) return { ok: false, error: "send_failed" };
+    if (!result.ok) {
+      console.error("[inbox] send_failed via Evolution:", result.error);
+      return { ok: false, error: "send_failed", detail: result.error };
+    }
 
     await db.message.create({
       data: {
@@ -137,7 +145,7 @@ export async function sendMessage(
     return { ok: true };
   } catch (error) {
     console.error("Failed to send message", error);
-    return { ok: false, error: "send_failed" };
+    return { ok: false, error: "send_failed", detail: error instanceof Error ? error.message : String(error) };
   }
 }
 
