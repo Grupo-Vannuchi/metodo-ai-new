@@ -4,6 +4,7 @@ import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { putMedia } from "@/lib/storage/blob";
 import { decryptCredentials } from "@/lib/integrations/crypto";
+import { resolveEvoCreds } from "@/lib/integrations/evolution-creds";
 import { getChannelAdapter } from "@/lib/integrations/channels";
 
 export const runtime = "nodejs";
@@ -99,12 +100,13 @@ export async function POST(req: Request) {
   });
   if (!conn) return Response.json({ ok: false, error: "no_connection" }, { status: 400 });
 
-  let creds: Record<string, string>;
+  let creds: ReturnType<typeof resolveEvoCreds>;
   try {
-    creds = decryptCredentials(conn.credentialsEnc);
+    creds = resolveEvoCreds(decryptCredentials(conn.credentialsEnc));
   } catch {
     return Response.json({ ok: false, error: "no_connection" }, { status: 400 });
   }
+  if (!creds) return Response.json({ ok: false, error: "no_connection" }, { status: 400 });
 
   const { mediatype, msgType } = classify(mime);
   const safeName = (file.name || "arquivo").replace(/[^\w.\-]+/g, "_").slice(0, 120) || "arquivo";

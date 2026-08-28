@@ -5,6 +5,7 @@ import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { decryptCredentials } from "@/lib/integrations/crypto";
+import { resolveEvoCreds } from "@/lib/integrations/evolution-creds";
 import { getChannelAdapter } from "@/lib/integrations/channels";
 import type { SendInput } from "@/lib/integrations/channels/types";
 import { normalizeWhatsappNumber, formatBrPhone, brPhoneKey, looksLikeWhatsappMobile } from "@/lib/phone";
@@ -86,12 +87,15 @@ export async function sendMessage(
     });
     if (!conn) return { ok: false, error: "no_connection" };
 
-    let creds: Record<string, string>;
+    // Resolve the effective creds: platform connections store only the instance;
+    // baseUrl + apiKey come from the shared env (resolveEvoCreds fills them in).
+    let creds: ReturnType<typeof resolveEvoCreds>;
     try {
-      creds = decryptCredentials(conn.credentialsEnc);
+      creds = resolveEvoCreds(decryptCredentials(conn.credentialsEnc));
     } catch {
       return { ok: false, error: "no_connection" };
     }
+    if (!creds) return { ok: false, error: "no_connection", detail: "Credenciais do Evolution incompletas (verifique EVOLUTION_API_URL/EVOLUTION_API_KEY)" };
 
     // Resolve the quoted message (must be in this conversation).
     let quoted: SendInput["quoted"];
@@ -229,14 +233,16 @@ export async function reactToMessage(messageId: string, emoji: string): Promise<
 
     if (msg.providerMessageId) {
       try {
-        const creds = decryptCredentials(conn.credentialsEnc);
-        const adapter = getChannelAdapter("WHATSAPP_EVOLUTION");
-        await adapter.sendReaction?.(creds, {
-          remoteJid: convo.remoteJid,
-          fromMe: msg.fromMe,
-          messageId: msg.providerMessageId,
-          emoji: finalEmoji,
-        });
+        const creds = resolveEvoCreds(decryptCredentials(conn.credentialsEnc));
+        if (creds) {
+          const adapter = getChannelAdapter("WHATSAPP_EVOLUTION");
+          await adapter.sendReaction?.(creds, {
+            remoteJid: convo.remoteJid,
+            fromMe: msg.fromMe,
+            messageId: msg.providerMessageId,
+            emoji: finalEmoji,
+          });
+        }
       } catch {
         /* still mirror locally even if the send fails */
       }
