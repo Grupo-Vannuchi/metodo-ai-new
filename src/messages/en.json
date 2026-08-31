@@ -217,6 +217,31 @@
       }
     }
   },
+  "downloader": {
+    "title": "Downloader",
+    "subtitle": "Paste a link from Instagram, X (Twitter) or YouTube and download the file.",
+    "linkLabel": "Video link",
+    "placeholder": "https://www.instagram.com/reel/… or youtube.com/watch?v=…",
+    "fetch": "Fetch",
+    "fetching": "Fetching…",
+    "supported": "Supported: Instagram (public Reels/posts), X (Twitter) and YouTube.",
+    "downloads": "Download",
+    "by": "by {author}",
+    "disclaimer": "Only download content you have the right to use. Respect copyright and each platform's terms.",
+    "source": {
+      "youtube": "YouTube",
+      "twitter": "X (Twitter)",
+      "instagram": "Instagram"
+    },
+    "error": {
+      "invalid_url": "Invalid link. Paste the full video URL.",
+      "unsupported": "We only support Instagram, X (Twitter) and YouTube for now.",
+      "not_found": "Video not found. Check the link is correct and public.",
+      "private": "Couldn't access it — the content may be private or require login.",
+      "no_video": "This link doesn't seem to have a downloadable video.",
+      "failed": "Couldn't resolve the video right now. Please try again."
+    }
+  },
   "companies": {
     "switchTitle": "Switch company",
     "moduleCount": "{count, plural, =0 {No modules} =1 {# module} other {# modules}}",
@@ -295,6 +320,7 @@
       "dashboard": "Dashboard",
       "my": "My items",
       "feed": "Feed",
+      "downloader": "Downloader",
       "crm": "Pipeline",
       "proposals": "Proposals",
       "tasks": "Tasks",

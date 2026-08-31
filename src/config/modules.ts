@@ -30,7 +30,8 @@ export type ModuleId =
   | "marketing"
   | "inbox"
   | "ia"
-  | "tasks";
+  | "tasks"
+  | "downloader";
 
 export type ModuleCategory = "comercial" | "operacao" | "atendimento" | "ia" | "produtividade";
 
@@ -157,6 +158,18 @@ export const MODULES: ModuleDef[] = [
     integratesWith: ["crm"],
     unlocks: [],
     screens: ["tasks"],
+  },
+  {
+    id: "downloader",
+    name: "Baixador",
+    tagline: "Baixe vídeos do Instagram, X (Twitter) e YouTube por link.",
+    icon: "Download",
+    priceMonthly: 39,
+    category: "produtividade",
+    dependsOn: [],
+    integratesWith: [],
+    unlocks: [],
+    screens: ["downloader"],
   },
 ];
 
@@ -353,6 +366,19 @@ export const MODULE_DETAILS: Record<ModuleId, ModuleDetail> = {
       { title: "Atribuição", desc: "Defina o responsável de cada tarefa dentro da equipe." },
       { title: "Prazos e status", desc: "Datas de entrega e acompanhamento do andamento." },
       { title: "Vínculo com o CRM", desc: "Ligue tarefas a contatos e oportunidades quando o CRM está instalado." },
+    ],
+  },
+  downloader: {
+    overview:
+      "Baixe vídeos das redes sociais direto pelo link. Cole a URL de um Reel/post do Instagram, de um vídeo do X (Twitter) ou do YouTube e o Baixador resolve o arquivo para você salvar — como os downloaders da internet, só que dentro do Método.",
+    niche:
+      "Marketing e social media que precisam guardar vídeos de referência, reaproveitar conteúdo próprio ou montar acervo — sem depender de site aleatório cheio de anúncio.",
+    features: [
+      { title: "Instagram", desc: "Reels e vídeos de posts públicos a partir do link." },
+      { title: "X (Twitter)", desc: "Vídeos de tweets públicos, escolhendo a qualidade." },
+      { title: "YouTube", desc: "Vídeos do YouTube em MP4 (com áudio)." },
+      { title: "Escolha de qualidade", desc: "Quando disponível, mostra as resoluções para você baixar a que quiser." },
+      { title: "Download direto", desc: "O arquivo baixa pelo próprio Método, sem redirecionar para sites externos." },
     ],
   },
 };

@@ -18,6 +18,7 @@ import {
   Workflow,
   Target,
   Boxes,
+  Download,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
@@ -52,6 +53,7 @@ type NavKey =
   | "supplyClientEquipment"
   | "supplyRegistries"
   | "suppliers"
+  | "downloader"
   | "loja"
   | "settings";
 type Item = { href: string; key: NavKey; icon: typeof LayoutDashboard };
@@ -66,6 +68,7 @@ const GROUPS: Group[] = [
       { href: "/app", key: "dashboard", icon: LayoutDashboard },
       { href: "/app/my", key: "my", icon: Star },
       { href: "/app/feed", key: "feed", icon: Megaphone },
+      { href: "/app/downloader", key: "downloader", icon: Download },
     ],
   },
   {

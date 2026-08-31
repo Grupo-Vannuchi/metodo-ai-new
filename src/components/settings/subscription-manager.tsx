@@ -10,6 +10,7 @@ import {
   MessageCircle,
   Sparkles,
   CheckSquare,
+  Download,
   Boxes,
   Plus,
   Loader2,
@@ -35,6 +36,7 @@ const ICONS: Record<string, LucideIcon> = {
   MessageCircle,
   Sparkles,
   CheckSquare,
+  Download,
 };
 
 /** Per-module gradient (mirrors the store banner) for a consistent identity. */
@@ -47,6 +49,7 @@ const THEME: Record<string, string> = {
   inbox: "from-sky-500 to-cyan-600",
   ia: "from-fuchsia-500 to-violet-600",
   tasks: "from-slate-500 to-slate-700",
+  downloader: "from-red-500 to-rose-600",
 };
 
 export type BillingModule = {

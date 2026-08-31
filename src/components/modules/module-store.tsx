@@ -10,6 +10,7 @@ import {
   MessageCircle,
   Sparkles,
   CheckSquare,
+  Download,
   Boxes,
   Check,
   Plus,
@@ -46,6 +47,7 @@ const ICONS: Record<string, LucideIcon> = {
   MessageCircle,
   Sparkles,
   CheckSquare,
+  Download,
 };
 
 /** Per-module visual identity for the featured banner. A real photo can replace
@@ -59,6 +61,7 @@ const THEME: Record<string, string> = {
   inbox: "from-sky-500 to-cyan-600",
   ia: "from-fuchsia-500 to-violet-600",
   tasks: "from-slate-500 to-slate-700",
+  downloader: "from-red-500 to-rose-600",
 };
 
 type Tab = "modules" | "packages";

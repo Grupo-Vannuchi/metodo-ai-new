@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
+    "@distube/ytdl-core": "^4.16.12",
     "@hookform/resolvers": "^3.9.1",
     "@prisma/adapter-pg": "^6.19.3",
     "@prisma/client": "^6.2.1",

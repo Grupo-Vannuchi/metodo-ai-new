@@ -217,6 +217,31 @@
       }
     }
   },
+  "downloader": {
+    "title": "Baixador",
+    "subtitle": "Cole o link de um vídeo do Instagram, X (Twitter) ou YouTube e baixe o arquivo.",
+    "linkLabel": "Link do vídeo",
+    "placeholder": "https://www.instagram.com/reel/… ou youtube.com/watch?v=…",
+    "fetch": "Buscar",
+    "fetching": "Buscando…",
+    "supported": "Suportado: Instagram (Reels/posts públicos), X (Twitter) e YouTube.",
+    "downloads": "Baixar",
+    "by": "por {author}",
+    "disclaimer": "Baixe apenas conteúdo que você tem direito de usar. Respeite os direitos autorais e os termos de cada plataforma.",
+    "source": {
+      "youtube": "YouTube",
+      "twitter": "X (Twitter)",
+      "instagram": "Instagram"
+    },
+    "error": {
+      "invalid_url": "Link inválido. Cole a URL completa do vídeo.",
+      "unsupported": "Só suportamos Instagram, X (Twitter) e YouTube por enquanto.",
+      "not_found": "Vídeo não encontrado. Confira se o link está certo e é público.",
+      "private": "Não foi possível acessar — o conteúdo pode ser privado ou exigir login.",
+      "no_video": "Este link não parece ter um vídeo para baixar.",
+      "failed": "Não foi possível resolver o vídeo agora. Tente novamente."
+    }
+  },
   "companies": {
     "switchTitle": "Trocar de empresa",
     "moduleCount": "{count, plural, =0 {Sem módulos} =1 {# módulo} other {# módulos}}",
@@ -295,6 +320,7 @@
       "dashboard": "Painel",
       "my": "Meus itens",
       "feed": "Mural",
+      "downloader": "Baixador",
       "crm": "Funil",
       "proposals": "Propostas",
       "tasks": "Tarefas",
