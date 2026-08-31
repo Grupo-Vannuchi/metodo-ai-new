@@ -45,6 +45,29 @@ export async function switchCompany(orgId: string): Promise<CompanyActionResult>
   return { ok: true, id: orgId };
 }
 
+/** Rename one of the account's companies. Account owner only (scoped by ownerId). */
+export async function renameCompany(orgId: string, name: string): Promise<CompanyActionResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+
+  const trimmed = (name ?? "").trim().slice(0, 120);
+  if (trimmed.length < 2) return { ok: false, error: "invalid" };
+
+  try {
+    // ownerId in the filter is the security boundary: only the owner renames it.
+    const res = await prisma.organization.updateMany({
+      where: { id: orgId, ownerId: ctx.userId },
+      data: { name: trimmed },
+    });
+    if (res.count === 0) return { ok: false, error: "forbidden" };
+    revalidatePath("/app", "layout");
+    return { ok: true, id: orgId };
+  } catch (error) {
+    console.error("renameCompany failed", error);
+    return { ok: false, error: "unknown" };
+  }
+}
+
 /**
  * Create a new company under the current account and switch to it. The creator
  * becomes its OWNER; enforced against the per-account company limit. Starts

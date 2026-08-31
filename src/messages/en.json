@@ -248,6 +248,8 @@
     "newCompany": "New company",
     "namePlaceholder": "Company name",
     "create": "Create",
+    "rename": "Rename",
+    "save": "Save",
     "cancel": "Cancel",
     "limitReached": "You've reached the account's company limit.",
     "error": {

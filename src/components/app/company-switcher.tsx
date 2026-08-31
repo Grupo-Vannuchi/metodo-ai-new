@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { Building2, ChevronsUpDown, Check, Plus, Loader2, X } from "lucide-react";
+import { Building2, ChevronsUpDown, Check, Plus, Loader2, X, Pencil } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
-import { switchCompany, createCompany } from "@/app/actions/account-companies";
+import { switchCompany, createCompany, renameCompany } from "@/app/actions/account-companies";
 
 type Company = { id: string; name: string; slug: string; activeModules: number };
 
@@ -30,6 +30,8 @@ export function CompanySwitcher({
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -56,6 +58,7 @@ export function CompanySwitcher({
     if (!open && triggerRef.current) setRect(triggerRef.current.getBoundingClientRect());
     setOpen((o) => !o);
     setCreating(false);
+    setEditingId(null);
     setError(null);
   }
 
@@ -70,6 +73,21 @@ export function CompanySwitcher({
         setOpen(false);
         router.push("/app");
         router.refresh();
+      }
+    });
+  }
+
+  function onRename(id: string) {
+    const n = editName.trim();
+    if (n.length < 2) return;
+    setError(null);
+    start(async () => {
+      const r = await renameCompany(id, n);
+      if (r.ok) {
+        setEditingId(null);
+        router.refresh();
+      } else {
+        setError(t(`error.${r.error}`));
       }
     });
   }
@@ -116,22 +134,72 @@ export function CompanySwitcher({
             >
               <p className="px-3 pb-1 pt-2.5 text-xs font-medium text-muted-foreground">{t("switchTitle")}</p>
               <div className="max-h-64 overflow-y-auto p-1">
-                {companies.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    disabled={pending}
-                    onClick={() => onSwitch(c.id)}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted disabled:opacity-50"
-                  >
-                    <Building2 className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{c.name}</span>
-                      <span className="block text-xs text-muted-foreground">{t("moduleCount", { count: c.activeModules })}</span>
-                    </span>
-                    {c.id === currentId ? <Check className="size-4 shrink-0 text-brand" /> : null}
-                  </button>
-                ))}
+                {companies.map((c) =>
+                  editingId === c.id ? (
+                    <form
+                      key={c.id}
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        onRename(c.id);
+                      }}
+                      className="flex items-center gap-1 p-1"
+                    >
+                      <input
+                        autoFocus
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Escape" && setEditingId(null)}
+                        maxLength={120}
+                        className="min-w-0 flex-1 rounded-md border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none"
+                      />
+                      <button
+                        type="submit"
+                        disabled={pending || editName.trim().length < 2}
+                        aria-label={t("save")}
+                        className="shrink-0 rounded-md p-1.5 text-brand transition-colors hover:bg-muted disabled:opacity-50"
+                      >
+                        {pending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(null)}
+                        aria-label={t("cancel")}
+                        className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </form>
+                  ) : (
+                    <div key={c.id} className="group/co flex items-center gap-1 rounded-lg pr-1 transition-colors hover:bg-muted">
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => onSwitch(c.id)}
+                        className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm disabled:opacity-50"
+                      >
+                        <Building2 className="size-4 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium">{c.name}</span>
+                          <span className="block text-xs text-muted-foreground">{t("moduleCount", { count: c.activeModules })}</span>
+                        </span>
+                        {c.id === currentId ? <Check className="size-4 shrink-0 text-brand" /> : null}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingId(c.id);
+                          setEditName(c.name);
+                          setError(null);
+                        }}
+                        aria-label={t("rename")}
+                        title={t("rename")}
+                        className="shrink-0 rounded-md p-1.5 text-muted-foreground opacity-0 transition-colors hover:bg-muted/70 hover:text-foreground group-hover/co:opacity-100"
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
+                    </div>
+                  ),
+                )}
               </div>
 
               <div className="border-t border-border p-1">
