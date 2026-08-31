@@ -30,7 +30,9 @@ export type MediaInfo = {
 };
 
 export type ResolveError = "invalid_url" | "unsupported" | "not_found" | "private" | "no_video" | "failed";
-export type ResolveResult = { ok: true; data: MediaInfo } | { ok: false; error: ResolveError };
+export type ResolveResult =
+  | { ok: true; data: MediaInfo }
+  | { ok: false; error: ResolveError; detail?: string };
 
 const DESKTOP_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
@@ -89,7 +91,8 @@ export async function resolveMedia(url: string): Promise<ResolveResult> {
     return await resolveInstagram(trimmed);
   } catch (error) {
     console.error(`[downloader] ${source} failed`, error);
-    return { ok: false, error: "failed" };
+    const detail = error instanceof Error ? `${source}: ${error.message}` : String(error);
+    return { ok: false, error: "failed", detail: detail.slice(0, 240) };
   }
 }
 

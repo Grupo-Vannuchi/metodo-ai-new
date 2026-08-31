@@ -34,7 +34,7 @@ export function DownloaderClient() {
     const r = await resolveDownload(link);
     setPending(false);
     if (r.ok) setResult(r.data);
-    else setError(t(`error.${r.error}`));
+    else setError(r.detail ? `${t(`error.${r.error}`)} — ${r.detail}` : t(`error.${r.error}`));
   }
 
   const proxyHref = (fileUrl: string, name: string) =>
