@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
+import { isCronAuthorized, cronUnauthorized } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 
@@ -9,11 +10,13 @@ const RETENTION_DAYS = 30;
 const STUCK_MINUTES = 5;
 
 /**
- * Prospecting maintenance (Vercel Cron). Prunes finished/old extraction jobs
+ * Prospecting maintenance (external cron — see README §8). Prunes old jobs
  * (and their leads, via cascade) past the retention window, and re-enqueues any
  * stuck jobs as a safety net. No-op resume when the queue isn't configured.
  */
-export async function GET() {
+export async function GET(req: Request) {
+  if (!isCronAuthorized(req)) return cronUnauthorized();
+
   const cutoff = new Date(Date.now() - RETENTION_DAYS * 86_400_000);
   const pruned = await prisma.extractionJob.deleteMany({
     where: { createdAt: { lt: cutoff } },

@@ -4,26 +4,22 @@ import { getAlerts } from "@/lib/queries/notifications";
 import { hrAlertCounts } from "@/lib/queries/time-off";
 import { hasFeatureByModules } from "@/config/modules";
 import { DIGEST_KINDS } from "@/lib/notifications";
+import { isCronAuthorized, cronUnauthorized } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 
 /**
- * Daily digest cron (Vercel Cron — see vercel.json). For every membership it
+ * Daily digest cron (external cron — see README §8). For every membership it
  * recomputes the pending counts and refreshes the persisted SYSTEM digest
  * notifications. Idempotent: unread digest notifications are dropped and
  * recreated, so re-runs never pile up. Assignment notifications are created
  * by the actions, never here.
  *
- * Protected by CRON_SECRET (Vercel sends it as `Authorization: Bearer …`).
+ * Protected by CRON_SECRET (see lib/cron-auth).
  */
-function authorized(req: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  return req.headers.get("authorization") === `Bearer ${secret}`;
-}
 
 export async function GET(req: Request) {
-  if (!authorized(req)) return new Response("Unauthorized", { status: 401 });
+  if (!isCronAuthorized(req)) return cronUnauthorized();
 
   const memberships = await prisma.membership.findMany({
     select: {
