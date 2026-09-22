@@ -11,8 +11,13 @@
  * Exits non-zero on any failed assertion. Cleans up its own data.
  */
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
-const prisma = new PrismaClient();
+// `engineType = "client"` (schema.prisma) drops the Rust engine, so every
+// PrismaClient needs an explicit driver adapter — same as src/lib/prisma.ts.
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) throw new Error("DATABASE_URL is not set");
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 function assert(cond: boolean, message: string) {
   if (!cond) throw new Error(`ISOLATION FAILED: ${message}`);
