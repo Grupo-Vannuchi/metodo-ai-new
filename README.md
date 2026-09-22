@@ -211,6 +211,36 @@ mkdir -p tmp && touch tmp/restart.txt   # reinicia o Passenger
 3. **Migração destrutiva rodou mas o app 500** = o app não foi rebuildado com o código novo (código antigo × schema novo).
 4. **Logs do app:** `console.error` vai pro log de erro do site (hPanel → Logs de erro, ou `~/domains/<dominio>/logs/`). Procure prefixos como `[evolution] send`, `[inbox]`, `[downloader]`, `[ingest]`.
 
+### Crons — agendados no hPanel, NÃO são automáticos ⚠️
+
+O projeto tinha um `vercel.json` declarando 4 crons, mas **produção nunca rodou no Vercel** —
+o arquivo era resquício e foi removido. Nada agenda esses jobs sozinho: eles precisam ser
+cron jobs do hPanel batendo nos endpoints. **Enquanto não estiverem agendados, as quatro
+funções abaixo simplesmente não acontecem** (duas delas são compromissos de LGPD que o
+código declara):
+
+| Endpoint | Frequência | O que deixa de acontecer sem ele |
+|---|---|---|
+| `/api/cron/campaigns` | a cada minuto | é o **único** caminho que promove campanha `SCHEDULED` → `RUNNING`: campanha agendada nunca dispara |
+| `/api/cron/extractions` | a cada 10 min | retenção de 30 dias dos leads do Google Places (ToS + LGPD) não é aplicada |
+| `/api/cron/notifications` | 7h diário | digest diário de notificações não é recalculado |
+| `/api/cron/feed-cleanup` | de hora em hora | posts do feed com +24h nunca são apagados (LGPD) |
+
+Os quatro exigem `Authorization: Bearer $CRON_SECRET` (guard em `src/lib/cron-auth.ts`) e
+respondem **401 sem o header** — inclusive quando `CRON_SECRET` não está setado, então
+defina-o no env de produção antes de agendar. Comandos para o hPanel → Cron Jobs:
+
+```bash
+# a cada minuto
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/campaigns
+# */10 * * * *
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/extractions
+# 0 7 * * *
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/notifications
+# 0 * * * *
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/feed-cleanup
+```
+
 ### Incidentes já resolvidos (histórico útil)
 - **QStash `DeduplicationId cannot contain ':'`** (ingest de mídia): o id `media:<id>` tinha `:`. Corrigido + `enqueue` sanitiza qualquer id.
 - **WhatsApp recebia mas não enviava** ("Conexão Evolution incompleta"): o envio não resolvia as credenciais pelo env — corrigido usando `resolveEvoCreds` em todos os caminhos.

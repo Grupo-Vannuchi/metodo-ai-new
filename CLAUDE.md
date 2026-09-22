@@ -78,6 +78,16 @@ Vale para scripts avulsos (`prisma/seed.ts`, `scripts/*.ts`) tanto quanto para a
 plataforma" guardam só o `instance`; `baseUrl`/`apiKey` vêm do env. Passar credencial crua quebra o envio
 com "Conexão Evolution incompleta".
 
+**Rotas `/api/*` são públicas por padrão.** O [src/proxy.ts](src/proxy.ts) exclui `api` do matcher
+(`/((?!api|_next|_vercel|.*\..*).*)`), então nenhum middleware protege endpoint de API — cada rota se
+protege sozinha. Os 4 `/api/cron/*` usam o guard `isCronAuthorized` de [src/lib/cron-auth.ts](src/lib/cron-auth.ts)
+(`Authorization: Bearer $CRON_SECRET`, falha fechado). Rota de cron nova **tem** que chamar o guard —
+dois dos quatro já nasceram sem ele por ser copy-paste.
+
+**Os crons não são automáticos.** Nada no repositório os agenda: precisam ser cron jobs do hPanel batendo
+nos endpoints (comandos prontos no §8 do README). O `vercel.json` que os declarava era resquício de uma
+fase Vercel que nunca foi produção, e foi removido.
+
 **Variáveis de ambiente.** Nunca leia `process.env.X` direto no código da app — declare em
 [src/lib/env.ts](src/lib/env.ts) (zod) e importe de lá. Obrigatórias faltando derrubam o boot.
 
