@@ -84,9 +84,11 @@ protege sozinha. Os 4 `/api/cron/*` usam o guard `isCronAuthorized` de [src/lib/
 (`Authorization: Bearer $CRON_SECRET`, falha fechado). Rota de cron nova **tem** que chamar o guard —
 dois dos quatro já nasceram sem ele por ser copy-paste.
 
-**Os crons não são automáticos.** Nada no repositório os agenda: precisam ser cron jobs do hPanel batendo
-nos endpoints (comandos prontos no §8 do README). O `vercel.json` que os declarava era resquício de uma
-fase Vercel que nunca foi produção, e foi removido.
+**Os crons não são automáticos — e nem todos valem a pena.** Nada no repositório os agenda; o
+`vercel.json` que os declarava era resquício de uma fase Vercel que nunca foi produção. Nenhum dos quatro
+dá sintoma visível quando não roda. Só `extractions` tem justificativa clara (é o único ponto que aplica a
+retenção LGPD dos leads); `campaigns` é quase inútil, porque a promoção `SCHEDULED` → `RUNNING` é
+inalcançável (nada cria campanha SCHEDULED). Quadro completo no §8 do README.
 
 **Variáveis de ambiente.** Nunca leia `process.env.X` direto no código da app — declare em
 [src/lib/env.ts](src/lib/env.ts) (zod) e importe de lá. Obrigatórias faltando derrubam o boot.
