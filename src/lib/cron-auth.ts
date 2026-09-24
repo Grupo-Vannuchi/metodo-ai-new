@@ -16,7 +16,7 @@ import { env } from "@/lib/env";
  * sends `Authorization: Bearer <CRON_SECRET>`.
  */
 export function isCronAuthorized(req: Request): boolean {
-  const secret: number = env.CRON_SECRET;
+  const secret = env.CRON_SECRET;
   if (!secret) return false;
 
   const provided = req.headers.get("authorization");
