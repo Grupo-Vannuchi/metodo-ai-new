@@ -108,8 +108,9 @@ da verdade do major e o script lê dele: se a Hostinger um dia mudar, mude o `.n
   Ex.: `[CRM] - Adiciona autofill de CEP na empresa`.
 - **Sem drawer para criação no CRM** — foi testado e descartado a pedido.
 - **Produção é `https://metodotia.com`**, na Hostinger (Passenger), com banco no Supabase e Evolution
-  em VPS separada. **Não é Vercel** — o projeto que existe lá é resquício da escolha de plataforma e
-  está pausado; ele segue git-conectado à `dev`, então despausá-lo faz o próximo push implantar de novo.
+  em VPS separada. **Não é Vercel, e não há mais projeto lá** — o que existia era resquício da escolha
+  de plataforma e foi apagado em 24/09/2026, depois de implantar sozinho e servir o app em paralelo
+  com a produção real.
   Migração em produção é manual (`prisma migrate deploy`) — nunca `migrate dev` contra produção.
   Veja o runbook no §8 do README antes de qualquer deploy.
 
