@@ -1,4 +1,5 @@
 import { PrismaClient, Role } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 import { createDefaultPipeline } from "../src/lib/default-pipeline";
 
@@ -7,7 +8,11 @@ import { createDefaultPipeline } from "../src/lib/default-pipeline";
  * Credentials come from the environment (see .env / .env.example):
  *   SEED_OWNER_EMAIL, SEED_OWNER_PASSWORD, SEED_ORG_NAME
  */
-const prisma = new PrismaClient();
+// `engineType = "client"` (schema.prisma) drops the Rust engine, so every
+// PrismaClient needs an explicit driver adapter — same as src/lib/prisma.ts.
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) throw new Error("DATABASE_URL is not set");
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 function slugify(value: string): string {
   return value

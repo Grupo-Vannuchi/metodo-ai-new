@@ -71,8 +71,11 @@ export async function createFeedPost(input: unknown): Promise<FeedResult> {
     const mentioned = [...new Set(mentions)].filter((id) => memberIds.has(id) && id !== ctx.userId);
 
     const pollOptions = poll.map((o) => o.trim()).filter(Boolean);
-    // Pinned posts are always permanent; otherwise honour the ephemeral choice.
-    const expiresAt = pinned ? null : ephemeral ? new Date(Date.now() + FEED_TTL_MS) : null;
+    // `expiresAt` carries the AUTHOR'S intent and nothing else. Pinning protects a
+    // post while it is pinned (see listFeed and the feed-cleanup cron) instead of
+    // rewriting this field — overloading it used to destroy the choice on pin and
+    // leave no way to restore it on unpin.
+    const expiresAt = ephemeral ? new Date(Date.now() + FEED_TTL_MS) : null;
 
     const post = await db.feedPost.create({
       data: {
@@ -131,7 +134,10 @@ export async function togglePin(postId: string): Promise<Ok> {
     const pin = post.pinnedAt === null;
     await db.feedPost.updateMany({
       where: { id: postId },
-      data: pin ? { pinnedAt: new Date(), expiresAt: null } : { pinnedAt: null },
+      // Only the pin state changes. Setting `expiresAt: null` here (as this used to)
+      // destroyed the author's expiry with no way to restore it on unpin, leaving
+      // ephemeral posts immortal.
+      data: pin ? { pinnedAt: new Date() } : { pinnedAt: null },
     });
     revalidatePath("/app/feed");
     return { ok: true };

@@ -5,9 +5,14 @@
  * Run: npm run backfill:pipelines
  */
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { createDefaultPipeline } from "../src/lib/default-pipeline";
 
-const prisma = new PrismaClient();
+// `engineType = "client"` (schema.prisma) drops the Rust engine, so every
+// PrismaClient needs an explicit driver adapter — same as src/lib/prisma.ts.
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) throw new Error("DATABASE_URL is not set");
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 async function main() {
   const orgs = await prisma.organization.findMany({ select: { id: true, slug: true } });

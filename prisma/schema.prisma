@@ -1521,7 +1521,8 @@ model FeedPost {
   /// Pinned posts sort to the top of the wall and never expire.
   pinnedAt       DateTime?
   /// When the post disappears from the wall. Null = permanent (kept in history).
-  /// Set (now + 24h) for ephemeral posts. Pinned posts are always permanent.
+  /// Set (now + 24h) for ephemeral posts. Untouched by pinning: a pinned post is
+  /// protected by `pinnedAt` (readers exclude it), never by clearing this field.
   expiresAt      DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt

@@ -33,13 +33,15 @@ export type FeedPostView = {
 
 /** The team wall: active posts (not expired), pinned first then newest, with
  * author, attachments, mentions, reactions, comments and any poll already
- * grouped for the signed-in user. Permanent posts have `expiresAt = null`. */
+ * grouped for the signed-in user. Permanent posts have `expiresAt = null`; a pinned
+ * post is shown whatever its expiry says, because pinning protects without
+ * rewriting the author's intent. */
 export async function listFeed(organizationId: string, userId: string): Promise<FeedPostView[]> {
   const db = tenantDb(organizationId);
   const now = new Date();
 
   const posts = await db.feedPost.findMany({
-    where: { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+    where: { OR: [{ pinnedAt: { not: null } }, { expiresAt: null }, { expiresAt: { gt: now } }] },
     orderBy: [{ pinnedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
     take: 100,
     select: {

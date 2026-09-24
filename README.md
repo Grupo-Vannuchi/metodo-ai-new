@@ -133,7 +133,7 @@ npm run db:seed           # cria org/owner inicial (usa SEED_* do .env)
 npm run dev               # http://localhost:3000
 ```
 
-Antes de commitar: **`npm run typecheck` + `npm run lint` + `npm run build` + `npm run check:isolation`** devem passar. (Webhooks em dev exigem túnel — ex.: ngrok — com `NEXT_PUBLIC_SITE_URL` apontando pra ele; localhost não recebe webhook.)
+Antes de commitar: **`npm run typecheck` + `npm run lint` + `npm run build` + `npm run check:isolation` + `npm run check:node`** devem passar. (Webhooks em dev exigem túnel — ex.: ngrok — com `NEXT_PUBLIC_SITE_URL` apontando pra ele; localhost não recebe webhook.)
 
 ### Scripts (`package.json`)
 | Comando | O que faz |
@@ -142,6 +142,7 @@ Antes de commitar: **`npm run typecheck` + `npm run lint` + `npm run build` + `n
 | `typecheck` | `tsc --noEmit` |
 | `lint` | ESLint |
 | `check:isolation` | valida isolamento multi-tenant |
+| `check:node` | falha se alguma dependência exigir Node acima do major do `.nvmrc` (produção é Hostinger, travada em 20.x) |
 | `db:migrate` / `db:deploy` / `db:push` / `db:seed` / `db:studio` | Prisma |
 | `db:dump` / `db:restore` | snapshot do Postgres (container `metodoai-db`) |
 
@@ -184,7 +185,15 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 
 ## 8. Runbook de produção ⚠️ (leia antes de qualquer deploy)
 
+**Produção é `https://metodotia.com`.** É o único endereço oficial do sistema.
+
 **Infra:** app na **Hostinger** (Node via Passenger/CloudLinux — **NÃO Vercel**) + banco no **Supabase** (só produção) + **Evolution numa VPS separada** (WhatsApp).
+
+> **Sobre a Vercel.** Não há mais nada. O projeto `metodo-ai-new` da conta da Vercel — resquício da
+> fase em que se decidia a plataforma — foi **apagado em 24/09/2026**, depois de um push na `dev` o
+> despertar e fazer o app ser servido publicamente em paralelo com a produção real (veja o incidente
+> mais abaixo). Se alguém recriar um projeto na Vercel a partir deste repositório, lembre que a branch
+> de produção de lá estava apontada para a `dev`, não para a `main`.
 
 ### Migrações (Supabase) — processo MANUAL
 Nunca rode `prisma migrate dev` contra produção. As migrations são aplicadas manualmente:
@@ -211,8 +220,36 @@ mkdir -p tmp && touch tmp/restart.txt   # reinicia o Passenger
 3. **Migração destrutiva rodou mas o app 500** = o app não foi rebuildado com o código novo (código antigo × schema novo).
 4. **Logs do app:** `console.error` vai pro log de erro do site (hPanel → Logs de erro, ou `~/domains/<dominio>/logs/`). Procure prefixos como `[evolution] send`, `[inbox]`, `[downloader]`, `[ingest]`.
 
+### Crons — nenhum está agendado, e nem todos precisam estar
+
+O projeto tinha um `vercel.json` declarando 4 crons, mas produção nunca rodou no Vercel — era
+resquício e foi removido. Nada agenda esses jobs: só rodam se virarem cron jobs do hPanel batendo
+nos endpoints. **Nenhum dos quatro produz sintoma visível quando não roda** — é por isso que
+passaram despercebidos. O que cada um realmente vale:
+
+| Endpoint | Vale agendar? | Por quê |
+|---|---|---|
+| `/api/cron/extractions`<br>`*/10 * * * *` | **Sim** | Único ponto que aplica a retenção de 30 dias dos leads do Google Places (ToS + LGPD). Fora dele só existe exclusão individual pelo usuário. |
+| `/api/cron/notifications`<br>`0 7 * * *` | Decisão de produto | Cria o digest diário (`DIGEST_KINDS`), que não nasce em nenhum outro lugar. Notificações de atribuição seguem funcionando sem ele. |
+| `/api/cron/feed-cleanup`<br>`0 * * * *` | Opcional | Só apaga fisicamente posts já vencidos. O mural já os esconde por `expiresAt`, então sem o cron a diferença é a tabela crescer. |
+| `/api/cron/campaigns`<br>`* * * * *` | Raramente | A promoção `SCHEDULED` → `RUNNING` é **código inalcançável**: `createCampaign` sempre grava `DRAFT` e a UI não expõe agendamento. O `startCampaign` já marca RUNNING e enfileira o primeiro disparo sozinho. Só serve para retomar campanha cuja cadeia de disparo morreu no meio. |
+
+Os quatro exigem `Authorization: Bearer $CRON_SECRET` (guard em `src/lib/cron-auth.ts`) e respondem
+**401 sem o header** — inclusive quando `CRON_SECRET` não está setado, então defina-o no env de
+produção antes de agendar qualquer um. Comandos para o hPanel → Cron Jobs:
+
+```bash
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/extractions     # */10 * * * *
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/notifications   # 0 7 * * *
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/feed-cleanup    # 0 * * * *
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/campaigns       # * * * * *
+```
+
 ### Incidentes já resolvidos (histórico útil)
+- **Token do GitHub no histórico público:** um commit expôs um token e um commit posterior removeu o valor do arquivo — mas remover num commit posterior **não tira o segredo do histórico**, e este repositório é público. Uma varredura de 346 commits contra 14 famílias de padrão não encontrou outros vazamentos. Duas lições que valem mais que o episódio: **(1)** quem resolve é a revogação, não a reescrita de histórico — um token revogado fica inofensivo mesmo permanecendo visível num commit antigo; **(2)** um PAT clássico pertence à *conta pessoal* de quem o gerou e empresta as permissões dela, então se essa pessoa deixar a empresa ninguém mais consegue revogá-lo — nesse caso o que neutraliza o alcance é **remover o acesso da pessoa à organização**, que é parte do desligamento de qualquer forma. O push protection do secret scanning foi ligado para bloquear o próximo na origem.
 - **QStash `DeduplicationId cannot contain ':'`** (ingest de mídia): o id `media:<id>` tinha `:`. Corrigido + `enqueue` sanitiza qualquer id.
+- **Deploy fantasma na Vercel**: o projeto `metodo-ai-new` da Vercel, resquício da fase de escolha de plataforma, seguia git-conectado a este repositório com variáveis de ambiente configuradas e branch de produção apontando para a `dev`. Nunca tinha implantado só porque ninguém empurrava para a `dev` havia meses. Em 24/09/2026 um push acordou o projeto e o app passou a ser servido publicamente em `metodo-ai-new.vercel.app`, sem SSO, ao lado da produção real. Resolvido pausando e, em seguida, apagando o projeto da Vercel. **Lição:** "nunca implantou" não é o mesmo que "não vai implantar" — antes de empurrar para uma branch, verifique o que está *conectado* a ela, não só o que já rodou.
+- **`/api/cron/feed-cleanup` apagava posts fixados**: filtrava por `createdAt < now-24h` em vez de `expiresAt`, então teria deletado todo post com mais de 24h — inclusive os permanentes e fixados, que por contrato do modelo nunca expiram. Nunca chegou a rodar em produção (o cron não estava agendado). Corrigido para filtrar por `expiresAt`.
 - **WhatsApp recebia mas não enviava** ("Conexão Evolution incompleta"): o envio não resolvia as credenciais pelo env — corrigido usando `resolveEvoCreds` em todos os caminhos.
 
 ---
@@ -220,7 +257,7 @@ mkdir -p tmp && touch tmp/restart.txt   # reinicia o Passenger
 ## 9. Convenções
 
 - **Commits:** `[ÁREA] - Verbo + Tarefa`, com corpo estruturado, terminando com a linha de co-autoria. Ex.: `[CRM] - Adiciona autofill de CEP na empresa`.
-- **Validação por entrega:** `typecheck` + `lint` + `build` + `check:isolation` antes de commitar; manter **paridade de chaves** entre `pt.json` e `en.json`.
+- **Validação por entrega:** `typecheck` + `lint` + `build` + `check:isolation` + `check:node` antes de commitar; manter **paridade de chaves** entre `pt.json` e `en.json`.
 - **Gating sempre pelas fontes de verdade:** `config/modules.ts` (módulos), `config/screens.ts` (telas), `config/limits.ts` (limites). Não espalhe `if` de módulo/permissão pelo código.
 - **Dados sempre pela DAL** (`lib/queries/*`) com `tenantDb`; Prisma cru só em contextos de sistema (webhook/job/cron) com `organizationId` explícito.
 - **Sem drawer para criação** no CRM (foi testado e descartado a pedido).

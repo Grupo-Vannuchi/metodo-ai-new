@@ -1,14 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
+import { isCronAuthorized, cronUnauthorized } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 
 /**
- * Campaign scheduler (Vercel Cron, every minute — see vercel.json).
+ * Campaign scheduler (external cron, every minute — see README §8).
  * Promotes due SCHEDULED campaigns to RUNNING and enqueues a dispatch batch for
  * every RUNNING campaign. No-op when the queue isn't configured.
  */
-export async function GET() {
+export async function GET(req: Request) {
+  if (!isCronAuthorized(req)) return cronUnauthorized();
+
   if (!isQueueConfigured()) {
     return Response.json({ ok: true, processed: 0 });
   }
