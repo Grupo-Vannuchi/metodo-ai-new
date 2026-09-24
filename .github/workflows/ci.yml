@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: metodoai
+          POSTGRES_PASSWORD: metodoai
+          POSTGRES_DB: metodoai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U metodoai -d metodoai"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # Valores descartaveis, nao segredos. O repositorio e publico e PRs vem de
+      # forks: um CI sem segredo nao tem o que vazar. O arquivo em disco (e nao
+      # apenas variaveis de ambiente) e obrigatorio porque check:isolation roda
+      # `tsx --env-file=.env`, que falha se o arquivo nao existir. Prisma e Next
+      # tambem leem .env sozinhos, entao um arquivo so serve os tres.
+      - name: Criar .env descartavel
+        run: |
+          cat > .env <<'ENVEOF'
+          DATABASE_URL="postgresql://metodoai:metodoai@localhost:5432/metodoai?schema=public"
+          DIRECT_URL="postgresql://metodoai:metodoai@localhost:5432/metodoai?schema=public"
+          SESSION_SECRET="ci-only-throwaway-value-not-a-real-secret-000000"
+          INTEGRATION_ENC_KEY="0000000000000000000000000000000000000000000000000000000000000000"
+          NEXT_PUBLIC_SITE_URL="http://localhost:3000"
+          ENVEOF
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Compatibilidade de Node
+        run: npm run check:node
+
+      - name: Build
+        run: npm run build
+
+      - name: Aplicar migrations
+        run: npx prisma migrate deploy
+
+      - name: Isolamento multi-tenant
+        run: npm run check:isolation
