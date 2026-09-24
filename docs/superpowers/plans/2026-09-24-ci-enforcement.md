@@ -319,10 +319,11 @@ Expected, exatamente:
 
 - [ ] **Step 4: Confirmar que push direto na `main` agora é recusado**
 
+Usar um commit **vazio**, não uma alteração de arquivo: se a proteção falhar em bloquear, o pior cenário é um commit sem conteúdo, e não uma edição real empurrada para produção.
+
 ```bash
 git checkout main && git pull origin main
-echo "# teste de protecao" >> README.md
-git add README.md && git commit -m "test: confirmar bloqueio de push direto"
+git commit --allow-empty -m "test: confirmar bloqueio de push direto"
 git push origin main
 ```
 
