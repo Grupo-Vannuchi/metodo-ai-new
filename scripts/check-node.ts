@@ -37,7 +37,7 @@ function satisfiesComparator(v: V, raw: string): boolean {
   // ^ e ~ viram uma janela limitada.
   if (c.startsWith("^") || c.startsWith("~")) {
     const p = parseVersion(c.slice(1));
-    if (!p) return true;
+    if (!p) return false; // versao ilegivel apos ^/~: nao da pra confirmar — falha fechado.
     if (cmp(v, p.v) < 0) return false;
     const upper: V = c.startsWith("^")
       ? p.v[0] > 0
@@ -48,9 +48,9 @@ function satisfiesComparator(v: V, raw: string): boolean {
   }
 
   const m = /^(>=|<=|>|<|=)?\s*(.+)$/.exec(c);
-  if (!m) return true;
+  if (!m) return false; // nao deveria acontecer (regex aceita qualquer texto), mas falha fechado por seguranca.
   const p = parseVersion(m[2]);
-  if (!p) return true;
+  if (!p) return false; // comparador com versao ilegivel: nao da pra confirmar — falha fechado.
   const d = cmp(v, p.v);
 
   switch (m[1]) {
@@ -79,7 +79,10 @@ function satisfies(v: V, range: string): boolean {
   return normalized.split("||").some((group) => {
     const parts = group.trim().split(/\s+/).filter(Boolean);
     if (parts.length === 0) return true;
-    if (parts.includes("-")) return true; // faixa com hifen: raro em engines, nao restringe
+    // Faixa com hifen ("18 - 19"): este parser nao interpreta o intervalo.
+    // Falha fechado (bloqueia) em vez de assumir compatibilidade — quem le o
+    // relatorio ve a faixa crua e julga a mao.
+    if (parts.includes("-")) return false;
     return parts.every((c) => satisfiesComparator(v, c));
   });
 }
