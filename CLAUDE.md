@@ -5,6 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > O **[README.md](README.md) é o documento de handoff** e a fonte canônica de arquitetura, runbook de
 > produção e histórico de incidentes. Este arquivo cobre só o que muda a forma de trabalhar no código.
 
+- **Chegando agora?** Comece por [docs/guia/01-primeiros-passos.md](docs/guia/01-primeiros-passos.md).
+- **Não sabe onde mexer?** [docs/guia/02-mapa-do-codigo.md](docs/guia/02-mapa-do-codigo.md) responde "preciso mudar X, vou onde".
+
 ## Comandos
 
 ```bash
