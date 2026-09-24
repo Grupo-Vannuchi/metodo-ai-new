@@ -40,7 +40,10 @@ const serverSchema = z.object({
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   // Secret guarding the /api/cron/* endpoints (sent as `Authorization: Bearer`).
-  CRON_SECRET: z.string().optional(),
+  CRON_SECRET: z
+    .string()
+    .min(32, "CRON_SECRET must be at least 32 characters")
+    .optional(),
   // Transactional email (Resend, platform key) — verification, invites, reset.
   // Optional so the app boots without it; `sendEmail` no-ops with a warning.
   RESEND_API_KEY: z.string().optional(),
