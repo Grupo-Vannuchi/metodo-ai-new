@@ -6,6 +6,27 @@
 
 ---
 
+> ## ⚠️ DOCUMENTO HISTÓRICO — a infraestrutura descrita aqui foi superada
+>
+> Este é o **plano fundador** do projeto e continua útil para entender *por que* as
+> decisões de produto e de domínio foram tomadas. A parte de **infraestrutura, porém,
+> não descreve mais a realidade** — leia o [README.md](README.md) para o que está no ar hoje.
+>
+> | O plano diz | Como é de fato |
+> |---|---|
+> | Hospedagem na **Vercel** | **Hostinger**, Node sob Passenger/CloudLinux. Há um projeto na Vercel, mas está desativado e nunca implantou. |
+> | Banco no **Neon** | **Supabase** (só produção); Postgres em Docker no local. |
+> | **Vercel Cron** via `vercel.json` | O `vercel.json` foi **removido** — era resquício e nunca disparou nada. Os crons precisam ser agendados no hPanel; veja o §8 do README, que explica quais valem a pena. |
+> | Deploy serverless, chunking por limite de execução | Servidor Node **persistente**. O chunking continua no código e segue útil por rate-limit, não por limite de execução. |
+> | Segredos em **env vars da Vercel** | `.env` no servidor da Hostinger, validado por `src/lib/env.ts`. |
+>
+> Duas consequências dessa migração que valem destaque, porque custaram incidente:
+> o Prisma roda **sem engine Rust** (`engineType = "client"`), então todo `new PrismaClient()`
+> exige um driver adapter explícito; e o deploy é **manual** — o runbook está no §8 do README.
+> O `CLAUDE.md` concentra as regras operacionais que valem hoje.
+
+---
+
 ## 1. Decisões travadas (norte do projeto)
 
 | Decisão | Escolha | Consequência arquitetural |

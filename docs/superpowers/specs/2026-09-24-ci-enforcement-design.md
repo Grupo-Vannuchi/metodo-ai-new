@@ -101,7 +101,7 @@ Aprovações em zero é escolha consciente: o portão que importa aqui é o auto
 
 Ligar **push protection** no repositório. O secret scanning já está ativo por ser repo público; o push protection é o que bloqueia o push contendo um segredo detectado, em vez de avisar depois.
 
-Justificativa concreta: o histórico deste repositório contém um GitHub PAT introduzido em `bf80d1f` e removido em `4b66cb9` no mesmo dia — mas remover num commit posterior não tira do histórico, e o repo é público. O token ficou legível por três meses. Uma varredura de 346 commits contra 14 famílias de padrão encontrou esse único vazamento; o resto está limpo.
+Justificativa concreta: o histórico deste repositório contém um GitHub PAT introduzido por um commit e removido por outro no mesmo dia — mas remover num commit posterior não tira do histórico, e o repo é público. O token ficou legível por três meses. (Os SHAs foram omitidos de propósito: este repositório é público, e apontar o commit exato de um segredo ainda não revogado é entregar o caminho pronto.) Uma varredura de 346 commits contra 14 famílias de padrão encontrou esse único vazamento; o resto está limpo.
 
 ## 5. Verificação
 

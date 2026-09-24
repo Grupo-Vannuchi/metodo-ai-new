@@ -475,7 +475,7 @@ Expected, exatamente:
 
 - [ ] **Step 4: Registrar os alertas já existentes**
 
-O histórico contém um GitHub PAT (`bf80d1f`, removido em `4b66cb9`). Listar o que o scanning já encontrou:
+O histórico contém um GitHub PAT (SHAs omitidos — repositório público). Listar o que o scanning já encontrou:
 
 ```bash
 gh api repos/Grupo-Vannuchi/metodo-ai-new/secret-scanning/alerts --jq '.[] | {numero: .number, tipo: .secret_type_display_name, estado: .state, criado: .created_at}'
@@ -488,7 +488,13 @@ Expected: pelo menos um alerta do tipo GitHub Personal Access Token. Se o estado
 Adicionar ao §8 do README, na lista "Incidentes já resolvidos", antes do item do QStash:
 
 ```markdown
-- **Token do GitHub no histórico público** (`bf80d1f`, removido em `4b66cb9` no mesmo dia): remover num commit posterior não tira do histórico, e o repositório é público — o token ficou legível por três meses. Uma varredura de 346 commits contra 14 famílias de padrão encontrou só esse vazamento. Corrigido revogando o token; o push protection do secret scanning foi ligado para bloquear o próximo na origem.
+> **Executado com desvio.** O texto prescrito aqui afirmava "Corrigido revogando o token",
+> o que se revelou **falso** na execução: o alerta do secret scanning seguia `open`, sem
+> resolução — o GitHub não revogou automaticamente, ao contrário do que se presumiu. Os SHAs
+> também foram retirados, porque num repositório público apontar o commit exato de um segredo
+> ainda vivo entrega o caminho pronto. O texto que foi de fato para o README está no §8 de lá.
+> Lição para planos futuros: **não prescreva documentação que declara um fato ainda não
+> verificado** — escreva o texto depois de confirmar o estado, não antes.
 ```
 
 - [ ] **Step 6: Commitar**
