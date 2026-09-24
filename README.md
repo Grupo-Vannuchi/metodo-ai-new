@@ -238,7 +238,7 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/cam
 ```
 
 ### Incidentes já resolvidos (histórico útil)
-- **Token do GitHub no histórico público** (`bf80d1f`, removido em `4b66cb9` no mesmo dia): remover num commit posterior não tira do histórico, e o repositório é público — o token ficou legível por três meses. Uma varredura de 346 commits contra 14 famílias de padrão encontrou só esse vazamento. **O token ainda NÃO foi revogado** — o alerta #1 do secret scanning segue `open`, sem resolução. Revogar em `github.com/settings/tokens` é o que de fato resolve: um token revogado é inofensivo mesmo permanecendo visível no histórico, e nenhuma reescrita de histórico substitui a revogação. O push protection do secret scanning foi ligado para bloquear o próximo na origem.
+- **Token do GitHub no histórico público:** um commit expôs um token do GitHub e um commit posterior removeu o valor do arquivo — mas remover num commit posterior não tira o token do histórico, e o repositório é público. Uma varredura de 346 commits contra 14 famílias de padrão não encontrou outros vazamentos. A lição: quem resolve é a revogação, não a reescrita de histórico — um token revogado fica inofensivo mesmo permanecendo visível em algum commit antigo. Revogar o token afetado em `github.com/settings/tokens` é ação de conta (não do repositório) e segue como passo pendente. O push protection do secret scanning foi ligado para bloquear o próximo vazamento na origem.
 - **QStash `DeduplicationId cannot contain ':'`** (ingest de mídia): o id `media:<id>` tinha `:`. Corrigido + `enqueue` sanitiza qualquer id.
 - **`/api/cron/feed-cleanup` apagava posts fixados**: filtrava por `createdAt < now-24h` em vez de `expiresAt`, então teria deletado todo post com mais de 24h — inclusive os permanentes e fixados, que por contrato do modelo nunca expiram. Nunca chegou a rodar em produção (o cron não estava agendado). Corrigido para filtrar por `expiresAt`.
 - **WhatsApp recebia mas não enviava** ("Conexão Evolution incompleta"): o envio não resolvia as credenciais pelo env — corrigido usando `resolveEvoCreds` em todos os caminhos.
@@ -248,7 +248,7 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/cam
 ## 9. Convenções
 
 - **Commits:** `[ÁREA] - Verbo + Tarefa`, com corpo estruturado, terminando com a linha de co-autoria. Ex.: `[CRM] - Adiciona autofill de CEP na empresa`.
-- **Validação por entrega:** `typecheck` + `lint` + `build` + `check:isolation` antes de commitar; manter **paridade de chaves** entre `pt.json` e `en.json`.
+- **Validação por entrega:** `typecheck` + `lint` + `build` + `check:isolation` + `check:node` antes de commitar; manter **paridade de chaves** entre `pt.json` e `en.json`.
 - **Gating sempre pelas fontes de verdade:** `config/modules.ts` (módulos), `config/screens.ts` (telas), `config/limits.ts` (limites). Não espalhe `if` de módulo/permissão pelo código.
 - **Dados sempre pela DAL** (`lib/queries/*`) com `tenantDb`; Prisma cru só em contextos de sistema (webhook/job/cron) com `organizationId` explícito.
 - **Sem drawer para criação** no CRM (foi testado e descartado a pedido).
