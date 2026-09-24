@@ -17,6 +17,7 @@
 - **Repositório público.** Nada de credencial, de estado de exposição em aberto, ou de detalhe que sirva de mapa para atacante.
 - **Marcar inferência.** Onde o conteúdo for dedução a partir do código, e não fato verificado, o texto diz isso explicitamente. O autor anterior saiu sem repasse; fingir certeza sobre a intenção dele engana quem chega.
 - **O `CLAUDE.md` entra em todo turno.** Cada linha acrescentada a ele custa contexto para sempre. Gatilhos são de uma linha; explicação vai para o guia.
+- **Links dentro dos guias usam `../../`** — `docs/guia/` está a **dois** níveis da raiz do repositório, não três.
 - **Todo caminho de arquivo citado num guia deve existir.** Um guia que aponta para arquivo inexistente é pior que nenhum.
 - **Commits:** padrão do repo, `[ÁREA] - Verbo + Tarefa`, corpo estruturado, terminando com a linha de co-autoria.
 - **Branch de trabalho:** `dev`. Nunca commitar direto na `main` (está protegida e vai recusar).
@@ -153,8 +154,8 @@ Explicar por que o guard é compartilhado e não copiado: a função era duplica
 Run:
 
 ```bash
-cd "C:/Users/ViniciusAlberto/Documents/GitHub/metodo-ai-new"
-grep -oE '\(\.\./\.\./\.\./[^)#]+' docs/guia/05-rotas-e-jobs.md | sed 's|(\.\./\.\./\.\./||' | sort -u | while read p; do [ -e "$p" ] && echo "ok   $p" || echo "FALTA $p"; done
+cd "C:/Users/ViniciusAlberto/Documents/GitHub/metodo-ai-new/docs/guia"
+grep -oE '\]\(\.\./\.\./[^)#]+' 05-rotas-e-jobs.md | sed 's|](||' | sort -u | while read p; do [ -e "$p" ] && echo "ok   $p" || echo "FALTA $p"; done
 ```
 
 Expected: toda linha começa com `ok`.
@@ -313,10 +314,10 @@ Mais: o que vive em cada pasta de `src/`, e uma nota honesta sobre os arquivos g
 Run:
 
 ```bash
-cd "C:/Users/ViniciusAlberto/Documents/GitHub/metodo-ai-new"
-for f in docs/guia/01-primeiros-passos.md docs/guia/02-mapa-do-codigo.md; do
+cd "C:/Users/ViniciusAlberto/Documents/GitHub/metodo-ai-new/docs/guia"
+for f in 01-primeiros-passos.md 02-mapa-do-codigo.md; do
   echo "--- $f ---"
-  grep -oE '\(\.\./\.\./\.\./[^)#]+' "$f" | sed 's|(\.\./\.\./\.\./||' | sort -u | while read p; do [ -e "$p" ] && echo "ok   $p" || echo "FALTA $p"; done
+  grep -oE '\]\(\.\./\.\./[^)#]+' "$f" | sed 's|](||' | sort -u | while read p; do [ -e "$p" ] && echo "ok   $p" || echo "FALTA $p"; done
 done
 ```
 
@@ -394,10 +395,10 @@ Mais: a convenção de commit, o fluxo `dev` → PR → `main`, e que a `main` e
 Run:
 
 ```bash
-cd "C:/Users/ViniciusAlberto/Documents/GitHub/metodo-ai-new"
-for f in docs/guia/04-modulos-e-permissoes.md docs/guia/06-antes-de-commitar.md; do
+cd "C:/Users/ViniciusAlberto/Documents/GitHub/metodo-ai-new/docs/guia"
+for f in 04-modulos-e-permissoes.md 06-antes-de-commitar.md; do
   echo "--- $f ---"
-  grep -oE '\(\.\./\.\./\.\./[^)#]+' "$f" | sed 's|(\.\./\.\./\.\./||' | sort -u | while read p; do [ -e "$p" ] && echo "ok   $p" || echo "FALTA $p"; done
+  grep -oE '\]\(\.\./\.\./[^)#]+' "$f" | sed 's|](||' | sort -u | while read p; do [ -e "$p" ] && echo "ok   $p" || echo "FALTA $p"; done
 done
 ```
 
