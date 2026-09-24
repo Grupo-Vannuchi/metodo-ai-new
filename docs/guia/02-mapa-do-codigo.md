@@ -23,14 +23,14 @@ aponta para onde ir.
 | mudar um **texto de interface** | `src/messages/pt.json` **e** `src/messages/en.json`, mesma chave nos dois | 2.597 chaves hoje nos dois arquivos (contagem própria, recursiva — bate com a regra 3 do `CLAUDE.md`). Mudou de um lado, muda do outro. |
 | mudar um **job** de fila (background) | [src/lib/jobs/index.ts](../../src/lib/jobs/index.ts) (registro `JOB_HANDLERS`), disparado por `src/app/api/jobs/[job]/route.ts` | Handler precisa ser idempotente — QStash pode entregar o mesmo job duas vezes. Ver [guia 05](05-rotas-e-jobs.md). |
 | criar ou mudar uma **rota de API** | `src/app/api/<algo>/route.ts` — 43 rotas hoje | Nasce pública, sem middleware protegendo. **Pare e leia o [guia 05](05-rotas-e-jobs.md) antes.** |
-| rodar um **comando de manutenção** | [scripts/](../../scripts/) — 5 arquivos, via `npm run <script>` ou `tsx --env-file=.env scripts/<nome>.ts` | `check-isolation`, `check-node` e `backfill-pipelines` são operacionais deste app; `create-project-task` e `inspect-project` automatizam o GitHub Projects e não tocam o app. |
+| rodar um **comando de manutenção** | [scripts/](../../scripts/) — 5 arquivos; só 3 têm alias de `npm run` (ver [package.json](../../package.json)) — os outros dois rodam direto via `tsx scripts/<nome>.ts` | `check-isolation`, `check-node` e `backfill-pipelines` são operacionais deste app; `create-project-task` e `inspect-project` automatizam o GitHub Projects e não tocam o app. |
 | reaproveitar um **componente de UI** genérico | [src/components/ui/](../../src/components/ui/) — 15 arquivos (botão, input, paginação, toast, confirmação, ...) | Confira aqui antes de criar um componente novo do zero. |
 
 ## O que vive em cada pasta de `src/`
 
 | Pasta | Arquivos | Linhas | O que é |
 |---|---|---|---|
-| `app/` | 211 | 18.834 | Rotas do Next (App Router): `[locale]/(auth)` (login, cadastro, convite, recuperação), `[locale]/app` (o produto — uma subpasta por domínio: `crm/`, `finance/`, `inbox/`...), `[locale]/api` (rotas de API), `actions/` (as 52 server actions — a escrita). |
+| `app/` | 211 | 18.834 | Rotas do Next (App Router): `[locale]/(auth)` (login, cadastro, convite, recuperação), `[locale]/app` (o produto — uma subpasta por domínio: `crm/`, `finance/`, `inbox/`...), `api/` (rotas de API, fora de `[locale]/`), `actions/` (as 52 server actions — a escrita). |
 | `components/` | 175 | 28.779 | UI por domínio, espelhando `app/` e `lib/queries/` (uma subpasta por área). **A maior pasta do repositório** — cerca de 45% das linhas de `src/`. `ui/` guarda os primitivos compartilhados; três arquivos soltos na raiz (`theme-style.tsx`, `theme-toggle.tsx`, `unsubscribe-form.tsx`) fogem do padrão por domínio. |
 | `config/` | 5 | 650 | As fontes de verdade: [modules.ts](../../src/config/modules.ts) (384L), [screens.ts](../../src/config/screens.ts) (34L), `limits.ts` (36L), mais `site.ts` e `audit.ts`. |
 | `i18n/` | 3 | 57 | `routing.ts` define os locales (`pt`, `en`) e o prefixo de URL (`as-needed` — o locale padrão não aparece na URL). |
