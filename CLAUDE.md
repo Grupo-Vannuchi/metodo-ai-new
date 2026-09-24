@@ -15,10 +15,10 @@ npm run db:seed                 # org demo + usuário dono (usa SEED_* do .env)
 npm run db:studio               # Prisma Studio
 ```
 
-**Antes de qualquer commit, os quatro precisam passar:**
+**Antes de qualquer commit, os cinco precisam passar:**
 
 ```bash
-npm run typecheck && npm run lint && npm run build && npm run check:isolation
+npm run typecheck && npm run lint && npm run build && npm run check:isolation && npm run check:node
 ```
 
 `check:isolation` sobe dados reais no Postgres local e valida o isolamento multi-tenant — se ele
@@ -89,6 +89,12 @@ dois dos quatro já nasceram sem ele por ser copy-paste.
 dá sintoma visível quando não roda. Só `extractions` tem justificativa clara (é o único ponto que aplica a
 retenção LGPD dos leads); `campaigns` é quase inútil, porque a promoção `SCHEDULED` → `RUNNING` é
 inalcançável (nada cria campanha SCHEDULED). Quadro completo no §8 do README.
+
+**Produção travada em Node 20.x.** A Hostinger não permite trocar a versão. Nenhuma dependência pode
+exigir Node acima disso, e `engines` é só **aviso** para o npm (não há `.npmrc` com `engine-strict`) —
+sem verificação, a quebra só apareceria no deploy. `npm run check:node` varre a árvore instalada e falha
+se alguma exigir mais, separando o que roda em produção do que só é usado no build. O `.nvmrc` é a fonte
+da verdade do major e o script lê dele: se a Hostinger um dia mudar, mude o `.nvmrc` e a checagem acompanha.
 
 **Variáveis de ambiente.** Nunca leia `process.env.X` direto no código da app — declare em
 [src/lib/env.ts](src/lib/env.ts) (zod) e importe de lá. Obrigatórias faltando derrubam o boot.

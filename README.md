@@ -133,7 +133,7 @@ npm run db:seed           # cria org/owner inicial (usa SEED_* do .env)
 npm run dev               # http://localhost:3000
 ```
 
-Antes de commitar: **`npm run typecheck` + `npm run lint` + `npm run build` + `npm run check:isolation`** devem passar. (Webhooks em dev exigem túnel — ex.: ngrok — com `NEXT_PUBLIC_SITE_URL` apontando pra ele; localhost não recebe webhook.)
+Antes de commitar: **`npm run typecheck` + `npm run lint` + `npm run build` + `npm run check:isolation` + `npm run check:node`** devem passar. (Webhooks em dev exigem túnel — ex.: ngrok — com `NEXT_PUBLIC_SITE_URL` apontando pra ele; localhost não recebe webhook.)
 
 ### Scripts (`package.json`)
 | Comando | O que faz |
@@ -142,6 +142,7 @@ Antes de commitar: **`npm run typecheck` + `npm run lint` + `npm run build` + `n
 | `typecheck` | `tsc --noEmit` |
 | `lint` | ESLint |
 | `check:isolation` | valida isolamento multi-tenant |
+| `check:node` | falha se alguma dependência exigir Node acima do major do `.nvmrc` (produção é Hostinger, travada em 20.x) |
 | `db:migrate` / `db:deploy` / `db:push` / `db:seed` / `db:studio` | Prisma |
 | `db:dump` / `db:restore` | snapshot do Postgres (container `metodoai-db`) |
 
