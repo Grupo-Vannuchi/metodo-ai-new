@@ -185,7 +185,16 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 
 ## 8. Runbook de produção ⚠️ (leia antes de qualquer deploy)
 
+**Produção é `https://metodotia.com`.** É o único endereço oficial do sistema.
+
 **Infra:** app na **Hostinger** (Node via Passenger/CloudLinux — **NÃO Vercel**) + banco no **Supabase** (só produção) + **Evolution numa VPS separada** (WhatsApp).
+
+> **Sobre a Vercel.** Existe um projeto `metodo-ai-new` na conta da Vercel, resquício da fase em que
+> se decidia a plataforma de hospedagem. Ele **não serve o produto** — mas ficou git-conectado a este
+> repositório, com variáveis de ambiente configuradas e a branch de produção apontando para a `dev`.
+> Em 24/09/2026 um push na `dev` o despertou e ele passou a servir o app publicamente em
+> `metodo-ai-new.vercel.app`, em paralelo com a produção real, até ser pausado. **Se for despausado
+> sem desconectar a integração com o Git, o próximo push na `dev` o reativa.**
 
 ### Migrações (Supabase) — processo MANUAL
 Nunca rode `prisma migrate dev` contra produção. As migrations são aplicadas manualmente:
@@ -240,6 +249,7 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/cam
 ### Incidentes já resolvidos (histórico útil)
 - **Token do GitHub no histórico público:** um commit expôs um token do GitHub e um commit posterior removeu o valor do arquivo — mas remover num commit posterior não tira o token do histórico, e o repositório é público. Uma varredura de 346 commits contra 14 famílias de padrão não encontrou outros vazamentos. A lição: quem resolve é a revogação, não a reescrita de histórico — um token revogado fica inofensivo mesmo permanecendo visível em algum commit antigo. Revogar o token afetado em `github.com/settings/tokens` é ação de conta (não do repositório) e segue como passo pendente. O push protection do secret scanning foi ligado para bloquear o próximo vazamento na origem.
 - **QStash `DeduplicationId cannot contain ':'`** (ingest de mídia): o id `media:<id>` tinha `:`. Corrigido + `enqueue` sanitiza qualquer id.
+- **Deploy fantasma na Vercel**: o projeto `metodo-ai-new` da Vercel, resquício da fase de escolha de plataforma, seguia git-conectado a este repositório com variáveis de ambiente configuradas e branch de produção apontando para a `dev`. Nunca tinha implantado só porque ninguém empurrava para a `dev` havia meses. Em 24/09/2026 um push acordou o projeto e o app passou a ser servido publicamente em `metodo-ai-new.vercel.app`, sem SSO, ao lado da produção real. Resolvido pausando o projeto. **Lição:** "nunca implantou" não é o mesmo que "não vai implantar" — antes de empurrar para uma branch, verifique o que está *conectado* a ela, não só o que já rodou.
 - **`/api/cron/feed-cleanup` apagava posts fixados**: filtrava por `createdAt < now-24h` em vez de `expiresAt`, então teria deletado todo post com mais de 24h — inclusive os permanentes e fixados, que por contrato do modelo nunca expiram. Nunca chegou a rodar em produção (o cron não estava agendado). Corrigido para filtrar por `expiresAt`.
 - **WhatsApp recebia mas não enviava** ("Conexão Evolution incompleta"): o envio não resolvia as credenciais pelo env — corrigido usando `resolveEvoCreds` em todos os caminhos.
 

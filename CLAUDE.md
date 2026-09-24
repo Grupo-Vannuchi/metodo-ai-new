@@ -107,7 +107,9 @@ da verdade do major e o script lê dele: se a Hostinger um dia mudar, mude o `.n
 - **Commits:** `[ÁREA] - Verbo + Tarefa`, corpo estruturado, terminando com a linha de co-autoria.
   Ex.: `[CRM] - Adiciona autofill de CEP na empresa`.
 - **Sem drawer para criação no CRM** — foi testado e descartado a pedido.
-- **Produção NÃO é Vercel:** app na Hostinger (Passenger), banco no Supabase, Evolution em VPS separada.
+- **Produção é `https://metodotia.com`**, na Hostinger (Passenger), com banco no Supabase e Evolution
+  em VPS separada. **Não é Vercel** — o projeto que existe lá é resquício da escolha de plataforma e
+  está pausado; ele segue git-conectado à `dev`, então despausá-lo faz o próximo push implantar de novo.
   Migração em produção é manual (`prisma migrate deploy`) — nunca `migrate dev` contra produção.
   Veja o runbook no §8 do README antes de qualquer deploy.
 
