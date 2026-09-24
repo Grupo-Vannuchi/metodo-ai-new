@@ -30,6 +30,9 @@ repositório; `check:isolation` é a rede de proteção automatizada que existe.
 **1. Isolamento multi-tenant.** Toda tabela de negócio carrega `organizationId` e é filtrada por ela.
 Nunca consulte tabela de negócio sem esse filtro.
 
+> **Vai escrever qualquer acesso ao banco? PARE e leia [docs/guia/03-multi-tenancy.md](docs/guia/03-multi-tenancy.md) antes.**
+> O `$extends` do `tenantDb` cobre 8 operações e deixa 5 passarem sem filtro de organização. Saber quais é a diferença entre isolar e vazar.
+
 - Dados sempre pela DAL em [src/lib/queries/](src/lib/queries/) (50 arquivos, um por domínio), usando
   `tenantDb(orgId)` de [src/lib/tenant-db.ts](src/lib/tenant-db.ts).
 - O `$extends` do `tenantDb` injeta a org em `create`/`createMany` e em `where` de list/bulk/aggregate.
