@@ -6,10 +6,21 @@ on:
   push:
     branches: [main, dev]
 
+# Colapsa o duplicate-run conhecido: push e pull_request disparam juntos para
+# PR do mesmo repo (nao de fork). A run mais nova cancela a anterior do mesmo
+# workflow+ref em vez de gastar minutos do runner com as duas em paralelo.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     name: validate
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # So leitura do repo — o job nao publica pacote, comenta PR nem cria release.
+    permissions:
+      contents: read
 
     services:
       postgres:
@@ -28,6 +39,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # O job nunca faz push nem chama a API do GitHub — sem motivo pra reter
+          # um token com permissao de escrita no runner depois do checkout.
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -61,11 +76,11 @@ jobs:
       - name: Compatibilidade de Node
         run: npm run check:node
 
-      - name: Build
-        run: npm run build
-
       - name: Aplicar migrations
         run: npx prisma migrate deploy
+
+      - name: Build
+        run: npm run build
 
       - name: Isolamento multi-tenant
         run: npm run check:isolation
