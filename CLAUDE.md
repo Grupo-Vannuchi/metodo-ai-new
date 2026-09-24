@@ -81,11 +81,10 @@ Vale para scripts avulsos (`prisma/seed.ts`, `scripts/*.ts`) tanto quanto para a
 plataforma" guardam só o `instance`; `baseUrl`/`apiKey` vêm do env. Passar credencial crua quebra o envio
 com "Conexão Evolution incompleta".
 
-**Rotas `/api/*` são públicas por padrão.** O [src/proxy.ts](src/proxy.ts) exclui `api` do matcher
-(`/((?!api|_next|_vercel|.*\..*).*)`), então nenhum middleware protege endpoint de API — cada rota se
-protege sozinha. Os 4 `/api/cron/*` usam o guard `isCronAuthorized` de [src/lib/cron-auth.ts](src/lib/cron-auth.ts)
-(`Authorization: Bearer $CRON_SECRET`, falha fechado). Rota de cron nova **tem** que chamar o guard —
-dois dos quatro já nasceram sem ele por ser copy-paste.
+**Rotas `/api/*` são públicas por padrão.** O [src/proxy.ts](src/proxy.ts) exclui `api` do matcher, então nenhum middleware protege endpoint de API — cada rota se protege sozinha.
+
+> **Vai criar ou alterar rota em `src/app/api/`? PARE e leia [docs/guia/05-rotas-e-jobs.md](docs/guia/05-rotas-e-jobs.md) antes.**
+> Dois dos quatro endpoints de cron já nasceram sem autenticação nenhuma.
 
 **Os crons não são automáticos — e nem todos valem a pena.** Nada no repositório os agenda; o
 `vercel.json` que os declarava era resquício de uma fase Vercel que nunca foi produção. Nenhum dos quatro
