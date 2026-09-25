@@ -259,6 +259,30 @@ Os quatro exigem `Authorization: Bearer $CRON_SECRET` (guard em `src/lib/cron-au
 **401 sem o header** — inclusive quando `CRON_SECRET` não está setado, então defina-o no env de
 produção antes de agendar qualquer um. Comandos para o hPanel → Cron Jobs:
 
+> **Decisão de 25/09/2026: agendar apenas o `extractions`.** A prospecção do Google Places está em
+> uso real, então há dado de terceiro acumulando enquanto o código declara retenção de 30 dias. Os
+> outros três ficam desligados — o mural já esconde post vencido por consulta, o digest é
+> funcionalidade que ninguém sentiu falta, e o `campaigns` é no-op sem `QSTASH_TOKEN`. Ligar rotina de
+> exclusão automática num sistema sem alerta é adicionar risco sem benefício correspondente.
+>
+> **Antes da primeira execução, conte o que será apagado.** Apagar um `ExtractionJob` leva os
+> `ExtractedLead` junto (`onDelete: Cascade`). Lead já importado é seguro — a importação cria um
+> `Company` próprio no CRM. Lead **nunca importado** com mais de 30 dias some para sempre:
+>
+> ```sql
+> SELECT count(DISTINCT j.id)                              AS jobs_a_apagar,
+>        count(l.id)                                       AS leads_a_apagar,
+>        count(l.id) FILTER (WHERE l."importedAt" IS NULL) AS nunca_importados,
+>        min(j."createdAt")::date                          AS mais_antigo
+> FROM extraction_jobs j
+> LEFT JOIN extracted_leads l ON l."jobId" = j.id
+> WHERE j."createdAt" < now() - interval '30 days';
+> ```
+>
+> Se `nunca_importados` for relevante, avise o time antes — a retenção diz que esse dado não deveria
+> estar lá, mas alguém pode estar contando com ele. Depois rode o endpoint **uma vez à mão** (comando
+> abaixo) para fazer a limpeza acumulada de forma observada, e só então agende.
+
 ```bash
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/extractions     # */10 * * * *
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/notifications   # 0 7 * * *
