@@ -317,6 +317,33 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/cam
 
 ## 10. Pendências / próximos passos
 
+### Operacionais — o que está esperando alguém (levantado em 24-25/09/2026)
+
+Diferente da lista de produto abaixo, estes têm próximo passo conhecido e escrito.
+
+1. **`CRON_SECRET` em produção e agendar o `extractions`.** Os quatro `/api/cron/*` respondem 401 sem
+   o segredo definido no env. Só o `extractions` deve ser agendado — o porquê, a consulta que conta o
+   que será apagado, e o cuidado com a primeira execução estão no [§8](#8-runbook-de-produção--leia-antes-de-qualquer-deploy).
+   **Conte antes de agendar:** a primeira execução limpa tudo que acumulou desde que a prospecção
+   entrou no ar, de uma vez, e leads nunca importados não voltam.
+
+2. **Verificação de assinatura no webhook genérico.** `src/app/api/webhooks/[provider]/route.ts`
+   carrega um `TODO(P9)` para validar a assinatura do provedor (ex.: `X-Hub-Signature-256` do Meta)
+   antes de confiar no payload. O webhook do Evolution já resolve isso de outro jeito — autentica pelo
+   token no próprio caminho da URL — e serve de referência de que o problema tem solução aqui dentro.
+   É a pendência de maior prioridade desta lista.
+
+3. **Decidir a versão do Node.** Produção roda **20.x** e o `.nvmrc` acompanha, mas a Hostinger suporta
+   22.x. O piso real da árvore hoje é 20.18.1 (`@distube/ytdl-core`) — perto do topo da linha 20. Subir
+   para 22 dá folga e continua LTS. `npm run check:node` lê o `.nvmrc`, então a checagem acompanha
+   sozinha a decisão.
+
+4. **`package.json#prisma` está depreciado.** O log de deploy avisa que a chave sai no Prisma 7 e pede
+   migração para um `prisma.config.ts`. Não urge — mas é quebra garantida num upgrade futuro.
+
+### Produto
+
+
 - **Cobrança real:** hoje é simulada (sem gateway). Ligar Stripe/pagamento é dívida em aberto.
 - **Baixador:** YouTube via ytdl-core é frágil; considerar `yt-dlp` na VPS. Ideias: TikTok, baixar só áudio (MP3), histórico.
 - **Gating cross-módulo server-side:** o gate é na UI; blindar as actions/endpoints (ex.: recusar anexo de módulo não instalado) é um reforço pendente.
