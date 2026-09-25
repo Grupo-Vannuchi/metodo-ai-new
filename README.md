@@ -144,7 +144,7 @@ Antes de commitar: **`npm run typecheck` + `npm run lint` + `npm run build` + `n
 | `dev` / `build` / `start` | ciclo Next.js |
 | `typecheck` | `tsc --noEmit` |
 | `lint` | ESLint |
-| `check:isolation` | valida isolamento multi-tenant |
+| `check:isolation` | prova que o banco respeita o filtro de org quando ele é escrito (não que o código o escreva — ver §3.1) |
 | `check:node` | falha se alguma dependência exigir Node acima do major do `.nvmrc` (produção é Hostinger, travada em 20.x) |
 | `db:migrate` / `db:deploy` / `db:push` / `db:seed` / `db:studio` | Prisma |
 | `db:dump` / `db:restore` | snapshot do Postgres (container `metodoai-db`) |
