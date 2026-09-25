@@ -60,7 +60,10 @@ O MétodoAI **deixou de ser um SaaS de planos fixos** e virou uma **plataforma m
 - **Toda tabela de negócio carrega `organizationId`** e é filtrada por ela. A regra é sagrada — nunca consulte tabela de negócio sem o filtro de org.
 - A DAL (`src/lib/queries/*`) usa `tenantDb(orgId)` (`src/lib/tenant-db.ts`) — um Prisma `$extends` que injeta a org em `create`/`where`. O que o extends não cobre (`findUnique`/`update`/`delete`/`upsert`) usa `findFirst` + `updateMany`/`deleteMany` filtrando por `{ id }`.
 - Contextos de sistema (webhooks, jobs) usam o `prisma` cru com `organizationId` explícito.
-- `npm run check:isolation` valida que nada escapa do isolamento.
+- `npm run check:isolation` prova que o Postgres respeita um filtro de `organizationId` — não que
+  `tenantDb`, a DAL ou as actions estão de fato passando esse filtro (o script usa Prisma cru, sem
+  passar por nenhum dos dois). Vermelho é sinal real de fronteira furada; verde não garante que a
+  aplicação isola. Detalhe em [docs/guia/03-multi-tenancy.md](docs/guia/03-multi-tenancy.md).
 
 ### 3.2 Conta & multi-empresa
 - **Conta = usuário dono.** `Organization.ownerId` aponta pro dono. "Empresas da conta" = orgs com aquele `ownerId`.
@@ -141,7 +144,7 @@ Antes de commitar: **`npm run typecheck` + `npm run lint` + `npm run build` + `n
 | `dev` / `build` / `start` | ciclo Next.js |
 | `typecheck` | `tsc --noEmit` |
 | `lint` | ESLint |
-| `check:isolation` | valida isolamento multi-tenant |
+| `check:isolation` | prova que o banco respeita o filtro de org quando ele é escrito (não que o código o escreva — ver §3.1) |
 | `check:node` | falha se alguma dependência exigir Node acima do major do `.nvmrc` (produção é Hostinger, travada em 20.x) |
 | `db:migrate` / `db:deploy` / `db:push` / `db:seed` / `db:studio` | Prisma |
 | `db:dump` / `db:restore` | snapshot do Postgres (container `metodoai-db`) |
