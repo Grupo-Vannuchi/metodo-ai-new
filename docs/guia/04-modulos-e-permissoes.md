@@ -111,9 +111,12 @@ Essa interseção explica um caso real e já documentado no
 aparece em `screens` de nenhum `ModuleDef` — leitura minha a partir do código, não documentada em
 lugar nenhum. Resultado: `available.has("connections")` nunca é verdadeiro, então ela nunca entra
 em `navScreens`, não importa o template. É por isso que as rotas de `/app/connections` "seguem
-vivas fora do menu": o código delas existe e funciona se alguém acessar a URL direto, mas nenhuma
-combinação de módulo/template a coloca na navegação. Uma tela sem módulo dono é, na prática,
-inalcançável por nav — só por link direto.
+vivas fora do menu": nenhuma combinação de módulo/template as coloca na navegação, mas a URL
+direta continua existindo. Ela **não** é aberta, porém: o
+[layout de `/app/connections`](../../src/app/[locale]/app/connections/layout.tsx) exige as duas
+coisas — `requireScreen(ctx, "connections")` **e** `requireModule(ctx, "inbox")`. Ou seja, chega lá
+por link direto apenas quem tem a tela liberada no template **e** o módulo Atendimento instalado.
+Uma tela sem módulo dono é inalcançável por navegação; não é o mesmo que desprotegida.
 
 **Gating cross-módulo** (uma tela de um módulo usando algo de outro) segue um padrão fixo: o
 **server** resolve `hasModule(...)` e passa o resultado como prop para o client component — nunca
