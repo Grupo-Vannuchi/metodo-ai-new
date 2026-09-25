@@ -28,6 +28,8 @@ npm run typecheck && npm run lint && npm run build && npm run check:isolation &&
 falhar, a mudança está furando a fronteira de segurança. Não existe suíte de testes unitários no
 repositório; `check:isolation` é a rede de proteção automatizada que existe.
 
+> O que cada uma das cinco checagens prova e o que fazer quando falha: [docs/guia/06-antes-de-commitar.md](docs/guia/06-antes-de-commitar.md).
+
 ## Regras invioláveis
 
 **1. Isolamento multi-tenant.** Toda tabela de negócio carrega `organizationId` e é filtrada por ela.
@@ -44,6 +46,8 @@ Nunca consulte tabela de negócio sem esse filtro.
 - Prisma cru (`src/lib/prisma.ts`) só em contexto de sistema (webhook, job, cron), com `organizationId` explícito.
 
 **2. Gating pelas fontes de verdade.** Não espalhe `if` de módulo ou permissão pelo código.
+
+> Vocabulário e modelo de domínio (conta × empresa, comprado × instalado): [docs/guia/04-modulos-e-permissoes.md](docs/guia/04-modulos-e-permissoes.md).
 
 - [src/config/modules.ts](src/config/modules.ts) — módulos, telas, features, preços. `hasModule`,
   `hasFeatureByModules`, `assertFeatureByModules`, `availableScreens`.
