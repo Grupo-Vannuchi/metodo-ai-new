@@ -220,6 +220,11 @@ npm install          # instala dependências novas — 669 pacotes no deploy de 
 npm run build        # next build, com TypeScript incluso — 145 páginas
 ```
 
+**O merge derruba o site por ~30 a 60 segundos.** Medido em 25/09/2026: logo após um merge o
+domínio devolveu timeout, e voltou a responder 200 cerca de 30s depois — é a janela do `npm
+install` + `next build` + reinício do Passenger. Não é erro; é como o deploy automático funciona.
+Vale considerar o horário antes de mergear algo no meio do expediente dos clientes.
+
 **Consequência prática:** mergear na `main` **é** publicar. Não existe um passo manual depois; o
 portão é o PR com o CI verde, e depois dele não há revisão humana entre o merge e a produção. Por
 isso a `main` exige PR e `enforce_admins` está ligado — sem isso, um push direto vai para o ar.
