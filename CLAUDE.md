@@ -5,8 +5,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > O **[README.md](README.md) é o documento de handoff** e a fonte canônica de arquitetura, runbook de
 > produção e histórico de incidentes. Este arquivo cobre só o que muda a forma de trabalhar no código.
 
-- **Chegando agora?** Comece por [docs/guia/01-primeiros-passos.md](docs/guia/01-primeiros-passos.md).
-- **Não sabe onde mexer?** [docs/guia/02-mapa-do-codigo.md](docs/guia/02-mapa-do-codigo.md) responde "preciso mudar X, vou onde".
+## Guias — leia sob demanda
+
+Não leia todos. Cada um carrega quando a tarefa pede; os gatilhos ao longo deste arquivo dizem quando.
+
+| Guia | Quando |
+|---|---|
+| [01-primeiros-passos](docs/guia/01-primeiros-passos.md) | primeiro dia no projeto |
+| [02-mapa-do-codigo](docs/guia/02-mapa-do-codigo.md) | "preciso mudar X, vou onde?" |
+| [03-multi-tenancy](docs/guia/03-multi-tenancy.md) | **qualquer** acesso ao banco |
+| [04-modulos-e-permissoes](docs/guia/04-modulos-e-permissoes.md) | mexer em módulo, tela, permissão ou i18n |
+| [05-rotas-e-jobs](docs/guia/05-rotas-e-jobs.md) | criar ou alterar rota em `src/app/api/` |
+| [06-antes-de-commitar](docs/guia/06-antes-de-commitar.md) | uma validação falhou e você não sabe por quê |
 
 ## Comandos
 
@@ -38,36 +48,21 @@ Nunca consulte tabela de negócio sem esse filtro.
 > **Vai escrever qualquer acesso ao banco? PARE e leia [docs/guia/03-multi-tenancy.md](docs/guia/03-multi-tenancy.md) antes.**
 > O `$extends` do `tenantDb` cobre 8 operações e deixa 5 passarem sem filtro de organização. Saber quais é a diferença entre isolar e vazar.
 
-- Dados sempre pela DAL em [src/lib/queries/](src/lib/queries/) (50 arquivos, um por domínio), usando
-  `tenantDb(orgId)` de [src/lib/tenant-db.ts](src/lib/tenant-db.ts).
-- O `$extends` do `tenantDb` injeta a org em `create`/`createMany` e em `where` de list/bulk/aggregate.
-  Ele **não** cobre `findUnique`/`update`/`delete`/`upsert` — para trabalho por id use
-  `findFirst` + `updateMany`/`deleteMany` com `{ id }` explícito, para o extends conseguir somar o filtro de org.
-- Prisma cru (`src/lib/prisma.ts`) só em contexto de sistema (webhook, job, cron), com `organizationId` explícito.
+- Dados sempre pela DAL em [src/lib/queries/](src/lib/queries/), usando `tenantDb(orgId)` de [src/lib/tenant-db.ts](src/lib/tenant-db.ts).
+- Trabalho por id: `findFirst` + `updateMany`/`deleteMany` com `{ id }` — nunca `findUnique`/`update`/`delete`/`upsert` direto.
+- Prisma cru ([src/lib/prisma.ts](src/lib/prisma.ts)) só em contexto de sistema, com `organizationId` explícito.
 
 **2. Gating pelas fontes de verdade.** Não espalhe `if` de módulo ou permissão pelo código.
 
-> Vocabulário e modelo de domínio (conta × empresa, comprado × instalado): [docs/guia/04-modulos-e-permissoes.md](docs/guia/04-modulos-e-permissoes.md).
+> Vocabulário e modelo de domínio (conta × empresa, comprado × instalado, `getOrgContext()`):
+> [docs/guia/04-modulos-e-permissoes.md](docs/guia/04-modulos-e-permissoes.md).
 
-- [src/config/modules.ts](src/config/modules.ts) — módulos, telas, features, preços. `hasModule`,
-  `hasFeatureByModules`, `assertFeatureByModules`, `availableScreens`.
-- [src/config/screens.ts](src/config/screens.ts) — telas gateáveis. [src/lib/access.ts](src/lib/access.ts)
-  resolve permissão por membro: `requireScreen`, `requireModule`.
+- [src/config/modules.ts](src/config/modules.ts) — módulos, telas, features, preços (`hasModule`, `hasFeatureByModules`, `assertFeatureByModules`, `availableScreens`).
+- [src/config/screens.ts](src/config/screens.ts) — telas gateáveis. [src/lib/access.ts](src/lib/access.ts) resolve permissão por membro (`requireScreen`, `requireModule`).
 - [src/config/limits.ts](src/config/limits.ts) — limites globais (não existem mais planos).
-- Nav final = `allowedScreens ∩ availableScreens(modules)`.
-- Gating cross-módulo: o **server** resolve `hasModule(...)` e passa como prop pro client.
 
 **3. Paridade de i18n.** `src/messages/pt.json` e `src/messages/en.json` têm exatamente as mesmas
 chaves (2597 hoje). Adicionou de um lado, adiciona do outro.
-
-## Contexto de request
-
-`getOrgContext()` / `requireOrgContext()` em [src/lib/tenant.ts](src/lib/tenant.ts) resolvem, a partir do
-cookie de sessão: org ativa, papel, template de acesso, telas permitidas, **módulos instalados**,
-`accountOwnerId` e `isAccountOwner`. Trocar de empresa = re-selar o cookie com outro `organizationId`.
-
-Conta = usuário dono (`Organization.ownerId`). Módulo é **comprado na conta** (`AccountModule`, cobrado 1×)
-e **instalado por empresa** (`OrganizationModule`, `ACTIVE|DORMANT`). Desinstalar = `DORMANT`, nunca apagar.
 
 ## Armadilhas específicas deste repo
 
@@ -88,22 +83,15 @@ Vale para scripts avulsos (`prisma/seed.ts`, `scripts/*.ts`) tanto quanto para a
 plataforma" guardam só o `instance`; `baseUrl`/`apiKey` vêm do env. Passar credencial crua quebra o envio
 com "Conexão Evolution incompleta".
 
-**Rotas `/api/*` são públicas por padrão.** O [src/proxy.ts](src/proxy.ts) exclui `api` do matcher, então nenhum middleware protege endpoint de API — cada rota se protege sozinha.
+**Rotas `/api/*` são públicas por padrão** — nenhum middleware protege endpoint de API, cada rota se
+protege sozinha.
 
 > **Vai criar ou alterar rota em `src/app/api/`? PARE e leia [docs/guia/05-rotas-e-jobs.md](docs/guia/05-rotas-e-jobs.md) antes.**
 > Dois dos quatro endpoints de cron já nasceram sem autenticação nenhuma.
 
-**Os crons não são automáticos — e nem todos valem a pena.** Nada no repositório os agenda; o
-`vercel.json` que os declarava era resquício de uma fase Vercel que nunca foi produção. Nenhum dos quatro
-dá sintoma visível quando não roda. Só `extractions` tem justificativa clara (é o único ponto que aplica a
-retenção LGPD dos leads); `campaigns` é quase inútil, porque a promoção `SCHEDULED` → `RUNNING` é
-inalcançável (nada cria campanha SCHEDULED). Quadro completo no §8 do README.
-
-**Produção travada em Node 20.x.** A Hostinger não permite trocar a versão. Nenhuma dependência pode
-exigir Node acima disso, e `engines` é só **aviso** para o npm (não há `.npmrc` com `engine-strict`) —
-sem verificação, a quebra só apareceria no deploy. `npm run check:node` varre a árvore instalada e falha
-se alguma exigir mais, separando o que roda em produção do que só é usado no build. O `.nvmrc` é a fonte
-da verdade do major e o script lê dele: se a Hostinger um dia mudar, mude o `.nvmrc` e a checagem acompanha.
+**Produção travada em Node 20.x.** A Hostinger não permite trocar a versão e `engines` no
+`package.json` é só aviso pro npm — sem `check:node`, a quebra só apareceria no deploy. O `.nvmrc` é a
+fonte da verdade do major. Detalhe: [docs/guia/06-antes-de-commitar.md](docs/guia/06-antes-de-commitar.md).
 
 **Variáveis de ambiente.** Nunca leia `process.env.X` direto no código da app — declare em
 [src/lib/env.ts](src/lib/env.ts) (zod) e importe de lá. Obrigatórias faltando derrubam o boot.
@@ -119,9 +107,12 @@ da verdade do major e o script lê dele: se a Hostinger um dia mudar, mude o `.n
 - **Produção é `https://metodotia.com`**, na Hostinger (Passenger), com banco no Supabase e Evolution
   em VPS separada. **Não é Vercel, e não há mais projeto lá** — o que existia era resquício da escolha
   de plataforma e foi apagado em 24/09/2026, depois de implantar sozinho e servir o app em paralelo
-  com a produção real.
-  Migração em produção é manual (`prisma migrate deploy`) — nunca `migrate dev` contra produção.
-  Veja o runbook no §8 do README antes de qualquer deploy.
+  com a produção real. Migração em produção é manual (`prisma migrate deploy`) — nunca `migrate dev`
+  contra produção. Veja o runbook no §8 do README antes de qualquer deploy.
+- **Mexeu numa fonte de verdade, atualize o guia no mesmo commit.** `tenant-db.ts` e `lib/queries/` →
+  guia 03; `config/modules.ts`, `screens.ts`, `limits.ts` → guia 04; `cron-auth.ts`, `proxy.ts`,
+  `app/api/` → guia 05; scripts de validação do `package.json` → guia 06. Guia desatualizado é pior
+  que nenhum, porque é seguido com confiança.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
