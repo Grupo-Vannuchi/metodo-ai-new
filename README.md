@@ -241,12 +241,18 @@ isso a `main` exige PR e `enforce_admins` está ligado — sem isso, um push dir
    `~/domains/<dominio>/logs/`). Procure prefixos como `[evolution] send`, `[inbox]`, `[downloader]`,
    `[ingest]`.
 
-### Crons — nenhum está agendado, e nem todos precisam estar
+### Crons — só o `extractions` deve rodar
 
-O projeto tinha um `vercel.json` declarando 4 crons, mas produção nunca rodou no Vercel — era
-resquício e foi removido. Nada agenda esses jobs: só rodam se virarem cron jobs do hPanel batendo
-nos endpoints. **Nenhum dos quatro produz sintoma visível quando não roda** — é por isso que
-passaram despercebidos. O que cada um realmente vale:
+**Nada no repositório agenda esses jobs.** O `vercel.json` que os declarava era resquício de uma fase
+Vercel que nunca foi produção, e foi removido. Eles só executam se existir um cron job do hPanel
+batendo no endpoint com o header certo — o repositório nunca vai agendá-los, qualquer que seja o
+estado deles hoje.
+
+**Nenhum dos quatro produz sintoma visível quando não roda**, e é por isso que passaram meses
+despercebidos. Falha de manutenção é silenciosa por definição: o mural esconde post vencido por
+consulta, leads acumulam invisíveis, e ninguém sente falta de uma notificação que nunca existiu.
+
+A decisão de 25/09/2026 e o que cada um realmente vale:
 
 | Endpoint | Vale agendar? | Por quê |
 |---|---|---|

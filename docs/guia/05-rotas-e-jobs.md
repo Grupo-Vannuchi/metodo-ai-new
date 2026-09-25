@@ -197,8 +197,11 @@ despercebido — e importa ainda mais aqui porque este código não tem um revis
 Nada neste repositório agenda essas quatro rotas — elas só executam se alguém criar o cron job
 correspondente no hPanel, batendo no endpoint com o header certo. Nenhuma delas dá sintoma
 visível quando não roda, o que já as deixou passar despercebidas por um bom tempo. Quais valem a
-pena agendar, e por quê, está no quadro do [README, seção 8 (Runbook de produção)](../../README.md)
-— não repetido aqui para não ter duas versões da mesma tabela desatualizando em ritmos diferentes.
+pena agendar, por quê, e o cuidado necessário na primeira execução de cada um está no quadro do
+[README, seção 8 (Runbook de produção)](../../README.md) — não repetido aqui para não ter duas
+versões da mesma tabela desatualizando em ritmos diferentes. Vá lá antes de agendar qualquer um:
+três dos quatro apagam dados, e a primeira execução de um cron de limpeza que nunca rodou apaga
+tudo que acumulou desde sempre, de uma vez.
 
 ## Filas: sem `QSTASH_TOKEN`, o caminho vira no-op silencioso
 
