@@ -28,8 +28,11 @@ Abra uma sessão nova, sem histórico. Dê exatamente o texto do caso, incluindo
 
 ## Resultado da última execução
 
-| Data | Caso 1 | Caso 2 |
-|---|---|---|
-| 24/09/2026 | passou (com a redação antiga, mais fraca) | passou |
+| Data | Caso 1 | Caso 2 | Observação |
+|---|---|---|---|
+| 24/09/2026 | passou | passou | redação antiga do caso 1, mais fraca; só os guias 03 e 05 existiam |
+| 25/09/2026 | passou | passou | com os seis guias e o `CLAUDE.md` já enxugado |
 
-Na execução de 24/09/2026 a sessão do caso 2 citou espontaneamente o `WHERE_OPS` e a linha exata do `tenant-db.ts` — sinal de que o gatilho do `CLAUDE.md` disparou e o guia foi lido, não adivinhado.
+Na execução de 25/09/2026 as duas sessões **citaram os guias pelo nome e explicaram o porquê**, em vez de acertar por acaso. O caso 1 escreveu `findFirst` + `updateMany` justificando que "o `$extends` do `tenantDb` só injeta o filtro de org em list/bulk/aggregate". O caso 2 fez o 401 por `getOrgContext` **e** acrescentou gating por módulo com `hasModule(ctx.modules, "crm")` — que a execução do dia anterior não tinha feito, porque o guia 04 ainda não existia.
+
+Essa diferença entre as duas execuções é a melhor evidência que existe de que os guias mudam o que sai, e não apenas descrevem o que já saía.
