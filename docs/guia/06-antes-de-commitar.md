@@ -90,7 +90,17 @@ convenções do projeto (sem repetir aqui).
 
 ## `dev` → PR → `main`
 
-Trabalha-se na `dev`; `main` é produção e o deploy sai dela. `main` é uma branch protegida no
+Trabalha-se na `dev`. **Mergear na `main` publica em produção automaticamente** — a Hostinger
+observa a branch e implanta a cada push, rodando `npm install` (com `prisma generate` no
+`postinstall`) e depois `npm run build`. Não existe passo manual depois do merge, nem revisão
+humana entre ele e o ar: **o CI verde é o único portão**. Por isso vale a pena rodar as cinco
+checagens localmente antes, em vez de descobrir no PR.
+
+> **O deploy automático não roda `prisma migrate deploy`.** Se a sua mudança toca
+> `prisma/schema.prisma`, aplique a migration no Supabase **antes** de mergear. Código novo com
+> schema antigo quebra; schema novo com código antigo costuma sobreviver. Procedimento no §8 do README.
+
+`main` é uma branch protegida no
 GitHub — push direto é rejeitado, e a única forma de levar código até lá é por Pull Request.
 Conferido na configuração real do repositório: a proteção exige que o check `validate` do CI
 ([.github/workflows/ci.yml](../../.github/workflows/ci.yml) — as mesmas cinco checagens deste
@@ -99,7 +109,7 @@ merge, bloqueia force-push e deleção da branch, e vale até para admin (`enfor
 **não** exige aprovação humana configurada — o gate é o CI, não um revisor. Isso não dispensa pedir
 revisão quando fizer sentido; só significa que o GitHub não vai impedir o merge por falta dela.
 
-Rotas para o servidor de produção (deploy, migração manual, runbook completo) estão no
+O runbook completo — o que o pipeline faz, o procedimento de migração e o histórico de incidentes — está no
 [README, seção 8 (Runbook de produção)](../../README.md) — não repetido aqui.
 
 ## Resumo

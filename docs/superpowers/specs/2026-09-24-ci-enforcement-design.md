@@ -1,6 +1,6 @@
 # CI e enforcement de validações — design
 
-**Data:** 2026-09-24 · **Status:** aprovado, aguardando implementação
+**Data:** 2026-09-24 · **Status:** implementado (25/09/2026). Mantido como registro da decisão — o estado atual vive no README e nos guias.
 **Frente:** B de um plano de DevOps maior (ver §7, Fora de escopo)
 
 ---
