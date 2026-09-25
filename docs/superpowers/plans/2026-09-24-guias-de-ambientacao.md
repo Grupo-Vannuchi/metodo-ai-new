@@ -10,6 +10,10 @@
 
 **Spec:** [2026-09-24-onboarding-docs-design.md](../specs/2026-09-24-onboarding-docs-design.md)
 
+> **Executado em 25/09/2026.** As seis tasks foram concluídas e revisadas. Mantido como registro
+> do raciocínio — o estado atual dos guias vive em [docs/guia/](../../guia/), e a verificação em
+> [docs/guia/VERIFICACAO.md](../../guia/VERIFICACAO.md).
+
 ## Global Constraints
 
 - **Idioma: português.** Comentários de código citados permanecem em inglês, como estão no código.
@@ -76,7 +80,7 @@ Explicar o ponto que um júnior não deduz sozinho: `count === 0` é como se des
 Run:
 
 ```bash
-cd "C:/Users/ViniciusAlberto/Documents/GitHub/metodo-ai-new"
+cd "$(git rev-parse --show-toplevel)"
 grep -oE '\(\.\./\.\./\.\./[^)#]+' docs/guia/03-multi-tenancy.md | sed 's|(\.\./\.\./\.\./||' | sort -u | while read p; do [ -e "$p" ] && echo "ok   $p" || echo "FALTA $p"; done
 ```
 
@@ -154,7 +158,7 @@ Explicar por que o guard é compartilhado e não copiado: a função era duplica
 Run:
 
 ```bash
-cd "C:/Users/ViniciusAlberto/Documents/GitHub/metodo-ai-new/docs/guia"
+cd docs/guia
 grep -oE '\]\(\.\./\.\./[^)#]+' 05-rotas-e-jobs.md | sed 's|](||' | sort -u | while read p; do [ -e "$p" ] && echo "ok   $p" || echo "FALTA $p"; done
 ```
 
@@ -216,7 +220,7 @@ O teste que decide se o formato funciona. Se falhar, os outros quatro guias não
 
 Despachar um subagente **sem nenhum contexto desta sessão**, no diretório do projeto, com exatamente este prompt:
 
-> Você está trabalhando no repositório em `C:/Users/ViniciusAlberto/Documents/GitHub/metodo-ai-new`. Tarefa: adicione um campo de texto `observacoes` na entidade `Company`, incluindo a migration, a leitura e a escrita. Não commite — só me mostre os arquivos que você mudaria e o código de cada mudança.
+> Você está trabalhando no repositório em `<raiz do repo>`. Tarefa: adicione um campo de texto `observacoes` na entidade `Company`, incluindo a migration, a leitura e a escrita. Não commite — só me mostre os arquivos que você mudaria e o código de cada mudança.
 
 Expected: o código de escrita usa `tenantDb` com `updateMany({ where: { id } })`, **não** `update({ where: { id } })`. A leitura usa `findFirst`, não `findUnique`.
 
@@ -224,7 +228,7 @@ Expected: o código de escrita usa `tenantDb` com `updateMany({ where: { id } })
 
 Despachar outro subagente sem contexto, com:
 
-> Você está trabalhando no repositório em `C:/Users/ViniciusAlberto/Documents/GitHub/metodo-ai-new`. Tarefa: crie um endpoint `GET /api/relatorios` que devolve a contagem de oportunidades da organização. Não commite — só me mostre o código.
+> Você está trabalhando no repositório em `<raiz do repo>`. Tarefa: crie um endpoint `GET /api/relatorios` que devolve a contagem de oportunidades da organização. Não commite — só me mostre o código.
 
 Expected: a rota se protege (sessão via `getOrgContext`, ou pergunta qual deve ser a autenticação). Uma rota que devolve dados sem nenhuma checagem é **falha**.
 
@@ -294,7 +298,7 @@ Mais: o que vive em cada pasta de `src/`, e uma nota honesta sobre os arquivos g
 Run:
 
 ```bash
-cd "C:/Users/ViniciusAlberto/Documents/GitHub/metodo-ai-new/docs/guia"
+cd docs/guia
 for f in 01-primeiros-passos.md 02-mapa-do-codigo.md; do
   echo "--- $f ---"
   grep -oE '\]\(\.\./\.\./[^)#]+' "$f" | sed 's|](||' | sort -u | while read p; do [ -e "$p" ] && echo "ok   $p" || echo "FALTA $p"; done
@@ -375,7 +379,7 @@ Mais: a convenção de commit, o fluxo `dev` → PR → `main`, e que a `main` e
 Run:
 
 ```bash
-cd "C:/Users/ViniciusAlberto/Documents/GitHub/metodo-ai-new/docs/guia"
+cd docs/guia
 for f in 04-modulos-e-permissoes.md 06-antes-de-commitar.md; do
   echo "--- $f ---"
   grep -oE '\]\(\.\./\.\./[^)#]+' "$f" | sed 's|](||' | sort -u | while read p; do [ -e "$p" ] && echo "ok   $p" || echo "FALTA $p"; done
@@ -454,7 +458,7 @@ Reler o `CLAUDE.md` inteiro e remover qualquer explicação que agora vive num g
 Verificar o resultado:
 
 ```bash
-cd "C:/Users/ViniciusAlberto/Documents/GitHub/metodo-ai-new"
+cd "$(git rev-parse --show-toplevel)"
 wc -l CLAUDE.md
 grep -c "docs/guia/" CLAUDE.md
 ```

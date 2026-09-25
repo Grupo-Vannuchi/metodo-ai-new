@@ -209,26 +209,50 @@ npx prisma migrate deploy        # aplica as pendentes na ordem, idempotente
 ```
 Sempre **backup antes** de migração destrutiva. Confira com `npx prisma migrate status`.
 
-### Deploy do app na Hostinger (na ordem)
-```bash
-git pull origin main
-npm install          # se houver dependência nova (ex.: o Baixador adicionou @distube/ytdl-core)
-npx prisma generate  # se o schema mudou
-npm run build        # rebuild do Next
-mkdir -p tmp && touch tmp/restart.txt   # reinicia o Passenger
+### Deploy — automático a cada push na `main`
+
+A Hostinger observa a `main` e implanta sozinha. Confirmado pelo log de deploy de 25/09/2026, o
+pipeline dela é:
+
 ```
+npm install          # instala dependências novas — 669 pacotes no deploy de 25/09
+  └─ postinstall     # prisma generate (client v6.19.3)
+npm run build        # next build, com TypeScript incluso — 145 páginas
+```
+
+**Consequência prática:** mergear na `main` **é** publicar. Não existe um passo manual depois; o
+portão é o PR com o CI verde, e depois dele não há revisão humana entre o merge e a produção. Por
+isso a `main` exige PR e `enforce_admins` está ligado — sem isso, um push direto vai para o ar.
+
+> **O que o deploy automático NÃO faz: `prisma migrate deploy`.** Ele não aparece no pipeline. Se um
+> merge trouxer mudança de schema, o **código novo sobe e o banco fica para trás** — e ninguém é
+> avisado, porque não há passo manual onde alguém perceberia.
+>
+> Antes de mergear qualquer coisa que toque `prisma/schema.prisma`, aplique a migration no Supabase
+> **primeiro** (veja "Migrações" acima) e só então faça o merge. A ordem importa: schema novo com
+> código antigo costuma funcionar; código novo com schema antigo quebra.
+
 **Gotchas que já causaram incidente:**
-1. **500 em todo o app após deploy** = faltou `prisma generate` + `npm run build` (o servidor continua com o client/bundle antigos). O `git pull` sozinho não muda nada.
-2. **Dependência nova** exige `npm install` no servidor (não só build).
-3. **Migração destrutiva rodou mas o app 500** = o app não foi rebuildado com o código novo (código antigo × schema novo).
-4. **Logs do app:** `console.error` vai pro log de erro do site (hPanel → Logs de erro, ou `~/domains/<dominio>/logs/`). Procure prefixos como `[evolution] send`, `[inbox]`, `[downloader]`, `[ingest]`.
+1. **500 em todo o app após deploy** = o build não pegou o código novo. Com o deploy automático isso
+   vira raro, mas confira o log do hPanel antes de investigar outra coisa.
+2. **Migração esquecida** = o cenário do aviso acima. É o mais provável hoje, justamente porque o
+   resto virou automático e este passo não.
+3. **Logs do app:** `console.error` vai pro log de erro do site (hPanel → Logs de erro, ou
+   `~/domains/<dominio>/logs/`). Procure prefixos como `[evolution] send`, `[inbox]`, `[downloader]`,
+   `[ingest]`.
 
-### Crons — nenhum está agendado, e nem todos precisam estar
+### Crons — só o `extractions` deve rodar
 
-O projeto tinha um `vercel.json` declarando 4 crons, mas produção nunca rodou no Vercel — era
-resquício e foi removido. Nada agenda esses jobs: só rodam se virarem cron jobs do hPanel batendo
-nos endpoints. **Nenhum dos quatro produz sintoma visível quando não roda** — é por isso que
-passaram despercebidos. O que cada um realmente vale:
+**Nada no repositório agenda esses jobs.** O `vercel.json` que os declarava era resquício de uma fase
+Vercel que nunca foi produção, e foi removido. Eles só executam se existir um cron job do hPanel
+batendo no endpoint com o header certo — o repositório nunca vai agendá-los, qualquer que seja o
+estado deles hoje.
+
+**Nenhum dos quatro produz sintoma visível quando não roda**, e é por isso que passaram meses
+despercebidos. Falha de manutenção é silenciosa por definição: o mural esconde post vencido por
+consulta, leads acumulam invisíveis, e ninguém sente falta de uma notificação que nunca existiu.
+
+A decisão de 25/09/2026 e o que cada um realmente vale:
 
 | Endpoint | Vale agendar? | Por quê |
 |---|---|---|
@@ -240,6 +264,30 @@ passaram despercebidos. O que cada um realmente vale:
 Os quatro exigem `Authorization: Bearer $CRON_SECRET` (guard em `src/lib/cron-auth.ts`) e respondem
 **401 sem o header** — inclusive quando `CRON_SECRET` não está setado, então defina-o no env de
 produção antes de agendar qualquer um. Comandos para o hPanel → Cron Jobs:
+
+> **Decisão de 25/09/2026: agendar apenas o `extractions`.** A prospecção do Google Places está em
+> uso real, então há dado de terceiro acumulando enquanto o código declara retenção de 30 dias. Os
+> outros três ficam desligados — o mural já esconde post vencido por consulta, o digest é
+> funcionalidade que ninguém sentiu falta, e o `campaigns` é no-op sem `QSTASH_TOKEN`. Ligar rotina de
+> exclusão automática num sistema sem alerta é adicionar risco sem benefício correspondente.
+>
+> **Antes da primeira execução, conte o que será apagado.** Apagar um `ExtractionJob` leva os
+> `ExtractedLead` junto (`onDelete: Cascade`). Lead já importado é seguro — a importação cria um
+> `Company` próprio no CRM. Lead **nunca importado** com mais de 30 dias some para sempre:
+>
+> ```sql
+> SELECT count(DISTINCT j.id)                              AS jobs_a_apagar,
+>        count(l.id)                                       AS leads_a_apagar,
+>        count(l.id) FILTER (WHERE l."importedAt" IS NULL) AS nunca_importados,
+>        min(j."createdAt")::date                          AS mais_antigo
+> FROM extraction_jobs j
+> LEFT JOIN extracted_leads l ON l."jobId" = j.id
+> WHERE j."createdAt" < now() - interval '30 days';
+> ```
+>
+> Se `nunca_importados` for relevante, avise o time antes — a retenção diz que esse dado não deveria
+> estar lá, mas alguém pode estar contando com ele. Depois rode o endpoint **uma vez à mão** (comando
+> abaixo) para fazer a limpeza acumulada de forma observada, e só então agende.
 
 ```bash
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/extractions     # */10 * * * *
@@ -268,6 +316,33 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/cam
 ---
 
 ## 10. Pendências / próximos passos
+
+### Operacionais — o que está esperando alguém (levantado em 24-25/09/2026)
+
+Diferente da lista de produto abaixo, estes têm próximo passo conhecido e escrito.
+
+1. **`CRON_SECRET` em produção e agendar o `extractions`.** Os quatro `/api/cron/*` respondem 401 sem
+   o segredo definido no env. Só o `extractions` deve ser agendado — o porquê, a consulta que conta o
+   que será apagado, e o cuidado com a primeira execução estão no [§8](#8-runbook-de-produção--leia-antes-de-qualquer-deploy).
+   **Conte antes de agendar:** a primeira execução limpa tudo que acumulou desde que a prospecção
+   entrou no ar, de uma vez, e leads nunca importados não voltam.
+
+2. **Verificação de assinatura no webhook genérico.** `src/app/api/webhooks/[provider]/route.ts`
+   carrega um `TODO(P9)` para validar a assinatura do provedor (ex.: `X-Hub-Signature-256` do Meta)
+   antes de confiar no payload. O webhook do Evolution já resolve isso de outro jeito — autentica pelo
+   token no próprio caminho da URL — e serve de referência de que o problema tem solução aqui dentro.
+   É a pendência de maior prioridade desta lista.
+
+3. **Decidir a versão do Node.** Produção roda **20.x** e o `.nvmrc` acompanha, mas a Hostinger suporta
+   22.x. O piso real da árvore hoje é 20.18.1 (`@distube/ytdl-core`) — perto do topo da linha 20. Subir
+   para 22 dá folga e continua LTS. `npm run check:node` lê o `.nvmrc`, então a checagem acompanha
+   sozinha a decisão.
+
+4. **`package.json#prisma` está depreciado.** O log de deploy avisa que a chave sai no Prisma 7 e pede
+   migração para um `prisma.config.ts`. Não urge — mas é quebra garantida num upgrade futuro.
+
+### Produto
+
 
 - **Cobrança real:** hoje é simulada (sem gateway). Ligar Stripe/pagamento é dívida em aberto.
 - **Baixador:** YouTube via ytdl-core é frágil; considerar `yt-dlp` na VPS. Ideias: TikTok, baixar só áudio (MP3), histórico.

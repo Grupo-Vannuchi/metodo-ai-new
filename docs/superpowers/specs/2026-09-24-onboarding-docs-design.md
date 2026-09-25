@@ -1,6 +1,6 @@
 # Documentação de ambientação para dev novo — design
 
-**Data:** 2026-09-24 · **Status:** aprovado, aguardando implementação
+**Data:** 2026-09-24 · **Status:** implementado (25/09/2026). Mantido como registro da decisão — o estado atual vive no README e nos guias.
 
 ---
 
