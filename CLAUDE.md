@@ -34,11 +34,9 @@ npm run db:studio               # Prisma Studio
 npm run typecheck && npm run lint && npm run build && npm run check:isolation && npm run check:node
 ```
 
-`check:isolation` sobe dados reais no Postgres local e valida o isolamento multi-tenant — se ele
-falhar, a mudança está furando a fronteira de segurança. Não existe suíte de testes unitários no
-repositório; `check:isolation` é a rede de proteção automatizada que existe.
-
-> O que cada uma das cinco checagens prova e o que fazer quando falha: [docs/guia/06-antes-de-commitar.md](docs/guia/06-antes-de-commitar.md).
+Se `check:isolation` falhar, a mudança abriu uma brecha real entre organizações — não existe
+suíte de testes unitários aqui, então é a única rede automatizada dessa fronteira. O que cada uma
+das cinco checagens prova (e o que fazer quando falha): [docs/guia/06-antes-de-commitar.md](docs/guia/06-antes-de-commitar.md).
 
 ## Regras invioláveis
 
@@ -46,7 +44,8 @@ repositório; `check:isolation` é a rede de proteção automatizada que existe.
 Nunca consulte tabela de negócio sem esse filtro.
 
 > **Vai escrever qualquer acesso ao banco? PARE e leia [docs/guia/03-multi-tenancy.md](docs/guia/03-multi-tenancy.md) antes.**
-> O `$extends` do `tenantDb` cobre 8 operações e deixa 5 passarem sem filtro de organização. Saber quais é a diferença entre isolar e vazar.
+> O `$extends` do `tenantDb` cobre só `create`/`createMany` + as 8 de `WHERE_OPS` (10 ao todo) —
+> qualquer outra operação do Prisma passa **sem filtro de organização**.
 
 - Dados sempre pela DAL em [src/lib/queries/](src/lib/queries/), usando `tenantDb(orgId)` de [src/lib/tenant-db.ts](src/lib/tenant-db.ts).
 - Trabalho por id: `findFirst` + `updateMany`/`deleteMany` com `{ id }` — nunca `findUnique`/`update`/`delete`/`upsert` direto.
@@ -60,6 +59,8 @@ Nunca consulte tabela de negócio sem esse filtro.
 - [src/config/modules.ts](src/config/modules.ts) — módulos, telas, features, preços (`hasModule`, `hasFeatureByModules`, `assertFeatureByModules`, `availableScreens`).
 - [src/config/screens.ts](src/config/screens.ts) — telas gateáveis. [src/lib/access.ts](src/lib/access.ts) resolve permissão por membro (`requireScreen`, `requireModule`).
 - [src/config/limits.ts](src/config/limits.ts) — limites globais (não existem mais planos).
+- Gating cross-módulo: o **server** resolve `hasModule(...)` e passa como prop pro client — nunca o inverso.
+- Desinstalar módulo = `OrganizationModule` vira `DORMANT`, **nunca apagar**.
 
 **3. Paridade de i18n.** `src/messages/pt.json` e `src/messages/en.json` têm exatamente as mesmas
 chaves (2597 hoje). Adicionou de um lado, adiciona do outro.
@@ -89,9 +90,8 @@ protege sozinha.
 > **Vai criar ou alterar rota em `src/app/api/`? PARE e leia [docs/guia/05-rotas-e-jobs.md](docs/guia/05-rotas-e-jobs.md) antes.**
 > Dois dos quatro endpoints de cron já nasceram sem autenticação nenhuma.
 
-**Produção travada em Node 20.x.** A Hostinger não permite trocar a versão e `engines` no
-`package.json` é só aviso pro npm — sem `check:node`, a quebra só apareceria no deploy. O `.nvmrc` é a
-fonte da verdade do major. Detalhe: [docs/guia/06-antes-de-commitar.md](docs/guia/06-antes-de-commitar.md).
+**Produção travada em Node 20.x.** A Hostinger não permite trocar; `engines` no `package.json` é só
+aviso pro npm. `.nvmrc` é a fonte da verdade do major ([detalhe](docs/guia/06-antes-de-commitar.md)).
 
 **Variáveis de ambiente.** Nunca leia `process.env.X` direto no código da app — declare em
 [src/lib/env.ts](src/lib/env.ts) (zod) e importe de lá. Obrigatórias faltando derrubam o boot.

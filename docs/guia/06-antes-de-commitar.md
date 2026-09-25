@@ -9,28 +9,34 @@ e uma falha específica pede uma reação diferente.
 npm run typecheck && npm run lint && npm run build && npm run check:isolation && npm run check:node
 ```
 
-É exatamente a sequência que o CI roda em todo push/PR para `dev` e `main` — ver
-[.github/workflows/ci.yml](../../.github/workflows/ci.yml). Rodar local antes de commitar não é
-redundância: é descobrir a falha em segundos, na sua máquina, em vez de minutos depois, na fila do
-CI.
+São as mesmas cinco checagens que o CI roda em todo push/PR para `dev` e `main`, mas **em outra
+ordem** e com um passo a mais no meio — ver [.github/workflows/ci.yml](../../.github/workflows/ci.yml):
+`typecheck` → `lint` → `check:node` → `prisma migrate deploy` → `build` → `check:isolation`. Rodar
+local antes de commitar não é redundância: é descobrir a falha em segundos, na sua máquina, em vez
+de minutos depois, na fila do CI.
 
 | Comando | O que prova | Quando falha |
 |---|---|---|
 | `typecheck` | o código bate com os tipos declarados | leia o caminho e a linha do erro; se apontar para dentro de `.next/`, pare o `next dev` e rode de novo — é build cacheado, não o seu código |
 | `lint` | regras de estilo e de React (`eslint-config-next`) | veja "Os avisos conhecidos" abaixo antes de investigar um aviso novo |
 | `build` | o app compila e empacota de verdade, com tudo que `typecheck` sozinho não pega | quase sempre import que não resolve ou API de servidor usada dentro de um client component |
-| `check:isolation` | **nenhuma organização enxerga ou afeta dado de outra** | **a mais séria das cinco** — ver "check:isolation" abaixo |
+| `check:isolation` | que o Postgres respeita um filtro `organizationId` escrito à mão — **não** que `tenantDb`, a DAL ou as actions estão de fato passando esse filtro | **a mais séria das cinco** — ver "check:isolation" abaixo |
 | `check:node` | toda a árvore de dependências roda no Node de produção | ver "check:node" abaixo |
 
 ## `check:isolation`
 
 Isolamento multi-tenant é [a regra inviolável nº 1 do `CLAUDE.md`](../../CLAUDE.md) e o
 [guia 03](03-multi-tenancy.md) é onde o mecanismo (`tenantDb`, `TENANT_MODELS`, o que o `$extends`
-cobre e o que não cobre) está explicado em detalhe — não repetido aqui. O que importa neste guia é
-o que fazer quando o comando falha: **se `check:isolation` ficou vermelho, a mudança que você
-acabou de fazer abriu um jeito de uma organização ler ou escrever dado de outra.** Não é um teste
-chato nem instável — é a única rede automatizada de proteção que o repositório tem para essa
-fronteira (não há suíte de testes unitários aqui).
+cobre e o que não cobre, e exatamente o que este script prova) está explicado em detalhe — não
+repetido aqui. Resumo que importa pra reagir a uma falha: `scripts/check-isolation.ts` usa o
+Prisma **cru**, com `where: { organizationId: ... }` escrito à mão — ele prova que o Postgres
+honra esse filtro quando a query o inclui, não que o `$extends` de `tenantDb`, a DAL ou as actions
+o incluem de fato. **Só o vermelho é garantia de algo: se `check:isolation` ficou vermelho, a
+mudança que você acabou de fazer quebrou algo real** (o próprio Postgres, uma chave única, ou a
+asserção que você mexeu). Verde não é prova de que a aplicação está isolando — é, ainda assim, a
+única rede automatizada que o repositório tem para essa fronteira (não há suíte de testes
+unitários aqui), então tratar uma falha como instável em vez de investigar é o erro mais caro que
+dá pra cometer aqui.
 
 Pré-requisito: Postgres local rodando (`docker compose up -d postgres`) e um `.env` válido — o
 script lê `DATABASE_URL` direto
@@ -98,12 +104,14 @@ Rotas para o servidor de produção (deploy, migração manual, runbook completo
 
 ## Resumo
 
-- Os cinco comandos rodam nesta ordem no CI; rodar local antes só adianta o feedback.
+- Os cinco comandos rodam no CI, na mesma composição mas em ordem diferente e com `prisma migrate
+  deploy` no meio; rodar local antes só adianta o feedback.
 - `typecheck`/`build` pegam erro de tipo e de compilação de verdade; `.next/` velho engana o
   `typecheck` — reinicie o dev server se a linha apontada não existir no seu editor.
 - `lint`: 4 avisos conhecidos hoje (3 sobre `watch()`, 1 var não usada) — nenhum bloqueia; um
   número diferente é sinal de algo novo.
-- `check:isolation` vermelho = fronteira de segurança furada, não teste instável. Ver
+- `check:isolation` vermelho = fronteira de segurança furada, não teste instável. Verde prova que
+  o Postgres respeita filtro explícito, não que a aplicação sempre o passa. Ver
   [guia 03](03-multi-tenancy.md).
 - `check:node` vermelho = dependência incompatível com o Node 20.x de produção. Troque ou fixe
   versão.

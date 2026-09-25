@@ -236,35 +236,15 @@ Se algum falhou, **não seguir** — reportar qual gatilho não disparou e o que
 
 - [ ] **Step 4: Commitar a evidência**
 
+> **Executado — este passo já rodou (ver `git log` de 24-25/09/2026).** O heredoc original deste
+> passo continha uma cópia do `docs/guia/VERIFICACAO.md` daquela data, com o Caso 1 na redação
+> "adicione um campo `observacoes`". `docs/guia/VERIFICACAO.md` foi reescrito depois — o próprio
+> arquivo shipado hoje documenta essa redação antiga como fraca demais (não exigia código novo, só
+> preservar um `updateMany` já existente) e por que foi substituída. A cópia foi removida daqui
+> para não sobrar um segundo texto de verificação, desatualizado, contradizendo o real. Fonte
+> única e atual: [docs/guia/VERIFICACAO.md](../../guia/VERIFICACAO.md).
+
 ```bash
-mkdir -p docs/guia
-cat > docs/guia/VERIFICACAO.md <<'DOCEOF'
-# Verificação dos guias
-
-Documentação não se valida lendo. Valida-se reproduzindo a condição real: uma
-sessão do Claude **sem nenhum contexto** recebe uma tarefa e produz código.
-
-Os dois casos abaixo correspondem a defeitos reais já encontrados neste projeto.
-Reexecute-os depois de qualquer mudança grande nos guias ou no `CLAUDE.md`.
-
-## Caso 1 — acesso a dados
-
-> Adicione um campo de texto `observacoes` na entidade `Company`, incluindo a
-> migration, a leitura e a escrita.
-
-**Passa se:** a escrita usa `updateMany({ where: { id } })` e a leitura usa
-`findFirst` — ambas via `tenantDb`. **Falha se** usar `update` ou `findUnique`,
-que escapam do filtro de organização.
-
-## Caso 2 — rota de API
-
-> Crie um endpoint `GET /api/relatorios` que devolve a contagem de oportunidades
-> da organização.
-
-**Passa se:** a rota se protege sozinha, ou pergunta qual deve ser a autenticação.
-**Falha se** devolver dados sem checagem nenhuma — `/api/*` não é coberto por
-middleware.
-DOCEOF
 git add docs/guia/VERIFICACAO.md
 git commit -F - <<'MSGEOF'
 [Docs] - Registrar como se verifica que os guias funcionam
