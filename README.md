@@ -209,19 +209,37 @@ npx prisma migrate deploy        # aplica as pendentes na ordem, idempotente
 ```
 Sempre **backup antes** de migração destrutiva. Confira com `npx prisma migrate status`.
 
-### Deploy do app na Hostinger (na ordem)
-```bash
-git pull origin main
-npm install          # se houver dependência nova (ex.: o Baixador adicionou @distube/ytdl-core)
-npx prisma generate  # se o schema mudou
-npm run build        # rebuild do Next
-mkdir -p tmp && touch tmp/restart.txt   # reinicia o Passenger
+### Deploy — automático a cada push na `main`
+
+A Hostinger observa a `main` e implanta sozinha. Confirmado pelo log de deploy de 25/09/2026, o
+pipeline dela é:
+
 ```
+npm install          # instala dependências novas — 669 pacotes no deploy de 25/09
+  └─ postinstall     # prisma generate (client v6.19.3)
+npm run build        # next build, com TypeScript incluso — 145 páginas
+```
+
+**Consequência prática:** mergear na `main` **é** publicar. Não existe um passo manual depois; o
+portão é o PR com o CI verde, e depois dele não há revisão humana entre o merge e a produção. Por
+isso a `main` exige PR e `enforce_admins` está ligado — sem isso, um push direto vai para o ar.
+
+> **O que o deploy automático NÃO faz: `prisma migrate deploy`.** Ele não aparece no pipeline. Se um
+> merge trouxer mudança de schema, o **código novo sobe e o banco fica para trás** — e ninguém é
+> avisado, porque não há passo manual onde alguém perceberia.
+>
+> Antes de mergear qualquer coisa que toque `prisma/schema.prisma`, aplique a migration no Supabase
+> **primeiro** (veja "Migrações" acima) e só então faça o merge. A ordem importa: schema novo com
+> código antigo costuma funcionar; código novo com schema antigo quebra.
+
 **Gotchas que já causaram incidente:**
-1. **500 em todo o app após deploy** = faltou `prisma generate` + `npm run build` (o servidor continua com o client/bundle antigos). O `git pull` sozinho não muda nada.
-2. **Dependência nova** exige `npm install` no servidor (não só build).
-3. **Migração destrutiva rodou mas o app 500** = o app não foi rebuildado com o código novo (código antigo × schema novo).
-4. **Logs do app:** `console.error` vai pro log de erro do site (hPanel → Logs de erro, ou `~/domains/<dominio>/logs/`). Procure prefixos como `[evolution] send`, `[inbox]`, `[downloader]`, `[ingest]`.
+1. **500 em todo o app após deploy** = o build não pegou o código novo. Com o deploy automático isso
+   vira raro, mas confira o log do hPanel antes de investigar outra coisa.
+2. **Migração esquecida** = o cenário do aviso acima. É o mais provável hoje, justamente porque o
+   resto virou automático e este passo não.
+3. **Logs do app:** `console.error` vai pro log de erro do site (hPanel → Logs de erro, ou
+   `~/domains/<dominio>/logs/`). Procure prefixos como `[evolution] send`, `[inbox]`, `[downloader]`,
+   `[ingest]`.
 
 ### Crons — nenhum está agendado, e nem todos precisam estar
 

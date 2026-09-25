@@ -100,15 +100,14 @@ aviso pro npm. `.nvmrc` é a fonte da verdade do major ([detalhe](docs/guia/06-a
 
 ## Convenções
 
-- **Branch:** trabalha-se na `dev`. `main` = produção (o deploy sai da `main`).
+- **Branch:** trabalha-se na `dev`. **Mergear na `main` publica em produção automaticamente** —
+  a Hostinger implanta a cada push (`npm install` → `prisma generate` → `npm run build`). Ela **não**
+  roda `prisma migrate deploy`: mudou schema, aplique a migration no Supabase **antes** do merge.
 - **Commits:** `[ÁREA] - Verbo + Tarefa`, corpo estruturado, terminando com a linha de co-autoria.
   Ex.: `[CRM] - Adiciona autofill de CEP na empresa`.
 - **Sem drawer para criação no CRM** — foi testado e descartado a pedido.
-- **Produção é `https://metodotia.com`**, na Hostinger (Passenger), com banco no Supabase e Evolution
-  em VPS separada. **Não é Vercel, e não há mais projeto lá** — o que existia era resquício da escolha
-  de plataforma e foi apagado em 24/09/2026, depois de implantar sozinho e servir o app em paralelo
-  com a produção real. Migração em produção é manual (`prisma migrate deploy`) — nunca `migrate dev`
-  contra produção. Veja o runbook no §8 do README antes de qualquer deploy.
+- **Produção é `https://metodotia.com`** — Hostinger (Passenger), banco no Supabase, Evolution em VPS
+  separada. Não é Vercel. **Nunca** rode `migrate dev` contra produção. Runbook no §8 do README.
 - **Mexeu numa fonte de verdade, atualize o guia no mesmo commit.** `tenant-db.ts` e `lib/queries/` →
   guia 03; `config/modules.ts`, `screens.ts`, `limits.ts` → guia 04; `cron-auth.ts`, `proxy.ts`,
   `app/api/` → guia 05; scripts de validação do `package.json` → guia 06. Guia desatualizado é pior
