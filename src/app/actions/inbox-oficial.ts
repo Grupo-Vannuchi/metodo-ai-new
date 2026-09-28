@@ -66,10 +66,10 @@ export async function sendCloudText(
   text: string,
   replyToMessageId?: string | null,
 ): Promise<CloudActionResult> {
-  const body = text.trim().slice(0, MAX_TEXT);
-  if (!body) return { ok: false, error: "empty" };
   const o = await ownedConversation(conversationId);
   if (!o.ok) return o;
+  const body = text.trim().slice(0, MAX_TEXT);
+  if (!body) return { ok: false, error: "empty" };
   if (!isWindowOpen(o.convo.lastInboundAt)) return { ok: false, error: "window_closed" };
   try {
     let quotedWamid: string | null = null;
@@ -86,15 +86,21 @@ export async function sendCloudText(
     }
     const res = await callSend(o.number, textPayload(o.convo, body, quotedWamid));
     if (!res.ok) return { ok: false, error: res.category, detail: res.message };
-    await recordOutbound(o.orgId, {
-      conversationId,
-      wamid: res.wamid,
-      type: "TEXT",
-      body,
-      quotedWamid,
-      quotedBody,
-      sentById: o.userId,
-    });
+    // A Meta já aceitou: uma falha ao gravar não pode virar erro pro vendedor
+    // (ele reenviaria e duplicaria a mensagem pro cliente).
+    try {
+      await recordOutbound(o.orgId, {
+        conversationId,
+        wamid: res.wamid,
+        type: "TEXT",
+        body,
+        quotedWamid,
+        quotedBody,
+        sentById: o.userId,
+      });
+    } catch (error) {
+      console.error("[wa-cloud] sent but not recorded", { wamid: res.wamid, conversationId }, error);
+    }
     return { ok: true };
   } catch (error) {
     console.error("[wa-cloud] send text failed", error);
@@ -125,15 +131,21 @@ export async function sendCloudTemplate(
       templatePayload(o.convo, def.name, def.language, buildTemplateComponents(def, clean)),
     );
     if (!res.ok) return { ok: false, error: res.category, detail: res.message };
-    await recordOutbound(o.orgId, {
-      conversationId,
-      wamid: res.wamid,
-      type: "TEMPLATE",
-      body: renderTemplateText(def, clean),
-      templateName: def.name,
-      templateLanguage: def.language,
-      sentById: o.userId,
-    });
+    // A Meta já aceitou: uma falha ao gravar não pode virar erro pro vendedor
+    // (ele reenviaria e duplicaria a mensagem pro cliente).
+    try {
+      await recordOutbound(o.orgId, {
+        conversationId,
+        wamid: res.wamid,
+        type: "TEMPLATE",
+        body: renderTemplateText(def, clean),
+        templateName: def.name,
+        templateLanguage: def.language,
+        sentById: o.userId,
+      });
+    } catch (error) {
+      console.error("[wa-cloud] sent but not recorded", { wamid: res.wamid, conversationId }, error);
+    }
     return { ok: true };
   } catch (error) {
     console.error("[wa-cloud] send template failed", error);

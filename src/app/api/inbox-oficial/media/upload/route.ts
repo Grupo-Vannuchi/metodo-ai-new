@@ -82,14 +82,21 @@ export async function POST(req: Request) {
       await deleteMedia(stored.url);
       return fail(502, res.category, res.message);
     }
-    await recordOutbound(ctx.organizationId, {
-      conversationId,
-      wamid: res.wamid,
-      type: TYPE_FOR[check.kind],
-      body: caption || null,
-      media: { url: stored.url, mime: check.mime, name: displayName, size: stored.size },
-      sentById: ctx.userId,
-    });
+    // A Meta já aceitou: a partir daqui a mídia enviada não pode mais ser apagada,
+    // e uma falha ao gravar não pode virar erro pro vendedor (ele reenviaria e
+    // duplicaria a mensagem pro cliente).
+    try {
+      await recordOutbound(ctx.organizationId, {
+        conversationId,
+        wamid: res.wamid,
+        type: TYPE_FOR[check.kind],
+        body: caption || null,
+        media: { url: stored.url, mime: check.mime, name: displayName, size: stored.size },
+        sentById: ctx.userId,
+      });
+    } catch (error) {
+      console.error("[wa-cloud] sent but not recorded", { wamid: res.wamid, conversationId }, error);
+    }
     return Response.json({ ok: true });
   } catch (error) {
     if (storedUrl) await deleteMedia(storedUrl);
