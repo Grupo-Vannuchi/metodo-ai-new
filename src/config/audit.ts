@@ -47,6 +47,10 @@ export const AUDIT_ACTIONS = [
   "assistant.automation_created",
   "assistant.contact_tagged",
   "assistant.team_message_sent",
+  "whatsapp_cloud.connected",
+  "whatsapp_cloud.token_updated",
+  "whatsapp_cloud.disconnected",
+  "whatsapp_cloud.removed",
 ] as const;
 
 export const AUDIT_ENTITIES = [
@@ -63,6 +67,7 @@ export const AUDIT_ENTITIES = [
   "TeamChat",
   "companies",
   "contacts",
+  "WhatsappCloudNumber",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
