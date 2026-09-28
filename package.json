@@ -20,6 +20,7 @@
     "db:studio": "prisma studio",
     "check:isolation": "tsx --env-file=.env scripts/check-isolation.ts",
     "check:node": "tsx scripts/check-node.ts",
+    "test:wa-cloud": "tsx --test src/lib/whatsapp-cloud/__tests__/*.test.ts",
     "backfill:pipelines": "tsx --env-file=.env scripts/backfill-pipelines.ts",
     "db:dump": "docker exec metodoai-db pg_dump -U metodoai -d metodoai --clean --if-exists --no-owner --no-privileges > prisma/backups/snapshot.sql",
     "db:restore": "docker exec -i metodoai-db psql -U metodoai -d metodoai < prisma/backups/snapshot.sql"
