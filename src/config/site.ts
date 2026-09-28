@@ -35,10 +35,14 @@ export type SiteConfig = {
   name: string;
   /** Legal entity name (footer / legal copy). */
   legalName: string;
+  /** Trade name registered for the legal entity (Brazil: nome fantasia). Optional. */
+  tradeName?: string;
   /** Year the company was founded. */
   foundedYear: number;
   /** Company registration number (Brazil: CNPJ). Optional. */
   registration?: string;
+  /** Registered address, one line (footer / legal copy). Optional. */
+  address?: string;
 
   contact: {
     email: string;
@@ -67,11 +71,16 @@ export type SiteConfig = {
 
 export const siteConfig: SiteConfig = {
   name: "MétodoAI",
-  legalName: "MétodoAI Tecnologia LTDA",
+  // As registered with the Receita Federal — Meta business verification checks
+  // that the site shows the same legal entity as the Business Manager.
+  legalName: "MORAES & VANNUCHI LTDA",
+  tradeName: "N8 Media Company",
   foundedYear: 2026,
+  registration: "43.158.706/0001-99",
+  address: "Rua Joaquim Távora, 93, Sala 93 – Vila Mathias, Santos/SP, CEP 11075-300",
 
   contact: {
-    email: "contato@metodoai.com.br",
+    email: "thiago.vannuchi@grupovannuchi.com.br",
     phone: "+55 (11) 90000-0000",
     whatsapp: {
       number: "5511900000000",
