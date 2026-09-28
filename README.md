@@ -97,7 +97,7 @@ src/
                        #   loja, settings/*, hr/*, supplies/*, crm/* ...)
     api/               # webhooks (evolution/genérico), cron, jobs, inbox,
                        #   assistant, downloader/fetch, team-chat, ...
-    (landing/pricing)  # vitrine pública
+    (landing/pricing/privacy)  # vitrine pública + Política de Privacidade (URL da Meta)
   components/          # UI por domínio (app, crm, finance, hr, supplies,
                        #   campaigns, inbox, downloader, modules, settings, ...)
   config/              # modules.ts, limits.ts, screens.ts (FONTES DE VERDADE)
@@ -219,6 +219,11 @@ npm install          # instala dependências novas — 669 pacotes no deploy de 
   └─ postinstall     # prisma generate (client v6.19.3)
 npm run build        # next build, com TypeScript incluso — 145 páginas
 ```
+
+**O merge derruba o site por ~30 a 60 segundos.** Medido em 25/09/2026: logo após um merge o
+domínio devolveu timeout, e voltou a responder 200 cerca de 30s depois — é a janela do `npm
+install` + `next build` + reinício do Passenger. Não é erro; é como o deploy automático funciona.
+Vale considerar o horário antes de mergear algo no meio do expediente dos clientes.
 
 **Consequência prática:** mergear na `main` **é** publicar. Não existe um passo manual depois; o
 portão é o PR com o CI verde, e depois dele não há revisão humana entre o merge e a produção. Por
