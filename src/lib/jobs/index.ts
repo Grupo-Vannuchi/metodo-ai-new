@@ -3,6 +3,7 @@ import { dispatchCampaignBatch } from "@/lib/dispatch";
 import { runExtractionBatch } from "@/lib/prospecting/runner";
 import { runWhatsappMediaJob, type WhatsappMediaJob } from "@/lib/whatsapp/media";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
+import { downloadInboundMedia, type WhatsappCloudMediaJob } from "@/lib/whatsapp-cloud/media";
 
 /**
  * Job registry. Each key maps to a handler invoked by `/api/jobs/<job>` after
@@ -47,5 +48,12 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
     const job = payload as WhatsappMediaJob;
     if (!job?.messageId || !job?.connectionId || !job?.key?.id) return;
     await runWhatsappMediaJob(job);
+  },
+
+  /** Download an official WhatsApp (Cloud API) inbound media into storage. */
+  "whatsapp-cloud-media": async (payload) => {
+    const job = payload as WhatsappCloudMediaJob;
+    if (!job?.organizationId || !job?.messageId) return;
+    await downloadInboundMedia(job.organizationId, job.messageId);
   },
 };
