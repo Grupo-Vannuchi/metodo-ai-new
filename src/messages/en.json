@@ -562,6 +562,133 @@
       "unknown": "Couldn't open the conversation."
     }
   },
+  "inboxOficial": {
+    "title": "Inbox (Official)",
+    "subtitle": "WhatsApp through Meta's official API.",
+    "manageNumber": "Official number",
+    "backToConversations": "Back to chats",
+    "numberError": "Your official number has an error: {error}",
+    "numberInactive": "Your official number is disconnected.",
+    "fixInSettings": "Open settings",
+    "close": "Close",
+    "connect": {
+      "title": "Connect official number",
+      "intro": "Copy the details from Meta's dashboard (WhatsApp → API Setup).",
+      "phoneNumberId": "Phone Number ID",
+      "wabaId": "WABA ID (WhatsApp Business account)",
+      "token": "Access token",
+      "tokenHint": "Use a System User's permanent token. The API Setup token expires in 24h.",
+      "pin": "Two-step verification PIN (optional)",
+      "pinHint": "Only needed to register a real number. Not stored.",
+      "submit": "Connect",
+      "submitting": "Connecting…"
+    },
+    "number": {
+      "title": "Official number",
+      "status": {
+        "ACTIVE": "Active",
+        "INACTIVE": "Disconnected",
+        "ERROR": "Error"
+      },
+      "quality": "Quality: {quality}",
+      "newToken": "Replace token",
+      "newTokenHint": "Paste a new token to replace the current one.",
+      "saveToken": "Save token",
+      "refresh": "Refresh details",
+      "disconnect": "Disconnect",
+      "disconnectConfirm": "Disconnect this number? Chats are kept, but nothing is sent or received until you reconnect.",
+      "remove": "Remove number",
+      "removeConfirm": "Removing this number deletes all its chats, messages and media in MétodoAI. Continue?",
+      "done": "Done."
+    },
+    "templates": {
+      "title": "Message templates",
+      "hint": "Create and edit templates in Meta's WhatsApp Manager; they are synced here.",
+      "sync": "Sync templates",
+      "synced": "{count} templates synced.",
+      "empty": "No templates synced yet.",
+      "reason": "Reason: {reason}"
+    },
+    "inbox": {
+      "search": "Search",
+      "newConversation": "New chat",
+      "noConversations": "No chats yet.",
+      "selectConversation": "Select a chat",
+      "noMessages": "No messages.",
+      "placeholder": "Type a message",
+      "send": "Send",
+      "attach": "Attach file",
+      "sendTemplate": "Send template",
+      "replyingTo": "Replying",
+      "cancelReply": "Cancel reply",
+      "cancel": "Cancel",
+      "react": "React",
+      "reply": "Reply",
+      "failed": "Failed",
+      "windowOpen": "Window open · closes in {time}",
+      "windowClosed": "24h window closed — send an approved template to resume.",
+      "windowClosedHint": "Outside the 24h window only approved templates can be sent.",
+      "captionPlaceholder": "Caption (optional)",
+      "templateBadge": "Template",
+      "unsupportedMessage": "Unsupported message",
+      "media": "Media",
+      "back": "Back"
+    },
+    "picker": {
+      "title": "Send approved template",
+      "choose": "Choose a template",
+      "none": "No approved templates. Sync them in settings.",
+      "variable": "Variable {name} ({part})",
+      "part": {
+        "header": "header",
+        "body": "body"
+      },
+      "preview": "Preview",
+      "send": "Send template",
+      "unsupported": {
+        "media_header": "media header (not supported yet)",
+        "location_header": "location header (not supported yet)",
+        "button_variable": "button with variable (not supported yet)"
+      }
+    },
+    "newChat": {
+      "title": "New chat",
+      "hint": "The first message must be an approved template.",
+      "searchContact": "Search CRM contact",
+      "orPhone": "or type the number",
+      "phonePlaceholder": "+55 11 91234-5678",
+      "start": "Start",
+      "invalid": "Invalid WhatsApp number."
+    },
+    "errors": {
+      "unauthorized": "Session expired. Sign in again.",
+      "not_enabled": "The official inbox isn't enabled for this company.",
+      "invalid": "Invalid data. Check the fields.",
+      "number_exists": "You already have another official number. Remove it first.",
+      "phone_in_use": "This number is already connected to another account.",
+      "limit": "The company's WhatsApp number limit was reached.",
+      "not_found": "Not found.",
+      "meta_error": "Meta refused: {detail}",
+      "unknown": "Something went wrong. Try again.",
+      "no_number": "Your official number isn't active.",
+      "empty": "Type a message.",
+      "window_closed": "24h window closed. Send an approved template.",
+      "undeliverable": "This number can't receive WhatsApp.",
+      "rate_limited": "Meta throttled sending. Try again shortly.",
+      "pair_rate_limited": "Too many messages to this contact in a row. Wait a few seconds.",
+      "marketing_opt_out": "The contact opted out of marketing.",
+      "marketing_limited": "Meta limited marketing messages to this contact.",
+      "template_paused": "Template paused by Meta.",
+      "template_disabled": "Template disabled by Meta.",
+      "token_invalid": "Invalid token or missing permission. Update it in settings.",
+      "not_registered": "Number not registered with Meta. Enter the PIN in settings.",
+      "account_restricted": "WhatsApp account restricted by Meta.",
+      "invalid_params": "Meta refused the message data: {detail}",
+      "unsupported_type": "Format not accepted by Meta (use JPG, PNG, MP4, MP3, M4A, OGG, AAC, AMR, PDF, Office or TXT).",
+      "too_large": "File exceeds Meta's limit for this type.",
+      "file_empty": "Empty file."
+    }
+  },
   "access": {
     "title": "Access templates",
     "subtitle": "Create profiles (e.g. Sales, Legal) and choose which screens each one unlocks. Assign them to members on the Team page.",

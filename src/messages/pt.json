@@ -562,6 +562,133 @@
       "unknown": "Não foi possível abrir a conversa."
     }
   },
+  "inboxOficial": {
+    "title": "Conversas (Oficial)",
+    "subtitle": "WhatsApp pela API oficial da Meta.",
+    "manageNumber": "Número oficial",
+    "backToConversations": "Voltar às conversas",
+    "numberError": "Seu número oficial está com erro: {error}",
+    "numberInactive": "Seu número oficial está desconectado.",
+    "fixInSettings": "Abrir configurações",
+    "close": "Fechar",
+    "connect": {
+      "title": "Conectar número oficial",
+      "intro": "Copie os dados do painel da Meta (WhatsApp → Configuração da API).",
+      "phoneNumberId": "Phone Number ID",
+      "wabaId": "WABA ID (conta do WhatsApp Business)",
+      "token": "Token de acesso",
+      "tokenHint": "Use o token permanente de um Usuário do Sistema. O token da tela Configuração da API expira em 24h.",
+      "pin": "PIN da verificação em duas etapas (opcional)",
+      "pinHint": "Só para registrar um número real. Não é guardado.",
+      "submit": "Conectar",
+      "submitting": "Conectando…"
+    },
+    "number": {
+      "title": "Número oficial",
+      "status": {
+        "ACTIVE": "Ativo",
+        "INACTIVE": "Desconectado",
+        "ERROR": "Com erro"
+      },
+      "quality": "Qualidade: {quality}",
+      "newToken": "Trocar token",
+      "newTokenHint": "Cole um token novo para substituir o atual.",
+      "saveToken": "Salvar token",
+      "refresh": "Atualizar dados",
+      "disconnect": "Desconectar",
+      "disconnectConfirm": "Desconectar este número? As conversas ficam guardadas, mas nada é enviado nem recebido até reconectar.",
+      "remove": "Remover número",
+      "removeConfirm": "Remover este número apaga todas as conversas, mensagens e mídias dele no MétodoAI. Continuar?",
+      "done": "Pronto."
+    },
+    "templates": {
+      "title": "Modelos de mensagem",
+      "hint": "Crie e edite modelos no WhatsApp Manager da Meta; aqui eles são sincronizados.",
+      "sync": "Sincronizar modelos",
+      "synced": "{count} modelos sincronizados.",
+      "empty": "Nenhum modelo sincronizado ainda.",
+      "reason": "Motivo: {reason}"
+    },
+    "inbox": {
+      "search": "Buscar",
+      "newConversation": "Nova conversa",
+      "noConversations": "Nenhuma conversa ainda.",
+      "selectConversation": "Selecione uma conversa",
+      "noMessages": "Sem mensagens.",
+      "placeholder": "Escreva uma mensagem",
+      "send": "Enviar",
+      "attach": "Anexar arquivo",
+      "sendTemplate": "Enviar modelo",
+      "replyingTo": "Respondendo",
+      "cancelReply": "Cancelar resposta",
+      "cancel": "Cancelar",
+      "react": "Reagir",
+      "reply": "Responder",
+      "failed": "Falhou",
+      "windowOpen": "Janela aberta · fecha em {time}",
+      "windowClosed": "Janela de 24h fechada — envie um modelo aprovado para retomar.",
+      "windowClosedHint": "Fora da janela de 24h só é possível enviar modelo aprovado.",
+      "captionPlaceholder": "Legenda (opcional)",
+      "templateBadge": "Modelo",
+      "unsupportedMessage": "Mensagem não suportada",
+      "media": "Mídia",
+      "back": "Voltar"
+    },
+    "picker": {
+      "title": "Enviar modelo aprovado",
+      "choose": "Escolha um modelo",
+      "none": "Nenhum modelo aprovado. Sincronize na engrenagem.",
+      "variable": "Variável {name} ({part})",
+      "part": {
+        "header": "cabeçalho",
+        "body": "corpo"
+      },
+      "preview": "Prévia",
+      "send": "Enviar modelo",
+      "unsupported": {
+        "media_header": "cabeçalho com mídia (ainda não suportado)",
+        "location_header": "cabeçalho de localização (ainda não suportado)",
+        "button_variable": "botão com variável (ainda não suportado)"
+      }
+    },
+    "newChat": {
+      "title": "Nova conversa",
+      "hint": "A primeira mensagem precisa ser um modelo aprovado.",
+      "searchContact": "Buscar contato do CRM",
+      "orPhone": "ou digite o número",
+      "phonePlaceholder": "(11) 91234-5678",
+      "start": "Começar",
+      "invalid": "Número inválido para WhatsApp."
+    },
+    "errors": {
+      "unauthorized": "Sessão expirada. Entre de novo.",
+      "not_enabled": "A tela oficial não está liberada para esta empresa.",
+      "invalid": "Dados inválidos. Confira os campos.",
+      "number_exists": "Você já tem outro número oficial. Remova-o antes.",
+      "phone_in_use": "Este número já está conectado em outra conta.",
+      "limit": "Limite de números de WhatsApp da empresa atingido.",
+      "not_found": "Não encontrado.",
+      "meta_error": "A Meta recusou: {detail}",
+      "unknown": "Algo deu errado. Tente de novo.",
+      "no_number": "Seu número oficial não está ativo.",
+      "empty": "Escreva uma mensagem.",
+      "window_closed": "Janela de 24h fechada. Envie um modelo aprovado.",
+      "undeliverable": "Este número não recebe WhatsApp.",
+      "rate_limited": "A Meta limitou a velocidade. Tente em instantes.",
+      "pair_rate_limited": "Muitas mensagens seguidas para este contato. Aguarde alguns segundos.",
+      "marketing_opt_out": "O contato optou por não receber marketing.",
+      "marketing_limited": "A Meta limitou mensagens de marketing para este contato.",
+      "template_paused": "Modelo pausado pela Meta.",
+      "template_disabled": "Modelo desativado pela Meta.",
+      "token_invalid": "Token inválido ou sem permissão. Atualize na engrenagem.",
+      "not_registered": "Número não registrado na Meta. Informe o PIN na engrenagem.",
+      "account_restricted": "Conta do WhatsApp restrita pela Meta.",
+      "invalid_params": "A Meta recusou os dados da mensagem: {detail}",
+      "unsupported_type": "Formato não aceito pela Meta (use JPG, PNG, MP4, MP3, M4A, OGG, AAC, AMR, PDF, Office ou TXT).",
+      "too_large": "Arquivo acima do limite da Meta para esse tipo.",
+      "file_empty": "Arquivo vazio."
+    }
+  },
   "access": {
     "title": "Templates de acesso",
     "subtitle": "Crie perfis (ex.: Comercial, Jurídico) e escolha a quais telas cada um dá acesso. Atribua-os aos membros na página de Equipe.",
