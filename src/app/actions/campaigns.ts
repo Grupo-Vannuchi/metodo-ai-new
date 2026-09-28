@@ -10,6 +10,11 @@ import {
   dispatchCampaignToCompletion,
 } from "@/lib/dispatch";
 import { CHANNEL_META, CHANNEL_KEYS, type ChannelKey } from "@/lib/integrations/channels/meta";
+import {
+  clearCloudPauseReason,
+  cloudCampaignStartProblem,
+  findCloudCampaign,
+} from "@/lib/whatsapp-cloud/campaign";
 import { audienceWhere, type AudienceFilter } from "@/lib/queries/campaigns";
 import { audit } from "@/lib/audit";
 import {
@@ -231,8 +236,16 @@ export async function startCampaign(id: string): Promise<{ ok: boolean; error?: 
     if (!campaign) return { ok: false, error: "invalid" };
 
     const channel = campaign.channel as ChannelKey;
-    const creds = await resolveChannelCredentials(ctx.organizationId, channel);
-    if (!creds) return { ok: false, error: "no_connection" };
+    // Campanha oficial (vínculo WhatsappCloudCampaign): número do criador + modelo aprovado.
+    const cloudLink = channel === "WHATSAPP_CLOUD" ? await findCloudCampaign(ctx.organizationId, id) : null;
+    if (cloudLink) {
+      const problem = await cloudCampaignStartProblem(cloudLink);
+      if (problem) return { ok: false, error: problem };
+      await clearCloudPauseReason(ctx.organizationId, id);
+    } else {
+      const creds = await resolveChannelCredentials(ctx.organizationId, channel);
+      if (!creds) return { ok: false, error: "no_connection" };
+    }
 
     // Re-dispatch: when every recipient was already processed (a finished
     // campaign), reset them all to PENDING so the whole campaign sends again.
@@ -323,6 +336,8 @@ export async function deleteCampaign(id: string): Promise<{ ok: boolean }> {
   if (!ctx) return { ok: false };
   try {
     const db = tenantDb(ctx.organizationId);
+    // Vínculo da campanha oficial (sem FK para campaigns, de propósito).
+    await db.whatsappCloudCampaign.deleteMany({ where: { campaignId: id } });
     await db.campaign.deleteMany({ where: { id } });
     revalidatePath("/app/campaigns");
     return { ok: true };

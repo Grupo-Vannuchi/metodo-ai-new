@@ -6,6 +6,7 @@
  *   npx tsx --env-file=.env scripts/wa-cloud-webhook.ts seed <email-do-usuario>
  *   npx tsx --env-file=.env scripts/wa-cloud-webhook.ts sql "<SELECT ...>"
  *   npx tsx --env-file=.env scripts/wa-cloud-webhook.ts move-owner to=<email|id>
+ *   npx tsx --env-file=.env scripts/wa-cloud-webhook.ts seed-campaign wamid=<id> [waId=...]
  *   npx tsx --env-file=.env scripts/wa-cloud-webhook.ts <tipo> [chave=valor ...]
  *
  * tipos:  text | image | audio | document | location | reaction | status | template | user-id
@@ -144,10 +145,91 @@ async function moveOwner(to: string) {
   }
 }
 
+/**
+ * Campanha oficial fictícia, RUNNING, com UM destinatário já "enviado" (wamid
+ * conhecido) — testa status e pausa pelo webhook sem precisar da Meta.
+ */
+async function seedCampaign() {
+  const prisma = client();
+  try {
+    const phoneNumberId = str("phone") ?? f.PHONE_NUMBER_ID;
+    const n = await prisma.whatsappCloudNumber.findFirst({
+      where: { phoneNumberId },
+      select: { id: true, organizationId: true, ownerId: true },
+    });
+    if (!n) throw new Error("Rode o seed antes");
+    const orgId = n.organizationId;
+    const wamid = str("wamid") ?? `wamid.CAMP.${Date.now()}`;
+    const waId = str("waId") ?? "5511955550001";
+
+    let template = await prisma.whatsappCloudTemplate.findFirst({
+      where: { organizationId: orgId, wabaId: f.WABA_ID, name: "simulado", language: "pt_BR" },
+      select: { id: true },
+    });
+    if (!template) {
+      template = await prisma.whatsappCloudTemplate.create({
+        data: {
+          organizationId: orgId,
+          wabaId: f.WABA_ID,
+          metaId: "0",
+          name: "simulado",
+          language: "pt_BR",
+          category: "MARKETING",
+          status: "APPROVED",
+          parameterFormat: "POSITIONAL",
+          components: [{ type: "BODY", text: "Olá {{1}}, esta é uma campanha simulada." }],
+          syncedAt: new Date(),
+        },
+        select: { id: true },
+      });
+    }
+    const contact = await prisma.contact.create({
+      data: { organizationId: orgId, name: `Contato ${wamid}`, phone: waId.slice(2), tags: ["simulado"], source: "simulador" },
+      select: { id: true },
+    });
+    const campaign = await prisma.campaign.create({
+      data: { organizationId: orgId, name: `Simulada ${wamid}`, channel: "WHATSAPP_CLOUD", status: "RUNNING", createdById: n.ownerId },
+      select: { id: true },
+    });
+    await prisma.campaignRecipient.create({
+      data: { organizationId: orgId, campaignId: campaign.id, contactId: contact.id, status: "SENT", providerMessageId: wamid, sentAt: new Date() },
+    });
+    await prisma.whatsappCloudCampaign.create({
+      data: { organizationId: orgId, campaignId: campaign.id, numberId: n.id, templateId: template.id, params: {} },
+    });
+    const convo =
+      (await prisma.whatsappCloudConversation.findFirst({
+        where: { organizationId: orgId, numberId: n.id, waId },
+        select: { id: true },
+      })) ??
+      (await prisma.whatsappCloudConversation.create({
+        data: { organizationId: orgId, numberId: n.id, waId, contactId: contact.id },
+        select: { id: true },
+      }));
+    await prisma.whatsappCloudMessage.create({
+      data: {
+        organizationId: orgId,
+        conversationId: convo.id,
+        wamid,
+        direction: "OUTBOUND",
+        type: "TEMPLATE",
+        body: "Olá, esta é uma campanha simulada.",
+        status: "SENT",
+        campaignId: campaign.id,
+        timestamp: new Date(),
+      },
+    });
+    console.log(`Campanha ${campaign.id} (RUNNING) com a mensagem ${wamid} para ${waId}.`);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 async function main() {
   if (kind === "seed") return seed(rest[0] ?? "");
   if (kind === "sql") return sql(rest.join(" "));
   if (kind === "move-owner") return moveOwner(str("to") ?? "");
+  if (kind === "seed-campaign") return seedCampaign();
   const secret = process.env.META_APP_SECRET;
   if (!secret) throw new Error("META_APP_SECRET não está no .env");
   const body = JSON.stringify(build());
