@@ -18,6 +18,7 @@ import { Link } from "@/i18n/navigation";
 import { availableScreens, hasFeatureByModules } from "@/config/modules";
 import { listAccountCompanies } from "@/lib/queries/accounts";
 import { LIMITS } from "@/config/limits";
+import { filterRolloutScreens } from "@/lib/whatsapp-cloud/rollout";
 import type { OrgContext } from "@/lib/tenant";
 import type { Locale } from "@/i18n/routing";
 
@@ -35,7 +36,11 @@ export async function AppShell({
   // Show only screens whose module the org installed (MetodoLoja); the member's
   // access template still applies on top. Core screens are always available.
   const available = availableScreens(ctx.modules);
-  const navScreens = ctx.allowedScreens.filter((s) => available.has(s));
+  // The official WhatsApp screen is pilot-only (WHATSAPP_CLOUD_ORG_IDS).
+  const navScreens = filterRolloutScreens(
+    ctx.organizationId,
+    ctx.allowedScreens.filter((s) => available.has(s)),
+  );
 
   const collapsed = (await cookies()).get("sidebar_collapsed")?.value === "1";
   const assistantEnabled = hasFeatureByModules(ctx.modules, "assistant");

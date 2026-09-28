@@ -133,7 +133,7 @@ export const MODULES: ModuleDef[] = [
     dependsOn: [],
     integratesWith: ["crm", "ia"],
     unlocks: [],
-    screens: ["inbox"],
+    screens: ["inbox", "inboxOficial"],
   },
   {
     id: "ia",
