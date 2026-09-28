@@ -1155,6 +1155,159 @@ model Message {
 }
 
 // ---------------------------------------------------------------------------
+// WhatsApp oficial (Cloud API direto na Meta) — tela "Conversas (Oficial)"
+// ---------------------------------------------------------------------------
+// Tabelas próprias, separadas do inbox da Evolution (spec 2026-09-28). A
+// conversa pertence ao número oficial de UM vendedor e identifica o cliente
+// pelo BSUID (sempre enviado pela Meta) e/ou pelo telefone (pode faltar para
+// quem adotou nome de usuário).
+
+enum WhatsappCloudMessageType {
+  TEXT
+  IMAGE
+  AUDIO
+  VIDEO
+  DOCUMENT
+  STICKER
+  LOCATION
+  TEMPLATE
+  UNSUPPORTED
+}
+
+/// Número oficial conectado por um vendedor. O token fica cifrado (crypto.ts).
+model WhatsappCloudNumber {
+  id                 String           @id @default(cuid())
+  organizationId     String
+  ownerId            String
+  /// Único no sistema todo: o webhook descobre a empresa por ele.
+  phoneNumberId      String           @unique
+  wabaId             String
+  displayPhoneNumber String?
+  verifiedName       String?
+  qualityRating      String?
+  /// AES-256-GCM de `{ accessToken }` — nunca em texto puro.
+  accessTokenEnc     String
+  status             ConnectionStatus @default(INACTIVE)
+  lastError          String?
+  checkedAt          DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  conversations WhatsappCloudConversation[]
+
+  @@unique([organizationId, ownerId])
+  @@index([organizationId])
+  @@map("whatsapp_cloud_numbers")
+}
+
+/// Conversa com um cliente. Identidade: bsuid e/ou waId (cada um único por número).
+model WhatsappCloudConversation {
+  id                 String    @id @default(cuid())
+  organizationId     String
+  numberId           String
+  bsuid              String?
+  waId               String?
+  username           String?
+  profileName        String?
+  contactId          String?
+  /// Última mensagem DO CLIENTE — abre a janela de 24h.
+  lastInboundAt      DateTime?
+  lastMessageAt      DateTime?
+  lastMessagePreview String?
+  unreadCount        Int       @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  number   WhatsappCloudNumber    @relation(fields: [numberId], references: [id], onDelete: Cascade)
+  messages WhatsappCloudMessage[]
+
+  @@unique([numberId, bsuid])
+  @@unique([numberId, waId])
+  @@index([organizationId, lastMessageAt])
+  @@map("whatsapp_cloud_conversations")
+}
+
+model WhatsappCloudMessage {
+  id               String                   @id @default(cuid())
+  organizationId   String
+  conversationId   String
+  /// Id da mensagem na Meta — deduplica reenvios do webhook.
+  wamid            String?
+  direction        MessageDirection
+  type             WhatsappCloudMessageType @default(TEXT)
+  body             String?
+  templateName     String?
+  templateLanguage String?
+  /// Extras por tipo: coordenadas, anúncio de origem (referral), etc.
+  payload          Json                     @default("{}")
+  mediaId          String?
+  mediaUrl         String?
+  mediaMime        String?
+  mediaName        String?
+  mediaSize        Int?
+  mediaStatus      MediaStatus?
+  status           MessageStatus?
+  errorCode        Int?
+  errorMessage     String?
+  /// Cobrança informada pela Meta no webhook de status (mede custo no piloto).
+  pricingCategory  String?
+  pricingType      String?
+  reactions        Json                     @default("[]")
+  quotedWamid      String?
+  quotedBody       String?
+  sentById         String?
+  campaignId       String?
+  timestamp        DateTime
+  createdAt        DateTime                 @default(now())
+
+  conversation WhatsappCloudConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, wamid])
+  @@index([conversationId, timestamp])
+  @@map("whatsapp_cloud_messages")
+}
+
+/// Modelo de mensagem sincronizado da Meta, por WABA.
+model WhatsappCloudTemplate {
+  id              String   @id @default(cuid())
+  organizationId  String
+  wabaId          String
+  metaId          String
+  name            String
+  language        String
+  category        String
+  status          String
+  parameterFormat String
+  components      Json
+  rejectedReason  String?
+  syncedAt        DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, wabaId, name, language])
+  @@map("whatsapp_cloud_templates")
+}
+
+/// Vínculo 1-para-1 com uma Campaign existente: o que é da API oficial. Sem
+/// relação Prisma com Campaign de propósito — o model existente não muda.
+model WhatsappCloudCampaign {
+  id             String   @id @default(cuid())
+  organizationId String
+  campaignId     String   @unique
+  numberId       String
+  templateId     String
+  /// Por variável do modelo: { source: "nome" | "empresa" | "fixo", value?: string }
+  params         Json     @default("{}")
+  /// Por que a campanha foi pausada automaticamente (mostrado na página dela).
+  pausedReason   String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([templateId])
+  @@map("whatsapp_cloud_campaigns")
+}
+
+// ---------------------------------------------------------------------------
 // Finance (Financeiro) — DRE, cash flow, entries (receitas/despesas)
 // ---------------------------------------------------------------------------
 

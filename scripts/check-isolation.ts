@@ -161,10 +161,35 @@ async function main() {
       "conversation list scoped to org B excludes org A's conversation",
     );
 
+    // 9) Official WhatsApp (Cloud API) conversations are tenant-scoped too.
+    const cloudNumber = await prisma.whatsappCloudNumber.create({
+      data: {
+        organizationId: orgA.id,
+        ownerId: userA.id,
+        phoneNumberId: `iso-pn-${stamp}`,
+        wabaId: `iso-waba-${stamp}`,
+        accessTokenEnc: "iso-not-a-token",
+      },
+    });
+    await prisma.whatsappCloudConversation.create({
+      data: { organizationId: orgA.id, numberId: cloudNumber.id, waId: `iso${stamp}` },
+    });
+    const cloudConvosB = await prisma.whatsappCloudConversation.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(
+      cloudConvosB.length === 0,
+      "official WhatsApp conversation list scoped to org B excludes org A's",
+    );
+
     console.log("\n✅ Tenant isolation: all checks passed.");
   } finally {
     // Cleanup. Companies/connections carry organizationId (no FK cascade from
     // org), so remove them explicitly before the orgs.
+    // Cascades to whatsapp_cloud_conversations (and their messages).
+    await prisma.whatsappCloudNumber.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
     await prisma.conversation.deleteMany({
       where: { organizationId: { in: created.orgs } },
     });
