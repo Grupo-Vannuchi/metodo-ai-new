@@ -20,16 +20,23 @@ import {
 import { previewFor, quotedLabel } from "@/lib/whatsapp-cloud/preview";
 import { applyReaction } from "@/lib/whatsapp/reactions";
 import { resolveContactId } from "@/lib/whatsapp/ingest";
-import { applyCampaignDeliveryUpdates } from "@/lib/integrations/webhooks/apply";
 import { scheduleMediaDownload } from "@/lib/whatsapp-cloud/media";
 import { markNumberError } from "@/lib/whatsapp-cloud/numbers";
-import { pauseCampaignsForTemplates, pauseCloudCampaign } from "@/lib/whatsapp-cloud/campaign-pause";
+import {
+  applyCloudCampaignDelivery,
+  pauseCampaignsForTemplates,
+  pauseCloudCampaign,
+} from "@/lib/whatsapp-cloud/campaign-pause";
 import { isUniqueViolation } from "@/lib/whatsapp-cloud/prisma-errors";
 
 /**
  * Grava os eventos do webhook oficial. Contexto de sistema: a empresa vem do
- * número (phone_number_id) e entra explicitamente em todo `where`. Idempotente
- * pelo `wamid` único por empresa — a Meta reenvia por até 7 dias.
+ * número (phone_number_id) e entra explicitamente em todo `where`, exceto as
+ * duas exceções comentadas nos pontos onde só temos um identificador da
+ * própria Meta, não uma empresa: status de modelo por `wabaId`
+ * (`applyTemplateStatus`) e troca de BSUID sem número conhecido
+ * (`applyUserIdUpdate`). Idempotente pelo `wamid` único por empresa — a Meta
+ * reenvia por até 7 dias.
  */
 type NumberRef = { id: string; organizationId: string; status: string };
 
@@ -244,13 +251,12 @@ async function applyStatus(number: NumberRef, s: CloudStatusUpdate): Promise<voi
   }
 
   if (s.status !== "SENT") {
-    await applyCampaignDeliveryUpdates([
-      {
-        providerMessageId: s.wamid,
-        status: s.status,
-        ...(category ? { error: recipientErrorText(category, s.errorMessage) } : {}),
-      },
-    ]);
+    await applyCloudCampaignDelivery(
+      orgId,
+      s.wamid,
+      s.status,
+      category ? recipientErrorText(category, s.errorMessage) : null,
+    );
   }
 }
 
@@ -273,6 +279,13 @@ async function applyTemplateStatus(t: CloudTemplateStatusUpdate): Promise<void> 
 
 async function applyUserIdUpdate(u: CloudUserIdUpdate, number: NumberRef | null): Promise<void> {
   try {
+    // O evento de troca de BSUID não traz empresa — só um `phone_number_id`
+    // opcional que pode não resolver a nenhum número nosso. Quando o número é
+    // conhecido, o filtro já isola por numberId + organizationId (caso normal).
+    // Sem número conhecido, o filtro cai para o bsuid sozinho: um BSUID
+    // identifica um único usuário da Meta, então o pior caso é atualizar a
+    // conversa de outra empresa que por coincidência tenha o mesmo bsuid
+    // antigo — aceito como exceção documentada no docstring do módulo.
     await prisma.whatsappCloudConversation.updateMany({
       where: {
         bsuid: u.previousBsuid,
