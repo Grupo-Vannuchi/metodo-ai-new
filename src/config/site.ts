@@ -46,6 +46,8 @@ export type SiteConfig = {
 
   contact: {
     email: string;
+    /** Channel for data-subject requests (LGPD) — the address the privacy policy gives. */
+    privacyEmail: string;
     phone: string;
     whatsapp: {
       /** Digits only, with country code, for wa.me links. */
@@ -80,7 +82,8 @@ export const siteConfig: SiteConfig = {
   address: "Rua Joaquim Távora, 93, Sala 93 – Vila Mathias, Santos/SP, CEP 11075-300",
 
   contact: {
-    email: "thiago.vannuchi@grupovannuchi.com.br",
+    email: "contato@metodoai.com.br",
+    privacyEmail: "thiago.vannuchi@grupovannuchi.com.br",
     phone: "+55 (11) 90000-0000",
     whatsapp: {
       number: "5511900000000",

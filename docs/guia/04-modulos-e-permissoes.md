@@ -157,8 +157,9 @@ usa o idioma que ficou pra trás.
 manda o catálogo inteiro para o navegador em toda página, e a política tem dezenas de KB que só a
 página dela usa. Aqui o formato é checado: a página faz `{ pt, en } satisfies Record<Locale,
 LegalContent>`, então um idioma fora do formato quebra o `typecheck` (o número de seções e itens
-continua sendo disciplina manual). Os dados da empresa (razão social, CNPJ, endereço, e-mail)
-entram como `{placeholders}` preenchidos a partir de [src/config/site.ts](../../src/config/site.ts)
+continua sendo disciplina manual). Os dados da empresa (razão social, CNPJ, endereço e o e-mail
+de privacidade, `contact.privacyEmail` — que não é o e-mail de contato do rodapé) entram como
+`{placeholders}` preenchidos a partir de [src/config/site.ts](../../src/config/site.ts)
 — mudou a empresa, muda só lá. Mudou o texto, atualize `UPDATED_AT` na página.
 
 ## Resumo

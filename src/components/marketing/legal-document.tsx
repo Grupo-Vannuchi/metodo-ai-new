@@ -29,7 +29,7 @@ export type LegalContent = {
 };
 
 const VARS: Record<string, string | undefined> = {
-  email: siteConfig.contact.email,
+  email: siteConfig.contact.privacyEmail,
   legalName: siteConfig.legalName,
   tradeName: siteConfig.tradeName,
   cnpj: siteConfig.registration,
