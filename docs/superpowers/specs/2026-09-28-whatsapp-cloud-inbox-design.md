@@ -113,7 +113,7 @@ Unidades pequenas, cada uma com um propósito. As marcadas **puras** não import
 
 ### 5.3 Acesso e liberação
 
-- Tela nova com chave **`inbox_oficial`**: entra em `GATEABLE_SCREENS` (`src/config/screens.ts`)
+- Tela nova com chave **`inboxOficial`** (camelCase, mesma chave do menu e de `app.nav.*`): entra em `GATEABLE_SCREENS` (`src/config/screens.ts`)
   e em `screens` do módulo `inbox` (`src/config/modules.ts`). Modelos de acesso existentes não a
   incluem — MEMBER com modelo de acesso só a vê se um admin conceder; OWNER/ADMIN e MEMBER sem
   modelo a veem (comportamento padrão de `resolveAllowedScreens`).
@@ -272,9 +272,12 @@ model WhatsappCloudCampaign {
   templateId     String
   /// Por variável do modelo: { source: "nome" | "empresa" | "fixo", value?: string }
   params         Json     @default("{}")
+  /// Por que a campanha foi pausada automaticamente (mostrado na página dela).
+  pausedReason   String?
   createdAt      DateTime @default(now())
 
   @@index([organizationId])
+  @@index([templateId])
   @@map("whatsapp_cloud_campaigns")
 }
 ```
@@ -363,8 +366,9 @@ Destino: `to: waId` quando há telefone; senão `recipient: bsuid`.
 | **Nova conversa** | Contato do CRM (com telefone) ou número digitado. Janela começa fechada → o primeiro envio é um modelo. |
 | **Marcar lida** | Ao abrir a conversa: `unreadCount = 0` e `status: read` para o `wamid` da última mensagem do cliente (se tiver até 30 dias). Falha aqui não é erro para o usuário. |
 
-A mensagem é gravada como `PENDING` antes da chamada; sucesso → `SENT` + `wamid`; erro → `FAILED`
-+ código e texto. Mensagem `held_for_quality_assessment` na resposta conta como enviada.
+A mensagem só é gravada depois que a Meta aceita (`SENT` + `wamid`); se a Meta recusa, nada é
+gravado e o erro volta para a tela como aviso (sem bolha órfã). Mensagem
+`held_for_quality_assessment` na resposta conta como enviada.
 
 ### 7.5 Modelos
 
@@ -398,7 +402,7 @@ existência do vínculo `WhatsappCloudCampaign`.
   público. Sem `enabled`, o formulário é exatamente o de hoje.
 - Modelos com cabeçalho de mídia ou botão com variável aparecem desabilitados com o motivo.
 - Action nova `createCloudCampaign`: mesmo público e mesmos filtros de `createCampaign`
-  (`audienceWhere` passa a ser exportada de `src/app/actions/campaigns.ts`), grava `Campaign`
+  (`audienceWhere`, já exportada de `src/lib/queries/campaigns.ts`), grava `Campaign`
   (`channel: WHATSAPP_CLOUD`, `templateId: null`), os `CampaignRecipient` e o
   `WhatsappCloudCampaign` com o número do criador.
 
@@ -450,13 +454,13 @@ Todas sem efeito para quem não está liberado:
 | `prisma/schema.prisma` + migration | só modelos e enum novos (§6) |
 | `src/lib/tenant-db.ts` | 5 modelos novos em `TENANT_MODELS` |
 | `src/lib/env.ts` | 4 variáveis opcionais (§5.4) |
-| `src/config/screens.ts`, `src/config/modules.ts` | tela `inbox_oficial` |
+| `src/config/screens.ts`, `src/config/modules.ts`, `settings/access/page.tsx` | tela `inboxOficial` (a página de modelos de acesso também filtra pela liberação) |
 | `src/components/app/app-shell.tsx`, `app-nav.tsx`, `back-bar.tsx` | item de menu, filtrado pela liberação |
 | `src/messages/pt.json`, `en.json` | chaves novas, com paridade |
 | `src/lib/queries/connections.ts` | `countWhatsappConnections` soma os números oficiais |
 | `src/lib/whatsapp/ingest.ts` | `export` em `resolveContactId` |
 | `src/lib/jobs/index.ts` | job `whatsapp-cloud-media` |
-| `src/lib/dispatch.ts`, `src/app/actions/campaigns.ts` | desvio para campanhas com vínculo; `export` de `audienceWhere` |
+| `src/lib/dispatch.ts`, `src/app/actions/campaigns.ts` | desvio para campanhas com vínculo (`startCampaign`, `dispatchCampaignBatch`, `deleteCampaign`) |
 | `src/app/[locale]/app/campaigns/new` e edição, `campaign-form.tsx`, `campaign-edit-form.tsx` | props `cloud` resolvidas no servidor |
 | `scripts/check-isolation.ts` | asserção da tabela de conversas oficiais |
 | `package.json` | script `test:wa-cloud` |
