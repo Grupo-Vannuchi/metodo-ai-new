@@ -241,8 +241,10 @@ isso a `main` exige PR e `enforce_admins` está ligado — sem isso, um push dir
 > Antes de mergear qualquer coisa que toque `prisma/schema.prisma`, aplique a migration no Supabase
 > **primeiro** (veja "Migrações" acima) e só então faça o merge. A ordem importa: schema novo com
 > código antigo costuma funcionar; código novo com schema antigo quebra. A migration
-> `20260928120000_whatsapp_cloud` (WhatsApp oficial) só cria tabelas — aplique-a antes do merge que
-> traz a tela oficial.
+> `20260928120000_whatsapp_cloud` (WhatsApp oficial) só cria tabelas, mas **tem de estar aplicada no
+> Supabase ANTES do merge** que traz a tela oficial: sem essas tabelas, o detalhe, a edição e a
+> exclusão de campanhas, o limite de números de WhatsApp e o disparo das campanhas `WHATSAPP_CLOUD`
+> antigas quebram para **todas** as empresas — não só para a do piloto.
 
 **Gotchas que já causaram incidente:**
 1. **500 em todo o app após deploy** = o build não pegou o código novo. Com o deploy automático isso
