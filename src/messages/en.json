@@ -1969,6 +1969,38 @@
       "forbidden": "Your plan doesn't include this channel.",
       "no_connection": "Connect the channel under Connections before dispatching.",
       "unknown": "Something went wrong."
+    },
+    "cloud": {
+      "channelLabel": "Official WhatsApp (approved templates)",
+      "template": "Meta approved template",
+      "selectTemplate": "Select a template",
+      "noTemplates": "No approved templates. Sync them in the Inbox (Official) settings.",
+      "variables": "Template variables",
+      "part": {
+        "header": "header",
+        "body": "body"
+      },
+      "sourceLabel": "Source of variable {name}",
+      "source": {
+        "nome": "Contact name",
+        "empresa": "Contact company",
+        "fixo": "Fixed text"
+      },
+      "fixedValue": "Fixed text",
+      "fallback": "If empty, use",
+      "preview": "Preview",
+      "previewWith": "with {name}",
+      "limitWarning": "Current Meta limit for this number: {limit} new contacts per 24h. This audience has {count} contacts.",
+      "incomplete": "Choose a template and fill in every variable.",
+      "unsupported": {
+        "media_header": "media header (not supported yet)",
+        "location_header": "location header (not supported yet)",
+        "button_variable": "button with variable (not supported yet)"
+      },
+      "templateUsed": "Meta template: {name}",
+      "pausedReason": "Paused automatically: {reason}",
+      "renameOnly": "Official campaigns can only be renamed. To use another template, create another campaign.",
+      "rename": "Save name"
     }
   },
   "pricing": {

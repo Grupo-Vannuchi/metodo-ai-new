@@ -1969,6 +1969,38 @@
       "forbidden": "Seu plano não inclui este canal.",
       "no_connection": "Conecte o canal em Conexões antes de disparar.",
       "unknown": "Algo deu errado."
+    },
+    "cloud": {
+      "channelLabel": "WhatsApp Oficial (modelos aprovados)",
+      "template": "Modelo aprovado da Meta",
+      "selectTemplate": "Selecione um modelo",
+      "noTemplates": "Nenhum modelo aprovado. Sincronize na engrenagem de Conversas (Oficial).",
+      "variables": "Variáveis do modelo",
+      "part": {
+        "header": "cabeçalho",
+        "body": "corpo"
+      },
+      "sourceLabel": "Origem da variável {name}",
+      "source": {
+        "nome": "Nome do contato",
+        "empresa": "Empresa do contato",
+        "fixo": "Texto fixo"
+      },
+      "fixedValue": "Texto fixo",
+      "fallback": "Se vazio, usar",
+      "preview": "Prévia",
+      "previewWith": "com {name}",
+      "limitWarning": "Limite atual do número na Meta: {limit} contatos novos por 24h. Este público tem {count} contatos.",
+      "incomplete": "Escolha um modelo e preencha todas as variáveis.",
+      "unsupported": {
+        "media_header": "cabeçalho com mídia (ainda não suportado)",
+        "location_header": "cabeçalho de localização (ainda não suportado)",
+        "button_variable": "botão com variável (ainda não suportado)"
+      },
+      "templateUsed": "Modelo da Meta: {name}",
+      "pausedReason": "Pausada automaticamente: {reason}",
+      "renameOnly": "Campanhas oficiais permitem trocar só o nome. Para usar outro modelo, crie outra campanha.",
+      "rename": "Salvar nome"
     }
   },
   "pricing": {
