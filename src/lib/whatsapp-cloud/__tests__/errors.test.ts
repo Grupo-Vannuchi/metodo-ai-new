@@ -15,6 +15,22 @@ describe("categorizeMetaError", () => {
   test("130429 = limite de velocidade", () => assert.equal(categorizeMetaError(130429), "rate_limited"));
   test("código desconhecido", () => assert.equal(categorizeMetaError(999999), "unknown"));
   test("sem código", () => assert.equal(categorizeMetaError(null), "unknown"));
+  test("131042 = problema de pagamento", () => assert.equal(categorizeMetaError(131042), "payment_issue"));
+  test("131048 = limitado por spam", () => assert.equal(categorizeMetaError(131048), "spam_limited"));
+  test("368 = bloqueado por política", () => assert.equal(categorizeMetaError(368), "policy_blocked"));
+  test("131000 e 131016 = instabilidade da Meta", () => {
+    assert.equal(categorizeMetaError(131000), "transient");
+    assert.equal(categorizeMetaError(131016), "transient");
+  });
+  test("4 e 80007 = limite de velocidade", () => {
+    assert.equal(categorizeMetaError(4), "rate_limited");
+    assert.equal(categorizeMetaError(80007), "rate_limited");
+  });
+  test("sem código + HTTP 500 = instabilidade", () => assert.equal(categorizeMetaError(null, 500), "transient"));
+  test("sem código + HTTP 503 = instabilidade", () => assert.equal(categorizeMetaError(null, 503), "transient"));
+  test("sem código + falha de rede (0) = instabilidade", () => assert.equal(categorizeMetaError(null, 0), "transient"));
+  test("sem código + HTTP 400 continua desconhecido", () => assert.equal(categorizeMetaError(null, 400), "unknown"));
+  test("com código, o HTTP não muda a categoria", () => assert.equal(categorizeMetaError(131047, 500), "window_closed"));
 });
 
 describe("classificação", () => {
@@ -22,6 +38,15 @@ describe("classificação", () => {
   test("não entregável não é problema do número", () => assert.equal(isNumberLevelError("undeliverable"), false));
   test("modelo pausado para a campanha", () => assert.equal(isCampaignStopper("template_paused"), true));
   test("não entregável não para a campanha", () => assert.equal(isCampaignStopper("undeliverable"), false));
+  test("problema de pagamento para a campanha", () => assert.equal(isCampaignStopper("payment_issue"), true));
+  test("limite por spam para a campanha", () => assert.equal(isCampaignStopper("spam_limited"), true));
+  test("bloqueio por política para a campanha", () => assert.equal(isCampaignStopper("policy_blocked"), true));
+  test("instabilidade não para a campanha", () => assert.equal(isCampaignStopper("transient"), false));
+  test("problemas da conta não marcam o número com erro", () => {
+    assert.equal(isNumberLevelError("payment_issue"), false);
+    assert.equal(isNumberLevelError("spam_limited"), false);
+    assert.equal(isNumberLevelError("policy_blocked"), false);
+  });
 });
 
 describe("graphErrorFromBody", () => {
@@ -50,4 +75,9 @@ describe("textos", () => {
   test("sem detalhe usa texto genérico", () => assert.equal(recipientErrorText("unknown", null), "Falha no envio."));
   test("motivo de pausa do modelo pausado", () =>
     assert.equal(pauseReasonText("template_paused"), "A Meta pausou o modelo desta campanha."));
+  test("motivos de pausa dos problemas da conta", () => {
+    assert.equal(pauseReasonText("payment_issue"), "Problema com a forma de pagamento da conta na Meta.");
+    assert.equal(pauseReasonText("spam_limited"), "A Meta limitou o número por excesso de mensagens.");
+    assert.equal(pauseReasonText("policy_blocked"), "A Meta bloqueou o envio por violação de política.");
+  });
 });

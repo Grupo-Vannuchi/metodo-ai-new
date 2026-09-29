@@ -13,8 +13,10 @@ export const dynamic = "force-dynamic";
  *    META_WEBHOOK_VERIFY_TOKEN (sem a variável: 403, fail-closed).
  *  - POST: X-Hub-Signature-256 sobre os bytes crus com META_APP_SECRET (sem a
  *    variável: 401). A empresa sai de metadata.phone_number_id.
- * Depois da assinatura válida responde 200 mesmo se o processamento falhar — a
- * Meta reenviaria por 7 dias; a deduplicação é pelo wamid.
+ * Depois da assinatura válida: 200 quando tudo foi gravado, quando o corpo não é
+ * JSON e quando o número é desconhecido (nada a fazer); **500** quando algum
+ * evento falhou de verdade (ex.: banco fora) — a Meta reenvia por até 7 dias e a
+ * deduplicação pelo wamid torna o reenvio seguro.
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -40,9 +42,14 @@ export async function POST(req: Request) {
     return Response.json({ ok: true, ignored: true });
   }
   try {
-    await ingestCloudEvents(parseCloudWebhook(payload));
+    const { failed } = await ingestCloudEvents(parseCloudWebhook(payload));
+    if (failed > 0) {
+      console.error(`[wa-cloud] webhook processing failed (${failed} event(s))`);
+      return Response.json({ ok: false }, { status: 500 });
+    }
   } catch (error) {
     console.error("[wa-cloud] webhook processing failed", error);
+    return Response.json({ ok: false }, { status: 500 });
   }
   return Response.json({ ok: true });
 }

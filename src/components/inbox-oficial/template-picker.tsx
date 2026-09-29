@@ -39,6 +39,8 @@ export function TemplatePicker({
   const [params, setParams] = useState<ParamContext | null>(null);
   const [sending, setSending] = useState(false);
   const selected = templates.find((x) => x.id === templateId) ?? null;
+  // Variável em branco iria para a Meta como "-": o vendedor preenche antes de enviar.
+  const missingValue = !!selected && selected.variables.some((v) => !(values[v.id] ?? "").trim());
 
   useEffect(() => {
     if (!open) return;
@@ -124,7 +126,7 @@ export function TemplatePicker({
             </div>
           ) : null}
           <div className="flex justify-end">
-            <Button type="button" onClick={send} disabled={!selected || sending}>
+            <Button type="button" onClick={send} disabled={!selected || missingValue || sending}>
               {sending ? <Loader2 className="size-4 animate-spin" /> : null}
               {t("send")}
             </Button>

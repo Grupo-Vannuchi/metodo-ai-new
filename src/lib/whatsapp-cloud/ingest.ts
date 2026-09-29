@@ -18,6 +18,8 @@ import {
   recipientErrorText,
 } from "@/lib/whatsapp-cloud/errors";
 import { previewFor, quotedLabel } from "@/lib/whatsapp-cloud/preview";
+import { templateStatusFromEvent } from "@/lib/whatsapp-cloud/template-params";
+import { brPhoneVariants } from "@/lib/whatsapp-cloud/identity";
 import { applyReaction } from "@/lib/whatsapp/reactions";
 import { resolveContactId } from "@/lib/whatsapp/ingest";
 import { scheduleMediaDownload } from "@/lib/whatsapp-cloud/media";
@@ -36,7 +38,8 @@ import { isUniqueViolation } from "@/lib/whatsapp-cloud/prisma-errors";
  * própria Meta, não uma empresa: status de modelo por `wabaId`
  * (`applyTemplateStatus`) e troca de BSUID sem número conhecido
  * (`applyUserIdUpdate`). Idempotente pelo `wamid` único por empresa — a Meta
- * reenvia por até 7 dias.
+ * reenvia por até 7 dias, e a rota responde 500 quando algum evento falhou
+ * (`failed > 0`) justamente para ganhar esse reenvio.
  */
 type NumberRef = { id: string; organizationId: string; status: string };
 
@@ -50,7 +53,13 @@ const CONVO_SELECT = {
 } as const;
 type ConvoRef = { id: string; bsuid: string | null; waId: string | null; contactId: string | null; lastMessageAt: Date | null; lastInboundAt: Date | null };
 
-export async function ingestCloudEvents(events: CloudEvent[]): Promise<void> {
+/**
+ * Processa cada evento isolado (um erro não impede os outros do mesmo payload) e
+ * devolve quantos falharam de verdade. Número desconhecido/INACTIVE e item
+ * irrelevante não são falha; conflito de índice único (reenvio) também não.
+ */
+export async function ingestCloudEvents(events: CloudEvent[]): Promise<{ failed: number }> {
+  let failed = 0;
   const numbers = new Map<string, NumberRef | null>();
   const numberFor = async (phoneNumberId: string): Promise<NumberRef | null> => {
     if (!numbers.has(phoneNumberId)) {
@@ -81,15 +90,19 @@ export async function ingestCloudEvents(events: CloudEvent[]): Promise<void> {
       else if (e.kind === "reaction") await ingestReaction(number, e);
       else await applyStatus(number, e);
     } catch (error) {
+      if (isUniqueViolation(error)) continue;
+      failed++;
       console.error(`[wa-cloud] failed to ingest ${e.kind}`, error);
     }
   }
+  return { failed };
 }
 
 async function findConversation(number: NumberRef, bsuid: string | null, waId: string | null): Promise<ConvoRef | null> {
   const or: Prisma.WhatsappCloudConversationWhereInput[] = [];
   if (bsuid) or.push({ bsuid });
-  if (waId) or.push({ waId });
+  // Celular brasileiro chega com ou sem o 9º dígito: as duas formas são o mesmo cliente.
+  if (waId) or.push({ waId: { in: brPhoneVariants(waId) } });
   if (or.length === 0) return null;
   return prisma.whatsappCloudConversation.findFirst({
     where: { organizationId: number.organizationId, numberId: number.id, OR: or },
@@ -163,42 +176,45 @@ async function ingestMessage(number: NumberRef, m: CloudInboundMessage): Promise
     quotedBody = q ? quotedLabel(q.type, q.body) : null;
   }
 
+  const newest = !convo.lastMessageAt || m.timestamp >= convo.lastMessageAt;
+  const inboundNewest = !convo.lastInboundAt || m.timestamp > convo.lastInboundAt;
   let messageId: string;
   try {
-    const created = await prisma.whatsappCloudMessage.create({
-      data: {
-        organizationId: orgId,
-        conversationId: convo.id,
-        wamid: m.wamid,
-        direction: "INBOUND",
-        type: m.type,
-        body: m.body,
-        payload: m.extra as Prisma.InputJsonValue,
-        ...(m.media
-          ? { mediaId: m.media.id, mediaMime: m.media.mime, mediaName: m.media.filename, mediaStatus: "PENDING" as const }
-          : {}),
-        quotedWamid: m.quotedWamid,
-        quotedBody,
-        timestamp: m.timestamp,
-      },
-      select: { id: true },
-    });
+    // Mensagem + contador/prévia da conversa numa transação só: ou os dois
+    // entram, ou nenhum (e o reenvio da Meta completa o que faltou).
+    const [created] = await prisma.$transaction([
+      prisma.whatsappCloudMessage.create({
+        data: {
+          organizationId: orgId,
+          conversationId: convo.id,
+          wamid: m.wamid,
+          direction: "INBOUND",
+          type: m.type,
+          body: m.body,
+          payload: m.extra as Prisma.InputJsonValue,
+          ...(m.media
+            ? { mediaId: m.media.id, mediaMime: m.media.mime, mediaName: m.media.filename, mediaStatus: "PENDING" as const }
+            : {}),
+          quotedWamid: m.quotedWamid,
+          quotedBody,
+          timestamp: m.timestamp,
+        },
+        select: { id: true },
+      }),
+      prisma.whatsappCloudConversation.updateMany({
+        where: { id: convo.id, organizationId: orgId },
+        data: {
+          unreadCount: { increment: 1 },
+          ...(inboundNewest ? { lastInboundAt: m.timestamp } : {}),
+          ...(newest ? { lastMessageAt: m.timestamp, lastMessagePreview: previewFor(m.type, m.body) } : {}),
+        },
+      }),
+    ]);
     messageId = created.id;
   } catch (error) {
     if (isUniqueViolation(error)) return; // reenvio da Meta: já gravada, não conta de novo
     throw error;
   }
-
-  const newest = !convo.lastMessageAt || m.timestamp >= convo.lastMessageAt;
-  const inboundNewest = !convo.lastInboundAt || m.timestamp > convo.lastInboundAt;
-  await prisma.whatsappCloudConversation.updateMany({
-    where: { id: convo.id, organizationId: orgId },
-    data: {
-      unreadCount: { increment: 1 },
-      ...(inboundNewest ? { lastInboundAt: m.timestamp } : {}),
-      ...(newest ? { lastMessageAt: m.timestamp, lastMessagePreview: previewFor(m.type, m.body) } : {}),
-    },
-  });
   if (m.media) scheduleMediaDownload(orgId, messageId);
 }
 
@@ -269,12 +285,20 @@ async function applyTemplateStatus(t: CloudTemplateStatusUpdate): Promise<void> 
   });
   if (rows.length === 0) return;
   const ids = rows.map((r) => r.id);
+  // `t.status` é o EVENTO da Meta: FLAGGED/IN_APPEAL/etc. não mudam o status gravado.
+  const status = templateStatusFromEvent(t.status);
+  if (status === null) {
+    if (t.reason) {
+      await prisma.whatsappCloudTemplate.updateMany({ where: { id: { in: ids } }, data: { rejectedReason: t.reason } });
+    }
+    return;
+  }
   await prisma.whatsappCloudTemplate.updateMany({
     where: { id: { in: ids } },
-    data: { status: t.status, rejectedReason: t.reason },
+    data: { status, rejectedReason: t.reason },
   });
-  if (t.status === "PAUSED") await pauseCampaignsForTemplates(ids, pauseReasonText("template_paused"));
-  if (t.status === "DISABLED") await pauseCampaignsForTemplates(ids, pauseReasonText("template_disabled"));
+  if (status === "PAUSED") await pauseCampaignsForTemplates(ids, pauseReasonText("template_paused"));
+  if (status === "DISABLED") await pauseCampaignsForTemplates(ids, pauseReasonText("template_disabled"));
 }
 
 async function applyUserIdUpdate(u: CloudUserIdUpdate, number: NumberRef | null): Promise<void> {

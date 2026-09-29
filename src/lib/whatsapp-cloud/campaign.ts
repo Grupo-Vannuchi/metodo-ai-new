@@ -21,9 +21,14 @@ import { pauseCloudCampaign } from "@/lib/whatsapp-cloud/campaign-pause";
  * Campanhas oficiais: disparam um modelo aprovado pelo número de quem criou a
  * campanha (as respostas caem na tela oficial dele). A Meta não bane por ritmo
  * como o QR code, então os lotes são maiores; a cota mensal é a mesma.
+ *
+ * Cada destinatário é RESERVADO antes da chamada à Meta (`sentAt` preenchido
+ * com o status ainda PENDING): duas cadeias de disparo em paralelo nunca pagam o
+ * mesmo modelo duas vezes. Reserva de lote que morreu vence em 10 minutos.
  */
 const BATCH = 25;
 const RATE_LIMIT_RETRY_SEC = 60;
+const CLAIM_STALE_MS = 10 * 60 * 1000;
 const randInt = (min: number, max: number) => Math.floor(min + Math.random() * (max - min + 1));
 
 export type CloudCampaignLink = {
@@ -88,14 +93,23 @@ export async function dispatchCloudCampaignBatch(link: CloudCampaignLink): Promi
   const remaining = LIMITS.dispatchQuotaPerMonth - sent;
   if (remaining <= 0) return pause("Cota mensal de disparos atingida.");
 
+  // Livre = PENDING sem reserva, ou com reserva vencida (lote que morreu no meio).
+  const staleBefore = new Date(now.getTime() - CLAIM_STALE_MS);
+  const claimable = {
+    status: "PENDING" as const,
+    OR: [{ sentAt: null }, { sentAt: { lt: staleBefore } }],
+  };
   const recipients = await db.campaignRecipient.findMany({
-    where: { campaignId, status: "PENDING" },
+    where: { campaignId, ...claimable },
     orderBy: { id: "asc" },
     take: Math.min(BATCH, remaining),
     select: { id: true, contactId: true },
   });
   if (recipients.length === 0) {
-    await db.campaign.updateMany({ where: { id: campaignId }, data: { status: "DONE" } });
+    // Sobrou só destinatário reservado por outra cadeia em andamento: ela termina
+    // a campanha. Marcar DONE aqui deixaria para trás quem ela devolver à fila.
+    const reserved = await db.campaignRecipient.count({ where: { campaignId, status: "PENDING" } });
+    if (reserved === 0) await db.campaign.updateMany({ where: { id: campaignId }, data: { status: "DONE" } });
     return { done: true };
   }
   const contacts = await db.contact.findMany({
@@ -103,10 +117,19 @@ export async function dispatchCloudCampaignBatch(link: CloudCampaignLink): Promi
     select: { id: true, name: true, phone: true, company: { select: { name: true } } },
   });
   const byId = new Map(contacts.map((c) => [c.id, c]));
+  // FAILED sem data de envio, como no disparo antigo (a reserva não é envio).
   const fail = (id: string, error: string) =>
-    db.campaignRecipient.updateMany({ where: { id }, data: { status: "FAILED", error } });
+    db.campaignRecipient.updateMany({ where: { id }, data: { status: "FAILED", error, sentAt: null } });
+  // Devolve à fila: continua PENDING e sem reserva, para o próximo lote.
+  const release = (id: string) =>
+    db.campaignRecipient.updateMany({ where: { id, status: "PENDING" }, data: { sentAt: null } });
 
   for (const r of recipients) {
+    const claim = await db.campaignRecipient.updateMany({
+      where: { id: r.id, ...claimable },
+      data: { sentAt: new Date() },
+    });
+    if (claim.count === 0) continue; // outra cadeia já pegou este destinatário
     const c = byId.get(r.contactId);
     const waId = normalizeWhatsappNumber(c?.phone ?? "");
     if (!c || !looksLikeWhatsappMobile(waId)) {
@@ -119,9 +142,18 @@ export async function dispatchCloudCampaignBatch(link: CloudCampaignLink): Promi
       templatePayload({ waId, bsuid: null }, def.name, def.language, buildTemplateComponents(def, values)),
     );
     if (!res.ok) {
-      if (res.category === "rate_limited") return { done: false, retryAfter: RATE_LIMIT_RETRY_SEC };
-      if (res.category === "pair_rate_limited") continue; // fica PENDING para o próximo lote
-      if (isCampaignStopper(res.category)) return pause(pauseReasonText(res.category));
+      if (res.category === "rate_limited" || res.category === "transient") {
+        await release(r.id);
+        return { done: false, retryAfter: RATE_LIMIT_RETRY_SEC };
+      }
+      if (res.category === "pair_rate_limited") {
+        await release(r.id); // fica PENDING para o próximo lote
+        continue;
+      }
+      if (isCampaignStopper(res.category)) {
+        await release(r.id); // não foi enviado: volta com a campanha retomada
+        return pause(pauseReasonText(res.category));
+      }
       await fail(r.id, recipientErrorText(res.category, res.message));
       continue;
     }
@@ -130,7 +162,7 @@ export async function dispatchCloudCampaignBatch(link: CloudCampaignLink): Promi
       data: { status: "SENT", providerMessageId: res.wamid, error: null, sentAt: new Date() },
     });
     try {
-      const conversationId = await conversationForPhone(organizationId, number.id, waId, c.id);
+      const conversationId = await conversationForPhone(organizationId, number.id, res.waId ?? waId, c.id, res.bsuid);
       await recordOutbound(organizationId, {
         conversationId,
         wamid: res.wamid,

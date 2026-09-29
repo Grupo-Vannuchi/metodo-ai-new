@@ -30,8 +30,12 @@ export async function downloadInboundMedia(organizationId: string, messageId: st
     },
   });
   if (!msg || msg.mediaStatus === "READY" || !msg.mediaId) return;
+  // Nunca rebaixa um READY gravado por outro download concorrente (job + sob demanda).
   const fail = async () => {
-    await db.whatsappCloudMessage.updateMany({ where: { id: messageId }, data: { mediaStatus: "FAILED" } });
+    await db.whatsappCloudMessage.updateMany({
+      where: { id: messageId, mediaStatus: { not: "READY" } },
+      data: { mediaStatus: "FAILED" },
+    });
   };
   if (Date.now() - msg.timestamp.getTime() > MEDIA_ID_TTL_MS) return fail();
   try {

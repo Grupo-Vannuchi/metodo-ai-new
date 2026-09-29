@@ -21,6 +21,8 @@ const TYPE_FOR: Record<OutboundKind, WhatsappCloudMessageType> = {
   document: "DOCUMENT",
 };
 
+const MULTIPART_OVERHEAD = 1024 * 1024;
+
 const fail = (status: number, error: string, detail?: string) =>
   Response.json({ ok: false, error, ...(detail ? { detail } : {}) }, { status });
 
@@ -33,6 +35,11 @@ export async function POST(req: Request) {
   const g = await cloudGuard();
   if (!g.ok) return guardResponse(g.error);
   const { ctx } = g;
+
+  // Recusa antes de ler o corpo: sem isso, um upload gigante seria todo
+  // carregado na memória só para ser recusado depois (1 MB = folga do multipart).
+  const declared = Number(req.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD) return fail(400, "too_large");
 
   let file: File | null = null;
   let conversationId = "";

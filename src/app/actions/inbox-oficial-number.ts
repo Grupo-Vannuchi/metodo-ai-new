@@ -57,10 +57,6 @@ export async function connectCloudNumber(input: {
       select: { id: true, phoneNumberId: true },
     });
     if (mine && mine.phoneNumberId !== phoneNumberId) return { ok: false, error: "number_exists" };
-    // phoneNumberId é único no sistema: um número da Meta só pode estar ligado
-    // uma vez. Busca entre empresas de propósito — devolve só o id.
-    const taken = await prisma.whatsappCloudNumber.findFirst({ where: { phoneNumberId }, select: { id: true } });
-    if (taken && taken.id !== mine?.id) return { ok: false, error: "phone_in_use" };
     if (
       !mine &&
       LIMITS.whatsappNumbersLimit !== null &&
@@ -71,6 +67,12 @@ export async function connectCloudNumber(input: {
 
     const info = await getPhoneNumber(phoneNumberId, accessToken);
     if (!info.ok) return { ok: false, error: "meta_error", detail: info.message };
+    // phoneNumberId é único no sistema: um número da Meta só pode estar ligado
+    // uma vez. Busca entre empresas de propósito — devolve só o id — e só depois
+    // que a Meta confirmou que o token dá acesso a esse número (sem isso, a
+    // resposta revelaria a quem não tem o token que o número já está em uso).
+    const taken = await prisma.whatsappCloudNumber.findFirst({ where: { phoneNumberId }, select: { id: true } });
+    if (taken && taken.id !== mine?.id) return { ok: false, error: "phone_in_use" };
     const sub = await subscribeApp(wabaId, accessToken);
     if (!sub.ok) return { ok: false, error: "meta_error", detail: sub.message };
     if (pin) {
@@ -200,14 +202,19 @@ export async function disconnectCloudNumber(): Promise<NumberActionResult> {
   const g = await cloudGuard();
   if (!g.ok) return { ok: false, error: g.error };
   const { ctx } = g;
-  const res = await tenantDb(ctx.organizationId).whatsappCloudNumber.updateMany({
-    where: { ownerId: ctx.userId },
-    data: { status: "INACTIVE" },
-  });
-  if (res.count === 0) return { ok: false, error: "not_found" };
-  await audit(ctx, { action: "whatsapp_cloud.disconnected", entity: "WhatsappCloudNumber" });
-  revalidatePath(PATH);
-  return { ok: true };
+  try {
+    const res = await tenantDb(ctx.organizationId).whatsappCloudNumber.updateMany({
+      where: { ownerId: ctx.userId },
+      data: { status: "INACTIVE" },
+    });
+    if (res.count === 0) return { ok: false, error: "not_found" };
+    await audit(ctx, { action: "whatsapp_cloud.disconnected", entity: "WhatsappCloudNumber" });
+    revalidatePath(PATH);
+    return { ok: true };
+  } catch (error) {
+    console.error("[wa-cloud] disconnect failed", error);
+    return { ok: false, error: "unknown" };
+  }
 }
 
 /** Remove o número: apaga conversas, mensagens (cascade) e as mídias guardadas (LGPD). */
@@ -235,14 +242,19 @@ export async function syncCloudTemplates(): Promise<NumberActionResult> {
   const g = await cloudGuard();
   if (!g.ok) return { ok: false, error: g.error };
   const { ctx } = g;
-  const mine = await tenantDb(ctx.organizationId).whatsappCloudNumber.findFirst({
-    where: { ownerId: ctx.userId },
-    select: { id: true },
-  });
-  const number = mine ? await loadNumber(ctx.organizationId, mine.id) : null;
-  if (!number) return { ok: false, error: "not_found" };
-  const res = await syncTemplates(ctx.organizationId, number.wabaId, number.token);
-  if (!res.ok) return { ok: false, error: "meta_error", detail: res.message };
-  revalidatePath(PATH);
-  return { ok: true, count: res.count };
+  try {
+    const mine = await tenantDb(ctx.organizationId).whatsappCloudNumber.findFirst({
+      where: { ownerId: ctx.userId },
+      select: { id: true },
+    });
+    const number = mine ? await loadNumber(ctx.organizationId, mine.id) : null;
+    if (!number) return { ok: false, error: "not_found" };
+    const res = await syncTemplates(ctx.organizationId, number.wabaId, number.token);
+    if (!res.ok) return { ok: false, error: "meta_error", detail: res.message };
+    revalidatePath(PATH);
+    return { ok: true, count: res.count };
+  } catch (error) {
+    console.error("[wa-cloud] template sync failed", error);
+    return { ok: false, error: "unknown" };
+  }
 }

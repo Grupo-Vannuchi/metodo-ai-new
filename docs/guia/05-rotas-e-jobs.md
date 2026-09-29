@@ -145,9 +145,12 @@ webhook para o **app**, não por conexão. Os dois métodos são fail-closed:
   sem a variável ou com assinatura errada, 401. A empresa sai de `metadata.phone_number_id` →
   `WhatsappCloudNumber.organizationId`.
 
-Com assinatura válida a rota responde 200 mesmo se o processamento falhar (log `[wa-cloud]`): a
-Meta reenvia por até 7 dias quem não responde 200, e a deduplicação é pelo `wamid`, único por
-empresa. Em desenvolvimento, `scripts/wa-cloud-webhook.ts` assina e envia payloads falsos para o
+Com assinatura válida, cada evento do payload é processado isolado e a rota responde **200** quando
+tudo foi gravado, quando o corpo não é JSON e quando o número é desconhecido ou inativo (nada a
+fazer). Se algum evento falhou de verdade (ex.: banco fora do ar), loga `[wa-cloud] webhook
+processing failed (N event(s))` e responde **500** de propósito: a Meta reenvia por até 7 dias quem
+não responde 200, e o reenvio é seguro porque a deduplicação é pelo `wamid`, único por empresa (a
+mensagem e o contador da conversa são gravados numa transação só). Em desenvolvimento, `scripts/wa-cloud-webhook.ts` assina e envia payloads falsos para o
 app local — não precisa de túnel para testar o recebimento.
 
 ## O guard de cron: por que é compartilhado, e não copiado

@@ -28,9 +28,11 @@ export default async function InboxOficialPage({
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
+  // Liberação primeiro: empresa fora do piloto recebe 404, não o redirecionamento
+  // de tela/módulo sem acesso — não pode perceber que a tela existe.
+  if (!isWhatsappCloudEnabled(ctx.organizationId)) notFound();
   await requireScreen(ctx, "inboxOficial", locale);
   await requireModule(ctx, "inbox", locale);
-  if (!isWhatsappCloudEnabled(ctx.organizationId)) notFound();
   const t = await getTranslations("inboxOficial");
   const { c, config } = await searchParams;
 

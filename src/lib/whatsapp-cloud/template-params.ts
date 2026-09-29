@@ -184,6 +184,31 @@ export function mappingIsComplete(vars: TemplateVariable[], mapping: ParamMappin
   });
 }
 
+/** Eventos que já são o próprio status do modelo na Meta. */
+const STATUS_EVENTS = new Set([
+  "APPROVED",
+  "REJECTED",
+  "PENDING",
+  "PAUSED",
+  "DISABLED",
+  "PENDING_DELETION",
+  "DELETED",
+  "ARCHIVED",
+  "LOCKED",
+  "LIMIT_EXCEEDED",
+]);
+
+/**
+ * O webhook `message_template_status_update` manda um EVENTO, não um status.
+ * Devolve o status a gravar, ou `null` = manter o gravado: FLAGGED é aviso de
+ * qualidade (o modelo continua enviável), IN_APPEAL/UNARCHIVED não definem o
+ * status final, e evento desconhecido não pode travar um modelo aprovado.
+ */
+export function templateStatusFromEvent(event: string): string | null {
+  if (event === "REINSTATED") return "APPROVED";
+  return STATUS_EVENTS.has(event) ? event : null;
+}
+
 export function toTemplateOption(row: {
   id: string;
   name: string;

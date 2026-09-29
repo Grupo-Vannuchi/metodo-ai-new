@@ -7,6 +7,7 @@ import {
   renderTemplateText,
   resolveParamValues,
   suggestValues,
+  templateStatusFromEvent,
   templateVariables,
   toTemplateDef,
   toTemplateOption,
@@ -147,6 +148,33 @@ describe("sugestões e mapeamento padrão", () => {
     assert.equal(mappingIsComplete(vars, mapping), true);
     assert.equal(mappingIsComplete(vars, { "body.first_name": { source: "fixo", value: " " } }), false);
   });
+});
+
+describe("templateStatusFromEvent (evento da Meta → status gravado)", () => {
+  test("REINSTATED volta a APPROVED", () => assert.equal(templateStatusFromEvent("REINSTATED"), "APPROVED"));
+  test("FLAGGED não muda o status (aviso de qualidade, modelo segue enviável)", () =>
+    assert.equal(templateStatusFromEvent("FLAGGED"), null));
+  test("IN_APPEAL e UNARCHIVED não mudam o status", () => {
+    assert.equal(templateStatusFromEvent("IN_APPEAL"), null);
+    assert.equal(templateStatusFromEvent("UNARCHIVED"), null);
+  });
+  test("PAUSED é gravado como está", () => assert.equal(templateStatusFromEvent("PAUSED"), "PAUSED"));
+  test("status reais passam direto", () => {
+    for (const s of [
+      "APPROVED",
+      "REJECTED",
+      "PENDING",
+      "DISABLED",
+      "PENDING_DELETION",
+      "DELETED",
+      "ARCHIVED",
+      "LOCKED",
+      "LIMIT_EXCEEDED",
+    ]) {
+      assert.equal(templateStatusFromEvent(s), s);
+    }
+  });
+  test("evento desconhecido não muda o status", () => assert.equal(templateStatusFromEvent("SOMETHING_NEW"), null));
 });
 
 describe("conversão das linhas do banco", () => {

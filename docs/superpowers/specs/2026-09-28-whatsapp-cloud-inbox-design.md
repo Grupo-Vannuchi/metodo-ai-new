@@ -100,8 +100,9 @@ Unidades pequenas, cada uma com um propósito. As marcadas **puras** não import
 | `signature.ts` (**pura**) | `verifySignature(rawBody, header, appSecret)` — HMAC-SHA256, `timingSafeEqual`, fail-closed. |
 | `webhook-parser.ts` (**puro**) | Payload da Meta → lista de eventos normalizados: `message`, `reaction`, `status`, `template_status`, `user_id_update`. Um evento por item; ignora o que não reconhece. |
 | `window.ts` (**pura**) | Janela de 24h: `isWindowOpen(lastInboundAt, now)` e `windowClosesAt(...)`. |
-| `errors.ts` (**pura**) | Código da Meta → categoria (`window_closed`, `undeliverable`, `rate_limited`, `pair_rate_limited`, `marketing_opt_out`, `marketing_limited`, `template_paused`, `template_disabled`, `token_invalid`, `not_registered`, `account_restricted`, `invalid_params`, `unknown`) + se vale tentar de novo. |
-| `template-params.ts` (**pura**) | Modelo + mapeamento de variáveis + contato → `components` do envio e texto final para exibir. Suporta `POSITIONAL` e `NAMED`; recusa modelos com cabeçalho de mídia ou botão com variável (fora do v1). |
+| `errors.ts` (**pura**) | Código da Meta → categoria (`window_closed`, `undeliverable`, `rate_limited`, `pair_rate_limited`, `marketing_opt_out`, `marketing_limited`, `template_paused`, `template_disabled`, `token_invalid`, `not_registered`, `account_restricted`, `invalid_params`, `payment_issue`, `spam_limited`, `policy_blocked`, `transient`, `unknown`) + se vale tentar de novo. Sem código da Meta, falha de rede (HTTP 0) ou 5xx vira `transient`. |
+| `template-params.ts` (**pura**) | Modelo + mapeamento de variáveis + contato → `components` do envio e texto final para exibir. Suporta `POSITIONAL` e `NAMED`; recusa modelos com cabeçalho de mídia ou botão com variável (fora do v1). Também `templateStatusFromEvent`: evento do webhook de modelo → status a gravar (§7.2). |
+| `identity.ts` (**pura**) | `brPhoneVariants(waId)`: o `wa_id` e, para celular brasileiro, a forma com/sem o 9º dígito — as duas são o mesmo cliente. |
 | `media-rules.ts` (**pura**) | Tipo/tamanho aceitos pela Meta por categoria de mídia. |
 | `numbers.ts` | Conectar (ler número, inscrever app, registrar), trocar token, desconectar, remover. Carrega/decifra o token para uso no servidor. |
 | `ingest.ts` | Grava eventos do webhook (sistema, Prisma cru, `organizationId` vindo do número). |
@@ -321,9 +322,11 @@ Notas:
      `metadata.phone_number_id` resolve o `WhatsappCloudNumber` (e com ele o `organizationId`).
      Número desconhecido → ignora.
   3. Por evento (`ingest.ts`):
-     - **message:** acha a conversa por `bsuid`, depois por `waId`; cria se não existir e preenche o
-       identificador que faltava. Grava a mensagem (conflito no `wamid` = reenvio → ignora). Atualiza
-       `lastInboundAt`, `lastMessageAt`, prévia, `unreadCount + 1` e `profileName`/`username`.
+     - **message:** acha a conversa por `bsuid`, depois por `waId` (celular brasileiro com ou sem o
+       9º dígito — `brPhoneVariants`); cria se não existir e preenche o
+       identificador que faltava. Grava a mensagem e atualiza `lastInboundAt`, `lastMessageAt`,
+       prévia e `unreadCount + 1` numa **transação só** (conflito no `wamid` = reenvio → desfaz tudo e
+       ignora); `profileName`/`username` antes, junto com o identificador.
        Mídia entra com `mediaId` e `mediaStatus: PENDING`. Resposta citando outra → `quotedWamid` +
        `quotedBody` (snapshot da mensagem citada, se estiver no banco).
      - **Contato do CRM:** com telefone, liga ao contato com o mesmo telefone ou cria um (mesma
@@ -334,10 +337,19 @@ Notas:
        `src/lib/integrations/webhooks/delivery.ts`); grava `errorCode`/`errorMessage` e
        `pricingCategory`/`pricingType`; preenche `bsuid`/`waId` da conversa se faltavam; chama
        `applyCampaignDeliveryUpdates` (existente) para destinatários de campanha.
-     - **template_status:** atualiza `WhatsappCloudTemplate.status`/`rejectedReason`; `PAUSED` ou
-       `DISABLED` pausa as campanhas oficiais `RUNNING` que usam o modelo.
+     - **template_status:** o campo `event` é um EVENTO, não um status — `templateStatusFromEvent`
+       traduz: `REINSTATED` → `APPROVED`; `FLAGGED` (aviso de qualidade, modelo segue enviável),
+       `IN_APPEAL`, `UNARCHIVED` e evento desconhecido **não mudam** o status (só gravam
+       `rejectedReason` se o evento trouxer motivo); os demais (`APPROVED`, `REJECTED`, `PENDING`,
+       `PAUSED`, `DISABLED`, `PENDING_DELETION`, `DELETED`, `ARCHIVED`, `LOCKED`, `LIMIT_EXCEEDED`) são
+       gravados como vêm, com `rejectedReason`. `PAUSED` ou `DISABLED` pausa as campanhas oficiais
+       `RUNNING` que usam o modelo.
      - **user_id_update:** troca `bsuid` anterior pelo atual nas conversas.
-  4. Responde 200. Falha de processamento → `console.error("[wa-cloud] ...")`, nunca 500.
+  4. Cada evento é processado isolado (um erro não impede os outros do payload). Responde **200**
+     quando tudo foi gravado, com corpo que não é JSON e com número desconhecido/inativo (nada a
+     fazer). Se algum evento falhou de verdade (ex.: banco fora do ar) → `console.error("[wa-cloud]
+     webhook processing failed (N event(s))")` e **500**: a Meta reenvia, e a deduplicação pelo
+     `wamid` torna o reenvio seguro.
 - Não grava em `WebhookEvent`: a deduplicação é pela unicidade do `wamid`, e uma campanha de 10 mil
   contatos gera ~30 mil webhooks de status.
 
@@ -361,7 +373,7 @@ Destino: `to: waId` quando há telefone; senão `recipient: bsuid`.
 |---|---|
 | **Texto** | Só com janela aberta (checado no servidor por `lastInboundAt`). Até 4.096 caracteres. Resposta citando outra → `context.message_id`. |
 | **Anexo** | Upload para `POST /api/inbox-oficial/media/upload` (sessão + liberação + dono), que valida tipo e tamanho pelo conteúdo do arquivo e por `media-rules.ts`, guarda com `putMedia` (para exibir) e sobe para a Meta (`POST /{phone-number-id}/media`) → envia por `id`. Legenda em imagem, vídeo e documento; nome do arquivo em documento. Só com janela aberta. GIF e formatos fora da tabela são recusados com mensagem clara. |
-| **Reação** | Em mensagens com até 30 dias; tocar no mesmo emoji remove. Espelha localmente mesmo se a Meta falhar, como a tela atual. |
+| **Reação** | Em mensagens com até 30 dias; tocar no mesmo emoji remove. Espelha localmente **só depois que a Meta aceita** a reação; se a Meta recusa, nada muda na tela e o erro volta como aviso. |
 | **Modelo** | Qualquer momento. Lista só modelos `APPROVED` da WABA do número; variáveis pré-preenchidas (nome do contato); prévia; grava a mensagem como `TEMPLATE` com o texto final. |
 | **Nova conversa** | Contato do CRM (com telefone) ou número digitado. Janela começa fechada → o primeiro envio é um modelo. |
 | **Marcar lida** | Ao abrir a conversa: `unreadCount = 0` e `status: read` para o `wamid` da última mensagem do cliente (se tiver até 30 dias). Falha aqui não é erro para o usuário. |
@@ -413,16 +425,26 @@ existência do vínculo `WhatsappCloudCampaign`.
 - Número: o do vínculo (o do criador). Número inativo ou com erro → campanha pausa.
 - Ritmo: lotes de 25, próximo lote em 2–5 s. A cota mensal (`LIMITS.dispatchQuotaPerMonth`) vale
   igual. Sem QStash, roda em processo (`dispatchCampaignToCompletion`), como hoje.
+- **Sem envio duplicado (cada modelo é cobrado):** cada destinatário é reservado antes da chamada à
+  Meta — `updateMany` com `status: PENDING` e `sentAt` nulo (ou reserva vencida há mais de 10 min,
+  de um lote que morreu) grava `sentAt = agora`; `count === 0` = outra cadeia já o pegou → pula.
+  `rate_limited`, `transient` e `pair_rate_limited` (e erro que pausa a campanha) devolvem a reserva
+  (`sentAt` nulo, segue `PENDING`); sucesso grava `SENT`; falha do destinatário grava `FAILED` (sem
+  `sentAt`). Lote que só encontra destinatários reservados por outra cadeia para sem marcar `DONE`.
+  `startCampaign` de campanha oficial já `RUNNING` com `lastDispatchAt` de menos de 2 min devolve
+  `ok` sem reiniciar destinatários nem abrir outra cadeia (clique duplo, duas abas).
 - Cada envio grava também a mensagem `TEMPLATE` (com `campaignId`) na conversa oficial do número,
   criando a conversa pelo telefone se preciso — a resposta do cliente chega com contexto.
 - Erros da Meta (via `errors.ts`):
 
 | Categoria | Efeito |
 |---|---|
-| `rate_limited` (130429) | para o lote, tenta de novo em 60 s |
+| `rate_limited` (130429, 4, 80007) | para o lote, tenta de novo em 60 s |
+| `transient` (131000, 131016; sem código com HTTP 0 ou 5xx) | igual a `rate_limited`: para o lote, tenta de novo em 60 s |
 | `pair_rate_limited` (131056) | destinatário volta para a fila, tenta no próximo lote |
 | `template_paused` / `template_disabled` (132015/132016) | **pausa a campanha** |
 | `token_invalid` (190) | **pausa a campanha** e marca o número com erro |
+| `payment_issue` (131042) / `spam_limited` (131048) / `policy_blocked` (368) | **pausa a campanha** (problema da conta na Meta, não do token: o número não é marcado com erro) |
 | `undeliverable` (131026) | destinatário `FAILED`: "Número não recebe WhatsApp." |
 | `marketing_opt_out` (131050) | destinatário `FAILED`: "Contato optou por não receber marketing." |
 | `marketing_limited` (131049) | destinatário `FAILED`: "A Meta limitou mensagens de marketing para este contato." |
@@ -433,7 +455,9 @@ existência do vínculo `WhatsappCloudCampaign`.
 ### 8.3 Editar e apagar
 
 - `updateCampaign` com vínculo: só o nome muda (o formulário de edição mostra o modelo como leitura).
-- `deleteCampaign` com vínculo: apaga o vínculo junto.
+- `deleteCampaign` com vínculo: apaga o vínculo junto — **depois** da campanha, para que uma falha no
+  meio deixe só um vínculo órfão inofensivo, nunca uma campanha oficial sem vínculo (que cairia no
+  disparo antigo).
 
 ## 9. Segurança
 

@@ -18,12 +18,18 @@ export type MetaErrorCategory =
   | "not_registered"
   | "account_restricted"
   | "invalid_params"
+  | "payment_issue"
+  | "spam_limited"
+  | "policy_blocked"
+  | "transient"
   | "unknown";
 
 const BY_CODE: Record<number, MetaErrorCategory> = {
   131047: "window_closed",
   131026: "undeliverable",
   130429: "rate_limited",
+  4: "rate_limited",
+  80007: "rate_limited",
   131056: "pair_rate_limited",
   131050: "marketing_opt_out",
   131049: "marketing_limited",
@@ -39,10 +45,22 @@ const BY_CODE: Record<number, MetaErrorCategory> = {
   131009: "invalid_params",
   132000: "invalid_params",
   132001: "invalid_params",
+  131042: "payment_issue",
+  131048: "spam_limited",
+  368: "policy_blocked",
+  131000: "transient",
+  131016: "transient",
 };
 
-export function categorizeMetaError(code: number | null | undefined): MetaErrorCategory {
-  if (code === null || code === undefined) return "unknown";
+/**
+ * `httpStatus` (opcional) só pesa quando a Meta não mandou código: falha de rede
+ * (0) ou HTTP 5xx é instabilidade passageira, não erro da mensagem.
+ */
+export function categorizeMetaError(code: number | null | undefined, httpStatus?: number): MetaErrorCategory {
+  if (code === null || code === undefined) {
+    if (code === null && httpStatus !== undefined && (httpStatus === 0 || httpStatus >= 500)) return "transient";
+    return "unknown";
+  }
   return BY_CODE[code] ?? "unknown";
 }
 
@@ -51,9 +69,20 @@ export function isNumberLevelError(c: MetaErrorCategory): boolean {
   return c === "token_invalid" || c === "not_registered" || c === "account_restricted";
 }
 
-/** Erros que param a campanha inteira em vez de só falhar um destinatário. */
+/**
+ * Erros que param a campanha inteira em vez de só falhar um destinatário.
+ * Pagamento, spam e política são da conta na Meta (não do token): param a
+ * campanha, mas não marcam o número com erro.
+ */
 export function isCampaignStopper(c: MetaErrorCategory): boolean {
-  return c === "template_paused" || c === "template_disabled" || isNumberLevelError(c);
+  return (
+    c === "template_paused" ||
+    c === "template_disabled" ||
+    c === "payment_issue" ||
+    c === "spam_limited" ||
+    c === "policy_blocked" ||
+    isNumberLevelError(c)
+  );
 }
 
 export type GraphError = { code: number | null; message: string };
@@ -90,6 +119,9 @@ const PAUSE_TEXT: Partial<Record<MetaErrorCategory, string>> = {
   token_invalid: "O token do número oficial é inválido ou perdeu permissão.",
   not_registered: "O número oficial não está registrado na Meta.",
   account_restricted: "A conta do WhatsApp está restrita pela Meta.",
+  payment_issue: "Problema com a forma de pagamento da conta na Meta.",
+  spam_limited: "A Meta limitou o número por excesso de mensagens.",
+  policy_blocked: "A Meta bloqueou o envio por violação de política.",
 };
 
 /** Motivo gravado quando uma campanha é pausada por erro da Meta. */

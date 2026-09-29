@@ -80,18 +80,26 @@ export function CloudInbox({
         !mediaTried.current.has(m.id),
     );
     for (const m of due) {
+      // Reserva enquanto o pedido está em voo (o polling não repete o pedido); só
+      // fica marcada depois de uma resposta HTTP de verdade.
       mediaTried.current.add(m.id);
+      let r: Response;
       try {
-        const r = await fetch("/api/inbox-oficial/media/fetch", {
+        r = await fetch("/api/inbox-oficial/media/fetch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messageId: m.id }),
         });
-        if (!r.ok) continue;
+      } catch {
+        mediaTried.current.delete(m.id); // falha de rede: tenta de novo no próximo ciclo
+        continue;
+      }
+      if (!r.ok) continue;
+      try {
         const media = (await r.json()) as Partial<MessageItem> | null;
         if (media) setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...media } : x)));
       } catch {
-        /* fica para a próxima visita */
+        /* corpo ilegível: a resposta já foi definitiva */
       }
     }
   }, []);
