@@ -126,7 +126,9 @@ export function AppNav({ allowedScreens, collapsed = false }: { allowedScreens: 
     ((key === "automations" || key === "goals") && allowedScreens.includes("crm")) ||
     // "Meus itens" is the personal Tasks hub — show it with the Tasks module.
     (key === "my" && allowedScreens.includes("tasks"));
-  const isActive = (href: string) => (href === "/app" ? pathname === "/app" : pathname.startsWith(href));
+  // Match whole segments: "/app/inbox" must not light up on "/app/inbox-oficial".
+  const isActive = (href: string) =>
+    href === "/app" ? pathname === "/app" : pathname === href || pathname.startsWith(`${href}/`);
 
   // Live unread badge for the inbox item — pushed by the realtime stream.
   const loadUnread = useCallback(async () => {
