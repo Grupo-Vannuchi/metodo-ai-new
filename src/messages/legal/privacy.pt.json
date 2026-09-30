@@ -1,0 +1,280 @@
+{
+  "title": "Política de Privacidade",
+  "description": "Como o MétodoAI trata dados pessoais: o que coletamos, para que usamos, com quem compartilhamos, por quanto tempo guardamos e como pedir a exclusão, inclusive dos dados do WhatsApp.",
+  "updatedLabel": "Última atualização",
+  "tocTitle": "Nesta página",
+  "sections": [
+    {
+      "id": "who-we-are",
+      "title": "1. Quem somos",
+      "blocks": [
+        { "p": "O MétodoAI (metodotia.com) é uma plataforma de gestão para empresas. Reúne CRM, atendimento e campanhas pelo WhatsApp, prospecção, propostas, financeiro, RH e outros módulos. A plataforma é operada por:" },
+        {
+          "ul": [
+            "**{legalName}** (nome fantasia {tradeName})",
+            "CNPJ {cnpj}",
+            "{address}",
+            "E-mail de privacidade: {email}"
+          ]
+        },
+        { "p": "Nesta Política, \"MétodoAI\" e \"nós\" significam essa empresa; \"Cliente\" é a empresa que contrata a plataforma; e \"Usuário\" é a pessoa que acessa a plataforma em nome de um Cliente." },
+        { "p": "Esta Política explica quais dados pessoais tratamos, para que servem, com quem são compartilhados, por quanto tempo ficam guardados e como você exerce seus direitos. Ela segue a Lei Geral de Proteção de Dados (Lei nº 13.709/2018, \"LGPD\") e o Marco Civil da Internet (Lei nº 12.965/2014)." }
+      ]
+    },
+    {
+      "id": "roles",
+      "title": "2. Nosso papel no tratamento dos dados",
+      "blocks": [
+        {
+          "ul": [
+            "**Somos controladores** dos dados de cadastro e uso da conta dos Usuários, dos dados de contratação e cobrança dos Clientes e dos dados de quem visita nosso site.",
+            "**Somos operadores** dos dados que os Clientes registram ou recebem na plataforma sobre outras pessoas: contatos, clientes, fornecedores, funcionários e conversas de WhatsApp. Tratamos esses dados só para prestar o serviço e seguindo as instruções do Cliente.",
+            "**O Cliente é o controlador desses dados.** Cabe a ele ter base legal para usá-los, incluindo a autorização prévia (opt-in) dos contatos para receber mensagens pelo WhatsApp."
+          ]
+        },
+        { "p": "Se você conversou com uma empresa que usa o MétodoAI, é essa empresa que decide como seus dados são usados. A seção 12 explica como pedir a exclusão." }
+      ]
+    },
+    {
+      "id": "data-we-collect",
+      "title": "3. Dados que tratamos",
+      "blocks": [
+        { "h3": "3.1 Dados da conta" },
+        {
+          "ul": [
+            "Nome, e-mail, telefone e CPF ou CNPJ.",
+            "Senha, guardada apenas em forma cifrada irreversível (hash). Nunca guardamos a senha em texto.",
+            "Quando você entra com Google, Microsoft ou LinkedIn: nome, e-mail e, quando disponível, foto de perfil fornecidos por esses serviços.",
+            "Empresa, perfil de acesso, convites e preferências, como o idioma."
+          ]
+        },
+        { "h3": "3.2 Dados registrados pelos Clientes" },
+        {
+          "ul": [
+            "Cadastros de contatos e empresas: nome, telefone, e-mail, CNPJ e endereço.",
+            "Oportunidades de venda, propostas, tarefas e anexos.",
+            "Lançamentos financeiros, dados de funcionários (RH), estoque e as demais informações que o Cliente registra."
+          ]
+        },
+        { "h3": "3.3 Dados do WhatsApp" },
+        { "p": "Quando o Cliente conecta um número à plataforma, tratamos:" },
+        {
+          "ul": [
+            "**Dos contatos que conversam com o Cliente:** número de telefone, nome de perfil e identificador de usuário do WhatsApp; conteúdo das mensagens (textos, imagens, áudios, vídeos, documentos, figurinhas e reações); data e hora e status de entrega e leitura.",
+            "**Do Cliente:** identificadores da conta WhatsApp Business e do número, token de acesso (guardado cifrado) e modelos de mensagem."
+          ]
+        },
+        { "h3": "3.4 Prospecção" },
+        { "p": "Resultados de buscas em fontes públicas, como o Google Places e o site da própria empresa pesquisada: nome do estabelecimento, telefone, endereço e site." },
+        { "h3": "3.5 Dados técnicos" },
+        { "p": "Endereço IP, data e hora de acesso, dados do navegador e do dispositivo, e registro das ações feitas na plataforma (auditoria)." }
+      ]
+    },
+    {
+      "id": "whatsapp",
+      "title": "4. WhatsApp Business Platform (Meta)",
+      "blocks": [
+        { "p": "O MétodoAI se integra à Plataforma WhatsApp Business (API de Nuvem), da Meta, para que os Clientes atendam e enviem mensagens aos seus contatos. Sobre os dados recebidos por essa integração:" },
+        {
+          "ul": [
+            "**Usamos esses dados apenas para** exibir as conversas ao Cliente, enviar as mensagens que ele solicita, mostrar o status de entrega e leitura e, se o Cliente ativar esse recurso, gerar respostas com o agente de IA (seção 6).",
+            "**Não vendemos nem alugamos esses dados.** Também não os usamos para publicidade, para criar perfis nem para qualquer finalidade própria.",
+            "**Não usamos o conteúdo das conversas para treinar modelos de inteligência artificial.**",
+            "Não compartilhamos esses dados com terceiros, exceto os fornecedores necessários para operar o serviço (seção 7) ou quando a lei exigir.",
+            "O token de acesso de cada número é guardado cifrado. Dentro da empresa Cliente, só o usuário responsável pelo número tem acesso às conversas dele.",
+            "O Cliente é responsável por obter o opt-in dos contatos antes de enviar mensagens, por cumprir a Política do WhatsApp Business e a Política de Mensagens Comerciais e pelo conteúdo que envia.",
+            "Para parar de receber mensagens, o contato pode pedir à empresa, usar o descadastro quando ele for oferecido (contatos descadastrados deixam de entrar em campanhas) ou, no próprio WhatsApp, bloquear a empresa ou deixar de receber mensagens de marketing.",
+            "As mensagens também são tratadas pela Meta, de acordo com os Termos e a Política de Privacidade do WhatsApp (https://www.whatsapp.com/legal/privacy-policy).",
+            "Alguns números são conectados por leitura de QR code. Nesse caso, as mensagens passam por um servidor de mensageria operado pelo MétodoAI num provedor de hospedagem contratado, e as regras desta seção valem da mesma forma."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "purposes",
+      "title": "5. Para que usamos os dados e com qual base legal",
+      "blocks": [
+        {
+          "table": {
+            "head": ["Finalidade", "Base legal (LGPD)"],
+            "rows": [
+              ["Criar e manter a conta, autenticar o acesso e prestar os serviços contratados", "Execução de contrato (art. 7º, V)"],
+              ["Enviar e-mails de serviço: verificação, convites, redefinição de senha e avisos", "Execução de contrato (art. 7º, V)"],
+              ["Cobrar a assinatura e cumprir obrigações fiscais", "Execução de contrato e obrigação legal (art. 7º, II e V)"],
+              ["Guardar os registros de acesso", "Obrigação legal (Marco Civil, art. 15)"],
+              ["Garantir a segurança, prevenir fraude e abuso e manter a auditoria", "Legítimo interesse e exercício regular de direitos (art. 7º, VI e IX)"],
+              ["Dar suporte e melhorar a plataforma", "Legítimo interesse (art. 7º, IX)"],
+              ["Tratar dados em nome dos Clientes", "A base legal definida pelo Cliente, que é o controlador"]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ai",
+      "title": "6. Inteligência artificial",
+      "blocks": [
+        {
+          "ul": [
+            "**Copiloto (assistente).** Quando o Usuário usa o copiloto, a pergunta e os dados da plataforma necessários para respondê-la são enviados à Anthropic (Claude). Pedidos de geração de imagem são enviados à OpenAI.",
+            "**Agente de atendimento no WhatsApp.** Se o Cliente ativar o agente, as mensagens recebidas são processadas pela Anthropic para gerar respostas automáticas. Áudios podem ser transcritos pela OpenAI.",
+            "Pelos termos comerciais desses fornecedores, os dados enviados por API não são usados para treinar os modelos deles.",
+            "O Cliente decide se ativa esses recursos e responde pelo uso das respostas geradas."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sharing",
+      "title": "7. Com quem compartilhamos",
+      "blocks": [
+        { "p": "Não vendemos dados pessoais. Compartilhamos dados só com os fornecedores que nos ajudam a operar a plataforma, e só na medida do necessário:" },
+        {
+          "table": {
+            "head": ["Fornecedor", "Finalidade"],
+            "rows": [
+              ["Meta Platforms (WhatsApp)", "Envio e recebimento de mensagens"],
+              ["Supabase", "Banco de dados e armazenamento de arquivos"],
+              ["Hostinger", "Hospedagem da aplicação"],
+              ["Upstash", "Filas de processamento e controle do ritmo de envio"],
+              ["Resend", "Envio de e-mails de serviço"],
+              ["Anthropic", "Copiloto e agente de IA"],
+              ["OpenAI", "Geração de imagens e transcrição de áudio"],
+              ["Google", "Login com Google e buscas de prospecção (Google Places)"],
+              ["Microsoft e LinkedIn", "Login com essas contas"],
+              ["Provedor de servidor dedicado", "Mensageria das conexões por QR code"]
+            ]
+          }
+        },
+        { "p": "Também podemos compartilhar dados com autoridades públicas, quando houver requisição legal, e numa operação societária, como fusão ou aquisição, desde que a proteção prevista nesta Política seja mantida." }
+      ]
+    },
+    {
+      "id": "international-transfers",
+      "title": "8. Transferência internacional",
+      "blocks": [
+        { "p": "Alguns fornecedores armazenam ou processam dados fora do Brasil, principalmente nos Estados Unidos. Nesses casos, a transferência segue o art. 33 da LGPD e se apoia em cláusulas contratuais e nas garantias de proteção oferecidas por esses fornecedores." }
+      ]
+    },
+    {
+      "id": "retention",
+      "title": "9. Por quanto tempo guardamos",
+      "blocks": [
+        {
+          "ul": [
+            "**Conta e dados do CRM:** enquanto a conta estiver ativa. Depois do encerramento ou de um pedido de exclusão, são eliminados em até 30 dias.",
+            "**Registros de acesso:** 6 meses, como exige o Marco Civil da Internet.",
+            "**Dados fiscais e de cobrança:** pelo prazo da legislação, em geral 5 anos.",
+            "**Resultados de prospecção:** excluídos automaticamente depois de 30 dias. Só permanece o que o Cliente importar para o CRM.",
+            "**Conversas do WhatsApp:** enquanto o Cliente as mantiver. O Usuário pode apagar conversas. Ao remover um número conectado pela API oficial, as conversas, mensagens e arquivos desse número são apagados.",
+            "**Cópias de segurança (backups):** eliminadas no ciclo automático de rotação."
+          ]
+        },
+        { "p": "Podemos manter dados além desses prazos quando isso for necessário para cumprir uma obrigação legal ou para exercer direitos em processo (art. 16 da LGPD)." }
+      ]
+    },
+    {
+      "id": "security",
+      "title": "10. Segurança",
+      "blocks": [
+        {
+          "ul": [
+            "Conexão cifrada (HTTPS).",
+            "Senhas protegidas por hash (bcrypt).",
+            "Tokens e credenciais de integração cifrados (AES-256-GCM).",
+            "Separação dos dados de cada empresa Cliente.",
+            "Permissões por perfil de usuário e registro de auditoria das ações."
+          ]
+        },
+        { "p": "Nenhum sistema é totalmente imune a falhas. Se houver um incidente que possa causar risco ou dano relevante, comunicaremos a ANPD e os titulares afetados, conforme o art. 48 da LGPD." }
+      ]
+    },
+    {
+      "id": "your-rights",
+      "title": "11. Seus direitos",
+      "blocks": [
+        { "p": "Pela LGPD (art. 18), você pode pedir:" },
+        {
+          "ul": [
+            "confirmação de que tratamos seus dados;",
+            "acesso aos dados;",
+            "correção de dados incompletos, inexatos ou desatualizados;",
+            "anonimização, bloqueio ou eliminação de dados desnecessários ou tratados em desacordo com a lei;",
+            "portabilidade;",
+            "eliminação dos dados tratados com base no seu consentimento;",
+            "informação sobre com quem compartilhamos seus dados;",
+            "revogação do consentimento;",
+            "oposição ao tratamento;",
+            "revisão de decisões tomadas unicamente por meio automatizado."
+          ]
+        },
+        { "p": "**Como pedir:** envie um e-mail para {email}. Podemos pedir uma confirmação da sua identidade. Respondemos em até **15 dias**." },
+        { "p": "Se o pedido for sobre dados que tratamos como operador, encaminhamos ao Cliente responsável e ajudamos no atendimento." },
+        { "p": "Você também pode apresentar reclamação à Autoridade Nacional de Proteção de Dados (https://www.gov.br/anpd)." }
+      ]
+    },
+    {
+      "id": "data-deletion",
+      "title": "12. Como pedir a exclusão dos seus dados",
+      "blocks": [
+        { "h3": "Se você é Usuário do MétodoAI" },
+        {
+          "ol": [
+            "Dentro da plataforma, você pode apagar contatos, conversas e outros registros. Remover um número de WhatsApp conectado pela API oficial apaga as conversas e os arquivos desse número.",
+            "Para excluir a conta e todos os dados, envie um e-mail para {email} com o assunto **\"Exclusão de dados\"**, a partir do e-mail cadastrado, informando o nome da empresa.",
+            "Confirmamos o pedido em até 15 dias e concluímos a exclusão em até 30 dias. Ficam de fora só os dados que a lei nos obriga a guardar (seção 9)."
+          ]
+        },
+        { "h3": "Se você conversou com uma empresa pelo WhatsApp ou foi cadastrado por um Cliente" },
+        {
+          "ol": [
+            "Peça a exclusão diretamente à empresa, ou envie um e-mail para {email} com o assunto **\"Exclusão de dados – WhatsApp\"**, informando seu número com DDD e o nome da empresa.",
+            "Localizamos os dados, acionamos a empresa responsável e respondemos em até 15 dias."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cookies",
+      "title": "13. Cookies",
+      "blocks": [
+        { "p": "Usamos apenas cookies essenciais:" },
+        {
+          "ul": [
+            "**Sessão:** mantém você conectado. Expira em até 7 dias ou quando você sai da conta.",
+            "**Idioma:** lembra o idioma escolhido."
+          ]
+        },
+        { "p": "Não usamos cookies de publicidade nem ferramentas de rastreamento ou analytics de terceiros. Se você bloquear os cookies, o login pode não funcionar." }
+      ]
+    },
+    {
+      "id": "children",
+      "title": "14. Crianças e adolescentes",
+      "blocks": [
+        { "p": "A plataforma é destinada a empresas e a maiores de 18 anos. Não coletamos de propósito dados de crianças ou adolescentes como Usuários." }
+      ]
+    },
+    {
+      "id": "changes",
+      "title": "15. Alterações nesta Política",
+      "blocks": [
+        { "p": "Podemos atualizar esta Política. A data de \"Última atualização\" no topo mostra a versão em vigor. Avisamos mudanças relevantes por e-mail ou por aviso na plataforma." }
+      ]
+    },
+    {
+      "id": "contact",
+      "title": "16. Contato",
+      "blocks": [
+        {
+          "ul": [
+            "**{legalName}** ({tradeName})",
+            "CNPJ {cnpj}",
+            "{address}",
+            "{email}"
+          ]
+        }
+      ]
+    }
+  ]
+}

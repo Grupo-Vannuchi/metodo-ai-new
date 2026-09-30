@@ -97,7 +97,7 @@ src/
                        #   loja, settings/*, hr/*, supplies/*, crm/* ...)
     api/               # webhooks (evolution/genérico), cron, jobs, inbox,
                        #   assistant, downloader/fetch, team-chat, ...
-    (landing/pricing)  # vitrine pública
+    (landing/pricing/privacy)  # vitrine pública + Política de Privacidade (URL da Meta)
   components/          # UI por domínio (app, crm, finance, hr, supplies,
                        #   campaigns, inbox, downloader, modules, settings, ...)
   config/              # modules.ts, limits.ts, screens.ts (FONTES DE VERDADE)

@@ -120,7 +120,8 @@
       "tagline": "CRM com IA para prospectar, organizar e fechar mais negócios.",
       "product": "Produto",
       "contactTitle": "Contato",
-      "rights": "Todos os direitos reservados."
+      "rights": "Todos os direitos reservados.",
+      "privacy": "Política de Privacidade"
     }
   },
   "auth": {
