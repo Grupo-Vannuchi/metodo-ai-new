@@ -184,8 +184,8 @@ export function InboxClient({
     });
   }, []);
 
-  // Lazily resolve WhatsApp profile pictures for conversations we haven't checked
-  // yet (server caches weekly). Bounded: most-recent first, capped, concurrency 3.
+  // Lazily resolve WhatsApp profile pictures for conversations not checked within
+  // the server's weekly window. Bounded: most-recent first, capped, concurrency 3.
   const avatarInflight = useRef<Set<string>>(new Set());
   const syncAvatars = useCallback(async (convos: Conversation[]) => {
     const queue = convos
@@ -218,6 +218,30 @@ export function InboxClient({
       }
     };
     await Promise.all(Array.from({ length: Math.min(3, queue.length) }, worker));
+  }, []);
+
+  // A stored picture URL that fails to load has usually expired (WhatsApp signs
+  // them with a deadline). Force one re-fetch per conversation per page load; if
+  // that fails too, the Avatar keeps showing the initials.
+  const avatarRefreshed = useRef<Set<string>>(new Set());
+  const refreshAvatar = useCallback(async (id: string) => {
+    if (avatarRefreshed.current.has(id)) return;
+    avatarRefreshed.current.add(id);
+    try {
+      const r = await fetch("/api/inbox/avatar/fetch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: id, force: true }),
+      });
+      if (r.ok) {
+        const { avatarUrl } = (await r.json()) as { avatarUrl: string | null };
+        setConversations((prev) =>
+          prev.map((x) => (x.id === id ? { ...x, avatarUrl, avatarChecked: true } : x)),
+        );
+      }
+    } catch {
+      /* keep the initials */
+    }
   }, []);
 
   const loadConversations = useCallback(async () => {
@@ -494,7 +518,13 @@ export function InboxClient({
           selectedId === c.id ? "bg-muted" : "",
         )}
       >
-        <Avatar name={displayName(c)} src={c.avatarUrl} group={c.isGroup} className="size-9" />
+        <Avatar
+          name={displayName(c)}
+          src={c.avatarUrl}
+          group={c.isGroup}
+          className="size-9"
+          onError={() => void refreshAvatar(c.id)}
+        />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <p className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">
@@ -710,7 +740,13 @@ export function InboxClient({
                 >
                   <ArrowLeft className="size-5" />
                 </button>
-                <Avatar name={displayName(selected)} src={selected.avatarUrl} group={selected.isGroup} className="size-9" />
+                <Avatar
+                  name={displayName(selected)}
+                  src={selected.avatarUrl}
+                  group={selected.isGroup}
+                  className="size-9"
+                  onError={() => void refreshAvatar(selected.id)}
+                />
                 <div className="min-w-0">
                   <p className="truncate font-medium">{displayName(selected)}</p>
                   {selected.contactId ? (
