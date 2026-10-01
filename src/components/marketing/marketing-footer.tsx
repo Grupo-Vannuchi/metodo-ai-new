@@ -9,12 +9,6 @@ export async function MarketingFooter() {
   const c = await getTranslations("common");
   const t = await getTranslations("home.footer");
   const year = siteConfig.foundedYear;
-  const legalDetails = [
-    siteConfig.registration && `CNPJ ${siteConfig.registration}`,
-    siteConfig.address,
-  ]
-    .filter(Boolean)
-    .join(" · ");
 
   const socials = [
     { href: siteConfig.social.instagram, Icon: Instagram, label: "Instagram" },
@@ -68,14 +62,8 @@ export async function MarketingFooter() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-border pt-6 text-xs text-muted-foreground sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex flex-col gap-1">
-            <p>© {year} {siteConfig.legalName}. {t("rights")}</p>
-            {legalDetails ? <p>{legalDetails}</p> : null}
-          </div>
-          <Link href="/privacy" className="shrink-0 hover:text-foreground">
-            {t("privacy")}
-          </Link>
+        <div className="flex flex-col gap-1 border-t border-border pt-6 text-xs text-muted-foreground">
+          <p>© {year} {siteConfig.legalName}. {t("rights")}</p>
         </div>
       </div>
     </footer>
