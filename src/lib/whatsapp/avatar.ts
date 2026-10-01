@@ -7,13 +7,6 @@ import { fetchProfilePictureUrl, findGroupInfo } from "@/lib/integrations/evolut
 /** Refresh a conversation's avatar at most once a week. */
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** True when the avatar was checked within the refresh window. The inbox list
- * uses this to decide which conversations to re-sync — the stored WhatsApp URL
- * is signed and expires, so a check older than the window must be redone. */
-export function isAvatarFresh(checkedAt: Date | null, now: Date): boolean {
-  return checkedAt !== null && now.getTime() - checkedAt.getTime() < TTL_MS;
-}
-
 /**
  * Resolve a conversation's WhatsApp profile picture on demand, triggered by the
  * inbox when it renders a conversation we haven't checked recently. Cached for a
@@ -34,7 +27,8 @@ export async function syncConversationAvatar(
   });
   if (!conv) return { avatarUrl: null };
 
-  if (isAvatarFresh(conv.avatarCheckedAt, now) && !force) return { avatarUrl: conv.avatarUrl };
+  const fresh = conv.avatarCheckedAt && now.getTime() - conv.avatarCheckedAt.getTime() < TTL_MS;
+  if (fresh && !force) return { avatarUrl: conv.avatarUrl };
 
   try {
     const creds = await loadEvoCredsById(conv.connectionId);
