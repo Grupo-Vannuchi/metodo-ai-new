@@ -141,7 +141,7 @@ Antes de commitar: **`npm run typecheck` + `npm run lint` + `npm run build` + `n
 ### Scripts (`package.json`)
 | Comando | O que faz |
 |---|---|
-| `dev` / `build` / `start` | ciclo Next.js |
+| `dev` / `build` / `start` | ciclo Next.js — o `build` usa webpack, não Turbopack (§8, gotcha 4) |
 | `typecheck` | `tsc --noEmit` |
 | `lint` | ESLint |
 | `check:isolation` | prova que o banco respeita o filtro de org quando ele é escrito (não que o código o escreva — ver §3.1) |
@@ -217,7 +217,7 @@ pipeline dela é:
 ```
 npm install          # instala dependências novas — 669 pacotes no deploy de 25/09
   └─ postinstall     # prisma generate (client v6.19.3)
-npm run build        # next build, com TypeScript incluso — 145 páginas
+npm run build        # next build --webpack, com TypeScript incluso — 147 páginas (gotcha 4)
 ```
 
 **O merge derruba o site por ~30 a 60 segundos.** Medido em 25/09/2026: logo após um merge o
@@ -245,6 +245,18 @@ isso a `main` exige PR e `enforce_admins` está ligado — sem isso, um push dir
 3. **Logs do app:** `console.error` vai pro log de erro do site (hPanel → Logs de erro, ou
    `~/domains/<dominio>/logs/`). Procure prefixos como `[evolution] send`, `[inbox]`, `[downloader]`,
    `[ingest]`.
+4. **Build falhou e o site continuou no ar** = o hPanel mostra "Falha na construção", mas o domínio
+   segue respondendo com o build anterior. O código novo **não** foi publicado, por mais que o merge
+   tenha acontecido. Desde 30/09/2026, no build da Hostinger, os processos `node` que o Turbopack cria
+   para rodar o PostCSS morrem antes de se conectar de volta (por quê, a Hostinger não documenta), e
+   todo deploy quebrava em `globals.css` com `node process exited before we could connect to it with
+   exit status: 0` (o merge do PR #207, em 01/10, ficou parado nisso). Por isso o script `build` é
+   `next build --webpack`: o webpack roda o PostCSS dentro do próprio processo. O `next dev` continua
+   no Turbopack. **Não volte o build para o Turbopack** sem antes conferir um deploy.
+   A alternativa óbvia, `experimental.turbopackPluginRuntimeStrategy: "workerThreads"`, foi testada e
+   descartada: resolve a falha, mas esbarra num bug nativo do Node com worker threads (corrigido só
+   no 24.13.1/25.4.0, não no 20) e terminou 2 de 6 builds locais em segfault (`exit 139`) — o que,
+   na Hostinger, também marca o deploy como falho.
 
 ### Crons — só o `extractions` deve rodar
 
