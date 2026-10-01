@@ -19,7 +19,7 @@ de minutos depois, na fila do CI.
 |---|---|---|
 | `typecheck` | o código bate com os tipos declarados | leia o caminho e a linha do erro; se apontar para dentro de `.next/`, pare o `next dev` e rode de novo — é build cacheado, não o seu código |
 | `lint` | regras de estilo e de React (`eslint-config-next`) | veja "Os avisos conhecidos" abaixo antes de investigar um aviso novo |
-| `build` | o app compila e empacota de verdade, com tudo que `typecheck` sozinho não pega — com **webpack**, como na Hostinger, e não com o Turbopack do `next dev` ([README §8, gotcha 4](../../README.md)) | quase sempre import que não resolve ou API de servidor usada dentro de um client component; algo que funciona no `next dev` e quebra só aqui pode ser diferença entre os dois empacotadores |
+| `build` | o app compila e empacota de verdade, com tudo que `typecheck` sozinho não pega | quase sempre import que não resolve ou API de servidor usada dentro de um client component |
 | `check:isolation` | que o Postgres respeita um filtro `organizationId` escrito à mão — **não** que `tenantDb`, a DAL ou as actions estão de fato passando esse filtro | **a mais séria das cinco** — ver "check:isolation" abaixo |
 | `check:node` | toda a árvore de dependências roda no Node de produção | ver "check:node" abaixo |
 
