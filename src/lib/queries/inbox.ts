@@ -1,6 +1,7 @@
 import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
 import { WHATSAPP_PROVIDERS } from "@/lib/queries/connections";
+import { isAvatarFresh } from "@/lib/whatsapp/avatar";
 
 /** Viewer scope: who is asking. WhatsApp is strictly per-user — every user
  * (admins included) sees only conversations from the numbers THEY connected, so
@@ -86,6 +87,7 @@ export async function listConversations(organizationId: string, viewer: InboxVie
     : [];
   const cMap = new Map(contacts.map((c) => [c.id, c.name]));
 
+  const now = new Date();
   return convos.map((c) => ({
     id: c.id,
     remoteJid: c.remoteJid,
@@ -100,7 +102,7 @@ export async function listConversations(organizationId: string, viewer: InboxVie
     pinned: c.pinned,
     folderId: c.folderId,
     avatarUrl: c.avatarUrl,
-    avatarChecked: c.avatarCheckedAt !== null,
+    avatarChecked: isAvatarFresh(c.avatarCheckedAt, now),
   }));
 }
 

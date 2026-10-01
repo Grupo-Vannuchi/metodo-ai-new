@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * On-demand WhatsApp profile-picture fetch. The inbox calls this for
- * conversations it hasn't checked yet (lazy); cached weekly server-side.
+ * conversations not checked this week (lazy; cached weekly server-side), and
+ * with `force` when a stored picture URL fails to load (expired signed link).
  */
 export async function POST(req: Request) {
   const ctx = await getOrgContext();
