@@ -43,7 +43,7 @@ Consequência direta, sem meio-termo: se você criou uma rota nova e não escrev
 dentro dela, ela está aberta para a internet. Não existe uma segunda camada que pegue o que
 sobrou.
 
-## Os quatro jeitos de autenticar uma rota neste repo
+## Os cinco jeitos de autenticar uma rota neste repo
 
 | Quem chama | Mecanismo | Onde vive |
 |---|---|---|
@@ -51,9 +51,10 @@ sobrou.
 | Cron do hPanel | header fixo → `isCronAuthorized(req)` | [src/lib/cron-auth.ts](../../src/lib/cron-auth.ts) |
 | QStash (fila de jobs) | assinatura HMAC → `verifyQStashSignature(...)` | [src/lib/queue.ts](../../src/lib/queue.ts) |
 | Evolution (webhook) | token embutido no caminho | rota de webhook, ver abaixo |
+| Meta (webhook do WhatsApp oficial) | assinatura HMAC `X-Hub-Signature-256` → `verifySignature(...)` com `META_APP_SECRET` | [src/lib/whatsapp-cloud/signature.ts](../../src/lib/whatsapp-cloud/signature.ts) |
 
 Não existe um "guard genérico" que sirva pra tudo — "quem pode chamar" muda por rota. O que os
-quatro têm em comum é onde a checagem acontece: **dentro do handler, como uma das primeiras
+cinco têm em comum é onde a checagem acontece: **dentro do handler, como uma das primeiras
 linhas**, antes de qualquer leitura ou efeito colateral.
 
 ### Rota chamada pelo usuário logado
@@ -132,6 +133,25 @@ Evolution não assina os webhooks que envia. Real,
 Em desenvolvimento isso exige túnel (ngrok) com `NEXT_PUBLIC_SITE_URL` apontando pra ele —
 `localhost` não recebe webhook, porque é a Evolution quem precisa alcançar sua máquina pela
 internet, não o contrário.
+
+### Webhook (Meta — WhatsApp oficial)
+
+Entra por `/api/webhooks/whatsapp-cloud` — uma URL só para todos os números, porque a Meta manda o
+webhook para o **app**, não por conexão. Os dois métodos são fail-closed:
+
+- `GET` é o aperto de mão da inscrição: devolve o `hub.challenge` só se `hub.verify_token` bater
+  com `META_WEBHOOK_VERIFY_TOKEN` (comparação em tempo constante); sem a variável, 403.
+- `POST` só é lido depois de `verifySignature(bytesCrus, X-Hub-Signature-256, META_APP_SECRET)`;
+  sem a variável ou com assinatura errada, 401. A empresa sai de `metadata.phone_number_id` →
+  `WhatsappCloudNumber.organizationId`.
+
+Com assinatura válida, cada evento do payload é processado isolado e a rota responde **200** quando
+tudo foi gravado, quando o corpo não é JSON e quando o número é desconhecido ou inativo (nada a
+fazer). Se algum evento falhou de verdade (ex.: banco fora do ar), loga `[wa-cloud] webhook
+processing failed (N event(s))` e responde **500** de propósito: a Meta reenvia por até 7 dias quem
+não responde 200, e o reenvio é seguro porque a deduplicação é pelo `wamid`, único por empresa (a
+mensagem e o contador da conversa são gravados numa transação só). Em desenvolvimento, `scripts/wa-cloud-webhook.ts` assina e envia payloads falsos para o
+app local — não precisa de túnel para testar o recebimento.
 
 ## O guard de cron: por que é compartilhado, e não copiado
 
@@ -242,16 +262,17 @@ Vale saber qual das duas você está lendo antes de confiar num "funcionou".
 
 Antes de considerar uma rota em `src/app/api/` pronta:
 
-- **A tabela acima não é exaustiva.** Ela documenta os quatro padrões conhecidos, não todo
+- **A tabela acima não é exaustiva.** Ela documenta os cinco padrões conhecidos, não todo
   `src/app/api/` — existe pelo menos uma rota real neste repositório que não se encaixa em
-  nenhuma das quatro linhas. Uma rota já existir no repositório não é prova de que o padrão dela
+  nenhuma das cinco linhas. Uma rota já existir no repositório não é prova de que o padrão dela
   está certo: confira o guard de verdade (leia o handler), não copie um arquivo vizinho por
   analogia.
 - **Quem pode chamar isto?** Usuário logado, cron, fila, webhook de um provedor, ou é
   intencionalmente pública?
 - **Se é pública, por quê?** Isso precisa ser uma decisão registrada, não um esquecimento.
 - **Se não é pública, qual guard?** `getOrgContext()` com checagem de `null`,
-  `isCronAuthorized(req)`, `verifyQStashSignature(...)`, ou comparação de token — uma das quatro
-  linhas da tabela acima. Escreva a checagem como uma das primeiras linhas do handler.
+  `isCronAuthorized(req)`, `verifyQStashSignature(...)`, `verifySignature(...)` da Meta, ou
+  comparação de token — uma das cinco linhas da tabela acima. Escreva a checagem como uma das
+  primeiras linhas do handler.
 - **Toca dado de tenant?** Se a rota lê ou grava tabela de negócio, autenticar quem chama não
   basta — vale o [guia 03 (multi-tenancy)](03-multi-tenancy.md) também.

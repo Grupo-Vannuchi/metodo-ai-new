@@ -10,6 +10,11 @@ import {
   dispatchCampaignToCompletion,
 } from "@/lib/dispatch";
 import { CHANNEL_META, CHANNEL_KEYS, type ChannelKey } from "@/lib/integrations/channels/meta";
+import {
+  clearCloudPauseReason,
+  cloudCampaignStartProblem,
+  findCloudCampaign,
+} from "@/lib/whatsapp-cloud/campaign";
 import { audienceWhere, type AudienceFilter } from "@/lib/queries/campaigns";
 import { audit } from "@/lib/audit";
 import {
@@ -217,6 +222,9 @@ export async function countAudience(
   }
 }
 
+/** Campanha oficial com disparo carimbado há menos disto tem uma cadeia viva. */
+const CLOUD_ACTIVE_CHAIN_MS = 2 * 60 * 1000;
+
 /** Start (or resume) sending a campaign. */
 export async function startCampaign(id: string): Promise<{ ok: boolean; error?: string }> {
   const ctx = await getOrgContext();
@@ -226,13 +234,30 @@ export async function startCampaign(id: string): Promise<{ ok: boolean; error?: 
     const db = tenantDb(ctx.organizationId);
     const campaign = await db.campaign.findFirst({
       where: { id },
-      select: { id: true, channel: true },
+      select: { id: true, channel: true, status: true, lastDispatchAt: true },
     });
     if (!campaign) return { ok: false, error: "invalid" };
 
     const channel = campaign.channel as ChannelKey;
-    const creds = await resolveChannelCredentials(ctx.organizationId, channel);
-    if (!creds) return { ok: false, error: "no_connection" };
+    // Campanha oficial (vínculo WhatsappCloudCampaign): número do criador + modelo aprovado.
+    const cloudLink = channel === "WHATSAPP_CLOUD" ? await findCloudCampaign(ctx.organizationId, id) : null;
+    if (cloudLink) {
+      // Já disparando agora (clique duplo, duas abas): não abre uma segunda cadeia
+      // nem reinicia destinatários — cada envio de modelo é cobrado pela Meta.
+      if (
+        campaign.status === "RUNNING" &&
+        campaign.lastDispatchAt &&
+        Date.now() - campaign.lastDispatchAt.getTime() < CLOUD_ACTIVE_CHAIN_MS
+      ) {
+        return { ok: true };
+      }
+      const problem = await cloudCampaignStartProblem(cloudLink);
+      if (problem) return { ok: false, error: problem };
+      await clearCloudPauseReason(ctx.organizationId, id);
+    } else {
+      const creds = await resolveChannelCredentials(ctx.organizationId, channel);
+      if (!creds) return { ok: false, error: "no_connection" };
+    }
 
     // Re-dispatch: when every recipient was already processed (a finished
     // campaign), reset them all to PENDING so the whole campaign sends again.
@@ -324,6 +349,10 @@ export async function deleteCampaign(id: string): Promise<{ ok: boolean }> {
   try {
     const db = tenantDb(ctx.organizationId);
     await db.campaign.deleteMany({ where: { id } });
+    // Vínculo da campanha oficial (sem FK para campaigns, de propósito). Apagado
+    // depois da campanha: uma falha entre os dois deixa só um vínculo órfão
+    // inofensivo, nunca uma campanha oficial sem vínculo (cairia no disparo antigo).
+    await db.whatsappCloudCampaign.deleteMany({ where: { campaignId: id } });
     revalidatePath("/app/campaigns");
     return { ok: true };
   } catch (error) {

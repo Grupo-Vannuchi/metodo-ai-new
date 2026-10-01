@@ -80,6 +80,18 @@ vale corrigir se você mexer nesse arquivo por outro motivo.
 Se `lint` voltar com um número de avisos diferente destes 4 (ou um erro, que é sempre bloqueante),
 o aviso novo é seu — não assuma que é mais um da lista conhecida sem conferir o arquivo e a regra.
 
+## `test:wa-cloud` (fora das cinco obrigatórias)
+
+`npm run test:wa-cloud` roda `src/lib/whatsapp-cloud/__tests__/*.test.ts` com o `node:test`
+nativo via `tsx` — a primeira suíte de testes do repositório, sem dependência nova. Cobre só as
+unidades **puras** da integração com a WhatsApp Cloud API (parser do webhook, assinatura, janela
+de 24h, erros, modelos, mídia, payloads). Não precisa de banco nem de `.env`.
+
+Regra que mantém a suíte rodando: os módulos testados não importam `server-only`, `@/lib/env`
+nem `@/lib/prisma` — fora do Next, `server-only` nem existe e o `env` exige variáveis. Não está no
+CI nem nas cinco checagens obrigatórias (decisão da spec de 28/09/2026); rode antes de commitar
+qualquer mudança em `src/lib/whatsapp-cloud/`.
+
 ## Convenção de commit
 
 `[ÁREA] - Verbo + Tarefa` no título, corpo estruturado explicando o porquê (não só o quê), e a

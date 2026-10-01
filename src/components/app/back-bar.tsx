@@ -21,6 +21,7 @@ const TOP_LEVEL = new Set([
   "/app/prospecting",
   "/app/connections",
   "/app/inbox",
+  "/app/inbox-oficial",
   "/app/finance",
   "/app/hr",
   "/app/settings",

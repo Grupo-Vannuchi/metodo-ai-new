@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { getCampaign } from "@/lib/queries/campaigns";
+import { getCloudCampaignInfo } from "@/lib/queries/whatsapp-cloud-campaigns";
 import { StartButton } from "@/components/campaigns/start-button";
 import { CHANNEL_META, type ChannelKey } from "@/lib/integrations/channels/meta";
 import { buttonVariants } from "@/components/ui/button";
@@ -44,6 +45,7 @@ export default async function CampaignDetailPage({
   const data = await getCampaign(ctx.organizationId, id);
   if (!data) notFound();
   const { campaign, counts, recipients } = data;
+  const cloudInfo = await getCloudCampaignInfo(ctx.organizationId, campaign.id);
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,6 +72,19 @@ export default async function CampaignDetailPage({
           <StartButton id={campaign.id} status={campaign.status} />
         </div>
       </div>
+
+      {cloudInfo ? (
+        <div className="flex flex-col gap-2 text-sm">
+          {cloudInfo.templateName ? (
+            <p className="text-muted-foreground">{t("cloud.templateUsed", { name: cloudInfo.templateName })}</p>
+          ) : null}
+          {campaign.status === "PAUSED" && cloudInfo.pausedReason ? (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+              {t("cloud.pausedReason", { reason: cloudInfo.pausedReason })}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {COUNT_KEYS.map((key) => (

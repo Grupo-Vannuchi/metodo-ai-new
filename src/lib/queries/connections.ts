@@ -39,10 +39,15 @@ export function countNonWhatsappConnections(organizationId: string): Promise<num
   return db.integrationConnection.count({ where: { provider: { notIn: [...WHATSAPP_PROVIDERS] } } });
 }
 
-/** Connected WhatsApp numbers for the org (bounds the per-plan numbers limit). */
-export function countWhatsappConnections(organizationId: string): Promise<number> {
+/** Connected WhatsApp numbers for the org (bounds the per-plan numbers limit):
+ * QR/legacy connections plus official (Cloud API) numbers. */
+export async function countWhatsappConnections(organizationId: string): Promise<number> {
   const db = tenantDb(organizationId);
-  return db.integrationConnection.count({ where: { provider: { in: [...WHATSAPP_PROVIDERS] } } });
+  const [legacy, official] = await Promise.all([
+    db.integrationConnection.count({ where: { provider: { in: [...WHATSAPP_PROVIDERS] } } }),
+    db.whatsappCloudNumber.count(),
+  ]);
+  return legacy + official;
 }
 
 /** WhatsApp numbers a given user already connected (one-per-user rule). */

@@ -28,7 +28,7 @@ O MétodoAI **deixou de ser um SaaS de planos fixos** e virou uma **plataforma m
 | `hr` | Pessoas (RH) | hr | Funcionários, folha, férias, documentos |
 | `supplies` | Suprimentos | supplies | Estoque, compras, patrimônio, manutenção, equip. de clientes |
 | `marketing` | Marketing | campaigns, prospecting | Campanhas WhatsApp/e-mail, prospecção (Google Places) |
-| `inbox` | Atendimento WhatsApp | inbox | Caixa de entrada multi-conversa (Evolution) |
+| `inbox` | Atendimento WhatsApp | inbox | Caixa de entrada multi-conversa (Evolution) + Conversas (Oficial) pela Cloud API — piloto |
 | `ia` | Inteligência Artificial | — | Copiloto no sistema + agente que responde no WhatsApp |
 | `tasks` | Tarefas | tasks | To-do da equipe (grátis) |
 | `downloader` | Baixador | downloader | Baixa vídeos IG/X/YouTube por link (MVP, ver §7) |
@@ -50,7 +50,7 @@ O MétodoAI **deixou de ser um SaaS de planos fixos** e virou uma **plataforma m
 | Storage | **Vercel Blob** (mídia do inbox) |
 | E-mail | **Resend** (verificação, convites, reset) |
 | IA | **Anthropic** (copiloto/agente) + **OpenAI** (transcrição de áudio, imagens) |
-| WhatsApp | **Evolution API** (não-oficial) numa **VPS separada** |
+| WhatsApp | **Evolution API** (não-oficial) numa **VPS separada** + **WhatsApp Cloud API** direto na Meta (piloto) |
 
 ---
 
@@ -163,6 +163,10 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 | `INTEGRATION_ENC_KEY` | **sim** | AES-256-GCM p/ credenciais (64 hex = 32 bytes) |
 | `NEXT_PUBLIC_SITE_URL` | **recomendada** | URL pública (webhooks, links de e-mail) |
 | `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE` | p/ WhatsApp | servidor Evolution compartilhado (VPS) |
+| `META_APP_SECRET` | p/ WhatsApp oficial | confere `X-Hub-Signature-256` do webhook; sem ela o webhook recusa tudo |
+| `META_WEBHOOK_VERIFY_TOKEN` | p/ WhatsApp oficial | responde ao GET de verificação do webhook |
+| `META_GRAPH_VERSION` | não | versão da Graph API (padrão `v26.0`) |
+| `WHATSAPP_CLOUD_ORG_IDS` | não | empresas liberadas para a tela oficial (ids separados por vírgula); vazio = ninguém |
 | `ANTHROPIC_API_KEY` | p/ IA | copiloto + agente WhatsApp |
 | `OPENAI_API_KEY` | p/ IA | transcrição de áudio, geração de imagem |
 | `RESEND_API_KEY`, `EMAIL_FROM` | p/ e-mail | verificação, convites, reset |
@@ -180,6 +184,7 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 ## 7. Módulos/áreas com detalhes que salvam tempo
 
 - **Inbox WhatsApp (Evolution):** conexão por usuário (`IntegrationConnection.ownerId`), credenciais **criptografadas**. Envio: `src/app/actions/inbox.ts` → adapter `WHATSAPP_EVOLUTION`. **Sempre resolva as credenciais com `resolveEvoCreds()`** (`src/lib/integrations/evolution-creds.ts`) — conexões "de plataforma" guardam só o `instance`; `baseUrl`/`apiKey` vêm do env. Passar credenciais cruas quebra o envio ("Conexão Evolution incompleta"). Recebimento: webhook por conexão `/api/webhooks/evolution/[connectionId]/[token]` → `lib/whatsapp/inbound.ts` + `ingest.ts`. Histórico exige instância criada com `syncFullHistory` (número já conectado precisa desconectar+reconectar). Mídia é assíncrona (QStash → baixa → Vercel Blob).
+- **Conversas (Oficial) — WhatsApp Cloud API (piloto):** tela `/app/inbox-oficial`, código em `src/lib/whatsapp-cloud/`, tabelas `WhatsappCloud*`. Por vendedor (cada um conecta o próprio número com Phone Number ID, WABA ID e token). Webhook único `/api/webhooks/whatsapp-cloud` (GET de verificação + POST assinado). Texto livre só dentro da janela de 24h; fora dela, modelo aprovado. Campanhas com canal "WhatsApp Oficial" disparam modelos pelo número do criador. Design: [spec de 28/09/2026](docs/superpowers/specs/2026-09-28-whatsapp-cloud-inbox-design.md). Simulador local: `scripts/wa-cloud-webhook.ts`. **Configurar a Meta:** (1) App Secret em *Configurações do app → Básico* → `META_APP_SECRET`; (2) em *WhatsApp → Configuração*, URL de retorno `https://metodotia.com/api/webhooks/whatsapp-cloud` e token = `META_WEBHOOK_VERIFY_TOKEN`, assinando `messages`, `message_template_status_update` e `user_id_update` (se listado); (3) token permanente: Gerenciador de Negócios → *Usuários do sistema* → admin → atribuir app e WABA → gerar token com `whatsapp_business_messaging` e `whatsapp_business_management`; (4) número de teste: cadastrar até 5 destinos em *Configuração da API*; (5) número real: PIN da verificação em duas etapas, informado no formulário de conexão.
 - **IA/Copiloto:** `src/lib/assistant/*` (tools read-only + ações com confirmação). Tools aceitam `companyId` opcional para consultar outra empresa da conta (owner-only).
 - **Prospecção:** Google Places com **chave do próprio cliente (BYO)**, assíncrona via QStash, descarte LGPD.
 - **Baixador (MVP frágil):** `src/lib/downloader/` — YouTube via `@distube/ytdl-core` (quebra quando o YouTube muda; atualizar a lib ajuda), X via endpoint de syndication, Instagram via `og:video` (só público). Download passa por `/api/downloader/fetch` (proxy com allowlist de host anti-SSRF, gateado por módulo). **Se o YouTube for crítico, migrar para `yt-dlp` numa VPS é o caminho estável.**
@@ -235,7 +240,11 @@ isso a `main` exige PR e `enforce_admins` está ligado — sem isso, um push dir
 >
 > Antes de mergear qualquer coisa que toque `prisma/schema.prisma`, aplique a migration no Supabase
 > **primeiro** (veja "Migrações" acima) e só então faça o merge. A ordem importa: schema novo com
-> código antigo costuma funcionar; código novo com schema antigo quebra.
+> código antigo costuma funcionar; código novo com schema antigo quebra. A migration
+> `20260928120000_whatsapp_cloud` (WhatsApp oficial) só cria tabelas, mas **tem de estar aplicada no
+> Supabase ANTES do merge** que traz a tela oficial: sem essas tabelas, o detalhe, a edição e a
+> exclusão de campanhas, o limite de números de WhatsApp e o disparo das campanhas `WHATSAPP_CLOUD`
+> antigas quebram para **todas** as empresas — não só para a do piloto.
 
 **Gotchas que já causaram incidente:**
 1. **500 em todo o app após deploy** = o build não pegou o código novo. Com o deploy automático isso

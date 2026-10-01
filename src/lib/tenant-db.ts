@@ -86,6 +86,11 @@ const TENANT_MODELS = new Set<string>([
   "MaintenanceEvent",
   "ServiceTicket",
   "WhatsappAgent",
+  "WhatsappCloudNumber",
+  "WhatsappCloudConversation",
+  "WhatsappCloudMessage",
+  "WhatsappCloudTemplate",
+  "WhatsappCloudCampaign",
 ]);
 
 const WHERE_OPS = new Set<string>([

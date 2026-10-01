@@ -11,6 +11,7 @@ import {
   Radar,
   Send,
   MessageCircle,
+  BadgeCheck,
   Building2,
   Contact,
   Wallet,
@@ -37,6 +38,7 @@ type NavKey =
   | "prospecting"
   | "campaigns"
   | "inbox"
+  | "inboxOficial"
   | "companies"
   | "contacts"
   | "connections"
@@ -87,6 +89,7 @@ const GROUPS: Group[] = [
     key: "comms",
     items: [
       { href: "/app/inbox", key: "inbox", icon: MessageCircle },
+      { href: "/app/inbox-oficial", key: "inboxOficial", icon: BadgeCheck },
       { href: "/app/campaigns", key: "campaigns", icon: Send },
       { href: "/app/prospecting", key: "prospecting", icon: Radar },
     ],
@@ -123,7 +126,9 @@ export function AppNav({ allowedScreens, collapsed = false }: { allowedScreens: 
     ((key === "automations" || key === "goals") && allowedScreens.includes("crm")) ||
     // "Meus itens" is the personal Tasks hub — show it with the Tasks module.
     (key === "my" && allowedScreens.includes("tasks"));
-  const isActive = (href: string) => (href === "/app" ? pathname === "/app" : pathname.startsWith(href));
+  // Match whole segments: "/app/inbox" must not light up on "/app/inbox-oficial".
+  const isActive = (href: string) =>
+    href === "/app" ? pathname === "/app" : pathname === href || pathname.startsWith(`${href}/`);
 
   // Live unread badge for the inbox item — pushed by the realtime stream.
   const loadUnread = useCallback(async () => {
