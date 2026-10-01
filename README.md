@@ -259,6 +259,13 @@ isso a `main` exige PR e `enforce_admins` está ligado — sem isso, um push dir
    descartada: resolve a falha, mas esbarra num bug nativo do Node com worker threads (corrigido só
    no 24.13.1/25.4.0, não no 20) e terminou 2 de 6 builds locais em segfault (`exit 139`) — o que,
    na Hostinger, também marca o deploy como falho.
+   **O build com webpack precisa do `outputFileTracingIncludes` do `next.config.ts`.** A Hostinger
+   publica só os arquivos listados nos traces (`.next/**/*.nft.json`), e o trace do webpack não
+   enxerga o `query_compiler_bg.wasm` que o Prisma (sem engine Rust) lê do disco. Sem a linha, o
+   deploy "dá certo", as páginas públicas abrem, mas toda query morre com `ENOENT …
+   .prisma/client/query_compiler_bg.wasm`: login dá 500, `/app` e telas logadas mostram "This page
+   couldn't load" (foi o que aconteceu em 01/10, entre 10:51 e a correção). O erro real só aparece em
+   hPanel → Logs de execução; localmente não reproduz, porque o `node_modules` está inteiro.
 
 ### Crons — só o `extractions` deve rodar
 
