@@ -145,22 +145,12 @@ para o tipo mas sem dono ainda — não gatear nada por elas por engano.
 
 ## Paridade de i18n
 
-`src/messages/pt.json` e `src/messages/en.json` têm **2598 chaves-folha cada um** (contagem
+`src/messages/pt.json` e `src/messages/en.json` têm **2597 chaves-folha cada um** (contagem
 própria, recursiva sobre os dois arquivos — batem exatamente). Não existe script no repositório
 que verifique isso automaticamente: nenhum arquivo em `scripts/` nem entrada em `package.json`
 menciona `pt.json`/`en.json`. Adicionar uma chave de um lado sem adicionar do outro não quebra
 `typecheck`, `lint` nem `build` — só aparece como texto faltando (ou a chave crua) na tela de quem
 usa o idioma que ficou pra trás.
-
-**Textos jurídicos longos ficam fora dos catálogos**, em `src/messages/legal/<doc>.<locale>.json`
-(hoje só `privacy`, servida em `/privacy`). O motivo é peso: o `NextIntlClientProvider` do layout
-manda o catálogo inteiro para o navegador em toda página, e a política tem dezenas de KB que só a
-página dela usa. Aqui o formato é checado: a página faz `{ pt, en } satisfies Record<Locale,
-LegalContent>`, então um idioma fora do formato quebra o `typecheck` (o número de seções e itens
-continua sendo disciplina manual). Os dados da empresa (razão social, CNPJ, endereço e o e-mail
-de privacidade, `contact.privacyEmail` — que não é o e-mail de contato do rodapé) entram como
-`{placeholders}` preenchidos a partir de [src/config/site.ts](../../src/config/site.ts)
-— mudou a empresa, muda só lá. Mudou o texto, atualize `UPDATED_AT` na página.
 
 ## Resumo
 
