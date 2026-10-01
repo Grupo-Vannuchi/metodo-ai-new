@@ -42,6 +42,20 @@ const nextConfig: NextConfig = {
     ],
   },
   /**
+   * Ship Prisma's query compiler with every server route.
+   *
+   * The client is engine-free (`engineType = "client"`, see schema.prisma): it
+   * compiles queries with `query_compiler_bg.wasm`, which it reads from disk at
+   * runtime. The webpack build's file tracing doesn't see that read, so the
+   * `.nft.json` traces list the `.js` glue but not the `.wasm` — and Hostinger
+   * deploys only the traced files. Without this, every query in production dies
+   * with `ENOENT … .prisma/client/query_compiler_bg.wasm` (login 500, /app down),
+   * while local runs work because the full node_modules is there.
+   */
+  outputFileTracingIncludes: {
+    "/*": ["./node_modules/.prisma/client/*.wasm"],
+  },
+  /**
    * Cache policy — fixes the "broken landing on some devices after a deploy".
    *
    * Next already serves the hashed build assets under `/_next/*` immutably, so we
