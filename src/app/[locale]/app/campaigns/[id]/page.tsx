@@ -86,7 +86,7 @@ export default async function CampaignDetailPage({
             <tr>
               <th className="px-5 py-3 font-medium">{t("colContact")}</th>
               <th className="px-5 py-3 font-medium">{t("colDestination")}</th>
-              <th className="px-5 py-3 font-medium">{t("status")}</th>
+              <th className="px-5 py-3 font-medium">{t("colStatus")}</th>
             </tr>
           </thead>
           <tbody>

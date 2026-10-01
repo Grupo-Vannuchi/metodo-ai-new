@@ -1821,6 +1821,7 @@
     "starting": "Iniciando…",
     "colContact": "Contato",
     "colDestination": "Destino",
+    "colStatus": "Status",
     "statusLabel": {
       "DRAFT": "Rascunho",
       "SCHEDULED": "Agendada",
