@@ -107,7 +107,8 @@ const GROUPS: Group[] = [
 ];
 
 /** Screens always shown in the sidebar (core, not gated by access templates).
- *  Settings + Loja live in the top bar now, not the sidebar. */
+ *  Settings + Loja stay out of this list: both are in the top bar, and Settings
+ *  also sits in the sidebar footer, next to the user. */
 const ALWAYS_SHOWN: NavKey[] = ["dashboard"];
 
 export function AppNav({ allowedScreens, collapsed = false }: { allowedScreens: string[]; collapsed?: boolean }) {

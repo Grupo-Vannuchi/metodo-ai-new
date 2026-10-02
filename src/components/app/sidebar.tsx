@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LogOut, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
+import { Link, usePathname } from "@/i18n/navigation";
 import { Logo } from "@/components/layout/logo";
 import { AppNav } from "@/components/app/app-nav";
 import { NotificationBell } from "@/components/app/notification-bell";
@@ -44,6 +45,7 @@ export function Sidebar({
 }) {
   const t = useTranslations("app.nav");
   const [collapsed, setCollapsed] = useState(initialCollapsed);
+  const settingsActive = usePathname().startsWith("/app/settings");
 
   function toggle() {
     const next = !collapsed;
@@ -118,20 +120,39 @@ export function Sidebar({
             </div>
           </div>
         )}
-        <form action={logoutAction}>
-          <button
-            type="submit"
-            aria-label={t("signOut")}
-            title={collapsed ? t("signOut") : undefined}
+        <div className="flex flex-col gap-0.5">
+          {/* Settings lives with the account, not in the nav list above —
+              that list is reserved for modules and their pages. */}
+          <Link
+            href="/app/settings"
+            aria-label={collapsed ? t("settings") : undefined}
+            title={collapsed ? t("settings") : undefined}
             className={cn(
-              "flex w-full items-center gap-3 rounded-lg py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+              "flex w-full items-center gap-3 rounded-lg py-2 text-sm transition-colors",
               collapsed ? "justify-center px-0" : "px-3",
+              settingsActive
+                ? "bg-brand/10 font-medium text-brand"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
-            <LogOut className="size-4 shrink-0" />
-            {collapsed ? null : t("signOut")}
-          </button>
-        </form>
+            <Settings className="size-4 shrink-0" />
+            {collapsed ? null : t("settings")}
+          </Link>
+          <form action={logoutAction}>
+            <button
+              type="submit"
+              aria-label={t("signOut")}
+              title={collapsed ? t("signOut") : undefined}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-lg py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                collapsed ? "justify-center px-0" : "px-3",
+              )}
+            >
+              <LogOut className="size-4 shrink-0" />
+              {collapsed ? null : t("signOut")}
+            </button>
+          </form>
+        </div>
       </div>
     </aside>
   );

@@ -101,7 +101,8 @@ export async function AppShell({
         </header>
 
         {/* Desktop top bar — config cluster (Loja, Configurações) beside the theme
-            toggle. The sidebar is reserved for modules and their pages. */}
+            toggle. The sidebar's nav list is reserved for modules and their pages;
+            Configurações is repeated in its footer, next to the user. */}
         <header className="hidden items-center justify-end gap-1 border-b border-border px-6 py-2.5 md:flex">
           <Link
             href="/app/loja"
