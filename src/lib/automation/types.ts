@@ -26,7 +26,7 @@ export function isWhatsappTrigger(t: TriggerType): boolean {
 }
 
 export const ACTION_TYPES = [
-  "ai_collect",
+  "ask_questions",
   "create_opportunity",
   "create_task",
   "notify_owner",
@@ -43,7 +43,7 @@ export const ACTION_TYPES = [
 export type ActionType = (typeof ACTION_TYPES)[number];
 
 /** Actions that only make sense under the WhatsApp trigger. */
-export const WHATSAPP_ONLY_ACTIONS: readonly ActionType[] = ["ai_collect", "create_opportunity"];
+export const WHATSAPP_ONLY_ACTIONS: readonly ActionType[] = ["ask_questions", "create_opportunity"];
 
 export type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
 
@@ -53,14 +53,7 @@ export type QuestionField = (typeof QUESTION_FIELDS)[number];
 export type FlowQuestion = { label: string; field: QuestionField };
 
 export type RuleAction =
-  | {
-      type: "ai_collect";
-      questions: FlowQuestion[];
-      firstMessage?: string;
-      instructions?: string;
-      finalMessage?: string;
-      allowHandoff?: boolean;
-    }
+  | { type: "ask_questions"; questions: FlowQuestion[]; firstMessage?: string; finalMessage?: string }
   | { type: "create_opportunity" }
   | { type: "create_task"; title: string; description?: string; priority?: TaskPriority; dueInDays?: number }
   | { type: "notify_owner"; message?: string }
@@ -109,7 +102,7 @@ export function cleanFlowNumber(raw: string): string {
   return d.length >= 10 && d.length <= 13 ? d : "";
 }
 
-export type RuleProblem = "name" | "actions" | "stage" | "connection" | "numbers" | "keyword" | "aiFirst" | "questions" | "whatsappOnly";
+export type RuleProblem = "name" | "actions" | "stage" | "connection" | "numbers" | "keyword" | "questionsFirst" | "questions" | "whatsappOnly";
 
 /** Why a rule can't be saved, or null. Shared by the editor and the server action. */
 export function ruleProblem(rule: {
@@ -130,7 +123,7 @@ export function ruleProblem(rule: {
   if (wa.numbers.length === 0) return "numbers";
   if (!wa.keyword.trim()) return "keyword";
   const [first, ...rest] = rule.actions;
-  if (first.type !== "ai_collect" || rest.some((a) => a.type === "ai_collect")) return "aiFirst";
+  if (first.type !== "ask_questions" || rest.some((a) => a.type === "ask_questions")) return "questionsFirst";
   if (first.questions.length === 0 || first.questions.some((q) => !q.label.trim())) return "questions";
   return null;
 }
@@ -154,21 +147,21 @@ export function parseActions(raw: unknown): RuleAction[] {
     if (!a || typeof a !== "object") continue;
     const o = a as Record<string, unknown>;
     switch (o.type) {
-      case "ai_collect": {
+      // "ai_collect" is the name rules were saved with while this step used the AI.
+      case "ai_collect":
+      case "ask_questions": {
         const questions: FlowQuestion[] = (Array.isArray(o.questions) ? o.questions : [])
           .filter((q): q is Record<string, unknown> => !!q && typeof q === "object")
           .map((q) => ({
-            label: str(q.label, 160),
+            label: str(q.label, 300),
             field: QUESTION_FIELDS.includes(q.field as QuestionField) ? (q.field as QuestionField) : "notes",
           }))
           .slice(0, MAX_FLOW_QUESTIONS);
         out.push({
-          type: "ai_collect",
+          type: "ask_questions",
           questions,
           firstMessage: str(o.firstMessage, 1000) || undefined,
-          instructions: str(o.instructions, 4000) || undefined,
           finalMessage: str(o.finalMessage, 1000) || undefined,
-          allowHandoff: o.allowHandoff === true,
         });
         break;
       }

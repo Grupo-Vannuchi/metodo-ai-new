@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
 import { requireScreen, requireModule } from "@/lib/access";
-import { hasFeatureByModules, hasModule } from "@/config/modules";
+import { hasModule } from "@/config/modules";
 import { listAutomationRules, listWhatsappConnections } from "@/lib/queries/automations";
 import { listPipelinesWithStages } from "@/lib/queries/pipelines";
 import { listQuickReplies } from "@/lib/queries/quick-replies";
@@ -18,8 +18,8 @@ export default async function AutomationsPage({ params }: { params: Promise<{ lo
   await requireScreen(ctx, "crm", locale);
   await requireModule(ctx, "crm", locale);
   const t = await getTranslations("crm.automations");
-  // The WhatsApp trigger runs the AI on inbound messages: IA + Atendimento.
-  const whatsappEnabled = hasFeatureByModules(ctx.modules, "whatsapp_agent") && hasModule(ctx.modules, "inbox");
+  // The WhatsApp trigger listens on the Atendimento module's numbers.
+  const whatsappEnabled = hasModule(ctx.modules, "inbox");
 
   const [rules, pipelines, templates, members, connections] = await Promise.all([
     listAutomationRules(ctx.organizationId),

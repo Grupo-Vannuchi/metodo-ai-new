@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import {
   Plus, Trash2, Pencil, Zap, X, CheckSquare, Bell, BellPlus, MessageCircle, Mail,
   ArrowRightLeft, UserCog, CalendarClock, Tag, Wallet, Webhook, ZoomIn, ZoomOut, Maximize2,
-  Bot, Briefcase,
+  MessagesSquare, Briefcase,
 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
@@ -82,7 +82,7 @@ const emptyDraft = (): Draft => ({
 const parseMoney = (s: string) => (s ? Number(s.replace(/[^\d.,]/g, "").replace(/\./g, "").replace(",", ".")) : undefined);
 
 const ACTION_ICON: Record<ActionType, typeof CheckSquare> = {
-  ai_collect: Bot,
+  ask_questions: MessagesSquare,
   create_opportunity: Briefcase,
   create_task: CheckSquare,
   notify_owner: Bell,
@@ -99,7 +99,7 @@ const ACTION_ICON: Record<ActionType, typeof CheckSquare> = {
 
 function newAction(type: ActionType, firstTemplate?: string, firstStage?: string, firstMember?: string): RuleAction {
   switch (type) {
-    case "ai_collect": return { type, questions: [{ label: "", field: "notes" }], allowHandoff: false };
+    case "ask_questions": return { type, questions: [{ label: "", field: "notes" }] };
     case "create_opportunity": return { type };
     case "create_task": return { type, title: "", priority: "MEDIUM" };
     case "notify_owner": return { type };
@@ -155,7 +155,7 @@ export function AutomationsClient({
 
   function actionSummary(a: RuleAction): string {
     switch (a.type) {
-      case "ai_collect": return `${t("action.ai_collect")}: ${t("aiQuestionsCount", { count: a.questions.length })}`;
+      case "ask_questions": return `${t("action.ask_questions")}: ${t("questionsCount", { count: a.questions.length })}`;
       case "create_opportunity": return t("action.create_opportunity");
       case "create_task": return t("action.create_task") + (a.title ? `: ${a.title}` : "");
       case "notify_owner": return t("action.notify_owner");
@@ -199,8 +199,8 @@ export function AutomationsClient({
   function changeTrigger(next: TriggerType) {
     setDraft((d) => {
       if (!d) return d;
-      if (!isWhatsappTrigger(next) || d.actions.some((a) => a.type === "ai_collect")) return { ...d, trigger: next };
-      return { ...d, trigger: next, actions: [newAction("ai_collect"), ...d.actions], layout: {} };
+      if (!isWhatsappTrigger(next) || d.actions.some((a) => a.type === "ask_questions")) return { ...d, trigger: next };
+      return { ...d, trigger: next, actions: [newAction("ask_questions"), ...d.actions], layout: {} };
     });
   }
 
@@ -221,7 +221,7 @@ export function AutomationsClient({
   const availableActions = ACTION_TYPES.filter((type) => {
     if (!WHATSAPP_ONLY_ACTIONS.includes(type)) return true;
     if (!isWa) return false;
-    return type !== "ai_collect" || !draft?.actions.some((a) => a.type === "ai_collect");
+    return type !== "ask_questions" || !draft?.actions.some((a) => a.type === "ask_questions");
   });
 
   function posOf(key: "trigger" | number): NodePos {
@@ -658,34 +658,31 @@ function ActionInspector({
     <div className="flex flex-col gap-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t(`action.${action.type}`)}</p>
 
-      {action.type === "ai_collect" ? (
+      {action.type === "ask_questions" ? (
         <>
-          <Field label={t("aiFirstMessage")}>
-            <textarea value={action.firstMessage ?? ""} onChange={(e) => onChange({ ...action, firstMessage: e.target.value })} rows={4} placeholder={t("aiFirstMessagePlaceholder")} className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none" />
+          <Field label={t("welcomeMessage")}>
+            <textarea value={action.firstMessage ?? ""} onChange={(e) => onChange({ ...action, firstMessage: e.target.value })} rows={3} placeholder={t("welcomeMessagePlaceholder")} className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none" />
           </Field>
-          <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" checked={action.allowHandoff === true} onChange={(e) => onChange({ ...action, allowHandoff: e.target.checked })} className="mt-0.5 size-4 accent-[var(--brand)]" />
-            {t("aiAllowHandoff")}
-          </label>
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">{t("aiQuestions")}</span>
+            <span className="text-xs font-medium text-muted-foreground">{t("questions")}</span>
             {action.questions.map((q, i) => (
               <div key={i} className="flex flex-col gap-1 rounded-lg border border-border p-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-4 shrink-0 text-xs tabular-nums text-muted-foreground">{i + 1}</span>
-                  <Input
+                <div className="flex items-start gap-1.5">
+                  <span className="mt-1.5 w-4 shrink-0 text-xs tabular-nums text-muted-foreground">{i + 1}</span>
+                  <textarea
                     value={q.label}
-                    onChange={(e) => onChange({ ...action, questions: action.questions.map((x, j) => (j === i ? { ...x, label: e.target.value.slice(0, 160) } : x)) })}
-                    placeholder={t("aiQuestionPlaceholder")}
-                    aria-label={`${t("aiQuestions")} ${i + 1}`}
-                    className="h-8 min-w-0 flex-1"
+                    onChange={(e) => onChange({ ...action, questions: action.questions.map((x, j) => (j === i ? { ...x, label: e.target.value.slice(0, 300) } : x)) })}
+                    placeholder={t("questionPlaceholder")}
+                    aria-label={`${t("questions")} ${i + 1}`}
+                    rows={2}
+                    className="min-w-0 flex-1 rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none"
                   />
-                  <button type="button" onClick={() => onChange({ ...action, questions: action.questions.filter((_, j) => j !== i) })} aria-label={t("aiRemoveQuestion")} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"><X className="size-3.5" /></button>
+                  <button type="button" onClick={() => onChange({ ...action, questions: action.questions.filter((_, j) => j !== i) })} aria-label={t("removeQuestion")} className="mt-1 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"><X className="size-3.5" /></button>
                 </div>
                 <Select
                   value={q.field}
                   onChange={(v) => onChange({ ...action, questions: action.questions.map((x, j) => (j === i ? { ...x, field: v as QuestionField } : x)) })}
-                  options={QUESTION_FIELDS.map((f) => ({ value: f, label: t(`aiField.${f}`) }))}
+                  options={QUESTION_FIELDS.map((f) => ({ value: f, label: t(`answerField.${f}`) }))}
                 />
               </div>
             ))}
@@ -696,14 +693,12 @@ function ActionInspector({
               className="inline-flex items-center gap-1 self-start text-xs font-medium text-brand hover:underline disabled:opacity-50"
             >
               <Plus className="size-3.5" />
-              {t("aiAddQuestion")}
+              {t("addQuestion")}
             </button>
+            <p className="text-xs text-muted-foreground">{t("questionsHint")}</p>
           </div>
-          <Field label={t("aiInstructions")}>
-            <textarea value={action.instructions ?? ""} onChange={(e) => onChange({ ...action, instructions: e.target.value })} rows={3} placeholder={t("aiInstructionsPlaceholder")} className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none" />
-          </Field>
-          <Field label={t("aiFinalMessage")}>
-            <textarea value={action.finalMessage ?? ""} onChange={(e) => onChange({ ...action, finalMessage: e.target.value })} rows={2} placeholder={t("aiFinalMessagePlaceholder")} className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none" />
+          <Field label={t("finalMessage")}>
+            <textarea value={action.finalMessage ?? ""} onChange={(e) => onChange({ ...action, finalMessage: e.target.value })} rows={2} placeholder={t("finalMessagePlaceholder")} className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none" />
           </Field>
         </>
       ) : null}
