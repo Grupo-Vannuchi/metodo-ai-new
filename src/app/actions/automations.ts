@@ -3,9 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
-import { isTrigger, parseActions, parseConfig } from "@/lib/automation/types";
+import { hasFeatureByModules, hasModule } from "@/config/modules";
+import { isTrigger, isWhatsappTrigger, parseActions, parseConfig, ruleProblem } from "@/lib/automation/types";
 
-export type RuleResult = { ok: true; id: string } | { ok: false; error: "unauthorized" | "invalid" | "unknown" };
+export type RuleResult =
+  | { ok: true; id: string }
+  | { ok: false; error: "unauthorized" | "forbidden" | "invalid" | "unknown" };
 
 type RuleInput = {
   name: string;
@@ -28,12 +31,26 @@ async function guard(): Promise<Guard> {
 function normalize(input: RuleInput) {
   const name = (input.name ?? "").trim().slice(0, 120);
   const trigger = (input.trigger ?? "").trim();
+  if (!isTrigger(trigger)) return null;
   const actions = parseActions(input.actions);
   const config = parseConfig(input.config);
-  if (!name || !isTrigger(trigger) || actions.length === 0) return null;
   const triggerStageId = trigger === "stage_entered" ? (input.triggerStageId ?? "").trim() || null : null;
-  if (trigger === "stage_entered" && !triggerStageId) return null;
+  if (!isWhatsappTrigger(trigger)) delete config.whatsapp;
+  if (ruleProblem({ name, trigger, triggerStageId, actions, config })) return null;
   return { name, trigger, triggerStageId, actions, config };
+}
+
+/** A WhatsApp rule needs the IA + Atendimento modules and a number of this org. */
+async function checkWhatsapp(ctx: OrgCtx, data: NonNullable<ReturnType<typeof normalize>>): Promise<RuleResult | null> {
+  if (!isWhatsappTrigger(data.trigger)) return null;
+  if (!hasFeatureByModules(ctx.modules, "whatsapp_agent") || !hasModule(ctx.modules, "inbox")) {
+    return { ok: false, error: "forbidden" };
+  }
+  const conn = await tenantDb(ctx.organizationId).integrationConnection.findFirst({
+    where: { id: data.config.whatsapp?.connectionId, provider: "EVOLUTION" },
+    select: { id: true },
+  });
+  return conn ? null : { ok: false, error: "invalid" };
 }
 
 export async function createRule(input: RuleInput): Promise<RuleResult> {
@@ -42,6 +59,8 @@ export async function createRule(input: RuleInput): Promise<RuleResult> {
   const data = normalize(input);
   if (!data) return { ok: false, error: "invalid" };
   try {
+    const rejected = await checkWhatsapp(g.ctx, data);
+    if (rejected) return rejected;
     const db = tenantDb(g.ctx.organizationId);
     const rule = await db.automationRule.create({
       data: { organizationId: g.ctx.organizationId, ...data, actions: data.actions },
@@ -61,6 +80,8 @@ export async function updateRule(id: string, input: RuleInput): Promise<RuleResu
   const data = normalize(input);
   if (!data) return { ok: false, error: "invalid" };
   try {
+    const rejected = await checkWhatsapp(g.ctx, data);
+    if (rejected) return rejected;
     const db = tenantDb(g.ctx.organizationId);
     const res = await db.automationRule.updateMany({ where: { id }, data: { ...data, actions: data.actions } });
     if (res.count === 0) return { ok: false, error: "unknown" };

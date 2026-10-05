@@ -12,7 +12,7 @@ import { getBase64FromMediaMessage } from "@/lib/integrations/evolution-client";
 import type { ParsedInbound } from "@/lib/whatsapp/inbound";
 
 /** Wait this long before replying, so rapid-fire messages get answered as one. */
-const DEBOUNCE_MS = 8000;
+export const DEBOUNCE_MS = 8000;
 /** How many recent messages of the chat to feed the model as context (memory). */
 const HISTORY_LIMIT = 20;
 const MAX_TOKENS = 800;
@@ -21,12 +21,12 @@ const MAX_TOOL_ROUNDS = 4;
 /** Skip transcription for very long audios (bounds cost); ask to type instead. */
 const MAX_AUDIO_SEC = 600;
 /** Fallback reply when an inbound voice note can't be transcribed. */
-const CANT_HEAR_AUDIO =
+export const CANT_HEAR_AUDIO =
   "Recebi seu áudio, mas não consegui ouvir agora. Pode me mandar por escrito, por favor?";
 
 type AgentRow = { prompt: string; model: string; name: string | null };
 
-type Turn = { role: "user" | "assistant"; content: string };
+export type Turn = { role: "user" | "assistant"; content: string };
 
 /**
  * Fire-and-forget the WhatsApp AI auto-reply for an inbound message. The webhook
@@ -170,7 +170,7 @@ async function runAgentReply(organizationId: string, connectionId: string, m: Pa
  *  read it like text. Returns the transcript, or "" when it can't be produced
  *  (no key, audio too long, provider/transcription failure) — the caller then
  *  degrades gracefully. Idempotent: reuses an already-stored transcript. */
-async function transcribeInboundAudio(connectionId: string, m: ParsedInbound): Promise<string> {
+export async function transcribeInboundAudio(connectionId: string, m: ParsedInbound): Promise<string> {
   if (!isTranscriptionConfigured() || !m.providerMessageId) return "";
   if ((m.media?.durationSec ?? 0) > MAX_AUDIO_SEC) return "";
 
@@ -200,7 +200,7 @@ async function transcribeInboundAudio(connectionId: string, m: ParsedInbound): P
 
 /** Store the bot's outgoing message, or tag the already-ingested echo. Uses the
  *  providerMessageId returned by the send so the webhook echo dedups against it. */
-async function recordAgentReply(
+export async function recordAgentReply(
   organizationId: string,
   conversationId: string,
   body: string,
@@ -287,7 +287,7 @@ function buildSystem(agent: AgentRow): string {
 
 /** The human the bot acts for: the agent's configurer if still a member, else
  *  any OWNER/ADMIN of the org. Null only if no such member exists. */
-async function resolveOwnerId(organizationId: string, createdById: string | null): Promise<string | null> {
+export async function resolveOwnerId(organizationId: string, createdById: string | null): Promise<string | null> {
   if (createdById) {
     const m = await prisma.membership.findFirst({
       where: { organizationId, userId: createdById },
@@ -304,7 +304,7 @@ async function resolveOwnerId(organizationId: string, createdById: string | null
 
 /** Merge consecutive same-role turns and drop any leading assistant turns, so
  *  the sequence alternates and starts with the user (Anthropic requirement). */
-function toAlternatingTurns(turns: Turn[]): Turn[] {
+export function toAlternatingTurns(turns: Turn[]): Turn[] {
   const merged: Turn[] = [];
   for (const t of turns) {
     const last = merged[merged.length - 1];
@@ -315,6 +315,6 @@ function toAlternatingTurns(turns: Turn[]): Turn[] {
   return merged;
 }
 
-function sleep(ms: number): Promise<void> {
+export function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }

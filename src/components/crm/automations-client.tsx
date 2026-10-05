@@ -5,23 +5,34 @@ import { useTranslations } from "next-intl";
 import {
   Plus, Trash2, Pencil, Zap, X, CheckSquare, Bell, BellPlus, MessageCircle, Mail,
   ArrowRightLeft, UserCog, CalendarClock, Tag, Wallet, Webhook, ZoomIn, ZoomOut, Maximize2,
+  Bot, Briefcase,
 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { useConfirm } from "@/components/ui/confirm";
 import { cn } from "@/lib/utils";
+import { formatBrPhone } from "@/lib/phone";
 import {
   TRIGGERS,
   ACTION_TYPES,
+  WHATSAPP_ONLY_ACTIONS,
+  QUESTION_FIELDS,
+  MAX_FLOW_NUMBERS,
+  MAX_FLOW_QUESTIONS,
   triggerNeedsStage,
+  isWhatsappTrigger,
+  cleanFlowNumber,
+  ruleProblem,
   type RuleAction,
   type RuleConfig,
   type TriggerType,
   type ActionType,
   type NodePos,
+  type QuestionField,
+  type WhatsappTriggerConfig,
 } from "@/lib/automation/types";
-import type { AutomationRuleView } from "@/lib/queries/automations";
+import type { AutomationRuleView, WhatsappConnectionOption } from "@/lib/queries/automations";
 import { createRule, updateRule, deleteRule, toggleRule } from "@/app/actions/automations";
 
 type Stage = { id: string; name: string; pipeline: string };
@@ -37,6 +48,8 @@ type Draft = {
   maxValue: string;
   actions: RuleAction[];
   layout: Layout;
+  wa: WhatsappTriggerConfig;
+  numberInput: string;
 };
 /** "trigger" or an action index. */
 type Selection = "trigger" | number | null;
@@ -61,10 +74,16 @@ function normalizeLayout(actionCount: number, layout: Layout): Layout {
     actions: actions.map((p) => ({ x: p.x + dx, y: p.y + dy })),
   };
 }
-const emptyDraft = (): Draft => ({ id: null, name: "", trigger: "stage_entered", triggerStageId: "", minValue: "", maxValue: "", actions: [], layout: {} });
+const emptyWa = (connectionId = ""): WhatsappTriggerConfig => ({ connectionId, numbers: [], keyword: "", match: "contains" });
+const emptyDraft = (): Draft => ({
+  id: null, name: "", trigger: "stage_entered", triggerStageId: "", minValue: "", maxValue: "", actions: [], layout: {},
+  wa: emptyWa(), numberInput: "",
+});
 const parseMoney = (s: string) => (s ? Number(s.replace(/[^\d.,]/g, "").replace(/\./g, "").replace(",", ".")) : undefined);
 
 const ACTION_ICON: Record<ActionType, typeof CheckSquare> = {
+  ai_collect: Bot,
+  create_opportunity: Briefcase,
   create_task: CheckSquare,
   notify_owner: Bell,
   notify_user: BellPlus,
@@ -80,6 +99,8 @@ const ACTION_ICON: Record<ActionType, typeof CheckSquare> = {
 
 function newAction(type: ActionType, firstTemplate?: string, firstStage?: string, firstMember?: string): RuleAction {
   switch (type) {
+    case "ai_collect": return { type, questions: [{ label: "", field: "notes" }], allowHandoff: false };
+    case "create_opportunity": return { type };
     case "create_task": return { type, title: "", priority: "MEDIUM" };
     case "notify_owner": return { type };
     case "notify_user": return { type, userId: firstMember ?? "" };
@@ -99,12 +120,16 @@ export function AutomationsClient({
   stages,
   templates,
   members,
+  connections,
+  whatsappEnabled,
   canEdit,
 }: {
   rules: AutomationRuleView[];
   stages: Stage[];
   templates: Template[];
   members: Member[];
+  connections: WhatsappConnectionOption[];
+  whatsappEnabled: boolean;
   canEdit: boolean;
 }) {
   const t = useTranslations("crm.automations");
@@ -114,6 +139,7 @@ export function AutomationsClient({
   const [selected, setSelected] = useState<Selection>("trigger");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [numberError, setNumberError] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -129,6 +155,8 @@ export function AutomationsClient({
 
   function actionSummary(a: RuleAction): string {
     switch (a.type) {
+      case "ai_collect": return `${t("action.ai_collect")}: ${t("aiQuestionsCount", { count: a.questions.length })}`;
+      case "create_opportunity": return t("action.create_opportunity");
       case "create_task": return t("action.create_task") + (a.title ? `: ${a.title}` : "");
       case "notify_owner": return t("action.notify_owner");
       case "notify_user": return `${t("action.notify_user")}: ${memberName(a.userId)}`;
@@ -158,11 +186,43 @@ export function AutomationsClient({
         maxValue: rule.config.maxValue ? String(rule.config.maxValue) : "",
         actions: rule.actions,
         layout: normalizeLayout(rule.actions.length, rule.config.layout ?? {}),
+        wa: rule.config.whatsapp ?? emptyWa(),
+        numberInput: "",
       });
     } else {
-      setDraft(emptyDraft());
+      setDraft({ ...emptyDraft(), wa: emptyWa(connections.length === 1 ? connections[0].id : "") });
     }
   }
+
+  /** Switching to the WhatsApp trigger puts "Responder com IA" first, which the
+   *  flow requires; the canvas layout restarts so nodes don't overlap. */
+  function changeTrigger(next: TriggerType) {
+    setDraft((d) => {
+      if (!d) return d;
+      if (!isWhatsappTrigger(next) || d.actions.some((a) => a.type === "ai_collect")) return { ...d, trigger: next };
+      return { ...d, trigger: next, actions: [newAction("ai_collect"), ...d.actions], layout: {} };
+    });
+  }
+
+  function addNumber() {
+    if (!draft) return;
+    const n = cleanFlowNumber(draft.numberInput);
+    if (!n) return setNumberError(true);
+    setNumberError(false);
+    const numbers = draft.wa.numbers.includes(n) ? draft.wa.numbers : [...draft.wa.numbers, n].slice(0, MAX_FLOW_NUMBERS);
+    setDraft({ ...draft, numberInput: "", wa: { ...draft.wa, numbers } });
+  }
+  function removeNumber(n: string) {
+    setDraft((d) => (d ? { ...d, wa: { ...d.wa, numbers: d.wa.numbers.filter((x) => x !== n) } } : d));
+  }
+
+  const isWa = draft ? isWhatsappTrigger(draft.trigger) : false;
+  const availableTriggers = TRIGGERS.filter((tr) => !isWhatsappTrigger(tr) || whatsappEnabled || draft?.trigger === tr);
+  const availableActions = ACTION_TYPES.filter((type) => {
+    if (!WHATSAPP_ONLY_ACTIONS.includes(type)) return true;
+    if (!isWa) return false;
+    return type !== "ai_collect" || !draft?.actions.some((a) => a.type === "ai_collect");
+  });
 
   function posOf(key: "trigger" | number): NodePos {
     if (!draft) return { x: 0, y: 0 };
@@ -252,13 +312,11 @@ export function AutomationsClient({
   function save() {
     if (!draft) return;
     setError(null);
-    if (!draft.name.trim() || draft.actions.length === 0) return setError(t("err.invalid"));
-    if (triggerNeedsStage(draft.trigger) && !draft.triggerStageId) return setError(t("err.invalid"));
-    const config: RuleConfig = {
-      minValue: parseMoney(draft.minValue),
-      maxValue: parseMoney(draft.maxValue),
-      layout: draft.layout,
-    };
+    const config: RuleConfig = isWa
+      ? { layout: draft.layout, whatsapp: draft.wa }
+      : { minValue: parseMoney(draft.minValue), maxValue: parseMoney(draft.maxValue), layout: draft.layout };
+    const problem = ruleProblem({ ...draft, config });
+    if (problem) return setError(t(`problem.${problem}`));
     const payload = { name: draft.name, trigger: draft.trigger, triggerStageId: draft.triggerStageId, actions: draft.actions, config };
     start(async () => {
       const r = draft.id ? await updateRule(draft.id, payload) : await createRule(payload);
@@ -300,7 +358,7 @@ export function AutomationsClient({
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder={t("namePlaceholder")} className="max-w-xs font-medium" />
             <div className="ml-auto flex items-center gap-1">
-              {ACTION_TYPES.map((type) => {
+              {availableActions.map((type) => {
                 const Icon = ACTION_ICON[type];
                 return (
                   <button key={type} type="button" onClick={() => addAction(type)} title={t(`action.${type}`)} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border bg-card px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-brand hover:text-foreground">
@@ -347,7 +405,11 @@ export function AutomationsClient({
                     tone="bg-brand/10 text-brand"
                     icon={Zap}
                     label={t("triggerLabel")}
-                    summary={t(`trigger.${draft.trigger}`) + (triggerNeedsStage(draft.trigger) ? ` · ${stageName(draft.triggerStageId)}` : "")}
+                    summary={
+                      t(`trigger.${draft.trigger}`) +
+                      (triggerNeedsStage(draft.trigger) ? ` · ${stageName(draft.triggerStageId)}` : "") +
+                      (isWa && draft.wa.keyword ? ` · "${draft.wa.keyword}"` : "")
+                    }
                     onSelect={() => setSelected("trigger")}
                     onDragStart={(e) => startDrag("trigger", e)}
                   />
@@ -393,19 +455,74 @@ export function AutomationsClient({
                 <div className="flex flex-col gap-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("triggerLabel")}</p>
                   <Field label={t("when")}>
-                    <Select value={draft.trigger} onChange={(v) => setDraft({ ...draft, trigger: v as TriggerType })} options={TRIGGERS.map((tr) => ({ value: tr, label: t(`trigger.${tr}`) }))} />
+                    <Select value={draft.trigger} onChange={(v) => changeTrigger(v as TriggerType)} options={availableTriggers.map((tr) => ({ value: tr, label: t(`trigger.${tr}`) }))} />
                   </Field>
                   {triggerNeedsStage(draft.trigger) ? (
                     <Field label={t("stage")}>
                       <Select value={draft.triggerStageId} onChange={(v) => setDraft({ ...draft, triggerStageId: v })} placeholder={t("chooseStage")} options={stages.map((s) => ({ value: s.id, label: `${s.pipeline} · ${s.name}` }))} />
                     </Field>
                   ) : null}
-                  <Field label={t("minValue")}>
-                    <Input value={draft.minValue} onChange={(e) => setDraft({ ...draft, minValue: e.target.value })} placeholder={t("minValuePlaceholder")} inputMode="numeric" className="h-9" />
-                  </Field>
-                  <Field label={t("maxValue")}>
-                    <Input value={draft.maxValue} onChange={(e) => setDraft({ ...draft, maxValue: e.target.value })} placeholder={t("maxValuePlaceholder")} inputMode="numeric" className="h-9" />
-                  </Field>
+                  {isWa ? (
+                    <>
+                      <Field label={t("waConnection")}>
+                        <Select
+                          value={draft.wa.connectionId}
+                          onChange={(v) => setDraft({ ...draft, wa: { ...draft.wa, connectionId: v } })}
+                          placeholder={t("waChooseConnection")}
+                          options={connections.map((c) => ({ value: c.id, label: c.active ? c.label : `${c.label} (${t("waDisconnected")})` }))}
+                        />
+                      </Field>
+                      {connections.length === 0 ? <p className="text-xs text-muted-foreground">{t("waNoConnections")}</p> : null}
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs font-medium text-muted-foreground">{t("waNumbers")}</span>
+                        {draft.wa.numbers.length > 0 ? (
+                          <ul className="divide-y divide-border rounded-lg border border-border">
+                            {draft.wa.numbers.map((n) => (
+                              <li key={n} className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm font-medium tabular-nums">
+                                <span>{formatBrPhone(n)}</span>
+                                <button type="button" onClick={() => removeNumber(n)} aria-label={t("waRemoveNumber")} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"><X className="size-3.5" /></button>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        <div className="flex gap-1.5">
+                          <Input
+                            value={draft.numberInput}
+                            onChange={(e) => setDraft({ ...draft, numberInput: formatBrPhone(e.target.value) })}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                addNumber();
+                              }
+                            }}
+                            placeholder={t("waNumberPlaceholder")}
+                            inputMode="tel"
+                            aria-label={t("waNumbers")}
+                            className="h-9 min-w-0 flex-1"
+                          />
+                          <Button type="button" variant="outline" size="sm" onClick={addNumber} disabled={draft.wa.numbers.length >= MAX_FLOW_NUMBERS}>{t("waAddNumber")}</Button>
+                        </div>
+                        {numberError ? <p className="text-xs text-red-500">{t("waNumberInvalid")}</p> : null}
+                        <p className="text-xs text-muted-foreground">{t("waNumbersHint")}</p>
+                      </div>
+                      <Field label={t("waKeyword")}>
+                        <Input value={draft.wa.keyword} onChange={(e) => setDraft({ ...draft, wa: { ...draft.wa, keyword: e.target.value.slice(0, 60) } })} placeholder={t("waKeywordPlaceholder")} className="h-9" />
+                      </Field>
+                      <Field label={t("waMatch")}>
+                        <Select value={draft.wa.match} onChange={(v) => setDraft({ ...draft, wa: { ...draft.wa, match: v === "exact" ? "exact" : "contains" } })} options={(["contains", "exact"] as const).map((m) => ({ value: m, label: t(`waMatchMode.${m}`) }))} />
+                      </Field>
+                      <p className="text-xs text-muted-foreground">{t("waMatchHint")}</p>
+                    </>
+                  ) : (
+                    <>
+                      <Field label={t("minValue")}>
+                        <Input value={draft.minValue} onChange={(e) => setDraft({ ...draft, minValue: e.target.value })} placeholder={t("minValuePlaceholder")} inputMode="numeric" className="h-9" />
+                      </Field>
+                      <Field label={t("maxValue")}>
+                        <Input value={draft.maxValue} onChange={(e) => setDraft({ ...draft, maxValue: e.target.value })} placeholder={t("maxValuePlaceholder")} inputMode="numeric" className="h-9" />
+                      </Field>
+                    </>
+                  )}
                 </div>
               ) : typeof selected === "number" && draft.actions[selected] ? (
                 <ActionInspector
@@ -456,11 +573,13 @@ export function AutomationsClient({
                   <div className="flex items-center gap-2">
                     <Zap className="size-4 shrink-0 text-brand" />
                     <h3 className="truncate font-medium">{rule.name}</h3>
-                    {rule.config.minValue ? <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">≥ {rule.config.minValue}</span> : null}
+                    {rule.config.minValue && !isWhatsappTrigger(rule.trigger) ? <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">≥ {rule.config.minValue}</span> : null}
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
                     <span className="rounded-md bg-brand/10 px-2 py-0.5 font-medium text-brand">
-                      {t(`trigger.${rule.trigger}`)}{triggerNeedsStage(rule.trigger) ? ` · ${stageName(rule.triggerStageId)}` : ""}
+                      {t(`trigger.${rule.trigger}`)}
+                      {triggerNeedsStage(rule.trigger) ? ` · ${stageName(rule.triggerStageId)}` : ""}
+                      {isWhatsappTrigger(rule.trigger) && rule.config.whatsapp ? ` · "${rule.config.whatsapp.keyword}"` : ""}
                     </span>
                     {rule.actions.map((a, i) => (
                       <span key={i} className="rounded-md bg-muted px-2 py-0.5 text-muted-foreground">→ {actionSummary(a)}</span>
@@ -538,6 +657,58 @@ function ActionInspector({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t(`action.${action.type}`)}</p>
+
+      {action.type === "ai_collect" ? (
+        <>
+          <Field label={t("aiFirstMessage")}>
+            <textarea value={action.firstMessage ?? ""} onChange={(e) => onChange({ ...action, firstMessage: e.target.value })} rows={4} placeholder={t("aiFirstMessagePlaceholder")} className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none" />
+          </Field>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" checked={action.allowHandoff === true} onChange={(e) => onChange({ ...action, allowHandoff: e.target.checked })} className="mt-0.5 size-4 accent-[var(--brand)]" />
+            {t("aiAllowHandoff")}
+          </label>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">{t("aiQuestions")}</span>
+            {action.questions.map((q, i) => (
+              <div key={i} className="flex flex-col gap-1 rounded-lg border border-border p-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-4 shrink-0 text-xs tabular-nums text-muted-foreground">{i + 1}</span>
+                  <Input
+                    value={q.label}
+                    onChange={(e) => onChange({ ...action, questions: action.questions.map((x, j) => (j === i ? { ...x, label: e.target.value.slice(0, 160) } : x)) })}
+                    placeholder={t("aiQuestionPlaceholder")}
+                    aria-label={`${t("aiQuestions")} ${i + 1}`}
+                    className="h-8 min-w-0 flex-1"
+                  />
+                  <button type="button" onClick={() => onChange({ ...action, questions: action.questions.filter((_, j) => j !== i) })} aria-label={t("aiRemoveQuestion")} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"><X className="size-3.5" /></button>
+                </div>
+                <Select
+                  value={q.field}
+                  onChange={(v) => onChange({ ...action, questions: action.questions.map((x, j) => (j === i ? { ...x, field: v as QuestionField } : x)) })}
+                  options={QUESTION_FIELDS.map((f) => ({ value: f, label: t(`aiField.${f}`) }))}
+                />
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => onChange({ ...action, questions: [...action.questions, { label: "", field: "notes" }] })}
+              disabled={action.questions.length >= MAX_FLOW_QUESTIONS}
+              className="inline-flex items-center gap-1 self-start text-xs font-medium text-brand hover:underline disabled:opacity-50"
+            >
+              <Plus className="size-3.5" />
+              {t("aiAddQuestion")}
+            </button>
+          </div>
+          <Field label={t("aiInstructions")}>
+            <textarea value={action.instructions ?? ""} onChange={(e) => onChange({ ...action, instructions: e.target.value })} rows={3} placeholder={t("aiInstructionsPlaceholder")} className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none" />
+          </Field>
+          <Field label={t("aiFinalMessage")}>
+            <textarea value={action.finalMessage ?? ""} onChange={(e) => onChange({ ...action, finalMessage: e.target.value })} rows={2} placeholder={t("aiFinalMessagePlaceholder")} className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none" />
+          </Field>
+        </>
+      ) : null}
+
+      {action.type === "create_opportunity" ? <p className="text-xs text-muted-foreground">{t("createOppHint")}</p> : null}
 
       {action.type === "create_task" ? (
         <>

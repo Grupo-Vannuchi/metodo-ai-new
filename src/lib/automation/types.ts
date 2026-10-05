@@ -11,6 +11,7 @@ export const TRIGGERS = [
   "opportunity_reopened",
   "proposal_accepted",
   "task_completed",
+  "whatsapp_message",
 ] as const;
 export type TriggerType = (typeof TRIGGERS)[number];
 
@@ -19,7 +20,14 @@ export function triggerNeedsStage(t: TriggerType): boolean {
   return t === "stage_entered";
 }
 
+/** The WhatsApp trigger has no opportunity until the flow creates one. */
+export function isWhatsappTrigger(t: TriggerType): boolean {
+  return t === "whatsapp_message";
+}
+
 export const ACTION_TYPES = [
+  "ai_collect",
+  "create_opportunity",
   "create_task",
   "notify_owner",
   "notify_user",
@@ -34,9 +42,26 @@ export const ACTION_TYPES = [
 ] as const;
 export type ActionType = (typeof ACTION_TYPES)[number];
 
+/** Actions that only make sense under the WhatsApp trigger. */
+export const WHATSAPP_ONLY_ACTIONS: readonly ActionType[] = ["ai_collect", "create_opportunity"];
+
 export type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
 
+/** Where a collected answer is stored when the flow finishes. */
+export const QUESTION_FIELDS = ["name", "email", "notes"] as const;
+export type QuestionField = (typeof QUESTION_FIELDS)[number];
+export type FlowQuestion = { label: string; field: QuestionField };
+
 export type RuleAction =
+  | {
+      type: "ai_collect";
+      questions: FlowQuestion[];
+      firstMessage?: string;
+      instructions?: string;
+      finalMessage?: string;
+      allowHandoff?: boolean;
+    }
+  | { type: "create_opportunity" }
   | { type: "create_task"; title: string; description?: string; priority?: TaskPriority; dueInDays?: number }
   | { type: "notify_owner"; message?: string }
   | { type: "notify_user"; userId: string; message?: string }
@@ -49,6 +74,16 @@ export type RuleAction =
   | { type: "create_finance_entry"; description: string; useOppValue?: boolean; amount?: number; dueInDays?: number }
   | { type: "webhook"; url: string };
 
+export type KeywordMatch = "contains" | "exact";
+export type WhatsappTriggerConfig = {
+  /** The Evolution connection (WhatsApp number) that receives the messages. */
+  connectionId: string;
+  /** Senders allowed to start the flow, stored as digits. */
+  numbers: string[];
+  keyword: string;
+  match: KeywordMatch;
+};
+
 export type NodePos = { x: number; y: number };
 export type RuleConfig = {
   /** Only fire when the opportunity's value is at least this. */
@@ -57,10 +92,47 @@ export type RuleConfig = {
   maxValue?: number;
   /** Canvas positions so the layout persists. */
   layout?: { trigger?: NodePos; actions?: NodePos[] };
+  /** Filters of the "whatsapp_message" trigger. */
+  whatsapp?: WhatsappTriggerConfig;
 };
 
 export function isTrigger(v: string): v is TriggerType {
   return (TRIGGERS as readonly string[]).includes(v);
+}
+
+export const MAX_FLOW_NUMBERS = 50;
+export const MAX_FLOW_QUESTIONS = 15;
+
+/** Digits of a phone typed by the user, or "" when it can't be a phone. */
+export function cleanFlowNumber(raw: string): string {
+  const d = String(raw ?? "").replace(/\D/g, "");
+  return d.length >= 10 && d.length <= 13 ? d : "";
+}
+
+export type RuleProblem = "name" | "actions" | "stage" | "connection" | "numbers" | "keyword" | "aiFirst" | "questions" | "whatsappOnly";
+
+/** Why a rule can't be saved, or null. Shared by the editor and the server action. */
+export function ruleProblem(rule: {
+  name: string;
+  trigger: TriggerType;
+  triggerStageId?: string | null;
+  actions: RuleAction[];
+  config: RuleConfig;
+}): RuleProblem | null {
+  if (!rule.name.trim()) return "name";
+  if (rule.actions.length === 0) return "actions";
+  if (triggerNeedsStage(rule.trigger) && !rule.triggerStageId) return "stage";
+  if (!isWhatsappTrigger(rule.trigger)) {
+    return rule.actions.some((a) => WHATSAPP_ONLY_ACTIONS.includes(a.type)) ? "whatsappOnly" : null;
+  }
+  const wa = rule.config.whatsapp;
+  if (!wa?.connectionId) return "connection";
+  if (wa.numbers.length === 0) return "numbers";
+  if (!wa.keyword.trim()) return "keyword";
+  const [first, ...rest] = rule.actions;
+  if (first.type !== "ai_collect" || rest.some((a) => a.type === "ai_collect")) return "aiFirst";
+  if (first.questions.length === 0 || first.questions.some((q) => !q.label.trim())) return "questions";
+  return null;
 }
 
 const PRIORITIES: TaskPriority[] = ["LOW", "MEDIUM", "HIGH"];
@@ -82,6 +154,27 @@ export function parseActions(raw: unknown): RuleAction[] {
     if (!a || typeof a !== "object") continue;
     const o = a as Record<string, unknown>;
     switch (o.type) {
+      case "ai_collect": {
+        const questions: FlowQuestion[] = (Array.isArray(o.questions) ? o.questions : [])
+          .filter((q): q is Record<string, unknown> => !!q && typeof q === "object")
+          .map((q) => ({
+            label: str(q.label, 160),
+            field: QUESTION_FIELDS.includes(q.field as QuestionField) ? (q.field as QuestionField) : "notes",
+          }))
+          .slice(0, MAX_FLOW_QUESTIONS);
+        out.push({
+          type: "ai_collect",
+          questions,
+          firstMessage: str(o.firstMessage, 1000) || undefined,
+          instructions: str(o.instructions, 4000) || undefined,
+          finalMessage: str(o.finalMessage, 1000) || undefined,
+          allowHandoff: o.allowHandoff === true,
+        });
+        break;
+      }
+      case "create_opportunity":
+        out.push({ type: "create_opportunity" });
+        break;
       case "create_task": {
         const priority = PRIORITIES.includes(o.priority as TaskPriority) ? (o.priority as TaskPriority) : undefined;
         out.push({
@@ -157,6 +250,18 @@ export function parseConfig(raw: unknown): RuleConfig {
     const trigger = pos(layout.trigger);
     const actions = Array.isArray(layout.actions) ? (layout.actions.map(pos).filter(Boolean) as NodePos[]) : undefined;
     cfg.layout = { trigger, actions };
+  }
+  const wa = o.whatsapp as Record<string, unknown> | undefined;
+  if (wa && typeof wa === "object") {
+    const numbers = [...new Set((Array.isArray(wa.numbers) ? wa.numbers : []).map((n) => cleanFlowNumber(String(n))))]
+      .filter(Boolean)
+      .slice(0, MAX_FLOW_NUMBERS);
+    cfg.whatsapp = {
+      connectionId: str(wa.connectionId, 64),
+      numbers,
+      keyword: str(wa.keyword, 60).trim(),
+      match: wa.match === "exact" ? "exact" : "contains",
+    };
   }
   return cfg;
 }
