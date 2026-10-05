@@ -52,18 +52,7 @@ export async function runAutomations(
     });
     if (rules.length === 0) return;
 
-    const opp = (await db.opportunity.findFirst({
-      where: { id: event.opportunityId },
-      select: {
-        id: true,
-        title: true,
-        value: true,
-        ownerId: true,
-        contactId: true,
-        companyId: true,
-        contact: { select: { name: true, phone: true, email: true } },
-      },
-    })) as Opp | null;
+    const opp = await loadOpp(db, event.opportunityId);
     if (!opp) return;
     const oppValue = Number(opp.value ?? 0);
 
@@ -73,16 +62,61 @@ export async function runAutomations(
       if (cfg.minValue !== undefined && oppValue < cfg.minValue) continue;
       if (cfg.maxValue !== undefined && oppValue > cfg.maxValue) continue;
 
-      for (const action of parseActions(rule.actions)) {
-        try {
-          await runAction(db, organizationId, opp, action, actorName);
-        } catch (e) {
-          console.error("[automation] action failed", rule.id, action.type, e);
-        }
-      }
+      await runEach(db, organizationId, opp, parseActions(rule.actions), actorName, rule.id);
     }
   } catch (e) {
     console.error("[automation] runAutomations failed", e);
+  }
+}
+
+/** Run a rule's remaining actions against an opportunity it just created (the
+ *  WhatsApp flow). Same isolation guarantees as runAutomations: never throws. */
+export async function runActionsForOpportunity(
+  organizationId: string,
+  opportunityId: string,
+  actions: RuleAction[],
+  actorName: string,
+  ruleId: string,
+): Promise<void> {
+  try {
+    const db = tenantDb(organizationId);
+    const opp = await loadOpp(db, opportunityId);
+    if (!opp) return;
+    await runEach(db, organizationId, opp, actions, actorName, ruleId);
+  } catch (e) {
+    console.error("[automation] runActionsForOpportunity failed", e);
+  }
+}
+
+async function loadOpp(db: Db, opportunityId: string): Promise<Opp | null> {
+  return (await db.opportunity.findFirst({
+    where: { id: opportunityId },
+    select: {
+      id: true,
+      title: true,
+      value: true,
+      ownerId: true,
+      contactId: true,
+      companyId: true,
+      contact: { select: { name: true, phone: true, email: true } },
+    },
+  })) as Opp | null;
+}
+
+async function runEach(
+  db: Db,
+  organizationId: string,
+  opp: Opp,
+  actions: RuleAction[],
+  actorName: string,
+  ruleId: string,
+): Promise<void> {
+  for (const action of actions) {
+    try {
+      await runAction(db, organizationId, opp, action, actorName);
+    } catch (e) {
+      console.error("[automation] action failed", ruleId, action.type, e);
+    }
   }
 }
 

@@ -167,49 +167,10 @@ async function createOpportunityTool(ctx: BotContext, input: Record<string, unkn
   const value = typeof input.value === "number" && isFinite(input.value) ? Math.max(0, input.value) : 0;
   const notes = typeof input.notes === "string" ? input.notes.trim() || null : null;
 
-  const db = tenantDb(ctx.organizationId);
-  // First stage of the default pipeline (fall back to any pipeline's first stage).
-  const stage =
-    (await db.stage.findFirst({
-      where: { pipeline: { isDefault: true } },
-      orderBy: { order: "asc" },
-      select: { id: true, pipelineId: true },
-    })) ??
-    (await db.stage.findFirst({ orderBy: { order: "asc" }, select: { id: true, pipelineId: true } }));
-  if (!stage) return "Não há funil configurado para criar a oportunidade.";
-
   const org = ctx.organizationId;
-  const year = new Date().getFullYear();
-  const yy = String(year).slice(-2);
-  // Code generation must be atomic with the insert (per org/year sequence).
-  const opp = await prisma.$transaction(async (tx) => {
-    const order = await tx.opportunity.count({ where: { organizationId: org, stageId: stage.id } });
-    const last = await tx.opportunity.findFirst({
-      where: { organizationId: org, seqYear: year },
-      orderBy: { seqNumber: "desc" },
-      select: { seqNumber: true },
-    });
-    const seqNumber = (last?.seqNumber ?? 0) + 1;
-    const code = `${String(seqNumber).padStart(4, "0")}/${yy}`;
-    return tx.opportunity.create({
-      data: {
-        organizationId: org,
-        pipelineId: stage.pipelineId,
-        stageId: stage.id,
-        title: title.slice(0, 140),
-        value,
-        contactId: ctx.contactId,
-        ownerId: ctx.ownerId,
-        createdById: ctx.ownerId,
-        notes,
-        order,
-        seqYear: year,
-        seqNumber,
-        code,
-      },
-      select: { id: true, code: true },
-    });
-  });
+  const db = tenantDb(org);
+  const opp = await insertBotOpportunity(org, { title, value, notes, contactId: ctx.contactId, ownerId: ctx.ownerId });
+  if (!opp) return "Não há funil configurado para criar a oportunidade.";
 
   // Notify the owner that the bot opened a deal (best-effort).
   if (ctx.ownerId) {
@@ -226,6 +187,55 @@ async function createOpportunityTool(ctx: BotContext, input: Record<string, unkn
       .catch(() => {});
   }
   return `Oportunidade ${opp.code} criada no funil.`;
+}
+
+/** Create an opportunity on the first stage of the default pipeline (any
+ *  pipeline as fallback), with its per-org/year code. Null without a pipeline. */
+export async function insertBotOpportunity(
+  organizationId: string,
+  data: { title: string; value: number; notes: string | null; contactId: string; ownerId: string | null },
+): Promise<{ id: string; code: string | null } | null> {
+  const db = tenantDb(organizationId);
+  const stage =
+    (await db.stage.findFirst({
+      where: { pipeline: { isDefault: true } },
+      orderBy: { order: "asc" },
+      select: { id: true, pipelineId: true },
+    })) ??
+    (await db.stage.findFirst({ orderBy: { order: "asc" }, select: { id: true, pipelineId: true } }));
+  if (!stage) return null;
+
+  const year = new Date().getFullYear();
+  const yy = String(year).slice(-2);
+  // Code generation must be atomic with the insert (per org/year sequence).
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.opportunity.count({ where: { organizationId, stageId: stage.id } });
+    const last = await tx.opportunity.findFirst({
+      where: { organizationId, seqYear: year },
+      orderBy: { seqNumber: "desc" },
+      select: { seqNumber: true },
+    });
+    const seqNumber = (last?.seqNumber ?? 0) + 1;
+    const code = `${String(seqNumber).padStart(4, "0")}/${yy}`;
+    return tx.opportunity.create({
+      data: {
+        organizationId,
+        pipelineId: stage.pipelineId,
+        stageId: stage.id,
+        title: data.title.slice(0, 140),
+        value: data.value,
+        contactId: data.contactId,
+        ownerId: data.ownerId,
+        createdById: data.ownerId,
+        notes: data.notes,
+        order,
+        seqYear: year,
+        seqNumber,
+        code,
+      },
+      select: { id: true, code: true },
+    });
+  });
 }
 
 async function handoff(ctx: BotContext, input: Record<string, unknown>): Promise<string> {
