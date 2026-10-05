@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
-import { hasFeatureByModules, hasModule } from "@/config/modules";
+import { hasModule } from "@/config/modules";
 import { isTrigger, isWhatsappTrigger, parseActions, parseConfig, ruleProblem } from "@/lib/automation/types";
 
 export type RuleResult =
@@ -40,12 +40,10 @@ function normalize(input: RuleInput) {
   return { name, trigger, triggerStageId, actions, config };
 }
 
-/** A WhatsApp rule needs the IA + Atendimento modules and a number of this org. */
+/** A WhatsApp rule needs the Atendimento module and a number of this org. */
 async function checkWhatsapp(ctx: OrgCtx, data: NonNullable<ReturnType<typeof normalize>>): Promise<RuleResult | null> {
   if (!isWhatsappTrigger(data.trigger)) return null;
-  if (!hasFeatureByModules(ctx.modules, "whatsapp_agent") || !hasModule(ctx.modules, "inbox")) {
-    return { ok: false, error: "forbidden" };
-  }
+  if (!hasModule(ctx.modules, "inbox")) return { ok: false, error: "forbidden" };
   const conn = await tenantDb(ctx.organizationId).integrationConnection.findFirst({
     where: { id: data.config.whatsapp?.connectionId, provider: "EVOLUTION" },
     select: { id: true },

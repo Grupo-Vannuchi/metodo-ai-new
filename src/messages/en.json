@@ -1138,23 +1138,21 @@
         "exact": "The whole message"
       },
       "waMatchHint": "Case and accents don't matter. Once the flow opens, replies continue without the keyword; the conversation leaves the flow after 24 h without a reply.",
-      "aiQuestionsCount": "{count, plural, one {# question} other {# questions}}",
-      "aiFirstMessage": "First message (with the options)",
-      "aiFirstMessagePlaceholder": "e.g. Hi! How can I help?\n1. Quote an event\n2. Talk to a person",
-      "aiAllowHandoff": "If the customer asks for a person, hand the chat over and open a task",
-      "aiQuestions": "Questions, in this order",
-      "aiQuestionPlaceholder": "e.g. When is the event?",
-      "aiAddQuestion": "Add question",
-      "aiRemoveQuestion": "Remove question",
-      "aiField": {
+      "questionsCount": "{count, plural, one {# question} other {# questions}}",
+      "welcomeMessage": "Welcome message",
+      "welcomeMessagePlaceholder": "e.g. Hi! Great to hear from you. I'll ask a few quick questions.",
+      "questions": "Questions, in this order",
+      "questionPlaceholder": "e.g. When is the event?",
+      "questionsHint": "Each question is sent exactly as written, one at a time. The customer's reply is saved to the chosen field.",
+      "addQuestion": "Add question",
+      "removeQuestion": "Remove question",
+      "answerField": {
         "name": "Save to: contact · name",
         "email": "Save to: contact · email",
         "notes": "Save to: opportunity notes"
       },
-      "aiInstructions": "Instructions for the AI",
-      "aiInstructionsPlaceholder": "e.g. Be friendly and brief. Don't quote prices.",
-      "aiFinalMessage": "Final message",
-      "aiFinalMessagePlaceholder": "e.g. Got it! Our team will reach out.",
+      "finalMessage": "Final message",
+      "finalMessagePlaceholder": "e.g. Got it! Our team will reach out.",
       "createOppHint": "Creates the opportunity on the first stage of the default pipeline, with the answers in its notes, when collection ends. The other actions run after it.",
       "problem": {
         "name": "Give the rule a name.",
@@ -1163,9 +1161,9 @@
         "connection": "Choose the number that receives the messages.",
         "numbers": "Add at least one accepted number.",
         "keyword": "Set the keyword that starts the flow.",
-        "aiFirst": "With the WhatsApp trigger, the first action must be \"Reply with AI\", and only one.",
-        "questions": "Fill in every AI question.",
-        "whatsappOnly": "\"Reply with AI\" and \"Create opportunity\" only work with the WhatsApp trigger."
+        "questionsFirst": "With the WhatsApp trigger, the first action must be \"Ask questions\", and only one.",
+        "questions": "Fill in every question.",
+        "whatsappOnly": "\"Ask questions\" and \"Create opportunity\" only work with the WhatsApp trigger."
       },
       "trigger": {
         "opportunity_created": "Opportunity created",
@@ -1178,7 +1176,7 @@
         "whatsapp_message": "WhatsApp message received"
       },
       "action": {
-        "ai_collect": "Reply with AI",
+        "ask_questions": "Ask questions",
         "create_opportunity": "Create opportunity",
         "create_task": "Create task",
         "notify_owner": "Notify owner",

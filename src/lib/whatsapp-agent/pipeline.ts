@@ -21,12 +21,12 @@ const MAX_TOOL_ROUNDS = 4;
 /** Skip transcription for very long audios (bounds cost); ask to type instead. */
 const MAX_AUDIO_SEC = 600;
 /** Fallback reply when an inbound voice note can't be transcribed. */
-export const CANT_HEAR_AUDIO =
+const CANT_HEAR_AUDIO =
   "Recebi seu áudio, mas não consegui ouvir agora. Pode me mandar por escrito, por favor?";
 
 type AgentRow = { prompt: string; model: string; name: string | null };
 
-export type Turn = { role: "user" | "assistant"; content: string };
+type Turn = { role: "user" | "assistant"; content: string };
 
 /**
  * Fire-and-forget the WhatsApp AI auto-reply for an inbound message. The webhook
@@ -170,7 +170,7 @@ async function runAgentReply(organizationId: string, connectionId: string, m: Pa
  *  read it like text. Returns the transcript, or "" when it can't be produced
  *  (no key, audio too long, provider/transcription failure) — the caller then
  *  degrades gracefully. Idempotent: reuses an already-stored transcript. */
-export async function transcribeInboundAudio(connectionId: string, m: ParsedInbound): Promise<string> {
+async function transcribeInboundAudio(connectionId: string, m: ParsedInbound): Promise<string> {
   if (!isTranscriptionConfigured() || !m.providerMessageId) return "";
   if ((m.media?.durationSec ?? 0) > MAX_AUDIO_SEC) return "";
 
@@ -304,7 +304,7 @@ export async function resolveOwnerId(organizationId: string, createdById: string
 
 /** Merge consecutive same-role turns and drop any leading assistant turns, so
  *  the sequence alternates and starts with the user (Anthropic requirement). */
-export function toAlternatingTurns(turns: Turn[]): Turn[] {
+function toAlternatingTurns(turns: Turn[]): Turn[] {
   const merged: Turn[] = [];
   for (const t of turns) {
     const last = merged[merged.length - 1];

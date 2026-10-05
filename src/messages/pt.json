@@ -1138,23 +1138,21 @@
         "exact": "Mensagem só com a palavra"
       },
       "waMatchHint": "Maiúsculas e acentos não fazem diferença. Depois que o fluxo abre, as respostas seguem sem a palavra; a conversa sai do fluxo após 24 h sem resposta.",
-      "aiQuestionsCount": "{count, plural, one {# pergunta} other {# perguntas}}",
-      "aiFirstMessage": "Primeira mensagem (com as opções)",
-      "aiFirstMessagePlaceholder": "Ex.: Olá! Como posso ajudar?\n1. Orçar um evento\n2. Falar com uma pessoa",
-      "aiAllowHandoff": "Se o cliente pedir para falar com uma pessoa, passar a conversa e abrir uma tarefa",
-      "aiQuestions": "Perguntas, nesta ordem",
-      "aiQuestionPlaceholder": "Ex.: Para quando é o evento?",
-      "aiAddQuestion": "Adicionar pergunta",
-      "aiRemoveQuestion": "Remover pergunta",
-      "aiField": {
+      "questionsCount": "{count, plural, one {# pergunta} other {# perguntas}}",
+      "welcomeMessage": "Mensagem de boas-vindas",
+      "welcomeMessagePlaceholder": "Ex.: Olá! Que bom falar com você. Vou fazer algumas perguntas rápidas.",
+      "questions": "Perguntas, nesta ordem",
+      "questionPlaceholder": "Ex.: Para quando é o evento?",
+      "questionsHint": "Cada pergunta é enviada exatamente como está escrita, uma por vez. A resposta do cliente fica salva no campo escolhido.",
+      "addQuestion": "Adicionar pergunta",
+      "removeQuestion": "Remover pergunta",
+      "answerField": {
         "name": "Salvar em: contato · nome",
         "email": "Salvar em: contato · e-mail",
         "notes": "Salvar em: notas da oportunidade"
       },
-      "aiInstructions": "Instruções para a IA",
-      "aiInstructionsPlaceholder": "Ex.: Fale de forma simpática e curta. Não informe preços.",
-      "aiFinalMessage": "Mensagem final",
-      "aiFinalMessagePlaceholder": "Ex.: Anotado! Nossa equipe vai falar com você.",
+      "finalMessage": "Mensagem final",
+      "finalMessagePlaceholder": "Ex.: Anotado! Nossa equipe vai falar com você.",
       "createOppHint": "Cria a oportunidade na 1ª etapa do funil padrão, com as respostas nas notas, quando a coleta termina. As outras ações rodam depois dela.",
       "problem": {
         "name": "Dê um nome à regra.",
@@ -1163,9 +1161,9 @@
         "connection": "Escolha o número que recebe as mensagens.",
         "numbers": "Adicione ao menos um número aceito.",
         "keyword": "Defina a palavra que inicia o fluxo.",
-        "aiFirst": "Com o gatilho de WhatsApp, a primeira ação precisa ser \"Responder com IA\", e só uma.",
-        "questions": "Preencha todas as perguntas da IA.",
-        "whatsappOnly": "\"Responder com IA\" e \"Criar oportunidade\" só funcionam com o gatilho de WhatsApp."
+        "questionsFirst": "Com o gatilho de WhatsApp, a primeira ação precisa ser \"Fazer perguntas\", e só uma.",
+        "questions": "Preencha todas as perguntas.",
+        "whatsappOnly": "\"Fazer perguntas\" e \"Criar oportunidade\" só funcionam com o gatilho de WhatsApp."
       },
       "trigger": {
         "opportunity_created": "Oportunidade criada",
@@ -1178,7 +1176,7 @@
         "whatsapp_message": "Mensagem recebida no WhatsApp"
       },
       "action": {
-        "ai_collect": "Responder com IA",
+        "ask_questions": "Fazer perguntas",
         "create_opportunity": "Criar oportunidade",
         "create_task": "Criar tarefa",
         "notify_owner": "Notificar responsável",
