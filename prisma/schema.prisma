@@ -438,7 +438,7 @@ model AutomationRule {
   organizationId String
   name           String
   enabled        Boolean  @default(true)
-  /// "stage_entered" | "opportunity_won" | "opportunity_lost"
+  /// One of TRIGGERS in src/lib/automation/types.ts (a CRM event or "whatsapp_message").
   trigger        String
   /// The stage that fires a "stage_entered" rule (null for won/lost).
   triggerStageId String?
@@ -451,6 +451,36 @@ model AutomationRule {
 
   @@index([organizationId, trigger, enabled])
   @@map("automation_rules")
+}
+
+enum AutomationSessionStatus {
+  ACTIVE
+  COMPLETED
+  EXPIRED
+  HANDOFF
+  CANCELED
+}
+
+/// A WhatsApp conversation in the middle of a "whatsapp_message" automation: the
+/// keyword opened it, and the customer's next answers continue it without the
+/// keyword until every question is answered. Expires after 24 h without a
+/// customer message (checked lazily on the next inbound, no cron).
+model AutomationSession {
+  id             String                  @id @default(cuid())
+  organizationId String
+  ruleId         String
+  conversationId String
+  status         AutomationSessionStatus @default(ACTIVE)
+  /// Answers collected so far, keyed by question index: { "0": "Mariana" }.
+  answers        Json                    @default("{}")
+  opportunityId  String?
+  lastInboundAt  DateTime                @default(now())
+  finishedAt     DateTime?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@index([organizationId, conversationId, status])
+  @@map("automation_sessions")
 }
 
 /// A sales pipeline (a board). Each org gets a default one.

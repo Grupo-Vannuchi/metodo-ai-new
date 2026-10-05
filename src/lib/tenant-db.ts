@@ -37,6 +37,7 @@ const TENANT_MODELS = new Set<string>([
   "ExtractedLead",
   "Goal",
   "AutomationRule",
+  "AutomationSession",
   "Conversation",
   "ConversationFolder",
   "Message",

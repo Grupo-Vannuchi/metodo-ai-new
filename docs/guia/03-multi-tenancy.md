@@ -20,7 +20,7 @@ organização ativa e devolve o mesmo client Prisma cru de
 `$allOperations`: toda chamada, em qualquer model, passa por essa função antes de chegar no
 banco.
 
-A interceptação só age sobre os models listados na constante `TENANT_MODELS` — **70 hoje**
+A interceptação só age sobre os models listados na constante `TENANT_MODELS` — **71 hoje**
 (é a contagem das entradas do array; cresce conforme o schema cresce). Para qualquer model
 fora dessa lista, o extends devolve a query sem tocar nela:
 
