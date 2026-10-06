@@ -161,10 +161,63 @@ async function main() {
       "conversation list scoped to org B excludes org A's conversation",
     );
 
+    // 9) Mass e-mail broadcasts and their recipients are tenant-scoped too.
+    const broadcastA = await prisma.emailBroadcast.create({
+      data: {
+        organizationId: orgA.id,
+        subject: `ISO-EB-A-${stamp}`,
+        html: "<p>x</p>",
+        createdById: userA.id,
+      },
+    });
+    await prisma.emailBroadcastRecipient.create({
+      data: {
+        organizationId: orgA.id,
+        broadcastId: broadcastA.id,
+        email: `iso-${stamp}@example.com`,
+        batchNo: 0,
+      },
+    });
+    const broadcastsB = await prisma.emailBroadcast.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(
+      broadcastsB.length === 0,
+      "email broadcast list scoped to org B excludes org A's broadcast",
+    );
+    const recipientsB = await prisma.emailBroadcastRecipient.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(
+      recipientsB.length === 0,
+      "email recipient list scoped to org B excludes org A's recipient",
+    );
+
+    // 10) The suppression list is per org: an address blocked in A is still
+    // free in B (the unique key is [organizationId, email]).
+    const blockedEmail = `iso-block-${stamp}@example.com`;
+    await prisma.emailSuppression.create({
+      data: { organizationId: orgA.id, email: blockedEmail, reason: "UNSUBSCRIBED" },
+    });
+    const blockedInB = await prisma.emailSuppression.findMany({
+      where: { organizationId: orgB.id, email: blockedEmail },
+    });
+    assert(
+      blockedInB.length === 0,
+      "an address suppressed in org A is not suppressed in org B",
+    );
+
     console.log("\n✅ Tenant isolation: all checks passed.");
   } finally {
     // Cleanup. Companies/connections carry organizationId (no FK cascade from
     // org), so remove them explicitly before the orgs.
+    await prisma.emailSuppression.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
+    // Recipients go with their broadcast (onDelete: Cascade).
+    await prisma.emailBroadcast.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
     await prisma.conversation.deleteMany({
       where: { organizationId: { in: created.orgs } },
     });
