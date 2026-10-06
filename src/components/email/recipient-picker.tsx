@@ -4,10 +4,14 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Building2, Contact, Mail, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast";
 import { searchEmailTargets } from "@/app/actions/email-broadcasts";
 import { isValidEmail, normalizeEmail, parseEmailList } from "@/lib/email-broadcast/normalize";
 import type { AudienceSelection } from "@/lib/validations/email-broadcast";
 import type { ComposerOptions, PickedTarget } from "@/lib/email-broadcast/types";
+
+// Same cap as the audience schema (emails max).
+const MAX_MANUAL = 5000;
 
 const toggle = (list: string[], value: string) =>
   list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
@@ -43,6 +47,7 @@ export function RecipientPicker({
   onPickedChange: (next: PickedTarget[]) => void;
 }) {
   const t = useTranslations("emailBroadcast");
+  const toast = useToast();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PickedTarget[]>([]);
   const set = (patch: Partial<AudienceSelection>) => onAudienceChange({ ...audience, ...patch });
@@ -52,8 +57,12 @@ export function RecipientPicker({
     let active = true;
     const term = query.trim();
     const handle = setTimeout(async () => {
-      const found = term.length >= 2 && !/[,;\s]/.test(term) ? await searchEmailTargets(term) : [];
-      if (active) setResults(found);
+      try {
+        const found = term.length >= 2 && !/[,;\s]/.test(term) ? await searchEmailTargets(term) : [];
+        if (active) setResults(found);
+      } catch {
+        // Network blip or stale action id: keep the previous results.
+      }
     }, 250);
     return () => {
       active = false;
@@ -66,6 +75,10 @@ export function RecipientPicker({
     if (parsed.length === 0) return;
     const next = [...audience.emails];
     for (const email of parsed) if (!next.includes(email)) next.push(email);
+    if (next.length > MAX_MANUAL) {
+      next.length = MAX_MANUAL;
+      toast(t("manualLimit"), { variant: "error" });
+    }
     set({ emails: next });
     setQuery("");
   }

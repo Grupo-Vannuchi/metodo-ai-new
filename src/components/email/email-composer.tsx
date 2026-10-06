@@ -53,8 +53,12 @@ export function EmailComposer({
   useEffect(() => {
     let active = true;
     const handle = setTimeout(async () => {
-      const r = await previewEmailAudience(audience);
-      if (active && r.ok) setPreview(r.preview);
+      try {
+        const r = await previewEmailAudience(audience);
+        if (active && r.ok) setPreview(r.preview);
+      } catch {
+        // Network blip or stale action id: keep the previous summary.
+      }
     }, 350);
     return () => {
       active = false;
@@ -78,25 +82,39 @@ export function EmailComposer({
     return r.id;
   }
 
+  // A thrown server action (network blip, stale action id after a deploy) must not reach the error
+  // boundary: it would discard the unsaved body.
+  const guarded = (run: () => Promise<void>) => async () => {
+    try {
+      await run();
+    } catch {
+      toast(t("error.unknown"), { variant: "error" });
+    }
+  };
+
   function onSaveDraft() {
-    startBusy(async () => {
-      const savedId = await save();
-      if (!savedId) return;
-      toast(t("draftSaved"));
-      if (!draft.id) router.replace(`/app/email/${savedId}/edit`);
-    });
+    startBusy(
+      guarded(async () => {
+        const savedId = await save();
+        if (!savedId) return;
+        toast(t("draftSaved"));
+        if (!draft.id) router.replace(`/app/email/${savedId}/edit`);
+      }),
+    );
   }
 
   function onTest() {
-    startBusy(async () => {
-      const r = await sendEmailTest(payload());
-      if (r.ok) toast(t("testSent", { email: r.to }));
-      else toast(errorText(r), { variant: "error" });
-    });
+    startBusy(
+      guarded(async () => {
+        const r = await sendEmailTest(payload());
+        if (r.ok) toast(t("testSent", { email: r.to }));
+        else toast(errorText(r), { variant: "error" });
+      }),
+    );
   }
 
   function onSend() {
-    startBusy(async () => {
+    startBusy(guarded(async () => {
       const savedId = await save();
       if (!savedId) return;
       const p = await previewEmailAudience(audience);
@@ -126,7 +144,7 @@ export function EmailComposer({
         return;
       }
       router.push(`/app/email/${savedId}`);
-    });
+    }));
   }
 
   return (

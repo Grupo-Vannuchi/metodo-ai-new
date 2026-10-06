@@ -1956,6 +1956,7 @@
     "manual": "Typed addresses",
     "manualPlaceholder": "Search a contact or paste emails…",
     "manualHint": "Type to search contacts and companies by name, or paste a list separated by commas, semicolons or line breaks.",
+    "manualLimit": "Limit of 5,000 typed addresses per send; the rest was ignored.",
     "invalidChip": "invalid",
     "remove": "Remove {email}",
     "summary": {

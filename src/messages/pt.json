@@ -1956,6 +1956,7 @@
     "manual": "E-mails avulsos",
     "manualPlaceholder": "Busque um contato ou cole e-mails…",
     "manualHint": "Digite para buscar contatos e empresas pelo nome, ou cole uma lista separada por vírgula, ponto e vírgula ou quebra de linha.",
+    "manualLimit": "Limite de 5.000 e-mails avulsos por envio; o excedente foi ignorado.",
     "invalidChip": "inválido",
     "remove": "Remover {email}",
     "summary": {
