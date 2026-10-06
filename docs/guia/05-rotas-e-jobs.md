@@ -43,7 +43,7 @@ Consequência direta, sem meio-termo: se você criou uma rota nova e não escrev
 dentro dela, ela está aberta para a internet. Não existe uma segunda camada que pegue o que
 sobrou.
 
-## Os quatro jeitos de autenticar uma rota neste repo
+## Os jeitos de autenticar uma rota neste repo
 
 | Quem chama | Mecanismo | Onde vive |
 |---|---|---|
@@ -51,6 +51,9 @@ sobrou.
 | Cron do hPanel | header fixo → `isCronAuthorized(req)` | [src/lib/cron-auth.ts](../../src/lib/cron-auth.ts) |
 | QStash (fila de jobs) | assinatura HMAC → `verifyQStashSignature(...)` | [src/lib/queue.ts](../../src/lib/queue.ts) |
 | Evolution (webhook) | token embutido no caminho | rota de webhook, ver abaixo |
+| Destinatário de e-mail em massa (link) | HMAC do id do destinatário no caminho → verifyEmailUnsubscribeSig | src/lib/email-broadcast/unsubscribe.ts |
+
+`/api/email/unsubscribe/[recipientId]/[sig]` é **pública de propósito** (RFC 8058); a assinatura é a primeira checagem, só aceita POST, e a server action `confirmEmailUnsubscribe` segue o mesmo padrão (server actions também são endpoints públicos).
 
 Não existe um "guard genérico" que sirva pra tudo — "quem pode chamar" muda por rota. O que os
 quatro têm em comum é onde a checagem acontece: **dentro do handler, como uma das primeiras

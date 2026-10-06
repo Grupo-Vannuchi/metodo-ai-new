@@ -3282,5 +3282,15 @@
       "dailyLimit": "Daily copilot limit reached for your plan. Try again tomorrow or upgrade.",
       "error": "I couldn't answer right now. Please try again."
     }
+  },
+  "emailUnsubscribe": {
+    "title": "Unsubscribe",
+    "body": "Confirm to stop receiving bulk emails from {org}.",
+    "confirm": "Confirm unsubscribe",
+    "processing": "Processing…",
+    "done": "Done. You won't receive these emails anymore.",
+    "failed": "Could not complete. Try again.",
+    "invalidTitle": "Invalid link",
+    "invalidBody": "This unsubscribe link is invalid."
   }
 }

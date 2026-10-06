@@ -3282,5 +3282,15 @@
       "dailyLimit": "Limite diário do copiloto atingido para o seu plano. Tente novamente amanhã ou faça upgrade.",
       "error": "Não consegui responder agora. Tente novamente."
     }
+  },
+  "emailUnsubscribe": {
+    "title": "Descadastrar",
+    "body": "Confirme para não receber mais e-mails em massa de {org}.",
+    "confirm": "Confirmar descadastro",
+    "processing": "Processando…",
+    "done": "Pronto. Você não vai mais receber estes e-mails.",
+    "failed": "Não foi possível concluir. Tente de novo.",
+    "invalidTitle": "Link inválido",
+    "invalidBody": "Este link de descadastro é inválido."
   }
 }
