@@ -36,10 +36,16 @@ export function fillTextVars(text: string, vars: TemplateVars): string {
     .trim();
 }
 
-/** "Name <addr>", or just the address when there's no usable name. */
+/**
+ * `"Name" <addr>` (always a quoted display name, so commas/specials stay valid per RFC 5322),
+ * or just the bare address when there's no usable name. `fromEmail` is free text in the
+ * connection, so an already formatted `Name <addr>` is reduced to its address first.
+ */
 export function formatFrom(fromName: string | null | undefined, fromEmail: string): string {
-  const name = (fromName ?? "").replace(/[<>"\r\n]/g, "").trim();
-  return name ? `${name} <${fromEmail}>` : fromEmail;
+  const angle = /<([^>]+)>/.exec(fromEmail);
+  const addr = (angle ? angle[1] : fromEmail).trim();
+  const name = (fromName ?? "").replace(/[\r\n"\\]/g, "").trim();
+  return name ? `"${name}" <${addr}>` : addr;
 }
 
 /** Plain-text alternative of the body (improves deliverability). */

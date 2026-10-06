@@ -121,10 +121,13 @@ check("fillTextVars fills the subject and strips line breaks (header injection)"
   assert.equal(fillTextVars("{{nome}}, oi\r\nBcc: x@y.com", { nome: "Ana", empresa: "" }), "Ana, oi Bcc: x@y.com");
 });
 
-check("formatFrom builds 'Name <addr>' and drops header-breaking characters", () => {
-  assert.equal(formatFrom('Empresa "Exemplo" <x>', "contato@ex.com"), "Empresa Exemplo x <contato@ex.com>");
+check("formatFrom always quotes the name, strips header-breaking chars and uses the bare address", () => {
+  assert.equal(formatFrom("Vannuchi, Moraes & Cia Ltda.", "contato@x.com"), '"Vannuchi, Moraes & Cia Ltda." <contato@x.com>');
+  assert.equal(formatFrom("a@b", "contato@x.com"), '"a@b" <contato@x.com>');
+  assert.equal(formatFrom("Acme", "ACME <contato@acme.com>"), '"Acme" <contato@acme.com>');
+  assert.equal(formatFrom('Em"presa\\\r\nX', "contato@ex.com"), '"EmpresaX" <contato@ex.com>');
   assert.equal(formatFrom("  ", "contato@ex.com"), "contato@ex.com");
-  assert.equal(formatFrom(null, "contato@ex.com"), "contato@ex.com");
+  assert.equal(formatFrom(null, " ACME <contato@ex.com> "), "contato@ex.com");
 });
 
 check("htmlToText keeps paragraphs, bullets and link targets", () => {
