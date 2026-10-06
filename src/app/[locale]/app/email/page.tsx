@@ -3,6 +3,8 @@ import { AlertTriangle, CheckCircle2, Plus } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { listEmailBroadcasts, countEmailsSentThisMonth } from "@/lib/queries/email-broadcasts";
 import { getResendConnection, deliveryTrackingActive } from "@/lib/email-broadcast/connection";
+import { DeleteButton } from "@/components/crm/delete-button";
+import { deleteEmailDraft } from "@/app/actions/email-broadcasts";
 import { StatusBadge } from "@/components/email/status-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { LIMITS } from "@/config/limits";
@@ -117,7 +119,9 @@ export default async function EmailPage({ params }: { params: Promise<{ locale: 
                     <td className="px-5 py-3 text-muted-foreground">
                       {isDraft ? t("editedAt", { date: when }) : when}
                     </td>
-                    <td className="px-5 py-3 text-right" data-slot="row-actions" />
+                    <td className="px-5 py-3 text-right">
+                      {isDraft ? <DeleteButton action={deleteEmailDraft.bind(null, r.id)} /> : null}
+                    </td>
                   </tr>
                 );
               })}

@@ -18,6 +18,7 @@ const TOP_LEVEL = new Set([
   "/app/proposals",
   "/app/tasks",
   "/app/campaigns",
+  "/app/email",
   "/app/prospecting",
   "/app/connections",
   "/app/inbox",
