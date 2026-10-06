@@ -10,6 +10,14 @@ import assert from "node:assert/strict";
 import { isValidEmail, normalizeEmail, parseEmailList } from "../src/lib/email-broadcast/normalize";
 import { mergeCandidates, type Candidate } from "../src/lib/email-broadcast/audience-core";
 import { buildEmailDocument, fillHtmlVars, fillTextVars, formatFrom, htmlToText } from "../src/lib/email-broadcast/render";
+import { hmacHex, safeEqual } from "../src/lib/email-broadcast/signing";
+import {
+  nextRecipientStatus,
+  parseResendEvent,
+  signSvix,
+  suppressionFor,
+  verifySvixSignature,
+} from "../src/lib/email-broadcast/webhook";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -134,6 +142,84 @@ check("buildEmailDocument wraps the body and adds the escaped footer link", () =
   assert.ok(doc.includes("<p>Oi</p>"));
   assert.ok(doc.includes("A &amp; B Ltda"));
   assert.ok(doc.includes('href="https://site.test/email-unsubscribe/r1/abc"'));
+});
+
+// --- signing / webhook -----------------------------------------------------------
+const SVIX_SECRET = "whsec_" + Buffer.from("check-email-broadcast-secret").toString("base64");
+const SVIX_BODY = '{"type":"email.delivered","data":{"email_id":"e1"}}';
+
+check("hmacHex is stable and safeEqual compares exactly", () => {
+  const a = hmacHex("k", "email-broadcast-unsub:r1");
+  assert.equal(a, hmacHex("k", "email-broadcast-unsub:r1"));
+  assert.notEqual(a, hmacHex("k", "email-broadcast-unsub:r2"));
+  assert.ok(safeEqual(a, a));
+  assert.ok(!safeEqual(a, a.slice(1)));
+});
+
+check("verifySvixSignature accepts a valid signature among several", () => {
+  const sig = signSvix(SVIX_SECRET, "msg_1", "1700000000", SVIX_BODY);
+  assert.ok(
+    verifySvixSignature({
+      secret: SVIX_SECRET,
+      id: "msg_1",
+      timestamp: "1700000000",
+      signature: `v1,AAAA ${sig}`,
+      body: SVIX_BODY,
+      nowSeconds: 1700000100,
+    }),
+  );
+});
+
+check("verifySvixSignature rejects tampered body, stale timestamp and missing headers", () => {
+  const sig = signSvix(SVIX_SECRET, "msg_1", "1700000000", SVIX_BODY);
+  const base = {
+    secret: SVIX_SECRET,
+    id: "msg_1",
+    timestamp: "1700000000",
+    signature: sig,
+    body: SVIX_BODY,
+    nowSeconds: 1700000100,
+  };
+  assert.ok(verifySvixSignature(base));
+  assert.ok(!verifySvixSignature({ ...base, body: SVIX_BODY + " " }));
+  assert.ok(!verifySvixSignature({ ...base, nowSeconds: 1700000000 + 301 }));
+  assert.ok(!verifySvixSignature({ ...base, signature: null }));
+  assert.ok(!verifySvixSignature({ ...base, id: null }));
+});
+
+check("parseResendEvent reads bounces and ignores unknown or incomplete events", () => {
+  assert.deepEqual(
+    parseResendEvent({
+      type: "email.bounced",
+      data: { email_id: "e1", bounce: { type: "Permanent", message: "Caixa inexistente" } },
+    }),
+    { type: "email.bounced", emailId: "e1", bouncePermanent: true, message: "Caixa inexistente" },
+  );
+  assert.equal(parseResendEvent({ type: "email.opened", data: { email_id: "e1" } }), null);
+  assert.equal(parseResendEvent({ type: "email.delivered", data: {} }), null);
+  assert.equal(parseResendEvent("lixo"), null);
+});
+
+check("status transitions only move forward", () => {
+  assert.equal(nextRecipientStatus("SENT", "email.delivered"), "DELIVERED");
+  assert.equal(nextRecipientStatus("BOUNCED", "email.delivered"), null);
+  assert.equal(nextRecipientStatus("DELIVERED", "email.bounced"), "BOUNCED");
+  assert.equal(nextRecipientStatus("FAILED", "email.complained"), null);
+  assert.equal(nextRecipientStatus("QUEUED", "email.failed"), "FAILED");
+  assert.equal(nextRecipientStatus("DELIVERED", "email.failed"), null);
+});
+
+check("only permanent bounces and complaints suppress the address", () => {
+  const ev = (type: "email.bounced" | "email.complained" | "email.delivered", bouncePermanent: boolean) => ({
+    type,
+    emailId: "e",
+    bouncePermanent,
+    message: null,
+  });
+  assert.equal(suppressionFor(ev("email.bounced", true)), "BOUNCED");
+  assert.equal(suppressionFor(ev("email.bounced", false)), null);
+  assert.equal(suppressionFor(ev("email.complained", false)), "COMPLAINED");
+  assert.equal(suppressionFor(ev("email.delivered", false)), null);
 });
 
 console.log(`\n✅ email-broadcast: ${passed} checks passed.`);
