@@ -11,7 +11,8 @@ export const runtime = "nodejs";
  * Delivery events for the mass e-mail, posted by the CLIENT's Resend account
  * (registered by ensureResendWebhook). Authorization: the Svix signature with
  * the per-connection secret, checked before anything else is trusted. The
- * connection row gives the org; every write filters by it. Separate from the
+ * connection row gives the org; every write filters by it. Events that are not
+ * about one of this org's broadcast recipients are acknowledged but not stored. Separate from the
  * generic /api/webhooks/[provider] sink (Campaigns), which stays untouched.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ connectionId: string }> }) {
@@ -46,13 +47,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     return new Response("Bad payload", { status: 400 });
   }
 
-  const dedupeKey = `RESEND:${svixId}`;
+  // Only events about e-mails THIS module sent are stored (data minimization: the client's Resend
+  // account also carries unrelated mail whose to/from/subject must not land here).
+  const event = parseResendEvent(payload);
+  if (!event) return Response.json({ ok: true, ignored: true });
+  const recipient = await prisma.emailBroadcastRecipient.findFirst({
+    where: { organizationId: conn.organizationId, providerMessageId: event.emailId },
+    select: { id: true, email: true },
+  });
+  if (!recipient) return Response.json({ ok: true, ignored: true });
+
+  // Per connection: Svix sends the same svix-id to every endpoint, and several companies can share one Resend key.
+  const dedupeKey = `RESEND:${conn.id}:${svixId}`;
   try {
     await prisma.webhookEvent.create({
       data: {
         organizationId: conn.organizationId,
         provider: "RESEND",
-        eventType: String((payload as { type?: unknown })?.type ?? "unknown"),
+        eventType: event.type,
         dedupeKey,
         payload: payload as Prisma.InputJsonValue,
       },
@@ -65,25 +77,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     return new Response("error", { status: 500 });
   }
 
-  const event = parseResendEvent(payload);
   try {
-    if (event) {
-      const t = TRANSITIONS[event.type];
-      await prisma.emailBroadcastRecipient.updateMany({
-        where: { organizationId: conn.organizationId, providerMessageId: event.emailId, status: { in: t.from } },
-        data: { status: t.to, ...(event.message ? { error: event.message.slice(0, 500) } : {}) },
-      });
-      const reason = suppressionFor(event);
-      if (reason) {
-        const r = await prisma.emailBroadcastRecipient.findFirst({
-          where: { organizationId: conn.organizationId, providerMessageId: event.emailId },
-          select: { id: true, email: true },
-        });
-        // An email_id from outside this module (same Resend account) matches nothing: ignored.
-        if (r) await suppressEmail(conn.organizationId, r.email, reason, r.id);
-      }
-    }
-    // Handled (including events we deliberately ignore): processedAt null means "stored but not applied".
+    const t = TRANSITIONS[event.type];
+    await prisma.emailBroadcastRecipient.updateMany({
+      where: { organizationId: conn.organizationId, providerMessageId: event.emailId, status: { in: t.from } },
+      data: { status: t.to, ...(event.message ? { error: event.message.slice(0, 500) } : {}) },
+    });
+    const reason = suppressionFor(event);
+    if (reason) await suppressEmail(conn.organizationId, recipient.email, reason, recipient.id);
+    // processedAt null means "stored but not applied".
     await prisma.webhookEvent.updateMany({
       where: { dedupeKey, organizationId: conn.organizationId },
       data: { processedAt: new Date() },
