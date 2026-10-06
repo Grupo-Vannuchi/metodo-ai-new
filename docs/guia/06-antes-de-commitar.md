@@ -23,6 +23,10 @@ de minutos depois, na fila do CI.
 | `check:isolation` | que o Postgres respeita um filtro `organizationId` escrito à mão — **não** que `tenantDb`, a DAL ou as actions estão de fato passando esse filtro | **a mais séria das cinco** — ver "check:isolation" abaixo |
 | `check:node` | toda a árvore de dependências roda no Node de produção | ver "check:node" abaixo |
 
+**Checagem de módulo (fora das cinco):** `npm run check:email` roda as asserções das funções puras do
+submenu E-mail (normalização, deduplicação, renderização, assinatura Svix, transições de status). Não
+usa banco nem rede. Rode sempre que mexer em `src/lib/email-broadcast/`.
+
 ## `check:isolation`
 
 Isolamento multi-tenant é [a regra inviolável nº 1 do `CLAUDE.md`](../../CLAUDE.md) e o
