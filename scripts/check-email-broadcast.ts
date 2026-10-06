@@ -9,6 +9,7 @@
 import assert from "node:assert/strict";
 import { isValidEmail, normalizeEmail, parseEmailList } from "../src/lib/email-broadcast/normalize";
 import { mergeCandidates, type Candidate } from "../src/lib/email-broadcast/audience-core";
+import { buildEmailDocument, fillHtmlVars, fillTextVars, formatFrom, htmlToText } from "../src/lib/email-broadcast/render";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -97,6 +98,42 @@ check("mergeCandidates with nothing selected yields zeros", () => {
     suppressed: 0,
     total: 0,
   });
+});
+
+// --- render --------------------------------------------------------------------
+check("fillHtmlVars escapes values and accepts spacing/case variations", () => {
+  assert.equal(
+    fillHtmlVars("<p>Olá {{ nome }}, {{EMPRESA}}</p>", { nome: "<script>x</script>", empresa: "A&B" }),
+    "<p>Olá &lt;script&gt;x&lt;/script&gt;, A&amp;B</p>",
+  );
+});
+
+check("fillTextVars fills the subject and strips line breaks (header injection)", () => {
+  assert.equal(fillTextVars("{{nome}}, oi\r\nBcc: x@y.com", { nome: "Ana", empresa: "" }), "Ana, oi Bcc: x@y.com");
+});
+
+check("formatFrom builds 'Name <addr>' and drops header-breaking characters", () => {
+  assert.equal(formatFrom('Empresa "Exemplo" <x>', "contato@ex.com"), "Empresa Exemplo x <contato@ex.com>");
+  assert.equal(formatFrom("  ", "contato@ex.com"), "contato@ex.com");
+  assert.equal(formatFrom(null, "contato@ex.com"), "contato@ex.com");
+});
+
+check("htmlToText keeps paragraphs, bullets and link targets", () => {
+  assert.equal(
+    htmlToText('<p>Olá <strong>Ana</strong></p><ul><li>Um</li><li>Dois</li></ul><p><a href="https://x.com">Ver</a></p>'),
+    "Olá Ana\n• Um\n• Dois\nVer (https://x.com)",
+  );
+});
+
+check("buildEmailDocument wraps the body and adds the escaped footer link", () => {
+  const doc = buildEmailDocument({
+    bodyHtml: "<p>Oi</p>",
+    orgName: "A & B Ltda",
+    unsubscribeUrl: "https://site.test/email-unsubscribe/r1/abc",
+  });
+  assert.ok(doc.includes("<p>Oi</p>"));
+  assert.ok(doc.includes("A &amp; B Ltda"));
+  assert.ok(doc.includes('href="https://site.test/email-unsubscribe/r1/abc"'));
 });
 
 console.log(`\n✅ email-broadcast: ${passed} checks passed.`);
