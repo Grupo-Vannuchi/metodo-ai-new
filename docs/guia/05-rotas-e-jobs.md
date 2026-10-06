@@ -249,16 +249,16 @@ Vale saber qual das duas você está lendo antes de confiar num "funcionou".
 
 Antes de considerar uma rota em `src/app/api/` pronta:
 
-- **A tabela acima não é exaustiva.** Ela documenta os quatro padrões conhecidos, não todo
+- **A tabela acima não é exaustiva.** Ela documenta os padrões conhecidos, não todo
   `src/app/api/` — existe pelo menos uma rota real neste repositório que não se encaixa em
-  nenhuma das quatro linhas. Uma rota já existir no repositório não é prova de que o padrão dela
+  nenhuma das linhas. Uma rota já existir no repositório não é prova de que o padrão dela
   está certo: confira o guard de verdade (leia o handler), não copie um arquivo vizinho por
   analogia.
 - **Quem pode chamar isto?** Usuário logado, cron, fila, webhook de um provedor, ou é
   intencionalmente pública?
 - **Se é pública, por quê?** Isso precisa ser uma decisão registrada, não um esquecimento.
 - **Se não é pública, qual guard?** `getOrgContext()` com checagem de `null`,
-  `isCronAuthorized(req)`, `verifyQStashSignature(...)`, ou comparação de token — uma das quatro
-  linhas da tabela acima. Escreva a checagem como uma das primeiras linhas do handler.
+  `isCronAuthorized(req)`, `verifyQStashSignature(...)`, ou comparação de token — uma das linhas
+  da tabela acima. Escreva a checagem como uma das primeiras linhas do handler.
 - **Toca dado de tenant?** Se a rota lê ou grava tabela de negócio, autenticar quem chama não
   basta — vale o [guia 03 (multi-tenancy)](03-multi-tenancy.md) também.
