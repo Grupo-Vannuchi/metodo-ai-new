@@ -51,13 +51,17 @@ sobrou.
 | Cron do hPanel | header fixo → `isCronAuthorized(req)` | [src/lib/cron-auth.ts](../../src/lib/cron-auth.ts) |
 | QStash (fila de jobs) | assinatura HMAC → `verifyQStashSignature(...)` | [src/lib/queue.ts](../../src/lib/queue.ts) |
 | Evolution (webhook) | token embutido no caminho | rota de webhook, ver abaixo |
-| Destinatário de e-mail em massa (link) | HMAC do id do destinatário no caminho → verifyEmailUnsubscribeSig | src/lib/email-broadcast/unsubscribe.ts |
+| Destinatário de e-mail em massa (link) | HMAC do id do destinatário no caminho → `verifyEmailUnsubscribeSig` | [src/lib/email-broadcast/unsubscribe.ts](../../src/lib/email-broadcast/unsubscribe.ts) |
+| Resend (webhook do e-mail em massa) | assinatura Svix com segredo por conexão → `verifySvixSignature` | [src/app/api/webhooks/resend/[connectionId]/route.ts](../../src/app/api/webhooks/resend/[connectionId]/route.ts) |
 
 `/api/email/unsubscribe/[recipientId]/[sig]` é **pública de propósito** (RFC 8058); a assinatura é a primeira checagem, só aceita POST, e a server action `confirmEmailUnsubscribe` segue o mesmo padrão (server actions também são endpoints públicos).
 
-Não existe um "guard genérico" que sirva pra tudo — "quem pode chamar" muda por rota. O que os
-quatro têm em comum é onde a checagem acontece: **dentro do handler, como uma das primeiras
+Não existe um "guard genérico" que sirva pra tudo — "quem pode chamar" muda por rota. O que todos
+têm em comum é onde a checagem acontece: **dentro do handler, como uma das primeiras
 linhas**, antes de qualquer leitura ou efeito colateral.
+
+O registro do webhook do Resend na conta do cliente é automático (`ensureResendWebhook`); em dev só
+funciona com `NEXT_PUBLIC_SITE_URL` https (ngrok), porque o Resend precisa alcançar sua máquina.
 
 ### Rota chamada pelo usuário logado
 
