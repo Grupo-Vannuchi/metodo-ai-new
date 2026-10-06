@@ -2511,6 +2511,7 @@
         "updated": "Alterou uma campanha",
         "started": "Disparou uma campanha"
       },
+      "email_broadcast": { "started": "Iniciou um envio de e-mail em massa" },
       "connection": {
         "created": "Conectou uma integração",
         "updated": "Alterou uma integração",
@@ -2558,6 +2559,7 @@
     "entities": {
       "AccessTemplate": "Template de acesso",
       "Campaign": "Campanha",
+      "EmailBroadcast": "Envio de e-mail",
       "ExtractionJob": "Prospecção",
       "FinanceEntry": "Financeiro",
       "IntegrationConnection": "Conexão",

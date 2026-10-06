@@ -2511,6 +2511,7 @@
         "updated": "Changed a campaign",
         "started": "Launched a campaign"
       },
+      "email_broadcast": { "started": "Started a bulk email send" },
       "connection": {
         "created": "Connected an integration",
         "updated": "Changed an integration",
@@ -2558,6 +2559,7 @@
     "entities": {
       "AccessTemplate": "Access template",
       "Campaign": "Campaign",
+      "EmailBroadcast": "Email send",
       "ExtractionJob": "Prospecting",
       "FinanceEntry": "Finance",
       "IntegrationConnection": "Connection",

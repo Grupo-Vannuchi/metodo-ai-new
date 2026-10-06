@@ -2,6 +2,7 @@ import "server-only";
 import { dispatchCampaignBatch } from "@/lib/dispatch";
 import { runExtractionBatch } from "@/lib/prospecting/runner";
 import { runWhatsappMediaJob, type WhatsappMediaJob } from "@/lib/whatsapp/media";
+import { QUEUE_BUDGET_MS, runEmailBroadcast } from "@/lib/email-broadcast/dispatch";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
 
 /**
@@ -47,5 +48,12 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
     const job = payload as WhatsappMediaJob;
     if (!job?.messageId || !job?.connectionId || !job?.key?.id) return;
     await runWhatsappMediaJob(job);
+  },
+  /** Run a mass e-mail for up to ~50s, then re-enqueue until it's done. */
+  "email-broadcast": async (payload) => {
+    const broadcastId = String((payload as { broadcastId?: string })?.broadcastId ?? "");
+    if (!broadcastId) return;
+    const { done } = await runEmailBroadcast(broadcastId, { budgetMs: QUEUE_BUDGET_MS });
+    if (!done && isQueueConfigured()) await enqueue("email-broadcast", { broadcastId });
   },
 };

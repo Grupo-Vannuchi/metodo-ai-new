@@ -11,15 +11,19 @@ import {
   audienceSelectionSchema,
   broadcastDraftSchema,
   type BroadcastDraftInput,
+  readAudience,
 } from "@/lib/validations/email-broadcast";
 import { normalizeEmail } from "@/lib/email-broadcast/normalize";
 import { resolveAudience } from "@/lib/email-broadcast/audience";
 import { composeEmail } from "@/lib/email-broadcast/compose";
 import { formatFrom } from "@/lib/email-broadcast/render";
-import { getResendConnection } from "@/lib/email-broadcast/connection";
+import { getResendConnection, ensureResendWebhook } from "@/lib/email-broadcast/connection";
 import { sendOne } from "@/lib/email-broadcast/resend";
 import { emailUnsubscribePageUrl } from "@/lib/email-broadcast/unsubscribe";
-import { searchEmailTargets as searchTargets } from "@/lib/queries/email-broadcasts";
+import { searchEmailTargets as searchTargets, countEmailsSentThisMonth } from "@/lib/queries/email-broadcasts";
+import { audit } from "@/lib/audit";
+import { LIMITS } from "@/config/limits";
+import { BATCH_SIZE, kickEmailBroadcast } from "@/lib/email-broadcast/dispatch";
 import type { AudiencePreview, PickedTarget } from "@/lib/email-broadcast/types";
 
 export type EmailActionError =
@@ -204,4 +208,120 @@ export async function sendEmailTest(input: BroadcastDraftInput): Promise<{ ok: t
     ...(parsed.data.replyTo ? { reply_to: normalizeEmail(parsed.data.replyTo) } : {}),
   });
   return res.ok ? { ok: true, to: g.ctx.user.email } : { ok: false, error: "provider", message: res.message };
+}
+
+/**
+ * DRAFT → SENDING: resolve the audience, check quota, materialize one row per
+ * unique address (@@unique([broadcastId, email]) + skipDuplicates), then kick
+ * the dispatcher. The DRAFT-only updateMany is the double-submit lock.
+ */
+export async function startEmailBroadcast(id: string): Promise<{ ok: true } | EmailActionFail> {
+  const g = await gate();
+  if (!g.ok) return g;
+  const orgId = g.ctx.organizationId;
+  const db = tenantDb(orgId);
+
+  const b = await db.emailBroadcast.findFirst({
+    where: { id },
+    select: { id: true, status: true, subject: true, html: true, audience: true },
+  });
+  if (!b) return { ok: false, error: "not_found" };
+  if (b.status !== "DRAFT") return { ok: false, error: "not_found" };
+  if (!b.subject.trim() || !hasBody(b.html)) return { ok: false, error: "invalid" };
+
+  const conn = await getResendConnection(orgId);
+  if (!conn) return { ok: false, error: "no_connection" };
+
+  const { recipients, stats } = await resolveAudience(orgId, readAudience(b.audience));
+  if (recipients.length === 0) return { ok: false, error: "empty" };
+
+  const remaining = LIMITS.emailBroadcastQuotaPerMonth - (await countEmailsSentThisMonth(orgId));
+  if (recipients.length > remaining) {
+    return { ok: false, error: "quota", remaining: Math.max(0, remaining), total: recipients.length };
+  }
+
+  await ensureResendWebhook(conn).catch((e) => {
+    console.warn("[email] webhook setup failed", e);
+    return false;
+  });
+
+  // Claim: only one request can move this draft forward. The fresh heartbeat
+  // keeps a "Resume" click from starting a runner mid-materialization.
+  const claimed = await db.emailBroadcast.updateMany({
+    where: { id, status: "DRAFT" },
+    data: {
+      status: "SENDING",
+      stats: stats as Prisma.InputJsonValue,
+      startedAt: new Date(),
+      lastDispatchAt: new Date(),
+      pausedReason: null,
+      lastError: null,
+    },
+  });
+  if (claimed.count === 0) return { ok: false, error: "not_found" };
+
+  try {
+    for (let i = 0; i < recipients.length; i += 1000) {
+      await db.emailBroadcastRecipient.createMany({
+        data: recipients.slice(i, i + 1000).map((r, j) => ({
+          organizationId: orgId,
+          broadcastId: id,
+          email: r.email,
+          name: r.name,
+          companyName: r.companyName,
+          sources: r.sources,
+          contactId: r.contactId,
+          companyId: r.companyId,
+          batchNo: Math.floor((i + j) / BATCH_SIZE),
+        })),
+        skipDuplicates: true,
+      });
+    }
+  } catch (error) {
+    console.error("Failed to materialize email recipients", error);
+    await db.emailBroadcastRecipient.deleteMany({ where: { broadcastId: id } });
+    await db.emailBroadcast.updateMany({
+      where: { id },
+      data: { status: "DRAFT", startedAt: null, lastDispatchAt: null, stats: {} },
+    });
+    return { ok: false, error: "unknown" };
+  }
+
+  // Release the claim heartbeat so the dispatcher's lease can be taken now.
+  await db.emailBroadcast.updateMany({ where: { id, status: "SENDING" }, data: { lastDispatchAt: null } });
+  await audit(g.ctx, {
+    action: "email_broadcast.started",
+    entity: "EmailBroadcast",
+    entityId: id,
+    meta: { recipients: recipients.length },
+  });
+  await kickEmailBroadcast(id);
+  revalidatePath("/app/email");
+  revalidatePath(`/app/email/${id}`);
+  return { ok: true };
+}
+
+/** PAUSED → SENDING (after the cause was fixed), or poke a stalled SENDING.
+ * The dispatcher's lease guarantees a single runner either way. */
+export async function resumeEmailBroadcast(id: string): Promise<{ ok: true } | EmailActionFail> {
+  const g = await gate();
+  if (!g.ok) return g;
+  const db = tenantDb(g.ctx.organizationId);
+  const b = await db.emailBroadcast.findFirst({ where: { id }, select: { status: true } });
+  if (!b) return { ok: false, error: "not_found" };
+
+  if (b.status === "PAUSED") {
+    if (!(await getResendConnection(g.ctx.organizationId))) return { ok: false, error: "no_connection" };
+    const res = await db.emailBroadcast.updateMany({
+      where: { id, status: "PAUSED" },
+      data: { status: "SENDING", pausedReason: null, lastError: null, lastDispatchAt: null },
+    });
+    if (res.count === 0) return { ok: false, error: "not_found" };
+  } else if (b.status !== "SENDING") {
+    return { ok: false, error: "invalid" };
+  }
+
+  await kickEmailBroadcast(id);
+  revalidatePath(`/app/email/${id}`);
+  return { ok: true };
 }
