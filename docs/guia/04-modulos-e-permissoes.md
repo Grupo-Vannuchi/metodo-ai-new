@@ -72,14 +72,17 @@ Não existe um terceiro lugar gateando alguma coisa. É sempre um destes três a
   exportadas — `hasModule`, `hasFeatureByModules`, `assertFeatureByModules`, `availableScreens`
   — são a única forma correta de perguntar "esta empresa tem X".
 - **[src/config/screens.ts](../../src/config/screens.ts)** — as telas *gateáveis por template de
-  acesso*: `GATEABLE_SCREENS`, **14** hoje (`feed`, `crm`, `proposals`, `tasks`, `prospecting`,
-  `campaigns`, `inbox`, `companies`, `contacts`, `connections`, `finance`, `hr`, `supplies`,
+  acesso*: `GATEABLE_SCREENS`, **15** hoje (`feed`, `crm`, `proposals`, `tasks`, `prospecting`,
+  `campaigns`, `email`, `inbox`, `companies`, `contacts`, `connections`, `finance`, `hr`, `supplies`,
   `downloader`). `dashboard` e `settings` não estão nessa lista porque são `ALWAYS_ALLOWED` —
   nenhum template restringe o *acesso à tela*, todo membro autenticado chega lá. Isso não é o
   mesmo que "sem restrição nenhuma": o comentário-fonte em
   [src/config/screens.ts:5-7](../../src/config/screens.ts#L5-L7) registra que `settings` é
   **gateada por papel** (ADMIN+) dentro dela mesma — partes da tela mudam ou somem conforme o
   `role` do membro, só não por template de acesso.
+  O módulo `marketing` libera as telas `campaigns`, `email` e `prospecting`. A tela `email` (submenu
+  E-mail, envio em massa via Resend) precisa ser marcada nos modelos de acesso para que membros a
+  vejam; owner e admin veem direto.
 - **[src/config/limits.ts](../../src/config/limits.ts)** — limites globais de uso, os mesmos para
   toda organização: `seatLimit` (25), `whatsappNumbersLimit` (10),
   `dispatchQuotaPerMonth` (50.000), `emailBroadcastQuotaPerMonth` (50.000), `prospectingQuotaPerMonth` (10.000),

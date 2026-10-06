@@ -121,7 +121,7 @@ export const MODULES: ModuleDef[] = [
     dependsOn: [],
     integratesWith: ["crm", "inbox"],
     unlocks: ["campaigns.whatsapp", "campaigns.email", "campaigns.scheduling.advanced", "prospecting"],
-    screens: ["campaigns", "prospecting"],
+    screens: ["campaigns", "email", "prospecting"],
   },
   {
     id: "inbox",

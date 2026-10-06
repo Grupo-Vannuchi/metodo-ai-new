@@ -14,6 +14,7 @@ export const GATEABLE_SCREENS = [
   "tasks",
   "prospecting",
   "campaigns",
+  "email",
   "inbox",
   "companies",
   "contacts",
