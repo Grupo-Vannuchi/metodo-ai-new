@@ -13,6 +13,8 @@ export const LIMITS: {
   whatsappNumbersLimit: number | null;
   /** Campaign dispatches per month. */
   dispatchQuotaPerMonth: number;
+  /** Mass e-mails (submenu E-mail) per month — separate from Campaigns. */
+  emailBroadcastQuotaPerMonth: number;
   /** Prospecting leads per month. */
   prospectingQuotaPerMonth: number;
   /** Prospecting extraction jobs per month. */
@@ -28,6 +30,7 @@ export const LIMITS: {
   connectionsLimit: null,
   whatsappNumbersLimit: 10,
   dispatchQuotaPerMonth: 50_000,
+  emailBroadcastQuotaPerMonth: 50_000,
   prospectingQuotaPerMonth: 10_000,
   extractionsPerMonth: 500,
   assistantDailyLimit: 750,

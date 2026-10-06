@@ -82,11 +82,13 @@ Não existe um terceiro lugar gateando alguma coisa. É sempre um destes três a
   `role` do membro, só não por template de acesso.
 - **[src/config/limits.ts](../../src/config/limits.ts)** — limites globais de uso, os mesmos para
   toda organização: `seatLimit` (25), `whatsappNumbersLimit` (10),
-  `dispatchQuotaPerMonth` (50.000), `prospectingQuotaPerMonth` (10.000),
+  `dispatchQuotaPerMonth` (50.000), `emailBroadcastQuotaPerMonth` (50.000), `prospectingQuotaPerMonth` (10.000),
   `extractionsPerMonth` (500), `assistantDailyLimit` (750), `whatsappAgentDailyLimit` (2.000),
   `companiesPerAccount` (5) e `connectionsLimit` (`null` = sem limite). O comentário no topo do
   arquivo é direto: **não existem mais planos** — o antigo `STANDARD/PLUS/GOLD/ENTERPRISE` virou
   módulo instalado ou não; estes números só existem para conter abuso/custo, iguais para todos.
+  `emailBroadcastQuotaPerMonth` (50.000): e-mails aceitos pelo Resend no mês no submenu E-mail. É
+  **separada** de `dispatchQuotaPerMonth` (Campanhas), e as duas não se somam.
 
 ## Como o gating se compõe
 
