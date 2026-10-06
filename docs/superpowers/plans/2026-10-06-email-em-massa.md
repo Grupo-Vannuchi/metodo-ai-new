@@ -47,6 +47,9 @@
 - **Commits:** `[E-mail] - Verbo + tarefa`, corpo curto e a última linha `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Branch `feature/email-em-massa`; não faça push sem pedir.
 - **Comentários de código em inglês**; docs em pt-BR.
 - Depois de `prisma generate`, mate e reinicie o `next dev` na porta 3000. Não suba um segundo servidor em outra porta.
+- **Nunca zere nem recrie o banco local.** Isso vale para `migrate dev`, `migrate reset`, `db push --force-reset` e para apagar dados que não foram criados nesta branch. Migration é só pelo procedimento da Task 1, Step 4.
+- **Nada sai para produção.** Sem push, sem PR, sem tocar no Supabase.
+- **Envio real de e-mail** (Tasks 10, 12 e 13) só se o usuário autorizou explicitamente. Sem autorização, pule esses passos e marque como pendente.
 
 ## Review Focus
 
@@ -136,7 +139,7 @@ E no `finally`, antes de `await prisma.conversation.deleteMany(...)`:
 
 - [ ] **Step 2: Rodar e confirmar que falha**
 
-Garanta o Postgres local de pé (`docker compose up -d postgres`) e rode `npm run typecheck`.
+Garanta o Postgres local de pé (portátil: `%LOCALAPPDATA%\metodoai-dev\pg.cmd status`; se estiver parado, `pg.cmd start`) e rode `npm run typecheck`.
 Esperado: FAIL com `Property 'emailBroadcast' does not exist on type 'PrismaClient'`.
 
 - [ ] **Step 3: Adicionar os models ao schema**
@@ -257,8 +260,22 @@ model EmailSuppression {
 
 - [ ] **Step 4: Gerar a migration e registrar os models no tenantDb**
 
-Run: `npm run db:migrate -- --name email_broadcasts`
-Esperado: cria `prisma/migrations/<timestamp>_email_broadcasts/migration.sql` só com `CREATE TYPE`, `CREATE TABLE` e `CREATE INDEX`, sem nenhum `ALTER`/`DROP` em tabela existente. Abra o SQL e confirme.
+> **NÃO rode `npm run db:migrate` / `prisma migrate dev` / `migrate reset` / `db push --force-reset`.**
+> O Postgres local (portátil, `%LOCALAPPDATA%\metodoai-dev\pg.cmd start`, porta 5433) tem
+> aplicada a migration `20260928120000_whatsapp_cloud`, que vem de outra branch e não existe
+> aqui. Por isso o `migrate dev` detecta drift e pede para **zerar o banco local**. O
+> procedimento abaixo gera e aplica só o SQL novo, sem tocar no resto.
+
+```bash
+mkdir -p prisma/migrations/20261006120000_email_broadcasts
+git show main:prisma/schema.prisma > "$TMP/schema-main.prisma"
+npx prisma migrate diff --from-schema-datamodel "$TMP/schema-main.prisma" --to-schema-datamodel prisma/schema.prisma --script > prisma/migrations/20261006120000_email_broadcasts/migration.sql
+npx prisma db execute --file prisma/migrations/20261006120000_email_broadcasts/migration.sql --schema prisma/schema.prisma
+npx prisma migrate resolve --applied 20261006120000_email_broadcasts
+npx prisma generate
+```
+
+Esperado: o `migration.sql` tem só `CREATE TYPE`, `CREATE TABLE`, `CREATE INDEX`/`CREATE UNIQUE INDEX` e o `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY` da tabela **nova** de destinatários. Nenhum `ALTER`/`DROP` em tabela existente. Abra o SQL e confirme **antes** do `db execute`. Se aparecer qualquer outra coisa, pare e reporte.
 
 Em `src/lib/tenant-db.ts`, no fim do array `TENANT_MODELS` (depois de `"WhatsappAgent",`):
 
