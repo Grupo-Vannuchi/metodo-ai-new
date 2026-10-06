@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { isValidEmail, normalizeEmail, parseEmailList } from "../src/lib/email-broadcast/normalize";
 import { mergeCandidates, type Candidate } from "../src/lib/email-broadcast/audience-core";
 import { buildEmailDocument, fillHtmlVars, fillTextVars, formatFrom, htmlToText } from "../src/lib/email-broadcast/render";
+import { batchFailureAction, singleFailureAction } from "../src/lib/email-broadcast/retry-policy";
 import { hmacHex, safeEqual } from "../src/lib/email-broadcast/signing";
 import {
   nextRecipientStatus,
@@ -220,6 +221,42 @@ check("only permanent bounces and complaints suppress the address", () => {
   assert.equal(suppressionFor(ev("email.bounced", false)), null);
   assert.equal(suppressionFor(ev("email.complained", false)), "COMPLAINED");
   assert.equal(suppressionFor(ev("email.delivered", false)), null);
+});
+
+check("batchFailureAction follows the retry policy", () => {
+  const C = "concurrent_idempotent_requests";
+  assert.equal(batchFailureAction(409, C, 0), "retry_same_key");
+  assert.equal(batchFailureAction(409, C, 4), "retry_same_key");
+  assert.equal(batchFailureAction(409, C, 5), "pause");
+  assert.equal(batchFailureAction(409, "invalid_idempotent_request", 0), "per_recipient");
+  assert.equal(batchFailureAction(409, null, 0), "per_recipient");
+  assert.equal(batchFailureAction(429, null, 4), "retry_same_key");
+  assert.equal(batchFailureAction(429, null, 5), "pause");
+  assert.equal(batchFailureAction(0, null, 2), "retry_same_key");
+  assert.equal(batchFailureAction(0, null, 3), "pause");
+  assert.equal(batchFailureAction(503, null, 2), "retry_same_key");
+  assert.equal(batchFailureAction(500, null, 3), "pause");
+  assert.equal(batchFailureAction(401, null, 0), "pause");
+  assert.equal(batchFailureAction(403, null, 0), "pause");
+  assert.equal(batchFailureAction(400, null, 0), "per_recipient");
+  assert.equal(batchFailureAction(422, null, 0), "per_recipient");
+  assert.equal(batchFailureAction(404, null, 0), "pause");
+});
+
+check("singleFailureAction follows the retry policy", () => {
+  const C = "concurrent_idempotent_requests";
+  assert.equal(singleFailureAction(409, C, 0), "retry_same_key");
+  assert.equal(singleFailureAction(409, C, 5), "pause");
+  assert.equal(singleFailureAction(409, "other", 0), "fail_recipient");
+  assert.equal(singleFailureAction(429, null, 4), "retry_same_key");
+  assert.equal(singleFailureAction(429, null, 5), "pause");
+  assert.equal(singleFailureAction(0, null, 2), "retry_same_key");
+  assert.equal(singleFailureAction(502, null, 3), "pause");
+  assert.equal(singleFailureAction(401, null, 0), "pause");
+  assert.equal(singleFailureAction(403, null, 0), "pause");
+  assert.equal(singleFailureAction(400, null, 0), "fail_recipient");
+  assert.equal(singleFailureAction(422, null, 0), "fail_recipient");
+  assert.equal(singleFailureAction(404, null, 0), "fail_recipient");
 });
 
 console.log(`\n✅ email-broadcast: ${passed} checks passed.`);

@@ -21,7 +21,7 @@ export type ResendEmail = {
 
 export type ResendCallResult<T> =
   | { ok: true; data: T }
-  | { ok: false; status: number; message: string; retryAfter: number | null };
+  | { ok: false; status: number; message: string; name: string | null; retryAfter: number | null };
 
 async function call<T>(
   apiKey: string,
@@ -37,6 +37,7 @@ async function call<T>(
         ...(init.idempotencyKey ? { "Idempotency-Key": init.idempotencyKey } : {}),
       },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      signal: AbortSignal.timeout(30_000),
     });
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
@@ -45,12 +46,13 @@ async function call<T>(
         ok: false,
         status: res.status,
         message: typeof json.message === "string" ? json.message : `Resend ${res.status}`,
+        name: typeof json.name === "string" ? json.name : null,
         retryAfter: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
       };
     }
     return { ok: true, data: json as T };
   } catch (e) {
-    return { ok: false, status: 0, message: e instanceof Error ? e.message : "Falha de rede", retryAfter: null };
+    return { ok: false, status: 0, message: e instanceof Error ? e.message : "Falha de rede", name: null, retryAfter: null };
   }
 }
 

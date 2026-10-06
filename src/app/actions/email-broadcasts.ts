@@ -235,15 +235,14 @@ export async function startEmailBroadcast(id: string): Promise<{ ok: true } | Em
   const { recipients, stats } = await resolveAudience(orgId, readAudience(b.audience));
   if (recipients.length === 0) return { ok: false, error: "empty" };
 
-  const remaining = LIMITS.emailBroadcastQuotaPerMonth - (await countEmailsSentThisMonth(orgId));
+  // Addresses still queued in other in-flight sends count as used: no partial start.
+  const queued = await db.emailBroadcastRecipient.count({
+    where: { status: "QUEUED", broadcast: { status: { in: ["SENDING", "PAUSED"] } } },
+  });
+  const remaining = LIMITS.emailBroadcastQuotaPerMonth - ((await countEmailsSentThisMonth(orgId)) + queued);
   if (recipients.length > remaining) {
     return { ok: false, error: "quota", remaining: Math.max(0, remaining), total: recipients.length };
   }
-
-  await ensureResendWebhook(conn).catch((e) => {
-    console.warn("[email] webhook setup failed", e);
-    return false;
-  });
 
   // Claim: only one request can move this draft forward. The fresh heartbeat
   // keeps a "Resume" click from starting a runner mid-materialization.
@@ -259,6 +258,12 @@ export async function startEmailBroadcast(id: string): Promise<{ ok: true } | Em
     },
   });
   if (claimed.count === 0) return { ok: false, error: "not_found" };
+
+  // After the claim, so two tabs cannot both register a webhook.
+  await ensureResendWebhook(conn).catch((e) => {
+    console.warn("[email] webhook setup failed", e);
+    return false;
+  });
 
   try {
     for (let i = 0; i < recipients.length; i += 1000) {
