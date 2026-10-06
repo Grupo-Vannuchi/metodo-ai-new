@@ -66,8 +66,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
   }
 
   const event = parseResendEvent(payload);
-  if (event) {
-    try {
+  try {
+    if (event) {
       const t = TRANSITIONS[event.type];
       await prisma.emailBroadcastRecipient.updateMany({
         where: { organizationId: conn.organizationId, providerMessageId: event.emailId, status: { in: t.from } },
@@ -82,11 +82,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
         // An email_id from outside this module (same Resend account) matches nothing: ignored.
         if (r) await suppressEmail(conn.organizationId, r.email, reason, r.id);
       }
-      await prisma.webhookEvent.updateMany({ where: { dedupeKey }, data: { processedAt: new Date() } });
-    } catch (error) {
-      // Best-effort: a 500 here would make Svix retry an event we already stored.
-      console.error("[webhook:resend] failed to apply event", error);
     }
+    // Handled (including events we deliberately ignore): processedAt null means "stored but not applied".
+    await prisma.webhookEvent.updateMany({
+      where: { dedupeKey, organizationId: conn.organizationId },
+      data: { processedAt: new Date() },
+    });
+  } catch (error) {
+    console.error("[webhook:resend] failed to apply event", error);
+    // Drop the stored event so the Svix retry is not short-circuited by the dedupe branch and the
+    // event is reapplied. Safe: transitions are forward-only and suppression is createMany+skipDuplicates.
+    try {
+      await prisma.webhookEvent.deleteMany({ where: { dedupeKey, organizationId: conn.organizationId } });
+    } catch (cleanupError) {
+      console.error("[webhook:resend] failed to drop stored event", cleanupError);
+    }
+    return new Response("error", { status: 500 });
   }
   return Response.json({ ok: true });
 }
