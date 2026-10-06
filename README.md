@@ -208,7 +208,7 @@ npx prisma migrate deploy        # aplica as pendentes na ordem, idempotente
 # npx prisma db execute --file prisma/migrations/<nome>/migration.sql --schema prisma/schema.prisma
 # npx prisma migrate resolve --applied <nome>
 ```
-**Antes do merge da branch `feature/email-em-massa`:** aplicar no Supabase o SQL de `prisma/migrations/20261006120000_email_broadcasts/migration.sql` (só `CREATE`). A Hostinger não roda migrations.
+**Antes do merge da branch `feature/email-em-massa`:** aplicar no Supabase o SQL de `prisma/migrations/20261006120000_email_broadcasts/migration.sql` (só cria tabelas, índices e a FK da tabela nova — nada destrutivo). A Hostinger não roda migrations.
 
 Sempre **backup antes** de migração destrutiva. Confira com `npx prisma migrate status`.
 
