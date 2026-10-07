@@ -1895,6 +1895,26 @@
     }
   },
   "emailBroadcast": {
+    "image": {
+      "button": "Image",
+      "title": "Insert image",
+      "upload": "Upload from computer",
+      "uploading": "Uploading…",
+      "uploaded": "Image uploaded ✓",
+      "orLink": "or paste a direct image link (https://…)",
+      "linkPlaceholder": "https://…/image.png",
+      "href": "Link on click (optional)",
+      "hrefPlaceholder": "https://yourstore.com/promo",
+      "alt": "Description (optional)",
+      "altPlaceholder": "e.g. October sale banner",
+      "insert": "Insert",
+      "cancel": "Cancel",
+      "invalidSrc": "Use a direct https:// link to the image (ending in .jpg, .png…).",
+      "invalidHref": "Invalid destination link. Use an address like https://yourstore.com.",
+      "tooLarge": "The image is over 5 MB. Use a smaller image.",
+      "badType": "Unsupported format. Use PNG, JPG, GIF or WEBP.",
+      "uploadError": "Couldn't upload the image. Try again."
+    },
     "title": "Email",
     "subtitle": "Send bulk emails to contacts and companies through your Resend account.",
     "new": "New email",

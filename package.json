@@ -35,6 +35,7 @@
     "@prisma/adapter-pg": "^6.19.3",
     "@prisma/client": "^6.2.1",
     "@tiptap/extension-color": "^2.27.2",
+    "@tiptap/extension-image": "^2.27.3",
     "@tiptap/extension-link": "^2.27.2",
     "@tiptap/extension-placeholder": "^2.27.2",
     "@tiptap/extension-text-align": "^2.27.2",

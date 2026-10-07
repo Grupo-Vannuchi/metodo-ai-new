@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,8 @@ import { Input, Label } from "@/components/ui/field";
 import { useConfirm } from "@/components/ui/confirm";
 import { useToast } from "@/components/ui/toast";
 import { Link, useRouter } from "@/i18n/navigation";
-import { RichTextEditor } from "@/components/proposals/rich-text-editor";
+import { RichTextEditor, type EditorImageSupport } from "@/components/proposals/rich-text-editor";
+import { safeClickHref, safeImageSrc } from "@/lib/email-broadcast/image-links";
 import { RecipientPicker } from "@/components/email/recipient-picker";
 import { AudienceSummary } from "@/components/email/audience-summary";
 import {
@@ -47,6 +48,48 @@ export function EmailComposer({
   const [picked, setPicked] = useState(draft.picked);
   const [preview, setPreview] = useState<AudiencePreview | null>(null);
   const [busy, startBusy] = useTransition();
+
+  // Image support for the body editor: upload goes to /api/email/image (same
+  // gates as this screen); pasted links are validated client-side.
+  const imageSupport = useMemo<EditorImageSupport>(
+    () => ({
+      upload: async (file) => {
+        const form = new FormData();
+        form.append("file", file);
+        try {
+          const res = await fetch("/api/email/image", { method: "POST", body: form });
+          const data = (await res.json().catch(() => ({}))) as { ok?: boolean; url?: string; error?: string };
+          if (res.ok && data.ok && data.url) return data.url;
+          const key = data.error === "size" ? "image.tooLarge" : data.error === "type" ? "image.badType" : "image.uploadError";
+          toast(t(key), { variant: "error" });
+        } catch (error) {
+          console.error("[email-image] upload failed", error);
+          toast(t("image.uploadError"), { variant: "error" });
+        }
+        return null;
+      },
+      validateSrc: safeImageSrc,
+      validateHref: safeClickHref,
+      labels: {
+        button: t("image.button"),
+        title: t("image.title"),
+        upload: t("image.upload"),
+        uploading: t("image.uploading"),
+        uploaded: t("image.uploaded"),
+        orLink: t("image.orLink"),
+        linkPlaceholder: t("image.linkPlaceholder"),
+        href: t("image.href"),
+        hrefPlaceholder: t("image.hrefPlaceholder"),
+        alt: t("image.alt"),
+        altPlaceholder: t("image.altPlaceholder"),
+        insert: t("image.insert"),
+        cancel: t("image.cancel"),
+        invalidSrc: t("image.invalidSrc"),
+        invalidHref: t("image.invalidHref"),
+      },
+    }),
+    [t, toast],
+  );
   const noConnection = !fromEmail;
 
   // Live summary, debounced; state only changes inside the timeout.
@@ -194,6 +237,7 @@ export function EmailComposer({
               { token: "nome", label: t("varName") },
               { token: "empresa", label: t("varCompany") },
             ]}
+            images={imageSupport}
           />
           <p className="mt-2 text-xs text-muted-foreground">
             {t("footerNotice")} {t("emptyVarHint")}
