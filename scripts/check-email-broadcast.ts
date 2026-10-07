@@ -9,7 +9,16 @@
 import assert from "node:assert/strict";
 import { isValidEmail, normalizeEmail, parseEmailList } from "../src/lib/email-broadcast/normalize";
 import { mergeCandidates, type Candidate } from "../src/lib/email-broadcast/audience-core";
-import { buildEmailDocument, fillHtmlVars, fillTextVars, formatFrom, htmlToText } from "../src/lib/email-broadcast/render";
+import {
+  buildEmailDocument,
+  fillHtmlVars,
+  fillTextVars,
+  formatFrom,
+  hasEmailContent,
+  htmlToText,
+  prepareEmailImages,
+} from "../src/lib/email-broadcast/render";
+import { safeClickHref, safeImageSrc } from "../src/lib/email-broadcast/image-links";
 import { batchFailureAction, singleFailureAction } from "../src/lib/email-broadcast/retry-policy";
 import { hmacHex, safeEqual } from "../src/lib/email-broadcast/signing";
 import {
@@ -260,6 +269,59 @@ check("singleFailureAction follows the retry policy", () => {
   assert.equal(singleFailureAction(400, null, 0), "fail_recipient");
   assert.equal(singleFailureAction(422, null, 0), "fail_recipient");
   assert.equal(singleFailureAction(404, null, 0), "fail_recipient");
+});
+
+// --- images ---------------------------------------------------------------------
+const IMG_STYLE = "max-width:100%;height:auto;border:0;display:block";
+
+check("prepareEmailImages makes sanitized images responsive, linked or not", () => {
+  assert.equal(
+    prepareEmailImages('<p><img src="https://cdn.x/a.png" alt="Promo" /></p>'),
+    `<p><img src="https://cdn.x/a.png" alt="Promo" style="${IMG_STYLE}" /></p>`,
+  );
+  assert.equal(
+    prepareEmailImages('<a href="https://loja.x"><img src="https://cdn.x/b.png" /></a>'),
+    `<a href="https://loja.x"><img src="https://cdn.x/b.png" style="${IMG_STYLE}" /></a>`,
+  );
+});
+
+check("prepareEmailImages keeps an existing style after the responsive base", () => {
+  assert.equal(
+    prepareEmailImages('<img src="https://cdn.x/c.png" style="margin: 0 auto" />'),
+    `<img src="https://cdn.x/c.png" style="${IMG_STYLE};margin: 0 auto" />`,
+  );
+});
+
+check("prepareEmailImages drops base64 images (mail clients block them)", () => {
+  assert.equal(
+    prepareEmailImages('<p>a<img src="data:image/png;base64,AAAA" alt="x" />b</p>'),
+    "<p>ab</p>",
+  );
+});
+
+check("safeImageSrc accepts only https image links", () => {
+  assert.equal(safeImageSrc("  https://cdn.x/banner.png "), "https://cdn.x/banner.png");
+  assert.equal(safeImageSrc("http://cdn.x/banner.png"), null);
+  assert.equal(safeImageSrc("data:image/png;base64,AAAA"), null);
+  assert.equal(safeImageSrc("javascript:alert(1)"), null);
+  assert.equal(safeImageSrc("cdn.x/banner.png"), null);
+  assert.equal(safeImageSrc(""), null);
+});
+
+check("safeClickHref accepts http(s) links, adds https:// to bare domains, rejects the rest", () => {
+  assert.equal(safeClickHref("https://loja.x/promo"), "https://loja.x/promo");
+  assert.equal(safeClickHref("http://loja.x"), "http://loja.x/");
+  assert.equal(safeClickHref("loja.x/promo"), "https://loja.x/promo");
+  assert.equal(safeClickHref("javascript:alert(1)"), null);
+  assert.equal(safeClickHref("mailto:a@x.com"), null);
+  assert.equal(safeClickHref("   "), null);
+});
+
+check("hasEmailContent counts text or an image as content", () => {
+  assert.equal(hasEmailContent("<p>Oi</p>"), true);
+  assert.equal(hasEmailContent('<p><img src="https://cdn.x/a.png"></p>'), true);
+  assert.equal(hasEmailContent("<p> &nbsp; </p><p></p>"), false);
+  assert.equal(hasEmailContent(""), false);
 });
 
 console.log(`\n✅ email-broadcast: ${passed} checks passed.`);

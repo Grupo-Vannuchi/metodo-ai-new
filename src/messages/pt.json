@@ -1895,6 +1895,26 @@
     }
   },
   "emailBroadcast": {
+    "image": {
+      "button": "Imagem",
+      "title": "Inserir imagem",
+      "upload": "Enviar do computador",
+      "uploading": "Enviando…",
+      "uploaded": "Imagem enviada ✓",
+      "orLink": "ou cole o link direto da imagem (https://…)",
+      "linkPlaceholder": "https://…/imagem.png",
+      "href": "Link ao clicar (opcional)",
+      "hrefPlaceholder": "https://sualoja.com/promocao",
+      "alt": "Descrição (opcional)",
+      "altPlaceholder": "ex.: Banner da promoção de outubro",
+      "insert": "Inserir",
+      "cancel": "Cancelar",
+      "invalidSrc": "Use um link https:// direto para a imagem (terminando em .jpg, .png…).",
+      "invalidHref": "Link de destino inválido. Use um endereço como https://sualoja.com.",
+      "tooLarge": "A imagem passa de 5 MB. Use uma imagem menor.",
+      "badType": "Formato não aceito. Use PNG, JPG, GIF ou WEBP.",
+      "uploadError": "Não foi possível enviar a imagem. Tente de novo."
+    },
     "title": "E-mail",
     "subtitle": "Envie e-mails em massa para contatos e empresas pela sua conta do Resend.",
     "new": "Novo e-mail",

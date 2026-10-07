@@ -67,6 +67,32 @@ export function htmlToText(html: string): string {
     .trim();
 }
 
+/** True when the editor HTML has something to send: visible text or an image. */
+export function hasEmailContent(html: string): boolean {
+  if (/<img\b/i.test(html)) return true;
+  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim().length > 0;
+}
+
+/** Inline style every image gets: mail clients ignore most <style> rules, and
+ * a fixed-width image would overflow the 600px card on phones. */
+const EMAIL_IMG_STYLE = "max-width:100%;height:auto;border:0;display:block";
+
+/**
+ * Make the (already sanitized) images e-mail-safe: responsive inline style on
+ * each <img>, and base64 images removed — Gmail and others block data: URIs,
+ * so they'd only show up as a broken image.
+ */
+export function prepareEmailImages(html: string): string {
+  return html.replace(/<img\b([^>]*?)\s*\/?>/gi, (_match, attrs: string) => {
+    if (/\bsrc\s*=\s*"\s*data:/i.test(attrs)) return "";
+    const style = attrs.match(/\bstyle="([^"]*)"/i);
+    const styled = style
+      ? attrs.replace(style[0], `style="${EMAIL_IMG_STYLE};${style[1]}"`)
+      : `${attrs} style="${EMAIL_IMG_STYLE}"`;
+    return `<img${styled} />`;
+  });
+}
+
 /** The full HTML e-mail: 600px card, inline styles, and the mandatory footer
  * (sender org + unsubscribe link, LGPD). Footer copy is pt-BR in v1. */
 export function buildEmailDocument(input: {

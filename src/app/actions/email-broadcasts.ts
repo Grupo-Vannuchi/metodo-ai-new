@@ -16,7 +16,7 @@ import {
 import { normalizeEmail } from "@/lib/email-broadcast/normalize";
 import { resolveAudience } from "@/lib/email-broadcast/audience";
 import { composeEmail } from "@/lib/email-broadcast/compose";
-import { formatFrom } from "@/lib/email-broadcast/render";
+import { formatFrom, hasEmailContent } from "@/lib/email-broadcast/render";
 import { getResendConnection, ensureResendWebhook } from "@/lib/email-broadcast/connection";
 import { sendOne } from "@/lib/email-broadcast/resend";
 import { emailUnsubscribePageUrl } from "@/lib/email-broadcast/unsubscribe";
@@ -57,10 +57,6 @@ async function gate(): Promise<Gate> {
     return { ok: false, error: "forbidden" };
   }
   return { ok: true, ctx };
-}
-
-function hasBody(html: string): boolean {
-  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim().length > 0;
 }
 
 export async function saveEmailDraft(
@@ -183,7 +179,7 @@ export async function sendEmailTest(input: BroadcastDraftInput): Promise<{ ok: t
   const g = await gate();
   if (!g.ok) return g;
   const parsed = broadcastDraftSchema.safeParse(input);
-  if (!parsed.success || !parsed.data.subject || !hasBody(parsed.data.html)) return { ok: false, error: "invalid" };
+  if (!parsed.success || !parsed.data.subject || !hasEmailContent(parsed.data.html)) return { ok: false, error: "invalid" };
 
   const limiter = makeRateLimiter("email-test", 10, 60);
   if (limiter && !(await limiter.limit(g.ctx.userId)).success) return { ok: false, error: "rate_limited" };
@@ -227,7 +223,7 @@ export async function startEmailBroadcast(id: string): Promise<{ ok: true } | Em
   });
   if (!b) return { ok: false, error: "not_found" };
   if (b.status !== "DRAFT") return { ok: false, error: "not_found" };
-  if (!b.subject.trim() || !hasBody(b.html)) return { ok: false, error: "invalid" };
+  if (!b.subject.trim() || !hasEmailContent(b.html)) return { ok: false, error: "invalid" };
 
   const conn = await getResendConnection(orgId);
   if (!conn) return { ok: false, error: "no_connection" };
