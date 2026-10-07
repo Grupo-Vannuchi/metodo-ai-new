@@ -2439,3 +2439,113 @@ model AssistantMessage {
   @@index([threadId, createdAt])
   @@map("assistant_messages")
 }
+
+// ---------------------------------------------------------------------------
+// Mass e-mail (submenu E-mail). Independent from Campaigns on purpose: its own
+// recipients (by address, not by contact), suppression list and quota. See
+// docs/superpowers/specs/2026-10-06-email-em-massa-design.md.
+// ---------------------------------------------------------------------------
+
+enum EmailBroadcastStatus {
+  DRAFT
+  SENDING
+  PAUSED
+  DONE
+}
+
+enum EmailRecipientStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  BOUNCED
+  COMPLAINED
+  FAILED
+}
+
+enum EmailSuppressionReason {
+  UNSUBSCRIBED
+  BOUNCED
+  COMPLAINED
+}
+
+/// One mass e-mail send. The audience selection is kept as JSON so a draft
+/// reopens as it was; recipients are materialized only when sending starts.
+model EmailBroadcast {
+  id             String               @id @default(cuid())
+  organizationId String
+  subject        String
+  /// Editor HTML as typed; sanitized again at render time.
+  html           String               @db.Text
+  fromName       String?
+  replyTo        String?
+  /// AudienceSelection (src/lib/validations/email-broadcast.ts).
+  audience       Json                 @default("{}")
+  /// { selected, invalid, duplicates, suppressed, total } frozen at send time.
+  stats          Json                 @default("{}")
+  status         EmailBroadcastStatus @default(DRAFT)
+  /// "no_connection" | "quota" | "provider_error"
+  pausedReason   String?
+  /// Resend's message when paused by a provider error.
+  lastError      String?
+  createdById    String
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  /// Dispatcher heartbeat / lease (src/lib/email-broadcast/dispatch.ts).
+  lastDispatchAt DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  recipients EmailBroadcastRecipient[]
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+  @@map("email_broadcasts")
+}
+
+/// One ADDRESS in a send. Unique per (broadcast, email): the database, not the
+/// code, guarantees nobody gets the same send twice.
+model EmailBroadcastRecipient {
+  id                String               @id @default(cuid())
+  organizationId    String
+  broadcastId       String
+  /// Normalized: trimmed + lowercased.
+  email             String
+  name              String?
+  companyName       String?
+  /// "contact" | "company" | "manual" — where the address came from.
+  sources           String[]             @default([])
+  /// Loose references (no FK): deleting a contact keeps the send history.
+  contactId         String?
+  companyId         String?
+  /// Fixed batch of 100 assigned at creation; the batch idempotency key uses it.
+  batchNo           Int
+  status            EmailRecipientStatus @default(QUEUED)
+  providerMessageId String?
+  error             String?
+  sentAt            DateTime?
+  updatedAt         DateTime             @updatedAt
+
+  broadcast EmailBroadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  @@unique([broadcastId, email])
+  @@index([broadcastId, status])
+  @@index([broadcastId, batchNo])
+  @@index([organizationId, sentAt])
+  @@index([providerMessageId])
+  @@map("email_broadcast_recipients")
+}
+
+/// Addresses that must never receive a mass e-mail from this org again
+/// (unsubscribed, hard bounce, spam complaint).
+model EmailSuppression {
+  id             String                 @id @default(cuid())
+  organizationId String
+  /// Normalized: trimmed + lowercased.
+  email          String
+  reason         EmailSuppressionReason
+  recipientId    String?
+  createdAt      DateTime               @default(now())
+
+  @@unique([organizationId, email])
+  @@map("email_suppressions")
+}

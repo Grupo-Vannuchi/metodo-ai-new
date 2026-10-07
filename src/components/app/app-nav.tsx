@@ -10,6 +10,7 @@ import {
   CheckSquare,
   Radar,
   Send,
+  Mail,
   MessageCircle,
   Building2,
   Contact,
@@ -36,6 +37,7 @@ type NavKey =
   | "tasks"
   | "prospecting"
   | "campaigns"
+  | "email"
   | "inbox"
   | "companies"
   | "contacts"
@@ -88,6 +90,7 @@ const GROUPS: Group[] = [
     items: [
       { href: "/app/inbox", key: "inbox", icon: MessageCircle },
       { href: "/app/campaigns", key: "campaigns", icon: Send },
+      { href: "/app/email", key: "email", icon: Mail },
       { href: "/app/prospecting", key: "prospecting", icon: Radar },
     ],
   },

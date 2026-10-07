@@ -87,6 +87,9 @@ const TENANT_MODELS = new Set<string>([
   "MaintenanceEvent",
   "ServiceTicket",
   "WhatsappAgent",
+  "EmailBroadcast",
+  "EmailBroadcastRecipient",
+  "EmailSuppression",
 ]);
 
 const WHERE_OPS = new Set<string>([

@@ -43,7 +43,7 @@ Consequência direta, sem meio-termo: se você criou uma rota nova e não escrev
 dentro dela, ela está aberta para a internet. Não existe uma segunda camada que pegue o que
 sobrou.
 
-## Os quatro jeitos de autenticar uma rota neste repo
+## Os jeitos de autenticar uma rota neste repo
 
 | Quem chama | Mecanismo | Onde vive |
 |---|---|---|
@@ -51,10 +51,17 @@ sobrou.
 | Cron do hPanel | header fixo → `isCronAuthorized(req)` | [src/lib/cron-auth.ts](../../src/lib/cron-auth.ts) |
 | QStash (fila de jobs) | assinatura HMAC → `verifyQStashSignature(...)` | [src/lib/queue.ts](../../src/lib/queue.ts) |
 | Evolution (webhook) | token embutido no caminho | rota de webhook, ver abaixo |
+| Destinatário de e-mail em massa (link) | HMAC do id do destinatário no caminho → `verifyEmailUnsubscribeSig` | [src/lib/email-broadcast/unsubscribe.ts](../../src/lib/email-broadcast/unsubscribe.ts) |
+| Resend (webhook do e-mail em massa) | assinatura Svix com segredo por conexão → `verifySvixSignature` | [src/app/api/webhooks/resend/[connectionId]/route.ts](../../src/app/api/webhooks/resend/[connectionId]/route.ts) |
 
-Não existe um "guard genérico" que sirva pra tudo — "quem pode chamar" muda por rota. O que os
-quatro têm em comum é onde a checagem acontece: **dentro do handler, como uma das primeiras
+`/api/email/unsubscribe/[recipientId]/[sig]` é **pública de propósito** (RFC 8058); a assinatura é a primeira checagem, só aceita POST, e a server action `confirmEmailUnsubscribe` segue o mesmo padrão (server actions também são endpoints públicos).
+
+Não existe um "guard genérico" que sirva pra tudo — "quem pode chamar" muda por rota. O que todos
+têm em comum é onde a checagem acontece: **dentro do handler, como uma das primeiras
 linhas**, antes de qualquer leitura ou efeito colateral.
+
+O registro do webhook do Resend na conta do cliente é automático (`ensureResendWebhook`); em dev só
+funciona com `NEXT_PUBLIC_SITE_URL` https (ngrok), porque o Resend precisa alcançar sua máquina.
 
 ### Rota chamada pelo usuário logado
 
@@ -242,16 +249,16 @@ Vale saber qual das duas você está lendo antes de confiar num "funcionou".
 
 Antes de considerar uma rota em `src/app/api/` pronta:
 
-- **A tabela acima não é exaustiva.** Ela documenta os quatro padrões conhecidos, não todo
+- **A tabela acima não é exaustiva.** Ela documenta os padrões conhecidos, não todo
   `src/app/api/` — existe pelo menos uma rota real neste repositório que não se encaixa em
-  nenhuma das quatro linhas. Uma rota já existir no repositório não é prova de que o padrão dela
+  nenhuma das linhas. Uma rota já existir no repositório não é prova de que o padrão dela
   está certo: confira o guard de verdade (leia o handler), não copie um arquivo vizinho por
   analogia.
 - **Quem pode chamar isto?** Usuário logado, cron, fila, webhook de um provedor, ou é
   intencionalmente pública?
 - **Se é pública, por quê?** Isso precisa ser uma decisão registrada, não um esquecimento.
 - **Se não é pública, qual guard?** `getOrgContext()` com checagem de `null`,
-  `isCronAuthorized(req)`, `verifyQStashSignature(...)`, ou comparação de token — uma das quatro
-  linhas da tabela acima. Escreva a checagem como uma das primeiras linhas do handler.
+  `isCronAuthorized(req)`, `verifyQStashSignature(...)`, ou comparação de token — uma das linhas
+  da tabela acima. Escreva a checagem como uma das primeiras linhas do handler.
 - **Toca dado de tenant?** Se a rota lê ou grava tabela de negócio, autenticar quem chama não
   basta — vale o [guia 03 (multi-tenancy)](03-multi-tenancy.md) também.

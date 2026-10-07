@@ -72,21 +72,26 @@ Não existe um terceiro lugar gateando alguma coisa. É sempre um destes três a
   exportadas — `hasModule`, `hasFeatureByModules`, `assertFeatureByModules`, `availableScreens`
   — são a única forma correta de perguntar "esta empresa tem X".
 - **[src/config/screens.ts](../../src/config/screens.ts)** — as telas *gateáveis por template de
-  acesso*: `GATEABLE_SCREENS`, **14** hoje (`feed`, `crm`, `proposals`, `tasks`, `prospecting`,
-  `campaigns`, `inbox`, `companies`, `contacts`, `connections`, `finance`, `hr`, `supplies`,
+  acesso*: `GATEABLE_SCREENS`, **15** hoje (`feed`, `crm`, `proposals`, `tasks`, `prospecting`,
+  `campaigns`, `email`, `inbox`, `companies`, `contacts`, `connections`, `finance`, `hr`, `supplies`,
   `downloader`). `dashboard` e `settings` não estão nessa lista porque são `ALWAYS_ALLOWED` —
   nenhum template restringe o *acesso à tela*, todo membro autenticado chega lá. Isso não é o
   mesmo que "sem restrição nenhuma": o comentário-fonte em
   [src/config/screens.ts:5-7](../../src/config/screens.ts#L5-L7) registra que `settings` é
   **gateada por papel** (ADMIN+) dentro dela mesma — partes da tela mudam ou somem conforme o
   `role` do membro, só não por template de acesso.
+  O módulo `marketing` libera as telas `campaigns`, `email` e `prospecting`. A tela `email` (submenu
+  E-mail, envio em massa via Resend) precisa ser marcada nos modelos de acesso para que membros a
+  vejam; owner e admin veem direto.
 - **[src/config/limits.ts](../../src/config/limits.ts)** — limites globais de uso, os mesmos para
   toda organização: `seatLimit` (25), `whatsappNumbersLimit` (10),
-  `dispatchQuotaPerMonth` (50.000), `prospectingQuotaPerMonth` (10.000),
+  `dispatchQuotaPerMonth` (50.000), `emailBroadcastQuotaPerMonth` (50.000), `prospectingQuotaPerMonth` (10.000),
   `extractionsPerMonth` (500), `assistantDailyLimit` (750), `whatsappAgentDailyLimit` (2.000),
   `companiesPerAccount` (5) e `connectionsLimit` (`null` = sem limite). O comentário no topo do
   arquivo é direto: **não existem mais planos** — o antigo `STANDARD/PLUS/GOLD/ENTERPRISE` virou
   módulo instalado ou não; estes números só existem para conter abuso/custo, iguais para todos.
+  `emailBroadcastQuotaPerMonth` (50.000): e-mails aceitos pelo Resend no mês no submenu E-mail. É
+  **separada** de `dispatchQuotaPerMonth` (Campanhas), e as duas não se somam.
 
 ## Como o gating se compõe
 
@@ -145,7 +150,7 @@ para o tipo mas sem dono ainda — não gatear nada por elas por engano.
 
 ## Paridade de i18n
 
-`src/messages/pt.json` e `src/messages/en.json` têm **2641 chaves-folha cada um** (contagem
+`src/messages/pt.json` e `src/messages/en.json` têm **2770 chaves-folha cada um** (contagem
 própria, recursiva sobre os dois arquivos — batem exatamente). Não existe script no repositório
 que verifique isso automaticamente: nenhum arquivo em `scripts/` nem entrada em `package.json`
 menciona `pt.json`/`en.json`. Adicionar uma chave de um lado sem adicionar do outro não quebra

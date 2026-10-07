@@ -18,6 +18,7 @@ export const AUDIT_ACTIONS = [
   "campaign.created",
   "campaign.updated",
   "campaign.started",
+  "email_broadcast.started",
   "connection.created",
   "connection.updated",
   "connection.deleted",
@@ -52,6 +53,7 @@ export const AUDIT_ACTIONS = [
 export const AUDIT_ENTITIES = [
   "AccessTemplate",
   "Campaign",
+  "EmailBroadcast",
   "ExtractionJob",
   "FinanceEntry",
   "IntegrationConnection",
