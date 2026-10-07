@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
 import { useConfirm } from "@/components/ui/confirm";
@@ -15,7 +14,6 @@ import { AudienceSummary } from "@/components/email/audience-summary";
 import {
   previewEmailAudience,
   saveEmailDraft,
-  sendEmailTest,
   startEmailBroadcast,
   type EmailActionFail,
 } from "@/app/actions/email-broadcasts";
@@ -26,13 +24,11 @@ export function EmailComposer({
   draft,
   options,
   fromEmail,
-  userEmail,
   quota,
 }: {
   draft: ComposerDraft;
   options: ComposerOptions;
   fromEmail: string | null;
-  userEmail: string;
   quota: { used: number; limit: number };
 }) {
   const t = useTranslations("emailBroadcast");
@@ -146,16 +142,6 @@ export function EmailComposer({
     );
   }
 
-  function onTest() {
-    startBusy(
-      guarded(async () => {
-        const r = await sendEmailTest(payload());
-        if (r.ok) toast(t("testSent", { email: r.to }));
-        else toast(errorText(r), { variant: "error" });
-      }),
-    );
-  }
-
   function onSend() {
     startBusy(guarded(async () => {
       const savedId = await save();
@@ -242,13 +228,6 @@ export function EmailComposer({
           <p className="mt-2 text-xs text-muted-foreground">
             {t("footerNotice")} {t("emptyVarHint")}
           </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" variant="outline" onClick={onTest} disabled={busy || noConnection}>
-            <Send className="size-4" />
-            {t("sendTest")}
-          </Button>
-          <span className="text-xs text-muted-foreground">{t("testTo", { email: userEmail })}</span>
         </div>
       </section>
 

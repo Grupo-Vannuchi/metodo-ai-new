@@ -38,7 +38,6 @@ export default async function NewEmailPage({ params }: { params: Promise<{ local
         }}
         options={data.options}
         fromEmail={data.fromEmail}
-        userEmail={ctx.user.email}
         quota={data.quota}
       />
     </div>
