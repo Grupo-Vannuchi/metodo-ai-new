@@ -53,7 +53,6 @@ export default async function EditEmailPage({
         }}
         options={data.options}
         fromEmail={data.fromEmail}
-        userEmail={ctx.user.email}
         quota={data.quota}
       />
     </div>

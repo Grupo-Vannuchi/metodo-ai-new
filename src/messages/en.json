@@ -1962,9 +1962,6 @@
     "varCompany": "Company",
     "footerNotice": "Every send gets an automatic footer with the company name and a “Stop receiving these” link (LGPD).",
     "emptyVarHint": "Typed addresses with no record get empty variables.",
-    "sendTest": "Send me a test",
-    "testTo": "The test goes to {email}",
-    "testSent": "Test sent to {email}",
     "recipients": "Recipients",
     "recipientsHint": "Add groups and addresses. The final list adds everything up and removes repeats.",
     "contacts": "CRM contacts",
@@ -2008,8 +2005,6 @@
       "empty": "No recipients selected.",
       "quota": "This month's quota can't fit this send.",
       "quotaDetail": "This send has {total} addresses, but only {remaining} are left in this month's quota.",
-      "provider": "Resend rejected the send.",
-      "rate_limited": "Too many tests in a row. Wait a minute.",
       "unknown": "Something went wrong. Try again."
     },
     "report": {

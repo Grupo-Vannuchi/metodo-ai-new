@@ -1962,9 +1962,6 @@
     "varCompany": "Empresa",
     "footerNotice": "Todo envio ganha um rodapé automático com o nome da empresa e o link “Não quero mais receber” (LGPD).",
     "emptyVarHint": "Endereços avulsos sem cadastro ficam com as variáveis vazias.",
-    "sendTest": "Enviar teste para mim",
-    "testTo": "O teste vai para {email}",
-    "testSent": "Teste enviado para {email}",
     "recipients": "Destinatários",
     "recipientsHint": "Some grupos e endereços. A lista final soma tudo e remove repetidos.",
     "contacts": "Contatos do CRM",
@@ -2008,8 +2005,6 @@
       "empty": "Nenhum destinatário selecionado.",
       "quota": "A cota do mês não comporta este envio.",
       "quotaDetail": "Este envio tem {total} endereços, mas restam {remaining} na cota do mês.",
-      "provider": "O Resend recusou o envio.",
-      "rate_limited": "Muitos testes seguidos. Espere um minuto.",
       "unknown": "Algo deu errado. Tente de novo."
     },
     "report": {

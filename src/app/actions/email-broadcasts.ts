@@ -6,7 +6,6 @@ import { getOrgContext, type OrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { canAccessScreen } from "@/lib/access";
 import { hasModule } from "@/config/modules";
-import { makeRateLimiter } from "@/lib/ratelimit";
 import {
   audienceSelectionSchema,
   broadcastDraftSchema,
@@ -15,11 +14,8 @@ import {
 } from "@/lib/validations/email-broadcast";
 import { normalizeEmail } from "@/lib/email-broadcast/normalize";
 import { resolveAudience } from "@/lib/email-broadcast/audience";
-import { composeEmail } from "@/lib/email-broadcast/compose";
-import { formatFrom, hasEmailContent } from "@/lib/email-broadcast/render";
+import { hasEmailContent } from "@/lib/email-broadcast/render";
 import { getResendConnection, ensureResendWebhook } from "@/lib/email-broadcast/connection";
-import { sendOne } from "@/lib/email-broadcast/resend";
-import { emailUnsubscribePageUrl } from "@/lib/email-broadcast/unsubscribe";
 import { searchEmailTargets as searchTargets, countEmailsSentThisMonth } from "@/lib/queries/email-broadcasts";
 import { audit } from "@/lib/audit";
 import { LIMITS } from "@/config/limits";
@@ -34,8 +30,6 @@ export type EmailActionError =
   | "no_connection"
   | "empty"
   | "quota"
-  | "provider"
-  | "rate_limited"
   | "unknown";
 
 export type EmailActionFail = {
@@ -171,39 +165,6 @@ export async function searchEmailTargets(q: string): Promise<PickedTarget[]> {
     console.error("Failed to search email targets", error);
     return [];
   }
-}
-
-/** One copy to the logged-in user, through the client's Resend. Not recorded,
- * not counted in the quota. Surfaces Resend errors (e.g. unverified domain). */
-export async function sendEmailTest(input: BroadcastDraftInput): Promise<{ ok: true; to: string } | EmailActionFail> {
-  const g = await gate();
-  if (!g.ok) return g;
-  const parsed = broadcastDraftSchema.safeParse(input);
-  if (!parsed.success || !parsed.data.subject || !hasEmailContent(parsed.data.html)) return { ok: false, error: "invalid" };
-
-  const limiter = makeRateLimiter("email-test", 10, 60);
-  if (limiter && !(await limiter.limit(g.ctx.userId)).success) return { ok: false, error: "rate_limited" };
-
-  const conn = await getResendConnection(g.ctx.organizationId);
-  if (!conn) return { ok: false, error: "no_connection" };
-
-  const composed = composeEmail({
-    subject: `[Teste] ${parsed.data.subject}`,
-    bodyHtml: parsed.data.html,
-    vars: { nome: g.ctx.user.name, empresa: g.ctx.organization.name },
-    orgName: g.ctx.organization.name,
-    // A preview link: the page answers "invalid link", which is right for a test.
-    unsubscribeUrl: emailUnsubscribePageUrl("teste"),
-  });
-  const res = await sendOne(conn.apiKey, {
-    from: formatFrom(parsed.data.fromName, conn.fromEmail),
-    to: [g.ctx.user.email],
-    subject: composed.subject,
-    html: composed.html,
-    text: composed.text,
-    ...(parsed.data.replyTo ? { reply_to: normalizeEmail(parsed.data.replyTo) } : {}),
-  });
-  return res.ok ? { ok: true, to: g.ctx.user.email } : { ok: false, error: "provider", message: res.message };
 }
 
 /**

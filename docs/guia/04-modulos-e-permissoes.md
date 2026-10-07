@@ -150,7 +150,7 @@ para o tipo mas sem dono ainda — não gatear nada por elas por engano.
 
 ## Paridade de i18n
 
-`src/messages/pt.json` e `src/messages/en.json` têm **2788 chaves-folha cada um** (contagem
+`src/messages/pt.json` e `src/messages/en.json` têm **2783 chaves-folha cada um** (contagem
 própria, recursiva sobre os dois arquivos — batem exatamente). Não existe script no repositório
 que verifique isso automaticamente: nenhum arquivo em `scripts/` nem entrada em `package.json`
 menciona `pt.json`/`en.json`. Adicionar uma chave de um lado sem adicionar do outro não quebra
