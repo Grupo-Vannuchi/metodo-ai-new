@@ -89,7 +89,7 @@ export async function getEmailBroadcastReport(organizationId: string, id: string
       take: 200,
       select: { id: true, email: true, name: true, sources: true, status: true, error: true, updatedAt: true },
     }),
-    db.emailBroadcast.findFirst({ where: { id }, select: { status: true, startedAt: true, lastDispatchAt: true } }),
+    db.emailBroadcast.findFirst({ where: { id }, select: { status: true, startedAt: true, lastDispatchAt: true, fromEmail: true } }),
   ]);
 
   const counts: Record<EmailRecipientStatus, number> = {
@@ -109,7 +109,7 @@ export async function getEmailBroadcastReport(organizationId: string, id: string
     now - b.startedAt.getTime() > STALE_MS &&
     (!b.lastDispatchAt || now - b.lastDispatchAt.getTime() > STALE_MS);
 
-  return { counts, recipients, canResume: b?.status === "PAUSED" || stalled };
+  return { counts, recipients, canResume: (b?.status === "PAUSED" && Boolean(b.fromEmail)) || stalled };
 }
 
 /** Chips of the recipient picker, each with how many addresses it holds. */

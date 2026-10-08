@@ -34,6 +34,7 @@ export type EmailActionError =
   | "quota"
   | "domain_not_allowed"
   | "from_required"
+  | "from_missing"
   | "unknown";
 
 export type EmailActionFail = {
@@ -259,7 +260,7 @@ export async function startEmailBroadcast(id: string): Promise<{ ok: true } | Em
     action: "email_broadcast.started",
     entity: "EmailBroadcast",
     entityId: id,
-    meta: { recipients: recipients.length },
+    meta: { recipients: recipients.length, fromEmail: b.fromEmail },
   });
   await kickEmailBroadcast(id);
   revalidatePath("/app/email");
@@ -278,7 +279,7 @@ export async function resumeEmailBroadcast(id: string): Promise<{ ok: true } | E
 
   if (b.status === "PAUSED") {
     if (!platformResendKey()) return { ok: false, error: "no_connection" };
-    if (!b.fromEmail) return { ok: false, error: "from_required" };
+    if (!b.fromEmail) return { ok: false, error: "from_missing" };
     if (!isSenderAllowed(b.fromEmail, await listSenderDomains(g.ctx.organizationId))) {
       return { ok: false, error: "domain_not_allowed" };
     }

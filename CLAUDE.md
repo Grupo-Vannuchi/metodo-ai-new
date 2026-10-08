@@ -63,7 +63,7 @@ Nunca consulte tabela de negócio sem esse filtro.
 - Desinstalar módulo = `OrganizationModule` vira `DORMANT`, **nunca apagar**.
 
 **3. Paridade de i18n.** `src/messages/pt.json` e `src/messages/en.json` têm exatamente as mesmas
-chaves (2786 hoje). Adicionou de um lado, adiciona do outro.
+chaves (2788 hoje). Adicionou de um lado, adiciona do outro.
 
 ## Armadilhas específicas deste repo
 

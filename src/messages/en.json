@@ -1948,7 +1948,8 @@
       "no_connection": "Send paused: the platform's e-mail sending isn't configured. Contact support.",
       "quota": "Send paused: this month's quota ran out.",
       "provider_error": "Send paused: Resend rejected the send.",
-      "domain_not_allowed": "Send paused: the sending address's domain is no longer allowed for your company."
+      "domain_not_allowed": "Send paused: the sending address's domain is no longer allowed for your company.",
+      "from_missing": "Send paused: this send was created before the switch to the platform's e-mail account and has no sending address, so it can't be resumed. To send again, duplicate it (the new send goes to the whole list)."
     },
     "message": "Message",
     "fromName": "Sender name",
@@ -2004,6 +2005,7 @@
       "not_found": "This send no longer exists or has already started.",
       "no_connection": "The platform's e-mail sending isn't configured. Contact support.",
       "domain_not_allowed": "The sending address's domain isn't allowed for your company.",
+      "from_missing": "This send was created before the switch to the platform's e-mail account and can't be resumed. Duplicate it to send again.",
       "from_required": "Fill in the sending address.",
       "empty": "No recipients selected.",
       "quota": "This month's quota can't fit this send.",

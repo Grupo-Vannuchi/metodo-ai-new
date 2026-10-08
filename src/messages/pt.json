@@ -1948,7 +1948,8 @@
       "no_connection": "Envio pausado: o envio de e-mail da plataforma não está configurado. Fale com o suporte.",
       "quota": "Envio pausado: a cota do mês acabou.",
       "provider_error": "Envio pausado: o Resend recusou o envio.",
-      "domain_not_allowed": "Envio pausado: o domínio do endereço de envio deixou de estar liberado para sua empresa."
+      "domain_not_allowed": "Envio pausado: o domínio do endereço de envio deixou de estar liberado para sua empresa.",
+      "from_missing": "Envio pausado: este envio foi criado antes da troca para a conta de e-mail da plataforma e não tem endereço de envio, então não pode ser retomado. Para enviar de novo, duplique-o (o novo envio vai para toda a lista)."
     },
     "message": "Mensagem",
     "fromName": "Nome do remetente",
@@ -2004,6 +2005,7 @@
       "not_found": "Este envio não existe mais ou já foi iniciado.",
       "no_connection": "O envio de e-mail da plataforma não está configurado. Fale com o suporte.",
       "domain_not_allowed": "O domínio do endereço de envio não está liberado para sua empresa.",
+      "from_missing": "Este envio foi criado antes da troca para a conta de e-mail da plataforma e não pode ser retomado. Duplique-o para enviar de novo.",
       "from_required": "Preencha o endereço de envio.",
       "empty": "Nenhum destinatário selecionado.",
       "quota": "A cota do mês não comporta este envio.",

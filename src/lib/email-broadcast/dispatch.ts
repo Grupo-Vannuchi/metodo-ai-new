@@ -21,9 +21,11 @@ import { emailUnsubscribeOneClickUrl, emailUnsubscribePageUrl } from "./unsubscr
 
 export const BATCH_SIZE = 100;
 const LEASE_MS = 90_000;
-/** ~2 requests/s at most: the platform's Resend account (~10 req/s) is shared
+/** Budget for ALL mass e-mail together (~2 req/s in total, see activeSends):
+ * the platform's Resend account (default limit 10 req/s per team) is shared
  * with login/invite/reset mail, which must keep its headroom. */
 const PACE_MS = 500;
+const MAX_PACE_FACTOR = 20; // keeps the longest wait (10 s) well inside LEASE_MS
 const MAX_RETRY_AFTER_S = 10;
 /** Per-job time budget in queue mode (the job re-enqueues itself after it). */
 export const QUEUE_BUDGET_MS = 50_000;
@@ -113,7 +115,19 @@ export async function runEmailBroadcast(
     await sleep(Math.min(seconds ?? 1, MAX_RETRY_AFTER_S) * 1000);
   };
 
-  const pause = (reason: "no_connection" | "quota" | "provider_error" | "domain_not_allowed", message: string | null) =>
+  /** Sends running right now on the platform account (any org): an aggregate
+   * count only, nothing org-specific is read. Each waits N × PACE_MS so the
+   * total stays ~2 req/s. */
+  const activeSends = () =>
+    prisma.emailBroadcast.count({
+      where: { status: "SENDING", lastDispatchAt: { gte: new Date(Date.now() - LEASE_MS) } },
+    });
+  let paceMs = PACE_MS;
+
+  const pause = (
+    reason: "no_connection" | "quota" | "provider_error" | "domain_not_allowed" | "from_missing",
+    message: string | null,
+  ) =>
     prisma.emailBroadcast.updateMany({
       where: { id: b.id, organizationId: org, status: "SENDING", lastDispatchAt: stamp },
       data: { status: "PAUSED", pausedReason: reason, lastError: message?.slice(0, 500) ?? null, lastDispatchAt: null },
@@ -135,7 +149,7 @@ export async function runEmailBroadcast(
       return { done: true };
     }
     if (!b.fromEmail) {
-      await pause("domain_not_allowed", null);
+      await pause("from_missing", null);
       return { done: true };
     }
     const orgRow = await prisma.organization.findFirst({ where: { id: org }, select: { name: true } });
@@ -212,7 +226,7 @@ export async function runEmailBroadcast(
           break;
         }
         await beat();
-        await sleep(PACE_MS);
+        await sleep(paceMs);
       }
       return { kind: "ok" };
     };
@@ -250,6 +264,7 @@ export async function runEmailBroadcast(
         await pause("domain_not_allowed", null);
         return { done: true };
       }
+      paceMs = PACE_MS * Math.min(Math.max(1, await activeSends()), MAX_PACE_FACTOR);
 
       const next = await prisma.emailBroadcastRecipient.findFirst({
         where: { broadcastId: b.id, organizationId: org, status: "QUEUED" },
@@ -285,7 +300,7 @@ export async function runEmailBroadcast(
       }
 
       await beat();
-      await sleep(PACE_MS);
+      await sleep(paceMs);
     }
 
     // Budget over (queue mode): release the lease so the re-enqueued job can take it.

@@ -93,6 +93,25 @@ async function add(rawDomain: string, slug: string): Promise<void> {
     });
     fail(`${domain} já pertence a outra empresa: ${owner ? `${owner.slug} (${owner.name})` : existing.organizationId}.`);
   }
+  // DMARC relaxed alignment treats a domain, its parents and its subdomains as
+  // one organization, so they must not be split across companies.
+  const labels = domain.split(".");
+  const parents = labels.slice(1).map((_, i) => labels.slice(i + 1).join(".")).filter((d) => d.includes("."));
+  const related = await prisma.emailSenderDomain.findMany({
+    where: {
+      NOT: { organizationId: org.id },
+      OR: [{ domain: { in: parents } }, { domain: { endsWith: `.${domain}` } }],
+    },
+  });
+  if (related.length > 0) {
+    const owners = await prisma.organization.findMany({
+      where: { id: { in: [...new Set(related.map((r) => r.organizationId))] } },
+      select: { id: true, slug: true },
+    });
+    const slugById = new Map(owners.map((o) => [o.id, o.slug]));
+    const list = related.map((r) => `${r.domain} → ${slugById.get(r.organizationId) ?? r.organizationId}`).join(", ");
+    fail(`${domain} é parente de domínio(s) de outra empresa: ${list}. Um domínio e seus subdomínios ficam numa empresa só.`);
+  }
   await prisma.emailSenderDomain.create({ data: { organizationId: org.id, domain } });
   console.log(`✓ ${domain} liberado para ${org.slug} (${org.name}).`);
   console.log("  Lembrete: o domínio precisa estar Verified no painel do Resend da plataforma.");
