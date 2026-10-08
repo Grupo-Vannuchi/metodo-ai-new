@@ -212,6 +212,22 @@ npx prisma migrate deploy        # aplica as pendentes na ordem, idempotente
 
 Sempre **backup antes** de migração destrutiva. Confira com `npx prisma migrate status`.
 
+### E-mail em massa: liberar o domínio de um cliente
+
+Todas as empresas enviam pela conta Resend da plataforma (`RESEND_API_KEY`). Cada empresa só envia de
+domínio próprio, liberado assim:
+
+1. Painel do Resend (conta da plataforma) → **Domains → Add Domain** → domínio do cliente. Passe ao
+   cliente as linhas de DNS e espere **Verified**.
+2. Libere para a empresa (o `slug` aparece na URL/Configurações da empresa):
+   `npx tsx --env-file=.env.supabase scripts/email-domain.ts add <dominio> <slug> --yes`
+   (`.env.supabase` com `DIRECT_URL` de produção; apague o arquivo depois.)
+3. Conferir: `... scripts/email-domain.ts list`. Remover: `... remove <dominio> --yes` (envios em andamento
+   desse domínio pausam no próximo lote).
+
+Um domínio pertence a uma empresa só, e `metodotia.com` nunca é liberado para cliente. A chave do
+`.env` precisa estar como "Sending access" com **All domains** no Resend.
+
 ### Deploy — automático a cada push na `main`
 
 A Hostinger observa a `main` e implanta sozinha. Confirmado pelo log de deploy de 25/09/2026, o
