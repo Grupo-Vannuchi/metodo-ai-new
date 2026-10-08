@@ -9,6 +9,7 @@
 import assert from "node:assert/strict";
 import { isValidEmail, normalizeEmail, parseEmailList } from "../src/lib/email-broadcast/normalize";
 import { mergeCandidates, type Candidate } from "../src/lib/email-broadcast/audience-core";
+import { transactionalRetryDelayMs } from "../src/lib/email/retry-after";
 import {
   buildEmailDocument,
   fillHtmlVars,
@@ -358,6 +359,15 @@ check("isSenderAllowed needs an exact allowed domain and never the platform's", 
   assert.equal(isSenderAllowed("a@mail.lojaxyz.com.br", ["lojaxyz.com.br"]), false);
   assert.equal(isSenderAllowed("x@metodotia.com", ["metodotia.com"]), false);
   assert.equal(isSenderAllowed("", ["lojaxyz.com.br"]), false);
+});
+
+check("transactionalRetryDelayMs follows retry-after, capped at 2s, 1s by default", () => {
+  assert.equal(transactionalRetryDelayMs(null), 1000);
+  assert.equal(transactionalRetryDelayMs("0.5"), 500);
+  assert.equal(transactionalRetryDelayMs("1"), 1000);
+  assert.equal(transactionalRetryDelayMs("30"), 2000);
+  assert.equal(transactionalRetryDelayMs("abc"), 1000);
+  assert.equal(transactionalRetryDelayMs("-3"), 1000);
 });
 
 console.log(`\n✅ email-broadcast: ${passed} checks passed.`);
