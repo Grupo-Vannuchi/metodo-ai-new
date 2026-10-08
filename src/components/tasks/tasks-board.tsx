@@ -144,6 +144,9 @@ export function TasksBoard({ tasks, columns }: { tasks: TaskRow[]; columns: Boar
     const r = el.getBoundingClientRect();
     if (e.clientX < r.left + EDGE_PX) el.scrollLeft -= SCROLL_STEP;
     else if (e.clientX > r.right - EDGE_PX) el.scrollLeft += SCROLL_STEP;
+    // Over a header or a gap (not a column's card area): no drop slot.
+    const overBody = (e.target as HTMLElement).closest("[data-column-body]");
+    if (!overBody && drop) setDrop(null);
   }
 
   function setDone(id: string, done: boolean) {

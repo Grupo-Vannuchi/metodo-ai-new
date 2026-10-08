@@ -302,8 +302,9 @@
     background-color: var(--muted-foreground);
   }
 
-  /* Tasks kanban: the themed bar above is too faint to notice on a wide board,
-     so the board's horizontal bar is thicker and contrasted. */
+  /* Tasks kanban: a contrasted horizontal bar (the themed bar above is too faint
+     on a wide board). Chromium/Firefox use scrollbar-width/scrollbar-color; the
+     ::-webkit-scrollbar rules below only take effect in Safari. */
   .board-scroll {
     scrollbar-width: auto;
     scrollbar-color: var(--muted-foreground) var(--muted);

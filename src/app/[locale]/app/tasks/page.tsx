@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { LayoutGrid, List } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
+import { requireScreen, requireModule } from "@/lib/access";
 import { hasModule } from "@/config/modules";
 import { listTasks } from "@/lib/queries/tasks";
 import { listMembers } from "@/lib/queries/organizations";
@@ -29,6 +30,10 @@ export default async function TasksPage({
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
+  // Layouts don't stop the page from rendering (Next renders them in parallel):
+  // gate here too, before the board build below writes anything.
+  await requireScreen(ctx, "tasks", locale);
+  await requireModule(ctx, "tasks", locale);
   const t = await getTranslations("tasks");
   const view = (await searchParams)?.view === "kanban" ? "kanban" : "list";
 

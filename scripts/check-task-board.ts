@@ -69,6 +69,7 @@ check("orderForInsert: empty column, top, end, middle", () => {
 check("orderForInsert asks for a renumber when neighbours tie or are too close", () => {
   assert.equal(orderForInsert([5, 5], 1), null);
   assert.equal(orderForInsert([1, 1 + 1e-6], 1), null);
+  assert.notEqual(orderForInsert([1, 1 + 3e-6], 1), null);
   assert.equal(orderForInsert([1, 2], 1), 1.5);
 });
 
@@ -78,6 +79,11 @@ check("compareBoardCards: boardOrder, then oldest first", () => {
     .sort(compareBoardCards)
     .map((c) => c.id);
   assert.deepEqual(sorted, ["a", "b", "c"]);
+  // Ties on both boardOrder and createdAt fall back to the id.
+  const tied = [card("b2", 1, "2026-01-01T00:00:00Z"), card("b1", 1, "2026-01-01T00:00:00Z")]
+    .sort(compareBoardCards)
+    .map((c) => c.id);
+  assert.deepEqual(tied, ["b1", "b2"]);
 });
 
 check("effectiveColumnId: the card's own column, else the entrance", () => {

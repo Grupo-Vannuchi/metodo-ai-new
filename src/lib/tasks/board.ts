@@ -64,7 +64,7 @@ export async function ensureTaskBoard(organizationId: string, names: Record<Boar
         UPDATE "tasks" AS t SET "boardOrder" = s.rn * ${ORDER_STEP}
         FROM (
           SELECT "id", row_number() OVER (
-            PARTITION BY "boardColumnId" ORDER BY "dueDate" ASC NULLS LAST, "createdAt" ASC
+            PARTITION BY "boardColumnId" ORDER BY "dueDate" ASC NULLS LAST, "createdAt" ASC, "id" ASC
           ) AS rn
           FROM "tasks" WHERE "organizationId" = ${organizationId}
         ) AS s

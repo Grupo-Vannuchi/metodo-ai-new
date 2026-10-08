@@ -114,7 +114,7 @@ export function BoardCard({ task, columnId, columns, dragging, onDragStart, onDr
         <div className="flex shrink-0 flex-col items-center gap-0.5">
           <label
             title={t("board.moveTo")}
-            className="relative rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="relative rounded-md p-1 text-muted-foreground transition-colors focus-within:ring-2 focus-within:ring-brand hover:bg-muted hover:text-foreground"
           >
             <ArrowRightLeft className="size-4" />
             <select

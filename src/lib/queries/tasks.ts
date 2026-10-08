@@ -82,7 +82,7 @@ export async function listTasks(
 
   const tasks = await db.task.findMany({
     where,
-    orderBy: [{ doneAt: { sort: "asc", nulls: "first" } }, { dueDate: "asc" }, { createdAt: "desc" }],
+    orderBy: [{ doneAt: { sort: "desc", nulls: "first" } }, { dueDate: "asc" }, { createdAt: "desc" }],
     take: 500,
     select: {
       id: true,

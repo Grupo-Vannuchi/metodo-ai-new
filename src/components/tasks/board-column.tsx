@@ -116,6 +116,7 @@ export function BoardColumnView(props: Props) {
             type="button"
             onClick={() => setMenuOpen((open) => !open)}
             aria-label={t("board.columnMenu")}
+            aria-haspopup="menu"
             aria-expanded={menuOpen}
             className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
@@ -186,6 +187,7 @@ export function BoardColumnView(props: Props) {
       </div>
 
       <div
+        data-column-body
         onDragOver={props.onDragOverBody}
         onDrop={(e) => {
           e.preventDefault();

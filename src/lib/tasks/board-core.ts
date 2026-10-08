@@ -65,12 +65,17 @@ export function orderForInsert(orders: readonly number[], index: number): number
   return (before + after) / 2;
 }
 
-/** Display order inside a column: boardOrder, then creation (oldest first). */
+/** Display order inside a column: boardOrder, then creation (oldest first),
+ * then id so the order is deterministic. */
 export function compareBoardCards(
-  a: { boardOrder: number; createdAt: Date },
-  b: { boardOrder: number; createdAt: Date },
+  a: { boardOrder: number; createdAt: Date; id?: string },
+  b: { boardOrder: number; createdAt: Date; id?: string },
 ): number {
-  return a.boardOrder - b.boardOrder || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  return (
+    a.boardOrder - b.boardOrder ||
+    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() ||
+    (a.id ?? "").localeCompare(b.id ?? "")
+  );
 }
 
 /** The column a card shows in: its own, or the entrance when it has none (a

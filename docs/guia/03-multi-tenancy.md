@@ -127,7 +127,7 @@ Para leitura por id vale o mesmo raciocínio: o par é `findFirst({ where: { id 
 
 ## Onde cada coisa vive
 
-- **Leitura:** DAL em [src/lib/queries/](../../src/lib/queries/) — 50 arquivos, um por
+- **Leitura:** DAL em [src/lib/queries/](../../src/lib/queries/) — 53 arquivos, um por
   domínio.
 - **Escrita:** actions em [src/app/actions/](../../src/app/actions/).
 - **Prisma cru** ([src/lib/prisma.ts](../../src/lib/prisma.ts), sem `tenantDb`): só em

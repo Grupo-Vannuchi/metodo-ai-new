@@ -97,7 +97,7 @@ export async function moveTaskOnBoard(
           await tx.$executeRaw`
             UPDATE "tasks" AS t SET "boardOrder" = s.rn * ${ORDER_STEP}
             FROM (
-              SELECT "id", row_number() OVER (ORDER BY "boardOrder" ASC, "createdAt" ASC) AS rn
+              SELECT "id", row_number() OVER (ORDER BY "boardOrder" ASC, "createdAt" ASC, "id" ASC) AS rn
               FROM "tasks"
               WHERE "organizationId" = ${orgId} AND "id" <> ${taskId} AND ${inColumnSql}
             ) AS s
@@ -256,9 +256,9 @@ export async function deleteTaskBoardColumn(id: string): Promise<TaskBoardResult
       // numbered after its current max so they never tie with its own cards.
       // Raw SQL is not intercepted by tenantDb: organizationId is explicit.
       const cardsMoved = await tx.$executeRaw`
-        UPDATE "tasks" AS t SET "boardColumnId" = NULL, "boardOrder" = base.max_order + s.rn
+        UPDATE "tasks" AS t SET "boardColumnId" = NULL, "boardOrder" = base.max_order + s.rn * 0.001
         FROM (
-          SELECT "id", row_number() OVER (ORDER BY "boardOrder" ASC, "createdAt" ASC) AS rn
+          SELECT "id", row_number() OVER (ORDER BY "boardOrder" ASC, "createdAt" ASC, "id" ASC) AS rn
           FROM "tasks" WHERE "organizationId" = ${orgId} AND "boardColumnId" = ${column.id}
         ) AS s,
         (
