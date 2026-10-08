@@ -1333,6 +1333,12 @@ model Task {
   reminderAt     DateTime?
   recurrence     TaskRecurrence @default(NONE)
   doneAt         DateTime?
+  /// Kanban column; null = the org's entrance column (TaskBoardColumn.isEntrance).
+  boardColumnId  String?
+  /// Position inside the kanban column (ascending). Defaults to the insert
+  /// instant (epoch seconds), so a new task lands at the end of the entrance
+  /// column without the task-creating code paths knowing about the board.
+  boardOrder     Float          @default(dbgenerated("extract(epoch from now())"))
   assignedToId   String? // User responsible
   createdById    String?
   contactId      String?
@@ -1343,13 +1349,34 @@ model Task {
 
   checklist   TaskChecklistItem[]
   attachments TaskAttachment[]
+  boardColumn TaskBoardColumn? @relation(fields: [boardColumnId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, assignedToId, doneAt])
   @@index([organizationId, dueDate])
   @@index([organizationId, reminderAt])
   @@index([organizationId, opportunityId])
   @@index([organizationId, contactId])
+  @@index([organizationId, boardColumnId])
   @@map("tasks")
+}
+
+/// A column of the org's task kanban (one board per org). Built on the board's
+/// first open (src/lib/tasks/board.ts); renamed/added/removed by members.
+/// Columns don't mean anything to the task (completion is the check).
+model TaskBoardColumn {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  order          Int      @default(0)
+  /// New tasks (boardColumnId null) show here. Exactly one per org.
+  isEntrance     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tasks Task[]
+
+  @@index([organizationId, order])
+  @@map("task_board_columns")
 }
 
 /// A checklist item / subtask of a Task. Ordered; completion feeds the task's

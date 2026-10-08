@@ -44,6 +44,7 @@ const TENANT_MODELS = new Set<string>([
   "FinanceEntry",
   "Task",
   "TaskChecklistItem",
+  "TaskBoardColumn",
   "TaskAttachment",
   "Notification",
   "TeamChat",
