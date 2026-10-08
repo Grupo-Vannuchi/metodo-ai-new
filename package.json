@@ -21,6 +21,7 @@
     "check:isolation": "tsx --env-file=.env scripts/check-isolation.ts",
     "check:node": "tsx scripts/check-node.ts",
     "check:email": "tsx scripts/check-email-broadcast.ts",
+    "check:tasks": "tsx scripts/check-task-board.ts",
     "email:dominio": "tsx --env-file=.env scripts/email-domain.ts",
     "backfill:pipelines": "tsx --env-file=.env scripts/backfill-pipelines.ts",
     "db:dump": "docker exec metodoai-db pg_dump -U metodoai -d metodoai --clean --if-exists --no-owner --no-privileges > prisma/backups/snapshot.sql",
