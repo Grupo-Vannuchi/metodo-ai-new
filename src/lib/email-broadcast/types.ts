@@ -26,6 +26,7 @@ export type ComposerDraft = {
   subject: string;
   html: string;
   fromName: string;
+  fromEmail: string;
   replyTo: string;
   audience: AudienceSelection;
   picked: PickedTarget[];

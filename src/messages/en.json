@@ -1924,16 +1924,16 @@
     "empty": "No sends yet. Click “New email” to start.",
     "noSubject": "(no subject)",
     "editedAt": "Edited {date}",
-    "connection": {
-      "active": "Resend connected",
-      "from": "Sending as {email}",
+    "domains": {
+      "title": "Allowed domains",
+      "noneTitle": "No domain allowed",
+      "noneBody": "Contact support to allow your company's domain for sending.",
+      "hint": "Allowed domains: {domains}",
+      "notAllowed": "This domain isn't allowed for your company. Use an address on an allowed domain.",
       "tracking": "delivery status on",
-      "noTracking": "delivery status unavailable",
-      "manage": "Manage in Connections",
-      "missingTitle": "Connect your Resend account",
-      "missingBody": "To send, add your Resend API key and a sender on a verified domain in Connections.",
-      "connect": "Connect Resend"
+      "noTracking": "delivery status unavailable"
     },
+    "fromEmailPlaceholder": "contact@yourdomain.com",
     "quota": { "label": "Sent this month", "value": "{used} of {limit}" },
     "col": {
       "subject": "Subject",
@@ -1945,9 +1945,10 @@
     },
     "status": { "DRAFT": "Draft", "SENDING": "Sending", "PAUSED": "Paused", "DONE": "Done" },
     "paused": {
-      "no_connection": "Send paused: the Resend connection was not found. Reconnect it in Connections and click “Resume send”.",
+      "no_connection": "Send paused: the platform's e-mail sending isn't configured. Contact support.",
       "quota": "Send paused: this month's quota ran out.",
-      "provider_error": "Send paused: Resend rejected the send."
+      "provider_error": "Send paused: Resend rejected the send.",
+      "domain_not_allowed": "Send paused: the sending address's domain is no longer allowed for your company."
     },
     "message": "Message",
     "fromName": "Sender name",
@@ -2001,7 +2002,9 @@
       "forbidden": "You don't have access to Email.",
       "invalid": "Fill in the subject and the email body (and check “Reply to”).",
       "not_found": "This send no longer exists or has already started.",
-      "no_connection": "Connect Resend in Connections before sending.",
+      "no_connection": "The platform's e-mail sending isn't configured. Contact support.",
+      "domain_not_allowed": "The sending address's domain isn't allowed for your company.",
+      "from_required": "Fill in the sending address.",
       "empty": "No recipients selected.",
       "quota": "This month's quota can't fit this send.",
       "quotaDetail": "This send has {total} addresses, but only {remaining} are left in this month's quota.",
@@ -2015,7 +2018,7 @@
       "resume": "Resume send",
       "processed": "{done} of {total} processed",
       "removed": "Left out of this send: {duplicates} repeats, {suppressed} blocked and {invalid} invalid.",
-      "noTracking": "No delivery status: the webhook could not be registered in the Resend account. Emails stay as “Sent”.",
+      "noTracking": "No delivery status: the platform's delivery webhook isn't configured yet. Emails stay as “Sent”.",
       "showing": "Showing the first {count}.",
       "counters": {
         "QUEUED": "Queued",

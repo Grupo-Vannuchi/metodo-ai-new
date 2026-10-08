@@ -1924,16 +1924,16 @@
     "empty": "Nenhum envio ainda. Clique em “Novo e-mail” para começar.",
     "noSubject": "(sem assunto)",
     "editedAt": "Editado em {date}",
-    "connection": {
-      "active": "Resend conectado",
-      "from": "Saindo como {email}",
+    "domains": {
+      "title": "Domínios liberados",
+      "noneTitle": "Nenhum domínio liberado",
+      "noneBody": "Fale com o suporte para liberar o domínio da sua empresa para envio.",
+      "hint": "Domínios liberados: {domains}",
+      "notAllowed": "Este domínio não está liberado para sua empresa. Use um endereço de um domínio liberado.",
       "tracking": "status de entrega ativo",
-      "noTracking": "status de entrega indisponível",
-      "manage": "Gerenciar em Conexões",
-      "missingTitle": "Conecte sua conta do Resend",
-      "missingBody": "Para enviar, cadastre em Conexões a chave da API do Resend e um remetente com domínio verificado.",
-      "connect": "Conectar Resend"
+      "noTracking": "status de entrega indisponível"
     },
+    "fromEmailPlaceholder": "contato@seudominio.com.br",
     "quota": { "label": "Enviados neste mês", "value": "{used} de {limit}" },
     "col": {
       "subject": "Assunto",
@@ -1945,9 +1945,10 @@
     },
     "status": { "DRAFT": "Rascunho", "SENDING": "Enviando", "PAUSED": "Pausado", "DONE": "Concluído" },
     "paused": {
-      "no_connection": "Envio pausado: a conexão do Resend não foi encontrada. Reconecte em Conexões e clique em “Retomar envio”.",
+      "no_connection": "Envio pausado: o envio de e-mail da plataforma não está configurado. Fale com o suporte.",
       "quota": "Envio pausado: a cota do mês acabou.",
-      "provider_error": "Envio pausado: o Resend recusou o envio."
+      "provider_error": "Envio pausado: o Resend recusou o envio.",
+      "domain_not_allowed": "Envio pausado: o domínio do endereço de envio deixou de estar liberado para sua empresa."
     },
     "message": "Mensagem",
     "fromName": "Nome do remetente",
@@ -2001,7 +2002,9 @@
       "forbidden": "Você não tem acesso ao E-mail.",
       "invalid": "Preencha o assunto e o corpo do e-mail (e confira o “Responder para”).",
       "not_found": "Este envio não existe mais ou já foi iniciado.",
-      "no_connection": "Conecte o Resend em Conexões antes de enviar.",
+      "no_connection": "O envio de e-mail da plataforma não está configurado. Fale com o suporte.",
+      "domain_not_allowed": "O domínio do endereço de envio não está liberado para sua empresa.",
+      "from_required": "Preencha o endereço de envio.",
       "empty": "Nenhum destinatário selecionado.",
       "quota": "A cota do mês não comporta este envio.",
       "quotaDetail": "Este envio tem {total} endereços, mas restam {remaining} na cota do mês.",
@@ -2015,7 +2018,7 @@
       "resume": "Retomar envio",
       "processed": "{done} de {total} processados",
       "removed": "Ficaram fora deste envio: {duplicates} repetidos, {suppressed} bloqueados e {invalid} inválidos.",
-      "noTracking": "Sem status de entrega: não foi possível registrar o webhook na conta do Resend. Os e-mails ficam como “Enviado”.",
+      "noTracking": "Sem status de entrega: o aviso de entrega da plataforma ainda não está configurado. Os e-mails ficam como “Enviado”.",
       "showing": "Mostrando os primeiros {count}.",
       "counters": {
         "QUEUED": "Na fila",
