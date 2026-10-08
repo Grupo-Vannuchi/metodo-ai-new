@@ -148,10 +148,10 @@ export function EmailComposer({
 
   function onSend() {
     startBusy(guarded(async () => {
-        if (!fromAllowed) {
-          toast(t(fromEmail.trim() ? "error.domain_not_allowed" : "error.from_required"), { variant: "error" });
-          return;
-        }
+      if (!fromAllowed) {
+        toast(t(fromEmail.trim() ? "error.domain_not_allowed" : "error.from_required"), { variant: "error" });
+        return;
+      }
       const savedId = await save();
       if (!savedId) return;
       const p = await previewEmailAudience(audience);
@@ -209,9 +209,8 @@ export function EmailComposer({
               aria-invalid={fromProblem}
               onChange={(e) => setFromEmail(e.target.value)}
             />
-            {fromProblem ? (
-              <p className="mt-1 text-xs text-red-600">{t("domains.notAllowed")}</p>
-            ) : !noDomains ? (
+            {fromProblem ? <p className="mt-1 text-xs text-red-600">{t("domains.notAllowed")}</p> : null}
+            {!noDomains ? (
               <p className="mt-1 text-xs text-muted-foreground">
                 {t("domains.hint", { domains: allowedDomains.join(", ") })}
               </p>
@@ -268,7 +267,7 @@ export function EmailComposer({
               type="button"
               className="flex-1"
               onClick={onSend}
-              disabled={busy || !fromAllowed || preview?.stats.total === 0}
+              disabled={busy || fromProblem || preview?.stats.total === 0}
             >
               {busy ? t("working") : t("reviewSend")}
             </Button>

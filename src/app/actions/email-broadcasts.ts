@@ -278,7 +278,8 @@ export async function resumeEmailBroadcast(id: string): Promise<{ ok: true } | E
 
   if (b.status === "PAUSED") {
     if (!platformResendKey()) return { ok: false, error: "no_connection" };
-    if (!b.fromEmail || !isSenderAllowed(b.fromEmail, await listSenderDomains(g.ctx.organizationId))) {
+    if (!b.fromEmail) return { ok: false, error: "from_required" };
+    if (!isSenderAllowed(b.fromEmail, await listSenderDomains(g.ctx.organizationId))) {
       return { ok: false, error: "domain_not_allowed" };
     }
     const res = await db.emailBroadcast.updateMany({

@@ -1916,7 +1916,7 @@
       "uploadError": "Couldn't upload the image. Try again."
     },
     "title": "Email",
-    "subtitle": "Send bulk emails to contacts and companies through your Resend account.",
+    "subtitle": "Send bulk emails to your CRM contacts and companies.",
     "new": "New email",
     "newTitle": "New email",
     "editTitle": "Edit draft",
@@ -1929,7 +1929,7 @@
       "noneTitle": "No domain allowed",
       "noneBody": "Contact support to allow your company's domain for sending.",
       "hint": "Allowed domains: {domains}",
-      "notAllowed": "This domain isn't allowed for your company. Use an address on an allowed domain.",
+      "notAllowed": "Use a valid address on a domain allowed for your company.",
       "tracking": "delivery status on",
       "noTracking": "delivery status unavailable"
     },
@@ -2000,7 +2000,7 @@
     "error": {
       "unauthorized": "Your session expired. Sign in again.",
       "forbidden": "You don't have access to Email.",
-      "invalid": "Fill in the subject and the email body (and check “Reply to”).",
+      "invalid": "Fill in the subject and the email body (and check “Sending address” and “Reply to”).",
       "not_found": "This send no longer exists or has already started.",
       "no_connection": "The platform's e-mail sending isn't configured. Contact support.",
       "domain_not_allowed": "The sending address's domain isn't allowed for your company.",

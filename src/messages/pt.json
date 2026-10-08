@@ -1916,7 +1916,7 @@
       "uploadError": "Não foi possível enviar a imagem. Tente de novo."
     },
     "title": "E-mail",
-    "subtitle": "Envie e-mails em massa para contatos e empresas pela sua conta do Resend.",
+    "subtitle": "Envie e-mails em massa para contatos e empresas do CRM.",
     "new": "Novo e-mail",
     "newTitle": "Novo e-mail",
     "editTitle": "Editar rascunho",
@@ -1929,7 +1929,7 @@
       "noneTitle": "Nenhum domínio liberado",
       "noneBody": "Fale com o suporte para liberar o domínio da sua empresa para envio.",
       "hint": "Domínios liberados: {domains}",
-      "notAllowed": "Este domínio não está liberado para sua empresa. Use um endereço de um domínio liberado.",
+      "notAllowed": "Use um endereço válido de um domínio liberado para sua empresa.",
       "tracking": "status de entrega ativo",
       "noTracking": "status de entrega indisponível"
     },
@@ -2000,7 +2000,7 @@
     "error": {
       "unauthorized": "Sua sessão expirou. Entre de novo.",
       "forbidden": "Você não tem acesso ao E-mail.",
-      "invalid": "Preencha o assunto e o corpo do e-mail (e confira o “Responder para”).",
+      "invalid": "Preencha o assunto e o corpo do e-mail (e confira o “Endereço de envio” e o “Responder para”).",
       "not_found": "Este envio não existe mais ou já foi iniciado.",
       "no_connection": "O envio de e-mail da plataforma não está configurado. Fale com o suporte.",
       "domain_not_allowed": "O domínio do endereço de envio não está liberado para sua empresa.",
