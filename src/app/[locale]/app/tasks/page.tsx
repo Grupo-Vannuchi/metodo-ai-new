@@ -81,7 +81,7 @@ export default async function TasksPage({
     // Height = viewport − app header − main's padding, so the board's bottom
     // (and its horizontal bar) stays on screen. Verified in the browser (Task 5).
     return (
-      <div className="flex h-[calc(100dvh-7rem)] flex-col gap-6 md:h-[calc(100dvh-7.5rem)]">
+      <div className="flex h-[calc(100dvh-7rem)] flex-col gap-6 md:h-[calc(100dvh-7.5rem-1px)]">
         {header}
         <TasksBoard tasks={tasks} columns={columns} />
       </div>

@@ -183,6 +183,13 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 - **Inbox WhatsApp (Evolution):** conexão por usuário (`IntegrationConnection.ownerId`), credenciais **criptografadas**. Envio: `src/app/actions/inbox.ts` → adapter `WHATSAPP_EVOLUTION`. **Sempre resolva as credenciais com `resolveEvoCreds()`** (`src/lib/integrations/evolution-creds.ts`) — conexões "de plataforma" guardam só o `instance`; `baseUrl`/`apiKey` vêm do env. Passar credenciais cruas quebra o envio ("Conexão Evolution incompleta"). Recebimento: webhook por conexão `/api/webhooks/evolution/[connectionId]/[token]` → `lib/whatsapp/inbound.ts` + `ingest.ts`. Histórico exige instância criada com `syncFullHistory` (número já conectado precisa desconectar+reconectar). Mídia é assíncrona (QStash → baixa → Vercel Blob).
 - **IA/Copiloto:** `src/lib/assistant/*` (tools read-only + ações com confirmação). Tools aceitam `companyId` opcional para consultar outra empresa da conta (owner-only).
 - **E-mail em massa (submenu E-mail):** `src/lib/email-broadcast/` e as tabelas `email_broadcasts`, `email_broadcast_recipients` e `email_suppressions`. Um destinatário por endereço por envio, garantido por `@@unique`. Lotes de 100 com `Idempotency-Key` (um 409 `concurrent_idempotent_requests` repete com a mesma chave; política em `retry-policy.ts`); sem QStash, roda em `after()` com lease verificado por dono e tem o botão "Retomar envio". A cota conta também os endereços ainda na fila de envios em andamento. O webhook de entrega é o webhook único da plataforma: `/api/email/webhook` (segredo `RESEND_WEBHOOK_SECRET`), com assinatura Svix; se aplicar o evento falha, apaga o evento guardado e responde 500 para o Svix repetir. Envia pela conta Resend da plataforma (`RESEND_API_KEY`). O remetente é digitado em cada envio e o domínio dele precisa estar em `email_sender_domains` daquela empresa (comando `email:dominio`, runbook §8). O ritmo é de ~2 req/s somando todos os envios em andamento (a conta Resend aceita 10 req/s por equipe), para preservar os e-mails de login e reset. O descadastro é próprio (`/email-unsubscribe/...` e o one-click `/api/email/unsubscribe/...`) e **não** altera `Contact.optedOut`. Imagens no corpo: botão "Imagem" do editor (opção desligada por padrão no `RichTextEditor`, as Propostas não usam), por upload em `/api/email/image` (mesmo gating da tela, guarda via `putMedia`) ou link https; podem ser clicáveis (`<a><img></a>`), e no envio ganham estilo responsivo e base64 é removido (`prepareEmailImages`). Specs: `docs/superpowers/specs/2026-10-06-email-em-massa-design.md` e, para a conta da plataforma e os domínios, `docs/superpowers/specs/2026-10-08-email-dominios-plataforma-design.md`.
+- **Kanban de Tarefas (`/app/tasks?view=kanban`):** colunas livres da empresa (tabela
+  `task_board_columns`, até 20), montadas na primeira abertura com as 5 antigas e cada tarefa onde
+  aparecia (horário de Brasília). `tasks.boardColumnId` nulo = coluna de entrada (★), onde caem as
+  tarefas novas; `tasks.boardOrder` tem padrão no banco (instante da criação), então nenhum caminho
+  que cria tarefa precisa conhecer o quadro. Coluna não conclui tarefa. Toda alteração do quadro
+  passa pela mesma trava por empresa (`lockTaskBoard`). Regras puras em
+  `src/lib/tasks/board-core.ts` (`npm run check:tasks`).
 - **Prospecção:** Google Places com **chave do próprio cliente (BYO)**, assíncrona via QStash, descarte LGPD.
 - **Baixador (MVP frágil):** `src/lib/downloader/` — YouTube via `@distube/ytdl-core` (quebra quando o YouTube muda; atualizar a lib ajuda), X via endpoint de syndication, Instagram via `og:video` (só público). Download passa por `/api/downloader/fetch` (proxy com allowlist de host anti-SSRF, gateado por módulo). **Se o YouTube for crítico, migrar para `yt-dlp` numa VPS é o caminho estável.**
 
@@ -225,6 +232,11 @@ npx prisma migrate deploy        # aplica as pendentes na ordem, idempotente
    ```
 3. Contas Resend de clientes que usaram o E-mail antes desta mudança podem ter um webhook apontando para
    `/api/webhooks/resend/<id>` (agora responde 404): apague-o no painel do Resend do cliente.
+
+**Antes do merge da branch `feature/tarefas-kanban-colunas`:** aplicar no Supabase
+`prisma/migrations/20261008150000_task_board_columns/migration.sql` com `prisma db execute --file … --schema
+prisma/schema.prisma` e depois `prisma migrate resolve --applied 20261008150000_task_board_columns` (aditiva:
+tabela nova, duas colunas em `tasks` e FK com `SET NULL`). **Não** use `migrate deploy`.
 
 Sempre **backup antes** de migração destrutiva. Confira com `npx prisma migrate status`.
 
