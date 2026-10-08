@@ -1,6 +1,17 @@
 import "server-only";
+import type { Prisma } from "@prisma/client";
 import { tenantDb } from "@/lib/tenant-db";
 import { ENTRANCE_BUCKET, INITIAL_BUCKETS, initialBucket, ORDER_STEP, type BoardBucket } from "@/lib/tasks/board-core";
+
+/**
+ * Serializes every board mutation of an org: a per-org advisory lock held until
+ * the surrounding transaction commits or rolls back. Call it first inside the
+ * transaction, then read the state you decide on.
+ */
+export async function lockTaskBoard(tx: Pick<Prisma.TransactionClient, "$queryRaw">, organizationId: string): Promise<void> {
+  // `SELECT 1 FROM` avoids returning a void column.
+  await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${`task_board:${organizationId}`}))`;
+}
 
 /**
  * Builds the org's task board on its first open: the 5 initial columns, every
@@ -15,8 +26,7 @@ export async function ensureTaskBoard(organizationId: string, names: Record<Boar
 
   await db.$transaction(
     async (tx) => {
-      // Released at commit/rollback. `SELECT 1 FROM` avoids returning a void column.
-      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${`task_board:${organizationId}`}))`;
+      await lockTaskBoard(tx, organizationId);
       if ((await tx.taskBoardColumn.count({ where: { organizationId } })) > 0) return;
 
       const idByBucket = {} as Record<BoardBucket, string>;
@@ -37,7 +47,9 @@ export async function ensureTaskBoard(organizationId: string, names: Record<Boar
       for (const task of tasks) {
         const bucket = initialBucket(task, now);
         if (bucket === ENTRANCE_BUCKET) continue; // no column = the entrance
-        idsByBucket.set(bucket, [...(idsByBucket.get(bucket) ?? []), task.id]);
+        const ids = idsByBucket.get(bucket);
+        if (ids) ids.push(task.id);
+        else idsByBucket.set(bucket, [task.id]);
       }
       for (const [bucket, ids] of idsByBucket) {
         await tx.task.updateMany({
