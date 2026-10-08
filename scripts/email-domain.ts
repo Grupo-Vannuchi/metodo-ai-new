@@ -31,7 +31,13 @@ if (!url) fail("DIRECT_URL/DATABASE_URL não definido.");
 if (!/^postgres(ql)?:\/\//.test(url)) {
   fail('URL do banco malformada: ela precisa começar com "postgresql://".');
 }
-const host = new URL(url).hostname;
+let host: string;
+try {
+  host = new URL(url).hostname;
+} catch {
+  // Never echo the URL: it holds the password.
+  fail('URL do banco malformada: não foi possível interpretá-la (senha com "#", "/" ou "@" precisa ser codificada).');
+}
 const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
 
 const args = process.argv.slice(2);
