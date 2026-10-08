@@ -166,6 +166,7 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 | `ANTHROPIC_API_KEY` | p/ IA | copiloto + agente WhatsApp |
 | `OPENAI_API_KEY` | p/ IA | transcrição de áudio, geração de imagem |
 | `RESEND_API_KEY`, `EMAIL_FROM` | p/ e-mail | verificação, convites, reset |
+| `RESEND_WEBHOOK_SECRET` | não | segredo do webhook de entrega do E-mail em massa (painel Resend → Webhooks) |
 | `BLOB_READ_WRITE_TOKEN` | p/ mídia | Vercel Blob (mídia do inbox) |
 | `QSTASH_TOKEN`, `QSTASH_URL`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` | p/ jobs | fila (prospecção, mídia). Sem eles, degrada. |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | não | rate-limit |
@@ -224,6 +225,9 @@ domínio próprio, liberado assim:
    (`.env.supabase` com `DIRECT_URL` de produção; apague o arquivo depois.)
 3. Conferir: `... scripts/email-domain.ts list`. Remover: `... remove <dominio> --yes` (envios em andamento
    desse domínio pausam no próximo lote).
+4. Uma vez só (não é por cliente): Resend → Webhooks → Add endpoint `https://metodotia.com/api/email/webhook`,
+   com os eventos `email.delivered`, `email.bounced`, `email.complained` e `email.failed`; copie o
+   signing secret para `RESEND_WEBHOOK_SECRET` no hPanel.
 
 Um domínio pertence a uma empresa só, e `metodotia.com` nunca é liberado para cliente. A chave do
 `.env` precisa estar como "Sending access" com **All domains** no Resend.
