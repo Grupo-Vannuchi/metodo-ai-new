@@ -2478,6 +2478,9 @@ model EmailBroadcast {
   html           String               @db.Text
   fromName       String?
   replyTo        String?
+  /// Sender address typed in the composer (normalized). Its domain must be an
+  /// EmailSenderDomain of this org for the send to start or continue.
+  fromEmail      String?
   /// AudienceSelection (src/lib/validations/email-broadcast.ts).
   audience       Json                 @default("{}")
   /// { selected, invalid, duplicates, suppressed, total } frozen at send time.
@@ -2548,4 +2551,19 @@ model EmailSuppression {
 
   @@unique([organizationId, email])
   @@map("email_suppressions")
+}
+
+/// A sender domain the platform team VERIFIED in the platform's Resend account
+/// and assigned to ONE organization (scripts/email-domain.ts). Globally unique:
+/// the lock that stops org B from sending as org A's domain through the shared
+/// platform account.
+model EmailSenderDomain {
+  id             String   @id @default(cuid())
+  organizationId String
+  /// Lowercase, no "@".
+  domain         String   @unique
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@map("email_sender_domains")
 }
