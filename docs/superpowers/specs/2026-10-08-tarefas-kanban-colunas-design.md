@@ -113,24 +113,26 @@ Em `Task`:
 ```prisma
   /// Kanban column; null = the org's entrance column.
   boardColumnId String?
-  /// Position inside the column (ascending); null = after the ordered ones.
-  boardOrder    Float?
+  /// Position inside the column (ascending). Defaults to the creation instant
+  /// (epoch seconds), so a new task lands at the end of the entrance column
+  /// without any of the task-creating code paths changing.
+  boardOrder    Float           @default(dbgenerated("extract(epoch from now())"))
   boardColumn   TaskBoardColumn? @relation(fields: [boardColumnId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, boardColumnId])
 ```
 
-- **Migration:** cria `task_board_columns`, os índices, as duas colunas nulas em `tasks` e a FK com `ON DELETE SET NULL`. Nada é apagado.
+- **Migration:** cria `task_board_columns` e os índices; em `tasks`, cria `boardColumnId` (nula) e `boardOrder` (com valor padrão; as linhas existentes recebem o instante da migration e são renumeradas na montagem do quadro), mais a FK com `ON DELETE SET NULL`. Nada é apagado.
 - **Aplicação em produção:** no Supabase, **antes do merge**, com `db execute` + `migrate resolve` (nunca `migrate deploy`).
 - `TaskBoardColumn` entra em `TENANT_MODELS`.
 
 ## 6. Ordem dos cards numa coluna
 
 1. `boardOrder` crescente;
-2. os sem `boardOrder` depois, por vencimento crescente (sem data por último);
-3. por fim, por criação crescente.
+2. empate: por criação crescente.
 
-Ao soltar um card, o servidor calcula a posição dele entre os vizinhos (média dos dois; topo = primeiro − 1; fim = último + 1; coluna vazia = 0). Se a coluna de destino ainda tiver cards sem `boardOrder`, ou se a distância entre vizinhos ficar menor que 1e-6, antes ele renumera a coluna inteira na ordem exibida (1024, 2048, …), na mesma transação.
+- **Na montagem do quadro (§4),** cada coluna é numerada por vencimento crescente, com as sem data por último e depois por criação: 1024, 2048, … Os valores são pequenos perto do padrão das tarefas novas (segundos desde 1970), então tarefa nova sempre entra no fim.
+- **Ao soltar um card,** o servidor calcula a posição dele entre os vizinhos: média dos dois; topo = primeiro − 1; fim = último + 1; coluna vazia = 0. Se os vizinhos estiverem a menos de 2e-6 um do outro (inclusive empatados), antes ele renumera a coluna inteira na ordem exibida (1024, 2048, …), na mesma transação.
 
 ## 7. Servidor
 
@@ -193,7 +195,8 @@ Ao soltar um card, o servidor calcula a posição dele entre os vizinhos (média
 - `src/lib/queries/realtime.ts`;
 - `src/config/limits.ts`;
 - `src/app/[locale]/app/tasks/page.tsx`;
-- `src/components/tasks/tasks-board.tsx` (pode ser dividido em coluna e card, se crescer demais);
+- `src/components/tasks/tasks-board.tsx` (estado, arrastar e rolagem), mais os novos `board-column.tsx` (cabeçalho, menu e área de soltar) e `board-card.tsx` (card e "Mover para…");
+- `src/app/globals.css` (classe `board-scroll`);
 - `src/messages/pt.json`, `src/messages/en.json`;
 - `scripts/check-isolation.ts`;
 - `package.json`;
