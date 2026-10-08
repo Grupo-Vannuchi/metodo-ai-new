@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 /**
  * Pure side of the Resend delivery webhook: Svix signature check, payload
  * parsing and the forward-only status transitions. The route
- * (src/app/api/webhooks/resend/[connectionId]/route.ts) does the DB writes.
+ * (src/app/api/email/webhook/route.ts) does the DB writes.
  */
 
 export const RESEND_WEBHOOK_EVENTS = [
