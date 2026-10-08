@@ -27,6 +27,10 @@ de minutos depois, na fila do CI.
 submenu E-mail (normalização, deduplicação, renderização, assinatura Svix, transições de status, domínio do remetente,
 espera da nova tentativa do e-mail transacional). Não usa banco nem rede. Rode sempre que mexer em `src/lib/email-broadcast/`.
 
+`npm run check:tasks` faz o mesmo para as regras puras do kanban de Tarefas
+([src/lib/tasks/board-core.ts](../../src/lib/tasks/board-core.ts): distribuição inicial por data no
+horário de Brasília, posição entre cards, nome de coluna). Rode sempre que mexer nesse arquivo.
+
 ## `check:isolation`
 
 Isolamento multi-tenant é [a regra inviolável nº 1 do `CLAUDE.md`](../../CLAUDE.md) e o

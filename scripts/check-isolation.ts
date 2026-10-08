@@ -229,10 +229,22 @@ async function main() {
     }
     assert(duplicateRejected, "the same sender domain cannot be assigned to a second org");
 
+    // 12) Task board columns are per org.
+    await prisma.taskBoardColumn.create({
+      data: { organizationId: orgA.id, name: "ISO", order: 0, isEntrance: true },
+    });
+    const columnsB = await prisma.taskBoardColumn.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(columnsB.length === 0, "task board columns scoped to org B exclude org A's column");
+
     console.log("\n✅ Tenant isolation: all checks passed.");
   } finally {
     // Cleanup. Companies/connections carry organizationId (no FK cascade from
     // org), so remove them explicitly before the orgs.
+    await prisma.taskBoardColumn.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
     await prisma.emailSenderDomain.deleteMany({
       where: { organizationId: { in: created.orgs } },
     });

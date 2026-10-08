@@ -29,6 +29,10 @@ export type TaskRow = {
   checklistDone: number;
   checklist: { text: string; done: boolean }[];
   attachmentCount: number;
+  /** Kanban column (null = the entrance) and position inside it. */
+  boardColumnId: string | null;
+  boardOrder: number;
+  createdAt: Date;
 };
 
 function startOfToday() {
@@ -78,7 +82,7 @@ export async function listTasks(
 
   const tasks = await db.task.findMany({
     where,
-    orderBy: [{ doneAt: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
+    orderBy: [{ doneAt: { sort: "desc", nulls: "first" } }, { dueDate: "asc" }, { createdAt: "desc" }],
     take: 500,
     select: {
       id: true,
@@ -97,6 +101,9 @@ export async function listTasks(
       contactId: true,
       companyId: true,
       opportunityId: true,
+      boardColumnId: true,
+      boardOrder: true,
+      createdAt: true,
       checklist: { select: { text: true, done: true }, orderBy: { order: "asc" } },
       _count: { select: { attachments: true } },
     },

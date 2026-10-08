@@ -18,7 +18,7 @@ export async function realtimeFingerprints(
   userId: string,
 ): Promise<RealtimeFingerprint> {
   const db = tenantDb(organizationId);
-  const [notif, conv, tchatMsg, tchatUnread, opp, task, feedPost, feedReaction] = await Promise.all([
+  const [notif, conv, tchatMsg, tchatUnread, opp, task, taskCol, feedPost, feedReaction] = await Promise.all([
     db.notification.count({ where: { userId, readAt: null } }),
     db.conversation.aggregate({
       _max: { lastMessageAt: true },
@@ -33,6 +33,8 @@ export async function realtimeFingerprints(
     db.teamChatParticipant.aggregate({ where: { userId }, _sum: { unreadCount: true } }),
     db.opportunity.aggregate({ _max: { updatedAt: true }, _count: { _all: true } }),
     db.task.aggregate({ _max: { updatedAt: true }, _count: { _all: true } }),
+    // Column renames/adds/removes on the Tasks kanban refresh open boards too.
+    db.taskBoardColumn.aggregate({ _max: { updatedAt: true }, _count: { _all: true } }),
     db.feedPost.aggregate({ _max: { createdAt: true }, _count: { _all: true } }),
     db.feedReaction.aggregate({ _max: { createdAt: true }, _count: { _all: true } }),
   ]);
@@ -42,7 +44,7 @@ export async function realtimeFingerprints(
     inbox: `${ms(conv._max.lastMessageAt)}:${conv._sum.unreadCount ?? 0}:${conv._count._all}`,
     teamChat: `${ms(tchatMsg._max.lastMessageAt)}:${tchatUnread._sum.unreadCount ?? 0}`,
     crm: `${ms(opp._max.updatedAt)}:${opp._count._all}`,
-    tasks: `${ms(task._max.updatedAt)}:${task._count._all}`,
+    tasks: `${ms(task._max.updatedAt)}:${task._count._all}:${ms(taskCol._max.updatedAt)}:${taskCol._count._all}`,
     feed: `${ms(feedPost._max.createdAt)}:${feedPost._count._all}:${ms(feedReaction._max.createdAt)}:${feedReaction._count._all}`,
   };
 }
