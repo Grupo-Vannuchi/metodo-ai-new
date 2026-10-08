@@ -24,8 +24,8 @@ de minutos depois, na fila do CI.
 | `check:node` | toda a árvore de dependências roda no Node de produção | ver "check:node" abaixo |
 
 **Checagem de módulo (fora das cinco):** `npm run check:email` roda as asserções das funções puras do
-submenu E-mail (normalização, deduplicação, renderização, assinatura Svix, transições de status). Não
-usa banco nem rede. Rode sempre que mexer em `src/lib/email-broadcast/`.
+submenu E-mail (normalização, deduplicação, renderização, assinatura Svix, transições de status, domínio do remetente,
+espera da nova tentativa do e-mail transacional). Não usa banco nem rede. Rode sempre que mexer em `src/lib/email-broadcast/`.
 
 ## `check:isolation`
 

@@ -1,8 +1,8 @@
 import "server-only";
 
 /**
- * Minimal Resend REST client for the mass e-mail, always with the CLIENT's
- * key. Separate from src/lib/email/send.ts (platform transactional mail) and
+ * Minimal Resend REST client for the mass e-mail, always with the platform's
+ * key (RESEND_API_KEY, passed in by the dispatcher). Separate from src/lib/email/send.ts (platform transactional mail) and
  * from the Campaigns adapter (src/lib/integrations/channels/email.ts), both
  * untouched. Never throws: network errors come back as status 0.
  */
@@ -67,15 +67,4 @@ export function sendBatch(apiKey: string, emails: ResendEmail[], idempotencyKey:
 
 export function sendOne(apiKey: string, email: ResendEmail, idempotencyKey?: string) {
   return call<{ id?: string }>(apiKey, "/emails", { method: "POST", body: email, idempotencyKey });
-}
-
-export function createWebhook(apiKey: string, endpoint: string, events: readonly string[]) {
-  return call<{ id?: string; signing_secret?: string }>(apiKey, "/webhooks", {
-    method: "POST",
-    body: { endpoint, events },
-  });
-}
-
-export function deleteWebhook(apiKey: string, id: string) {
-  return call<unknown>(apiKey, `/webhooks/${encodeURIComponent(id)}`, { method: "DELETE" });
 }

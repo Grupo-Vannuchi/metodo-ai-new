@@ -9,6 +9,7 @@
 import assert from "node:assert/strict";
 import { isValidEmail, normalizeEmail, parseEmailList } from "../src/lib/email-broadcast/normalize";
 import { mergeCandidates, type Candidate } from "../src/lib/email-broadcast/audience-core";
+import { transactionalRetryDelayMs } from "../src/lib/email/retry-after";
 import {
   buildEmailDocument,
   fillHtmlVars,
@@ -28,6 +29,12 @@ import {
   suppressionFor,
   verifySvixSignature,
 } from "../src/lib/email-broadcast/webhook";
+import {
+  domainOfEmail,
+  isPlatformDomain,
+  isSenderAllowed,
+  normalizeDomain,
+} from "../src/lib/email-broadcast/sender-domain";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -322,6 +329,45 @@ check("hasEmailContent counts text or an image as content", () => {
   assert.equal(hasEmailContent('<p><img src="https://cdn.x/a.png"></p>'), true);
   assert.equal(hasEmailContent("<p> &nbsp; </p><p></p>"), false);
   assert.equal(hasEmailContent(""), false);
+});
+
+// --- sender domains ----------------------------------------------------------------
+check("normalizeDomain lowercases, strips @ and trailing dot, rejects non-domains", () => {
+  assert.equal(normalizeDomain(" @LojaXYZ.com.br. "), "lojaxyz.com.br");
+  assert.equal(normalizeDomain("lojaxyz"), null);
+  assert.equal(normalizeDomain("http://x.com"), null);
+  assert.equal(normalizeDomain("a b.com"), null);
+  assert.equal(normalizeDomain(""), null);
+});
+
+check("domainOfEmail returns the normalized domain of a valid address only", () => {
+  assert.equal(domainOfEmail(" Contato@LojaXYZ.com.br "), "lojaxyz.com.br");
+  assert.equal(domainOfEmail("sem-arroba"), null);
+  assert.equal(domainOfEmail("maria@@x.com"), null);
+});
+
+check("isPlatformDomain matches metodotia.com and its subdomains only", () => {
+  assert.equal(isPlatformDomain("metodotia.com"), true);
+  assert.equal(isPlatformDomain("mail.metodotia.com"), true);
+  assert.equal(isPlatformDomain("metodotia.com.br"), false);
+  assert.equal(isPlatformDomain("xmetodotia.com"), false);
+});
+
+check("isSenderAllowed needs an exact allowed domain and never the platform's", () => {
+  assert.equal(isSenderAllowed(" Promo@LojaXYZ.com.br ", ["lojaxyz.com.br"]), true);
+  assert.equal(isSenderAllowed("a@outra.com", ["lojaxyz.com.br"]), false);
+  assert.equal(isSenderAllowed("a@mail.lojaxyz.com.br", ["lojaxyz.com.br"]), false);
+  assert.equal(isSenderAllowed("x@metodotia.com", ["metodotia.com"]), false);
+  assert.equal(isSenderAllowed("", ["lojaxyz.com.br"]), false);
+});
+
+check("transactionalRetryDelayMs follows retry-after, capped at 2s, 1s by default", () => {
+  assert.equal(transactionalRetryDelayMs(null), 1000);
+  assert.equal(transactionalRetryDelayMs("0.5"), 500);
+  assert.equal(transactionalRetryDelayMs("1"), 1000);
+  assert.equal(transactionalRetryDelayMs("30"), 2000);
+  assert.equal(transactionalRetryDelayMs("abc"), 1000);
+  assert.equal(transactionalRetryDelayMs("-3"), 1000);
 });
 
 console.log(`\n✅ email-broadcast: ${passed} checks passed.`);

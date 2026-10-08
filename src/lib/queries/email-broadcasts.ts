@@ -2,7 +2,7 @@ import "server-only";
 import type { EmailRecipientStatus } from "@prisma/client";
 import { tenantDb } from "@/lib/tenant-db";
 import { LIMITS } from "@/config/limits";
-import { getResendConnection } from "@/lib/email-broadcast/connection";
+import { listSenderDomains } from "@/lib/queries/email-sender-domains";
 import type { ComposerOptions, PickedTarget } from "@/lib/email-broadcast/types";
 
 const PROBLEM_STATUSES: EmailRecipientStatus[] = ["BOUNCED", "COMPLAINED", "FAILED"];
@@ -54,6 +54,7 @@ export function getEmailBroadcast(organizationId: string, id: string) {
       subject: true,
       html: true,
       fromName: true,
+      fromEmail: true,
       replyTo: true,
       audience: true,
       stats: true,
@@ -88,7 +89,7 @@ export async function getEmailBroadcastReport(organizationId: string, id: string
       take: 200,
       select: { id: true, email: true, name: true, sources: true, status: true, error: true, updatedAt: true },
     }),
-    db.emailBroadcast.findFirst({ where: { id }, select: { status: true, startedAt: true, lastDispatchAt: true } }),
+    db.emailBroadcast.findFirst({ where: { id }, select: { status: true, startedAt: true, lastDispatchAt: true, fromEmail: true } }),
   ]);
 
   const counts: Record<EmailRecipientStatus, number> = {
@@ -108,7 +109,7 @@ export async function getEmailBroadcastReport(organizationId: string, id: string
     now - b.startedAt.getTime() > STALE_MS &&
     (!b.lastDispatchAt || now - b.lastDispatchAt.getTime() > STALE_MS);
 
-  return { counts, recipients, canResume: b?.status === "PAUSED" || stalled };
+  return { counts, recipients, canResume: (b?.status === "PAUSED" && Boolean(b.fromEmail)) || stalled };
 }
 
 /** Chips of the recipient picker, each with how many addresses it holds. */
@@ -141,14 +142,14 @@ export async function emailComposerOptions(organizationId: string): Promise<Comp
 
 /** Everything the composer page needs besides the draft itself. */
 export async function emailComposerData(organizationId: string) {
-  const [options, conn, used] = await Promise.all([
+  const [options, allowedDomains, used] = await Promise.all([
     emailComposerOptions(organizationId),
-    getResendConnection(organizationId),
+    listSenderDomains(organizationId),
     countEmailsSentThisMonth(organizationId),
   ]);
   return {
     options,
-    fromEmail: conn?.fromEmail ?? null,
+    allowedDomains,
     quota: { used, limit: LIMITS.emailBroadcastQuotaPerMonth },
   };
 }

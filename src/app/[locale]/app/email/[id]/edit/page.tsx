@@ -47,12 +47,13 @@ export default async function EditEmailPage({
           subject: b.subject,
           html: b.html,
           fromName: b.fromName ?? "",
+          fromEmail: b.fromEmail ?? "",
           replyTo: b.replyTo ?? "",
           audience,
           picked,
         }}
         options={data.options}
-        fromEmail={data.fromEmail}
+        allowedDomains={data.allowedDomains}
         quota={data.quota}
       />
     </div>

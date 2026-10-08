@@ -8,7 +8,7 @@ import {
 } from "@/lib/queries/email-broadcasts";
 import { readStats } from "@/lib/validations/email-broadcast";
 import { composeEmail } from "@/lib/email-broadcast/compose";
-import { getResendConnection, deliveryTrackingActive } from "@/lib/email-broadcast/connection";
+import { deliveryTrackingConfigured } from "@/lib/email-broadcast/platform";
 import { StatusBadge } from "@/components/email/status-badge";
 import { ReportActions } from "@/components/email/report-actions";
 import { AutoRefresh } from "@/components/email/auto-refresh";
@@ -48,10 +48,7 @@ export default async function EmailReportPage({
 
   const requested = (await searchParams).status ?? "all";
   const filter: ReportFilter = (FILTERS as string[]).includes(requested) ? (requested as ReportFilter) : "all";
-  const [{ counts, recipients, canResume }, conn] = await Promise.all([
-    getEmailBroadcastReport(ctx.organizationId, id, filter),
-    getResendConnection(ctx.organizationId),
-  ]);
+  const { counts, recipients, canResume } = await getEmailBroadcastReport(ctx.organizationId, id, filter);
 
   const total = COUNTER_ORDER.reduce((n, s) => n + counts[s], 0);
   const processed = total - counts.QUEUED;
@@ -102,7 +99,7 @@ export default async function EmailReportPage({
           {b.lastError ? ` (${b.lastError})` : ""}
         </p>
       ) : null}
-      {conn && !deliveryTrackingActive(conn) ? (
+      {!deliveryTrackingConfigured() ? (
         <p className="text-sm text-muted-foreground">{t("report.noTracking")}</p>
       ) : null}
 

@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
 import { useConfirm } from "@/components/ui/confirm";
 import { useToast } from "@/components/ui/toast";
-import { Link, useRouter } from "@/i18n/navigation";
+import { useRouter } from "@/i18n/navigation";
+import { isSenderAllowed } from "@/lib/email-broadcast/sender-domain";
 import { RichTextEditor, type EditorImageSupport } from "@/components/proposals/rich-text-editor";
 import { safeClickHref, safeImageSrc } from "@/lib/email-broadcast/image-links";
 import { RecipientPicker } from "@/components/email/recipient-picker";
@@ -23,12 +24,12 @@ import type { AudiencePreview, ComposerDraft, ComposerOptions } from "@/lib/emai
 export function EmailComposer({
   draft,
   options,
-  fromEmail,
+  allowedDomains,
   quota,
 }: {
   draft: ComposerDraft;
   options: ComposerOptions;
-  fromEmail: string | null;
+  allowedDomains: string[];
   quota: { used: number; limit: number };
 }) {
   const t = useTranslations("emailBroadcast");
@@ -37,6 +38,7 @@ export function EmailComposer({
   const toast = useToast();
   const [id, setId] = useState<string | null>(draft.id);
   const [fromName, setFromName] = useState(draft.fromName);
+  const [fromEmail, setFromEmail] = useState(draft.fromEmail);
   const [replyTo, setReplyTo] = useState(draft.replyTo);
   const [subject, setSubject] = useState(draft.subject);
   const [html, setHtml] = useState(draft.html);
@@ -86,7 +88,9 @@ export function EmailComposer({
     }),
     [t, toast],
   );
-  const noConnection = !fromEmail;
+  const noDomains = allowedDomains.length === 0;
+  const fromAllowed = isSenderAllowed(fromEmail, allowedDomains);
+  const fromProblem = fromEmail.trim() !== "" && !fromAllowed;
 
   // Live summary, debounced; state only changes inside the timeout.
   useEffect(() => {
@@ -105,7 +109,7 @@ export function EmailComposer({
     };
   }, [audience]);
 
-  const payload = () => ({ subject, html, fromName, replyTo, audience });
+  const payload = () => ({ subject, html, fromName, fromEmail, replyTo, audience });
   const errorText = (r: EmailActionFail) =>
     r.error === "quota"
       ? t("error.quotaDetail", { total: r.total ?? 0, remaining: r.remaining ?? 0 })
@@ -144,6 +148,10 @@ export function EmailComposer({
 
   function onSend() {
     startBusy(guarded(async () => {
+      if (!fromAllowed) {
+        toast(t(fromEmail.trim() ? "error.domain_not_allowed" : "error.from_required"), { variant: "error" });
+        return;
+      }
       const savedId = await save();
       if (!savedId) return;
       const p = await previewEmailAudience(audience);
@@ -180,12 +188,9 @@ export function EmailComposer({
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <section className="flex flex-col gap-5 rounded-xl border border-border bg-card p-6">
         <h2 className="text-sm font-semibold">{t("message")}</h2>
-        {noConnection ? (
+        {noDomains ? (
           <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-            {t("connection.missingBody")}{" "}
-            <Link href="/app/connections/new" className="font-medium underline underline-offset-4">
-              {t("connection.connect")}
-            </Link>
+            <span className="font-medium">{t("domains.noneTitle")}.</span> {t("domains.noneBody")}
           </p>
         ) : null}
         <div className="grid gap-4 sm:grid-cols-2">
@@ -195,7 +200,21 @@ export function EmailComposer({
           </div>
           <div>
             <Label htmlFor="fromEmail">{t("fromEmail")}</Label>
-            <Input id="fromEmail" value={fromEmail ?? ""} readOnly placeholder={t("connection.missingTitle")} />
+            <Input
+              id="fromEmail"
+              type="email"
+              value={fromEmail}
+              maxLength={254}
+              placeholder={t("fromEmailPlaceholder")}
+              aria-invalid={fromProblem}
+              onChange={(e) => setFromEmail(e.target.value)}
+            />
+            {fromProblem ? <p className="mt-1 text-xs text-red-600">{t("domains.notAllowed")}</p> : null}
+            {!noDomains ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("domains.hint", { domains: allowedDomains.join(", ") })}
+              </p>
+            ) : null}
           </div>
         </div>
         <div>
@@ -248,7 +267,7 @@ export function EmailComposer({
               type="button"
               className="flex-1"
               onClick={onSend}
-              disabled={busy || noConnection || preview?.stats.total === 0}
+              disabled={busy || fromProblem || preview?.stats.total === 0}
             >
               {busy ? t("working") : t("reviewSend")}
             </Button>

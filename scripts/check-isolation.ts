@@ -207,10 +207,35 @@ async function main() {
       "an address suppressed in org A is not suppressed in org B",
     );
 
+    // 11) Sender domains are per org, and a domain belongs to ONE org (unique).
+    const senderDomain = `iso-${stamp}.example.com`;
+    await prisma.emailSenderDomain.create({
+      data: { organizationId: orgA.id, domain: senderDomain },
+    });
+    const domainsB = await prisma.emailSenderDomain.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(
+      domainsB.length === 0,
+      "sender domain list scoped to org B excludes org A's domain",
+    );
+    let duplicateRejected = false;
+    try {
+      await prisma.emailSenderDomain.create({
+        data: { organizationId: orgB.id, domain: senderDomain },
+      });
+    } catch {
+      duplicateRejected = true;
+    }
+    assert(duplicateRejected, "the same sender domain cannot be assigned to a second org");
+
     console.log("\n✅ Tenant isolation: all checks passed.");
   } finally {
     // Cleanup. Companies/connections carry organizationId (no FK cascade from
     // org), so remove them explicitly before the orgs.
+    await prisma.emailSenderDomain.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
     await prisma.emailSuppression.deleteMany({
       where: { organizationId: { in: created.orgs } },
     });

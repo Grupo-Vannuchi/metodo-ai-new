@@ -32,12 +32,13 @@ export default async function NewEmailPage({ params }: { params: Promise<{ local
           subject: "",
           html: "",
           fromName: ctx.organization.name,
+          fromEmail: "",
           replyTo: "",
           audience: EMPTY_AUDIENCE,
           picked: [],
         }}
         options={data.options}
-        fromEmail={data.fromEmail}
+        allowedDomains={data.allowedDomains}
         quota={data.quota}
       />
     </div>

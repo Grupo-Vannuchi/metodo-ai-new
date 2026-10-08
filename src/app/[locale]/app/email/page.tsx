@@ -2,7 +2,8 @@ import { getFormatter, getTranslations } from "next-intl/server";
 import { AlertTriangle, CheckCircle2, Plus } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { listEmailBroadcasts, countEmailsSentThisMonth } from "@/lib/queries/email-broadcasts";
-import { getResendConnection, deliveryTrackingActive } from "@/lib/email-broadcast/connection";
+import { deliveryTrackingConfigured } from "@/lib/email-broadcast/platform";
+import { listSenderDomains } from "@/lib/queries/email-sender-domains";
 import { DeleteButton } from "@/components/crm/delete-button";
 import { deleteEmailDraft } from "@/app/actions/email-broadcasts";
 import { StatusBadge } from "@/components/email/status-badge";
@@ -19,11 +20,12 @@ export default async function EmailPage({ params }: { params: Promise<{ locale: 
   const t = await getTranslations("emailBroadcast");
   const format = await getFormatter();
 
-  const [rows, conn, used] = await Promise.all([
+  const [rows, domains, used] = await Promise.all([
     listEmailBroadcasts(ctx.organizationId),
-    getResendConnection(ctx.organizationId),
+    listSenderDomains(ctx.organizationId),
     countEmailsSentThisMonth(ctx.organizationId),
   ]);
+  const tracking = deliveryTrackingConfigured();
   const limit = LIMITS.emailBroadcastQuotaPerMonth;
   const pct = Math.min(100, (used / limit) * 100);
 
@@ -41,30 +43,23 @@ export default async function EmailPage({ params }: { params: Promise<{ locale: 
       </div>
 
       <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        {conn ? (
+        {domains.length > 0 ? (
           <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-4">
             <CheckCircle2 className="size-5 shrink-0 text-green-600" />
             <div className="min-w-0 flex-1">
-              <p className="font-medium">{t("connection.active")}</p>
+              <p className="font-medium">{t("domains.title")}</p>
               <p className="truncate text-sm text-muted-foreground">
-                {t("connection.from", { email: conn.fromEmail })} ·{" "}
-                {deliveryTrackingActive(conn) ? t("connection.tracking") : t("connection.noTracking")}
+                {domains.join(", ")} · {tracking ? t("domains.tracking") : t("domains.noTracking")}
               </p>
             </div>
-            <Link href="/app/connections" className="shrink-0 text-sm font-medium text-brand hover:underline">
-              {t("connection.manage")}
-            </Link>
           </div>
         ) : (
           <div className="flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-5 py-4 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
             <AlertTriangle className="size-5 shrink-0" />
             <div className="min-w-0 flex-1">
-              <p className="font-medium">{t("connection.missingTitle")}</p>
-              <p className="text-sm">{t("connection.missingBody")}</p>
+              <p className="font-medium">{t("domains.noneTitle")}</p>
+              <p className="text-sm">{t("domains.noneBody")}</p>
             </div>
-            <Link href="/app/connections/new" className={buttonVariants({ size: "sm" })}>
-              {t("connection.connect")}
-            </Link>
           </div>
         )}
         <div className="flex flex-col justify-center gap-2 rounded-xl border border-border bg-card px-5 py-4">

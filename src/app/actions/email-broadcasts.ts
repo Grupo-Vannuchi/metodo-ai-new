@@ -15,7 +15,9 @@ import {
 import { normalizeEmail } from "@/lib/email-broadcast/normalize";
 import { resolveAudience } from "@/lib/email-broadcast/audience";
 import { hasEmailContent } from "@/lib/email-broadcast/render";
-import { getResendConnection, ensureResendWebhook } from "@/lib/email-broadcast/connection";
+import { platformResendKey } from "@/lib/email-broadcast/platform";
+import { isSenderAllowed } from "@/lib/email-broadcast/sender-domain";
+import { listSenderDomains } from "@/lib/queries/email-sender-domains";
 import { searchEmailTargets as searchTargets, countEmailsSentThisMonth } from "@/lib/queries/email-broadcasts";
 import { audit } from "@/lib/audit";
 import { LIMITS } from "@/config/limits";
@@ -30,6 +32,9 @@ export type EmailActionError =
   | "no_connection"
   | "empty"
   | "quota"
+  | "domain_not_allowed"
+  | "from_required"
+  | "from_missing"
   | "unknown";
 
 export type EmailActionFail = {
@@ -66,6 +71,7 @@ export async function saveEmailDraft(
     subject: parsed.data.subject,
     html: parsed.data.html,
     fromName: parsed.data.fromName || null,
+    fromEmail: parsed.data.fromEmail ? normalizeEmail(parsed.data.fromEmail) : null,
     replyTo: parsed.data.replyTo ? normalizeEmail(parsed.data.replyTo) : null,
     audience: parsed.data.audience as Prisma.InputJsonValue,
   };
@@ -110,7 +116,7 @@ export async function duplicateEmailBroadcast(id: string): Promise<{ ok: true; i
     const db = tenantDb(g.ctx.organizationId);
     const src = await db.emailBroadcast.findFirst({
       where: { id },
-      select: { subject: true, html: true, fromName: true, replyTo: true, audience: true },
+      select: { subject: true, html: true, fromName: true, fromEmail: true, replyTo: true, audience: true },
     });
     if (!src) return { ok: false, error: "not_found" };
     const created = await db.emailBroadcast.create({
@@ -120,6 +126,7 @@ export async function duplicateEmailBroadcast(id: string): Promise<{ ok: true; i
         subject: src.subject,
         html: src.html,
         fromName: src.fromName,
+        fromEmail: src.fromEmail,
         replyTo: src.replyTo,
         audience: (src.audience ?? {}) as Prisma.InputJsonValue,
       },
@@ -180,14 +187,18 @@ export async function startEmailBroadcast(id: string): Promise<{ ok: true } | Em
 
   const b = await db.emailBroadcast.findFirst({
     where: { id },
-    select: { id: true, status: true, subject: true, html: true, audience: true },
+    select: { id: true, status: true, subject: true, html: true, audience: true, fromEmail: true },
   });
   if (!b) return { ok: false, error: "not_found" };
   if (b.status !== "DRAFT") return { ok: false, error: "not_found" };
   if (!b.subject.trim() || !hasEmailContent(b.html)) return { ok: false, error: "invalid" };
 
-  const conn = await getResendConnection(orgId);
-  if (!conn) return { ok: false, error: "no_connection" };
+  if (!platformResendKey()) return { ok: false, error: "no_connection" };
+  if (!b.fromEmail) return { ok: false, error: "from_required" };
+  // Server-side gate: the composer checks too, but only this decides.
+  if (!isSenderAllowed(b.fromEmail, await listSenderDomains(orgId))) {
+    return { ok: false, error: "domain_not_allowed" };
+  }
 
   const { recipients, stats } = await resolveAudience(orgId, readAudience(b.audience));
   if (recipients.length === 0) return { ok: false, error: "empty" };
@@ -215,12 +226,6 @@ export async function startEmailBroadcast(id: string): Promise<{ ok: true } | Em
     },
   });
   if (claimed.count === 0) return { ok: false, error: "not_found" };
-
-  // After the claim, so two tabs cannot both register a webhook.
-  await ensureResendWebhook(conn).catch((e) => {
-    console.warn("[email] webhook setup failed", e);
-    return false;
-  });
 
   try {
     for (let i = 0; i < recipients.length; i += 1000) {
@@ -255,7 +260,7 @@ export async function startEmailBroadcast(id: string): Promise<{ ok: true } | Em
     action: "email_broadcast.started",
     entity: "EmailBroadcast",
     entityId: id,
-    meta: { recipients: recipients.length },
+    meta: { recipients: recipients.length, fromEmail: b.fromEmail },
   });
   await kickEmailBroadcast(id);
   revalidatePath("/app/email");
@@ -269,11 +274,15 @@ export async function resumeEmailBroadcast(id: string): Promise<{ ok: true } | E
   const g = await gate();
   if (!g.ok) return g;
   const db = tenantDb(g.ctx.organizationId);
-  const b = await db.emailBroadcast.findFirst({ where: { id }, select: { status: true } });
+  const b = await db.emailBroadcast.findFirst({ where: { id }, select: { status: true, fromEmail: true } });
   if (!b) return { ok: false, error: "not_found" };
 
   if (b.status === "PAUSED") {
-    if (!(await getResendConnection(g.ctx.organizationId))) return { ok: false, error: "no_connection" };
+    if (!platformResendKey()) return { ok: false, error: "no_connection" };
+    if (!b.fromEmail) return { ok: false, error: "from_missing" };
+    if (!isSenderAllowed(b.fromEmail, await listSenderDomains(g.ctx.organizationId))) {
+      return { ok: false, error: "domain_not_allowed" };
+    }
     const res = await db.emailBroadcast.updateMany({
       where: { id, status: "PAUSED" },
       data: { status: "SENDING", pausedReason: null, lastError: null, lastDispatchAt: null },

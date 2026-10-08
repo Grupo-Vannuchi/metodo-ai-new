@@ -33,6 +33,11 @@ export const broadcastDraftSchema = z.object({
   subject: z.string().trim().max(200),
   html: z.string().max(200_000),
   fromName: z.string().trim().max(100),
+  fromEmail: z
+    .string()
+    .trim()
+    .max(254)
+    .refine((v) => v === "" || isValidEmail(normalizeEmail(v)), "invalid_from"),
   replyTo: z
     .string()
     .trim()

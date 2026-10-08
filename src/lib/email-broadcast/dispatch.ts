@@ -6,7 +6,8 @@ import { LIMITS } from "@/config/limits";
 import { monthStart } from "@/lib/queries/email-broadcasts";
 import { composeEmail } from "./compose";
 import { formatFrom } from "./render";
-import { getResendConnection } from "./connection";
+import { platformResendKey } from "./platform";
+import { isSenderAllowed } from "./sender-domain";
 import { sendBatch, sendOne, type ResendEmail } from "./resend";
 import { batchFailureAction, singleFailureAction } from "./retry-policy";
 import { emailUnsubscribeOneClickUrl, emailUnsubscribePageUrl } from "./unsubscribe";
@@ -20,7 +21,11 @@ import { emailUnsubscribeOneClickUrl, emailUnsubscribePageUrl } from "./unsubscr
 
 export const BATCH_SIZE = 100;
 const LEASE_MS = 90_000;
-const PACE_MS = 150;
+/** Budget for ALL mass e-mail together (~2 req/s in total, see activeSends):
+ * the platform's Resend account (default limit 10 req/s per team) is shared
+ * with login/invite/reset mail, which must keep its headroom. */
+const PACE_MS = 500;
+const MAX_PACE_FACTOR = 20; // keeps the longest wait (10 s) well inside LEASE_MS
 const MAX_RETRY_AFTER_S = 10;
 /** Per-job time budget in queue mode (the job re-enqueues itself after it). */
 export const QUEUE_BUDGET_MS = 50_000;
@@ -86,7 +91,7 @@ export async function runEmailBroadcast(
 ): Promise<{ done: boolean }> {
   const b = await prisma.emailBroadcast.findFirst({
     where: { id: broadcastId },
-    select: { id: true, organizationId: true, status: true, subject: true, html: true, fromName: true, replyTo: true },
+    select: { id: true, organizationId: true, status: true, subject: true, html: true, fromName: true, fromEmail: true, replyTo: true },
   });
   if (!b || b.status !== "SENDING") return { done: true };
   const org = b.organizationId;
@@ -110,21 +115,46 @@ export async function runEmailBroadcast(
     await sleep(Math.min(seconds ?? 1, MAX_RETRY_AFTER_S) * 1000);
   };
 
-  const pause = (reason: "no_connection" | "quota" | "provider_error", message: string | null) =>
+  /** Sends running right now on the platform account (any org): an aggregate
+   * count only, nothing org-specific is read. Each waits N × PACE_MS so the
+   * total stays ~2 req/s. */
+  const activeSends = () =>
+    prisma.emailBroadcast.count({
+      where: { status: "SENDING", lastDispatchAt: { gte: new Date(Date.now() - LEASE_MS) } },
+    });
+  let paceMs = PACE_MS;
+
+  const pause = (
+    reason: "no_connection" | "quota" | "provider_error" | "domain_not_allowed" | "from_missing",
+    message: string | null,
+  ) =>
     prisma.emailBroadcast.updateMany({
       where: { id: b.id, organizationId: org, status: "SENDING", lastDispatchAt: stamp },
       data: { status: "PAUSED", pausedReason: reason, lastError: message?.slice(0, 500) ?? null, lastDispatchAt: null },
     });
 
+  /** Re-checked before every batch: a domain removed with email:dominio stops the send. */
+  const senderStillAllowed = async () => {
+    const rows = await prisma.emailSenderDomain.findMany({
+      where: { organizationId: org },
+      select: { domain: true },
+    });
+    return Boolean(b.fromEmail) && isSenderAllowed(b.fromEmail as string, rows.map((r) => r.domain));
+  };
+
   try {
-    const conn = await getResendConnection(org);
-    if (!conn) {
+    const apiKey = platformResendKey();
+    if (!apiKey) {
       await pause("no_connection", null);
+      return { done: true };
+    }
+    if (!b.fromEmail) {
+      await pause("from_missing", null);
       return { done: true };
     }
     const orgRow = await prisma.organization.findFirst({ where: { id: org }, select: { name: true } });
     const orgName = orgRow?.name ?? "";
-    const from = formatFrom(b.fromName, conn.fromEmail);
+    const from = formatFrom(b.fromName, b.fromEmail);
     const deadline = opts.budgetMs ? Date.now() + opts.budgetMs : Number.POSITIVE_INFINITY;
 
     const toEmail = (r: Batch[number]): ResendEmail => {
@@ -167,7 +197,7 @@ export async function runEmailBroadcast(
         const key = `eb-${b.id}-${batchNo}-${r.id}`;
         const counters: Counters = { rate: 0, server: 0, conflict: 0 };
         for (;;) {
-          const res = await sendOne(conn.apiKey, toEmail(r), key);
+          const res = await sendOne(apiKey, toEmail(r), key);
           if (res.ok) {
             await markSent([{ id: r.id, providerId: res.data.id ?? null }]);
             streak = 0;
@@ -196,7 +226,7 @@ export async function runEmailBroadcast(
           break;
         }
         await beat();
-        await sleep(PACE_MS);
+        await sleep(paceMs);
       }
       return { kind: "ok" };
     };
@@ -205,7 +235,7 @@ export async function runEmailBroadcast(
       const emails = batch.map(toEmail);
       const counters: Counters = { rate: 0, server: 0, conflict: 0 };
       for (;;) {
-        const res = await sendBatch(conn.apiKey, emails, `eb-${b.id}-${batchNo}`);
+        const res = await sendBatch(apiKey, emails, `eb-${b.id}-${batchNo}`);
         if (res.ok) {
           const ids = res.data.data ?? [];
           await markSent(batch.map((r, i) => ({ id: r.id, providerId: ids[i]?.id ?? null })));
@@ -230,6 +260,11 @@ export async function runEmailBroadcast(
         select: { status: true },
       });
       if (current?.status !== "SENDING") return { done: true };
+      if (!(await senderStillAllowed())) {
+        await pause("domain_not_allowed", null);
+        return { done: true };
+      }
+      paceMs = PACE_MS * Math.min(Math.max(1, await activeSends()), MAX_PACE_FACTOR);
 
       const next = await prisma.emailBroadcastRecipient.findFirst({
         where: { broadcastId: b.id, organizationId: org, status: "QUEUED" },
@@ -265,7 +300,7 @@ export async function runEmailBroadcast(
       }
 
       await beat();
-      await sleep(PACE_MS);
+      await sleep(paceMs);
     }
 
     // Budget over (queue mode): release the lease so the re-enqueued job can take it.

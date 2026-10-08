@@ -49,6 +49,10 @@ const serverSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   // Verified sender, e.g. `MétodoAI <nao-responda@metodotia.com>`.
   EMAIL_FROM: z.string().optional(),
+  // Signing secret of the platform's Resend webhook (dashboard → Webhooks →
+  // https://<site>/api/email/webhook). Optional: without it the mass e-mail
+  // still sends, but delivery statuses stay "Sent".
+  RESEND_WEBHOOK_SECRET: z.string().optional(),
   // Social sign-in. Each provider is independent: the button only shows up once
   // its id + secret are present, so you can enable them one at a time. The
   // redirect URI to register is `${NEXT_PUBLIC_SITE_URL}/api/auth/<provider>/callback`.
