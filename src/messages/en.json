@@ -2533,6 +2533,7 @@
         "started": "Launched a campaign"
       },
       "email_broadcast": { "started": "Started a bulk email send" },
+      "task_board": { "entrance_changed": "Changed the task board's entrance column", "column_deleted": "Deleted a task board column" },
       "connection": {
         "created": "Connected an integration",
         "updated": "Changed an integration",
@@ -2590,6 +2591,7 @@
       "Opportunity": "Opportunity",
       "AutomationRule": "Automation",
       "TeamChat": "Team chat",
+      "TaskBoardColumn": "Task board",
       "companies": "Companies",
       "contacts": "Contacts"
     }

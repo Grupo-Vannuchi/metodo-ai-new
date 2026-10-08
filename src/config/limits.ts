@@ -25,6 +25,8 @@ export const LIMITS: {
   whatsappAgentDailyLimit: number;
   /** Companies (organizations) an account owner can have. */
   companiesPerAccount: number;
+  /** Columns of the Tasks kanban per org. */
+  taskBoardColumnsMax: number;
 } = {
   seatLimit: 25,
   connectionsLimit: null,
@@ -36,4 +38,5 @@ export const LIMITS: {
   assistantDailyLimit: 750,
   whatsappAgentDailyLimit: 2_000,
   companiesPerAccount: 5,
+  taskBoardColumnsMax: 20,
 };

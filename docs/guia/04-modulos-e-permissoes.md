@@ -87,7 +87,7 @@ Não existe um terceiro lugar gateando alguma coisa. É sempre um destes três a
   toda organização: `seatLimit` (25), `whatsappNumbersLimit` (10),
   `dispatchQuotaPerMonth` (50.000), `emailBroadcastQuotaPerMonth` (50.000), `prospectingQuotaPerMonth` (10.000),
   `extractionsPerMonth` (500), `assistantDailyLimit` (750), `whatsappAgentDailyLimit` (2.000),
-  `companiesPerAccount` (5) e `connectionsLimit` (`null` = sem limite). O comentário no topo do
+  `companiesPerAccount` (5), `taskBoardColumnsMax` (20) e `connectionsLimit` (`null` = sem limite). O comentário no topo do
   arquivo é direto: **não existem mais planos** — o antigo `STANDARD/PLUS/GOLD/ENTERPRISE` virou
   módulo instalado ou não; estes números só existem para conter abuso/custo, iguais para todos.
   `emailBroadcastQuotaPerMonth` (50.000): e-mails aceitos pelo Resend no mês no submenu E-mail. É
@@ -150,7 +150,7 @@ para o tipo mas sem dono ainda — não gatear nada por elas por engano.
 
 ## Paridade de i18n
 
-`src/messages/pt.json` e `src/messages/en.json` têm **2788 chaves-folha cada um** (contagem
+`src/messages/pt.json` e `src/messages/en.json` têm **2791 chaves-folha cada um** (contagem
 própria, recursiva sobre os dois arquivos — batem exatamente). Não existe script no repositório
 que verifique isso automaticamente: nenhum arquivo em `scripts/` nem entrada em `package.json`
 menciona `pt.json`/`en.json`. Adicionar uma chave de um lado sem adicionar do outro não quebra

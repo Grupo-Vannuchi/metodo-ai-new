@@ -2533,6 +2533,7 @@
         "started": "Disparou uma campanha"
       },
       "email_broadcast": { "started": "Iniciou um envio de e-mail em massa" },
+      "task_board": { "entrance_changed": "Trocou a coluna de entrada do quadro de tarefas", "column_deleted": "Excluiu uma coluna do quadro de tarefas" },
       "connection": {
         "created": "Conectou uma integração",
         "updated": "Alterou uma integração",
@@ -2590,6 +2591,7 @@
       "Opportunity": "Oportunidade",
       "AutomationRule": "Automação",
       "TeamChat": "Chat de equipe",
+      "TaskBoardColumn": "Quadro de tarefas",
       "companies": "Empresas",
       "contacts": "Contatos"
     }
