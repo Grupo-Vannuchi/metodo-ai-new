@@ -107,6 +107,32 @@ export async function putMedia(
   return { url: `${LOCAL_PREFIX}${pathname}`, size: body.byteLength };
 }
 
+/** Whether readMedia works with the active backend (Supabase or local disk). */
+export function mediaReadable(): boolean {
+  return supabaseEnabled() || !blobEnabled();
+}
+
+/**
+ * Read stored bytes back by the pathname given to putMedia. Supabase is read
+ * through the authenticated API (no public URL involved); local disk stays
+ * inside .media/. Vercel Blob is not supported: its names get a random suffix,
+ * so the pathname alone can't find the object.
+ */
+export async function readMedia(pathname: string): Promise<Buffer> {
+  if (supabaseEnabled()) {
+    const res = await fetch(
+      `${env.SUPABASE_URL}/storage/v1/object/authenticated/${SUPABASE_BUCKET}/${pathname}`,
+      { headers: sbHeaders(), signal: AbortSignal.timeout(30_000) },
+    );
+    if (!res.ok) throw new Error(`Supabase read failed: ${res.status}`);
+    return Buffer.from(await res.arrayBuffer());
+  }
+  if (blobEnabled()) throw new Error("readMedia is not supported on Vercel Blob");
+  const file = path.resolve(LOCAL_DIR, pathname);
+  if (!file.startsWith(LOCAL_DIR + path.sep)) throw new Error("Invalid media path");
+  return fs.readFile(file);
+}
+
 /** Best-effort delete (LGPD): never throws so callers can fire-and-forget. It
  * dispatches by URL shape, so it handles media stored by any backend. */
 export async function deleteMedia(url: string): Promise<void> {
