@@ -1915,6 +1915,18 @@
       "badType": "Formato não aceito. Use PNG, JPG, GIF ou WEBP.",
       "uploadError": "Não foi possível enviar a imagem. Tente de novo."
     },
+    "attachments": {
+      "title": "Anexos",
+      "add": "Adicionar arquivos",
+      "counter": "{count, plural, one {# arquivo} other {# arquivos}} · {used} de {max}",
+      "notice": "E-mails com anexo saem um por um, cerca de 2 por segundo.",
+      "uploading": "Enviando {file}…",
+      "remove": "Remover {file}",
+      "errorType": "O arquivo {file} não é aceito. Use PDF, Word, Excel, PowerPoint, OpenDocument, TXT, CSV ou imagem.",
+      "errorTotal": "{file} passa do limite de 10 MB somando todos os anexos.",
+      "errorCount": "No máximo {max} arquivos por envio.",
+      "errorUpload": "Não foi possível anexar {file}. Tente de novo."
+    },
     "title": "E-mail",
     "subtitle": "Envie e-mails em massa para contatos e empresas do CRM.",
     "new": "Novo e-mail",
@@ -2000,6 +2012,8 @@
     "confirmTitle": "Enviar para {count, plural, one {# endereço} other {# endereços}}?",
     "confirmBody": "Assunto: {subject}. Ficaram de fora {duplicates} repetidos, {suppressed} bloqueados e {invalid} inválidos. Depois de enviado não dá para cancelar; se o envio for interrompido, “Retomar envio” continua só para quem ainda não recebeu.",
     "confirmSend": "Enviar para {count}",
+    "confirmAttachments": "Com anexos, o envio leva cerca de {minutes, plural, one {# minuto} other {# minutos}}.",
+    "confirmAttachmentsQuick": "Com anexos, o envio leva menos de 1 minuto.",
     "error": {
       "unauthorized": "Sua sessão expirou. Entre de novo.",
       "forbidden": "Você não tem acesso ao E-mail.",
@@ -2025,6 +2039,7 @@
       "removed": "Ficaram fora deste envio: {duplicates} repetidos, {suppressed} bloqueados e {invalid} inválidos.",
       "noTracking": "Sem status de entrega: o aviso de entrega da plataforma ainda não está configurado. Os e-mails ficam como “Enviado”.",
       "showing": "Mostrando os primeiros {count}.",
+      "attachments": "Anexos",
       "counters": {
         "QUEUED": "Na fila",
         "SENT": "Enviados",

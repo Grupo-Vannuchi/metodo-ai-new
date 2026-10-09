@@ -12,6 +12,8 @@ import { RichTextEditor, type EditorImageSupport } from "@/components/proposals/
 import { safeClickHref, safeImageSrc } from "@/lib/email-broadcast/image-links";
 import { RecipientPicker } from "@/components/email/recipient-picker";
 import { AudienceSummary } from "@/components/email/audience-summary";
+import { EmailAttachments } from "@/components/email/email-attachments";
+import { estimateAttachmentSendMinutes } from "@/lib/email-broadcast/attachments";
 import {
   previewEmailAudience,
   saveEmailDraft,
@@ -44,7 +46,8 @@ export function EmailComposer({
   const [html, setHtml] = useState(draft.html);
   const [audience, setAudience] = useState(draft.audience);
   const [picked, setPicked] = useState(draft.picked);
-  const [attachments] = useState(draft.attachments);
+  const [attachments, setAttachments] = useState(draft.attachments);
+  const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<AudiencePreview | null>(null);
   const [busy, startBusy] = useTransition();
 
@@ -165,14 +168,20 @@ export function EmailComposer({
         toast(t("error.empty"), { variant: "error" });
         return;
       }
+      const minutes = estimateAttachmentSendMinutes(s.total);
+      const timing =
+        attachments.length === 0
+          ? ""
+          : ` ${minutes === 0 ? t("confirmAttachmentsQuick") : t("confirmAttachments", { minutes })}`;
       const ok = await confirm({
         title: t("confirmTitle", { count: s.total }),
-        description: t("confirmBody", {
-          subject: subject || t("noSubject"),
-          duplicates: s.duplicates,
-          suppressed: s.suppressed,
-          invalid: s.invalid,
-        }),
+        description:
+          t("confirmBody", {
+            subject: subject || t("noSubject"),
+            duplicates: s.duplicates,
+            suppressed: s.suppressed,
+            invalid: s.invalid,
+          }) + timing,
         confirmLabel: t("confirmSend", { count: s.total }),
       });
       if (!ok) return;
@@ -249,6 +258,7 @@ export function EmailComposer({
             {t("footerNotice")} {t("emptyVarHint")}
           </p>
         </div>
+        <EmailAttachments value={attachments} onChange={setAttachments} onUploadingChange={setUploading} />
       </section>
 
       <div className="flex flex-col gap-6">
@@ -261,14 +271,14 @@ export function EmailComposer({
         />
         <AudienceSummary preview={preview} quota={quota}>
           <div className="flex flex-wrap gap-3">
-            <Button type="button" variant="outline" className="flex-1" onClick={onSaveDraft} disabled={busy}>
+            <Button type="button" variant="outline" className="flex-1" onClick={onSaveDraft} disabled={busy || uploading}>
               {t("saveDraft")}
             </Button>
             <Button
               type="button"
               className="flex-1"
               onClick={onSend}
-              disabled={busy || fromProblem || preview?.stats.total === 0}
+              disabled={busy || uploading || fromProblem || preview?.stats.total === 0}
             >
               {busy ? t("working") : t("reviewSend")}
             </Button>

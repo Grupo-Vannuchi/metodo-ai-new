@@ -1915,6 +1915,18 @@
       "badType": "Unsupported format. Use PNG, JPG, GIF or WEBP.",
       "uploadError": "Couldn't upload the image. Try again."
     },
+    "attachments": {
+      "title": "Attachments",
+      "add": "Add files",
+      "counter": "{count, plural, one {# file} other {# files}} · {used} of {max}",
+      "notice": "Emails with attachments go out one by one, about 2 per second.",
+      "uploading": "Uploading {file}…",
+      "remove": "Remove {file}",
+      "errorType": "The file {file} isn't accepted. Use PDF, Word, Excel, PowerPoint, OpenDocument, TXT, CSV or an image.",
+      "errorTotal": "{file} goes over the 10 MB limit for all attachments together.",
+      "errorCount": "At most {max} files per send.",
+      "errorUpload": "Couldn't attach {file}. Try again."
+    },
     "title": "Email",
     "subtitle": "Send bulk emails to your CRM contacts and companies.",
     "new": "New email",
@@ -2000,6 +2012,8 @@
     "confirmTitle": "Send to {count, plural, one {# address} other {# addresses}}?",
     "confirmBody": "Subject: {subject}. Left out: {duplicates} repeats, {suppressed} blocked and {invalid} invalid. Once sent it can't be canceled; if the send is interrupted, “Resume send” continues only for those who haven't received it.",
     "confirmSend": "Send to {count}",
+    "confirmAttachments": "With attachments, sending takes about {minutes, plural, one {# minute} other {# minutes}}.",
+    "confirmAttachmentsQuick": "With attachments, sending takes less than a minute.",
     "error": {
       "unauthorized": "Your session expired. Sign in again.",
       "forbidden": "You don't have access to Email.",
@@ -2025,6 +2039,7 @@
       "removed": "Left out of this send: {duplicates} repeats, {suppressed} blocked and {invalid} invalid.",
       "noTracking": "No delivery status: the platform's delivery webhook isn't configured yet. Emails stay as “Sent”.",
       "showing": "Showing the first {count}.",
+      "attachments": "Attachments",
       "counters": {
         "QUEUED": "Queued",
         "SENT": "Sent",

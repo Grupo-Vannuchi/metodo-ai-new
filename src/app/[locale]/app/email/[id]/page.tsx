@@ -7,6 +7,7 @@ import {
   type ReportFilter,
 } from "@/lib/queries/email-broadcasts";
 import { readStats } from "@/lib/validations/email-broadcast";
+import { attachmentSizeParts, readAttachments } from "@/lib/email-broadcast/attachments";
 import { composeEmail } from "@/lib/email-broadcast/compose";
 import { deliveryTrackingConfigured } from "@/lib/email-broadcast/platform";
 import { StatusBadge } from "@/components/email/status-badge";
@@ -53,6 +54,11 @@ export default async function EmailReportPage({
   const total = COUNTER_ORDER.reduce((n, s) => n + counts[s], 0);
   const processed = total - counts.QUEUED;
   const stats = readStats(b.stats);
+  const attachments = readAttachments(b.attachments);
+  const sizeLabel = (bytes: number) => {
+    const { value, unit } = attachmentSizeParts(bytes);
+    return `${format.number(value, { maximumFractionDigits: 1 })} ${unit}`;
+  };
   const filterCount: Record<ReportFilter, number> = {
     all: total,
     queued: counts.QUEUED,
@@ -126,6 +132,20 @@ export default async function EmailReportPage({
           {t("report.removed", { duplicates: stats.duplicates, suppressed: stats.suppressed, invalid: stats.invalid })}
         </p>
       </section>
+
+      {attachments.length > 0 ? (
+        <section className="rounded-xl border border-border bg-card p-6">
+          <h2 className="mb-3 text-sm font-semibold">{t("report.attachments")}</h2>
+          <ul className="flex flex-col gap-1.5 text-sm">
+            {attachments.map((a) => (
+              <li key={a.key} className="flex justify-between gap-3">
+                <span className="min-w-0 truncate">{a.filename}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">{sizeLabel(a.size)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="overflow-hidden rounded-xl border border-border bg-card">
         <nav className="flex flex-wrap gap-2 border-b border-border p-3">
