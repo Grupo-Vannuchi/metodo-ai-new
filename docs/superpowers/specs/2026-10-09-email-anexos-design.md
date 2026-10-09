@@ -109,8 +109,8 @@ acima disso, e o anexo cresce ~33% em base64. O teto do Resend é 40 MB por e-ma
   inchar o `email-composer.tsx`.
 
 **Confirmação do envio:** com anexos, a descrição ganha uma frase:
-"Com anexos, o envio leva cerca de {minutos} minutos." O cálculo é `ceil(total × 0,5 s / 60)`, e
-abaixo de 1 minuto o texto vira "menos de 1 minuto". Não há bloqueio.
+"Com anexos, o envio leva cerca de {minutos} minutos." O cálculo é `total × 0,5 s`, arredondado
+para o minuto mais próximo. Abaixo de 60 s, o texto vira "menos de 1 minuto". Não há bloqueio.
 
 **Página do envio** (`/app/email/[id]`): uma seção "Anexos" lista nome e tamanho de cada arquivo,
 quando houver.
@@ -162,7 +162,7 @@ bytes (§8).
 
 | Armazenamento | Como lê |
 |---|---|
-| Supabase Storage (produção) | `GET {SUPABASE_URL}/storage/v1/object/authenticated/media/<pathname>` com os headers da service role (`sbHeaders()`): leitura autenticada, sem depender da URL pública. Conferir o caminho exato na documentação da API do Storage ao implementar. |
+| Supabase Storage (produção) | `GET {SUPABASE_URL}/storage/v1/object/authenticated/media/<pathname>` com os headers da service role (`sbHeaders()`): leitura autenticada, sem depender da URL pública. O caminho foi conferido em `src/http/routes/object/getObject.ts` do supabase/storage. |
 | Disco local (dev) | `fs.readFile` dentro de `.media/`, recusando caminho que saia da pasta |
 | Vercel Blob (legado) | não suportado: lança erro |
 
@@ -220,8 +220,12 @@ Usadas pela tela, pelas actions, pela rota, pelo despachante e pelo `check:email
 - `attachmentStorageKey(orgId, uuid, filename)` → a chave da §7
 - `isAttachmentKeyOf(orgId, key)` → prefixo e formato da chave
 - `checkAttachments(orgId, list)` → `null` ou o primeiro problema: `"count" | "type" | "total" | "key"`
-- `readAttachments(value: unknown)` → `EmailAttachment[]`; JSON quebrado vira `[]`, como `readAudience`
-- `estimateAttachmentSendMinutes(total)` → minutos arredondados para cima (0 = "menos de 1 minuto")
+- `attachmentAddProblem(current, file)` → a checagem da tela antes de subir: `"count" | "type" | "total"` ou `null`
+- `parseAttachments(value: unknown)` → `EmailAttachment[]`, ou `null` se o JSON estiver quebrado. Actions e despachante tratam `null` como inválido, para nunca enviar sem os arquivos.
+- `readAttachments(value: unknown)` → `EmailAttachment[]`; JSON quebrado vira `[]` (para as telas, como `readAudience`)
+- `estimateAttachmentSendMinutes(total)` → minutos arredondados (0 = "menos de 1 minuto")
+- `attachmentSizeParts(bytes)` → `{ value, unit }` em KB abaixo de 1 MB e em MB (uma casa) acima
+- `ATTACHMENT_ACCEPT` → o `accept` do campo de arquivo
 
 ## 10. Falhas e mensagens
 
@@ -260,6 +264,7 @@ Os textos novos entram em `pt.json` e `en.json` com as mesmas chaves:
 | `src/lib/storage/blob.ts` | `readMedia`, `mediaReadable` |
 | `src/app/api/email/attachment/route.ts` | **nova** rota de upload |
 | `src/lib/validations/email-broadcast.ts` | `emailAttachmentSchema` e campo no rascunho |
+| `src/lib/queries/email-broadcasts.ts` | `getEmailBroadcast` devolve `attachments` |
 | `src/app/actions/email-broadcasts.ts` | salvar, validar, duplicar e iniciar com anexos; erro `attachments_invalid`; auditoria |
 | `src/lib/email-broadcast/resend.ts` | `attachments` em `ResendEmail`; tempo limite opcional |
 | `src/lib/email-broadcast/dispatch.ts` | carregar anexos, caminho um por um, `budget`, pausas novas |
