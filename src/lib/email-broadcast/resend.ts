@@ -9,6 +9,9 @@ import "server-only";
 
 const API = "https://api.resend.com";
 
+/** `content` is base64; the type comes from the extension (attachments.ts). */
+export type ResendAttachment = { filename: string; content: string; content_type: string };
+
 export type ResendEmail = {
   from: string;
   to: string[];
@@ -17,6 +20,7 @@ export type ResendEmail = {
   text: string;
   reply_to?: string;
   headers?: Record<string, string>;
+  attachments?: ResendAttachment[];
 };
 
 export type ResendCallResult<T> =
@@ -26,7 +30,7 @@ export type ResendCallResult<T> =
 async function call<T>(
   apiKey: string,
   path: string,
-  init: { method: "POST" | "DELETE"; body?: unknown; idempotencyKey?: string },
+  init: { method: "POST" | "DELETE"; body?: unknown; idempotencyKey?: string; timeoutMs?: number },
 ): Promise<ResendCallResult<T>> {
   try {
     const res = await fetch(`${API}${path}`, {
@@ -37,7 +41,7 @@ async function call<T>(
         ...(init.idempotencyKey ? { "Idempotency-Key": init.idempotencyKey } : {}),
       },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(init.timeoutMs ?? 30_000),
     });
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
@@ -65,6 +69,6 @@ export function sendBatch(apiKey: string, emails: ResendEmail[], idempotencyKey:
   });
 }
 
-export function sendOne(apiKey: string, email: ResendEmail, idempotencyKey?: string) {
-  return call<{ id?: string }>(apiKey, "/emails", { method: "POST", body: email, idempotencyKey });
+export function sendOne(apiKey: string, email: ResendEmail, idempotencyKey?: string, timeoutMs?: number) {
+  return call<{ id?: string }>(apiKey, "/emails", { method: "POST", body: email, idempotencyKey, timeoutMs });
 }

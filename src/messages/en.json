@@ -1949,7 +1949,9 @@
       "quota": "Send paused: this month's quota ran out.",
       "provider_error": "Send paused: Resend rejected the send.",
       "domain_not_allowed": "Send paused: the sending address's domain is no longer allowed for your company.",
-      "from_missing": "Send paused: this send was created before the switch to the platform's e-mail account and has no sending address, so it can't be resumed. To send again, duplicate it (the new send goes to the whole list)."
+      "from_missing": "Send paused: this send was created before the switch to the platform's e-mail account and has no sending address, so it can't be resumed. To send again, duplicate it (the new send goes to the whole list).",
+      "attachment_unavailable": "Send paused: an attachment couldn't be loaded. Try resuming; if it keeps failing, duplicate the send and attach the file again.",
+      "attachment_invalid": "Send paused: this send's attachments go over the limit or are invalid. Duplicate the send and attach the files again."
     },
     "message": "Message",
     "fromName": "Sender name",
