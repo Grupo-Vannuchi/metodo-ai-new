@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isValidEmail, normalizeEmail } from "@/lib/email-broadcast/normalize";
+import { MAX_ATTACHMENTS } from "@/lib/email-broadcast/attachments";
 import type { AudienceStats } from "@/lib/email-broadcast/audience-core";
 
 const id = z.string().min(1).max(64);
@@ -29,6 +30,14 @@ export const EMPTY_AUDIENCE: AudienceSelection = {
   emails: [],
 };
 
+/** One uploaded attachment as the composer sends it back; the server checks
+ * the key, name and total again with checkAttachments. */
+export const emailAttachmentSchema = z.object({
+  key: z.string().min(1).max(300),
+  filename: z.string().min(1).max(150),
+  size: z.number().int().positive(),
+});
+
 export const broadcastDraftSchema = z.object({
   subject: z.string().trim().max(200),
   html: z.string().max(200_000),
@@ -44,6 +53,7 @@ export const broadcastDraftSchema = z.object({
     .max(254)
     .refine((v) => v === "" || isValidEmail(normalizeEmail(v)), "invalid_reply_to"),
   audience: audienceSelectionSchema,
+  attachments: z.array(emailAttachmentSchema).max(MAX_ATTACHMENTS).default([]),
 });
 
 export type BroadcastDraftInput = z.input<typeof broadcastDraftSchema>;

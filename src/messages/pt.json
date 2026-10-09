@@ -2007,6 +2007,7 @@
       "domain_not_allowed": "O domínio do endereço de envio não está liberado para sua empresa.",
       "from_missing": "Este envio foi criado antes da troca para a conta de e-mail da plataforma e não pode ser retomado. Duplique-o para enviar de novo.",
       "from_required": "Preencha o endereço de envio.",
+      "attachments_invalid": "Os anexos deste envio são inválidos. Remova e anexe de novo.",
       "empty": "Nenhum destinatário selecionado.",
       "quota": "A cota do mês não comporta este envio.",
       "quotaDetail": "Este envio tem {total} endereços, mas restam {remaining} na cota do mês.",

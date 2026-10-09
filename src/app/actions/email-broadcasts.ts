@@ -16,6 +16,7 @@ import { normalizeEmail } from "@/lib/email-broadcast/normalize";
 import { resolveAudience } from "@/lib/email-broadcast/audience";
 import { hasEmailContent } from "@/lib/email-broadcast/render";
 import { platformResendKey } from "@/lib/email-broadcast/platform";
+import { checkAttachments, parseAttachments } from "@/lib/email-broadcast/attachments";
 import { isSenderAllowed } from "@/lib/email-broadcast/sender-domain";
 import { listSenderDomains } from "@/lib/queries/email-sender-domains";
 import { searchEmailTargets as searchTargets, countEmailsSentThisMonth } from "@/lib/queries/email-broadcasts";
@@ -35,6 +36,7 @@ export type EmailActionError =
   | "domain_not_allowed"
   | "from_required"
   | "from_missing"
+  | "attachments_invalid"
   | "unknown";
 
 export type EmailActionFail = {
@@ -66,6 +68,10 @@ export async function saveEmailDraft(
   if (!g.ok) return g;
   const parsed = broadcastDraftSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
+  // Keys must be this org's uploads: the dispatcher reads files by key only.
+  if (checkAttachments(g.ctx.organizationId, parsed.data.attachments)) {
+    return { ok: false, error: "attachments_invalid" };
+  }
 
   const data = {
     subject: parsed.data.subject,
@@ -74,6 +80,7 @@ export async function saveEmailDraft(
     fromEmail: parsed.data.fromEmail ? normalizeEmail(parsed.data.fromEmail) : null,
     replyTo: parsed.data.replyTo ? normalizeEmail(parsed.data.replyTo) : null,
     audience: parsed.data.audience as Prisma.InputJsonValue,
+    attachments: parsed.data.attachments as Prisma.InputJsonValue,
   };
   try {
     const db = tenantDb(g.ctx.organizationId);
@@ -116,7 +123,7 @@ export async function duplicateEmailBroadcast(id: string): Promise<{ ok: true; i
     const db = tenantDb(g.ctx.organizationId);
     const src = await db.emailBroadcast.findFirst({
       where: { id },
-      select: { subject: true, html: true, fromName: true, fromEmail: true, replyTo: true, audience: true },
+      select: { subject: true, html: true, fromName: true, fromEmail: true, replyTo: true, audience: true, attachments: true },
     });
     if (!src) return { ok: false, error: "not_found" };
     const created = await db.emailBroadcast.create({
@@ -129,6 +136,7 @@ export async function duplicateEmailBroadcast(id: string): Promise<{ ok: true; i
         fromEmail: src.fromEmail,
         replyTo: src.replyTo,
         audience: (src.audience ?? {}) as Prisma.InputJsonValue,
+        attachments: (src.attachments ?? []) as Prisma.InputJsonValue,
       },
     });
     revalidatePath("/app/email");
@@ -187,7 +195,7 @@ export async function startEmailBroadcast(id: string): Promise<{ ok: true } | Em
 
   const b = await db.emailBroadcast.findFirst({
     where: { id },
-    select: { id: true, status: true, subject: true, html: true, audience: true, fromEmail: true },
+    select: { id: true, status: true, subject: true, html: true, audience: true, fromEmail: true, attachments: true },
   });
   if (!b) return { ok: false, error: "not_found" };
   if (b.status !== "DRAFT") return { ok: false, error: "not_found" };
@@ -198,6 +206,10 @@ export async function startEmailBroadcast(id: string): Promise<{ ok: true } | Em
   // Server-side gate: the composer checks too, but only this decides.
   if (!isSenderAllowed(b.fromEmail, await listSenderDomains(orgId))) {
     return { ok: false, error: "domain_not_allowed" };
+  }
+  const attachments = parseAttachments(b.attachments);
+  if (!attachments || checkAttachments(orgId, attachments)) {
+    return { ok: false, error: "attachments_invalid" };
   }
 
   const { recipients, stats } = await resolveAudience(orgId, readAudience(b.audience));
@@ -260,7 +272,7 @@ export async function startEmailBroadcast(id: string): Promise<{ ok: true } | Em
     action: "email_broadcast.started",
     entity: "EmailBroadcast",
     entityId: id,
-    meta: { recipients: recipients.length, fromEmail: b.fromEmail },
+    meta: { recipients: recipients.length, fromEmail: b.fromEmail, attachments: attachments.length },
   });
   await kickEmailBroadcast(id);
   revalidatePath("/app/email");

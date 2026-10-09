@@ -1,5 +1,6 @@
 import type { AudienceStats, CandidateSource } from "./audience-core";
 import type { AudienceSelection } from "@/lib/validations/email-broadcast";
+import type { EmailAttachment } from "./attachments";
 
 /** Shapes shared by the E-mail pages, actions and client components. Types only. */
 
@@ -30,4 +31,5 @@ export type ComposerDraft = {
   replyTo: string;
   audience: AudienceSelection;
   picked: PickedTarget[];
+  attachments: EmailAttachment[];
 };
