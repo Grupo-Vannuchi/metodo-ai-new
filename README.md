@@ -187,7 +187,7 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
   `task_board_columns`, até 20), montadas na primeira abertura com as 5 antigas e cada tarefa onde
   aparecia (horário de Brasília). `tasks.boardColumnId` nulo = coluna de entrada (★), onde caem as
   tarefas novas; `tasks.boardOrder` tem padrão no banco (instante da criação), então nenhum caminho
-  que cria tarefa precisa conhecer o quadro. Coluna não conclui tarefa. Toda alteração que depende do estado do quadro (mover card, criar, reordenar, trocar a entrada, excluir coluna)
+  que cria tarefa precisa conhecer o quadro. Coluna não conclui tarefa. A visão em lista (`/app/tasks`) usa as mesmas colunas como abas (`tasksOfColumn`); "Meus itens" e as listas do CRM seguem com as abas por prazo. Toda alteração que depende do estado do quadro (mover card, criar, reordenar, trocar a entrada, excluir coluna)
   passa pela mesma trava por empresa (`lockTaskBoard`); renomear é uma única escrita. Regras puras em
   `src/lib/tasks/board-core.ts` (`npm run check:tasks`).
 - **Prospecção:** Google Places com **chave do próprio cliente (BYO)**, assíncrona via QStash, descarte LGPD.

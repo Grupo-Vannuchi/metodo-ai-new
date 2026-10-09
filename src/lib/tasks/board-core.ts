@@ -87,3 +87,17 @@ export function effectiveColumnId(
 ): string {
   return boardColumnId && columnIds.has(boardColumnId) ? boardColumnId : entranceId;
 }
+
+/** The tasks a column shows, in board order: the ones placed in it, plus — for
+ * the entrance — the ones with no column. Used by the task list's column tabs
+ * so they match the kanban. Doesn't mutate `tasks`. */
+export function tasksOfColumn<
+  T extends { boardColumnId: string | null; boardOrder: number; createdAt: Date; id?: string },
+>(tasks: readonly T[], columnId: string, columns: readonly BoardColumn[]): T[] {
+  const entrance = columns.find((c) => c.isEntrance) ?? columns[0];
+  if (!entrance) return [];
+  const ids = new Set(columns.map((c) => c.id));
+  return tasks
+    .filter((task) => effectiveColumnId(task.boardColumnId, ids, entrance.id) === columnId)
+    .sort(compareBoardCards);
+}

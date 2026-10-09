@@ -37,16 +37,15 @@ export default async function TasksPage({
   const t = await getTranslations("tasks");
   const view = (await searchParams)?.view === "kanban" ? "kanban" : "list";
 
-  // The board must exist (and hold the tasks' columns) before tasks are listed.
-  if (view === "kanban") {
-    await ensureTaskBoard(ctx.organizationId, {
-      overdue: t("board.overdue"),
-      today: t("board.today"),
-      upcoming: t("board.upcoming"),
-      nodate: t("board.nodate"),
-      done: t("board.done"),
-    });
-  }
+  // The board must exist (and hold the tasks' columns) before tasks are listed —
+  // both views show its columns (the list uses them as tabs).
+  await ensureTaskBoard(ctx.organizationId, {
+    overdue: t("board.overdue"),
+    today: t("board.today"),
+    upcoming: t("board.upcoming"),
+    nodate: t("board.nodate"),
+    done: t("board.done"),
+  });
 
   const hasCrm = hasModule(ctx.modules, "crm");
   const [tasks, rawMembers, contacts, opportunities, columns] = await Promise.all([
@@ -54,7 +53,7 @@ export default async function TasksPage({
     listMembers(ctx.organizationId),
     hasCrm ? contactOptions(ctx.organizationId) : Promise.resolve([]),
     hasCrm ? opportunityOptions(ctx.organizationId) : Promise.resolve([]),
-    view === "kanban" ? listTaskBoardColumns(ctx.organizationId) : Promise.resolve([]),
+    listTaskBoardColumns(ctx.organizationId),
   ]);
 
   // Anyone can assign a task to any member (users hand tasks to each other).
@@ -104,6 +103,7 @@ export default async function TasksPage({
         currentUserId={ctx.userId}
         showTabs
         hasCrm={hasCrm}
+        boardColumns={columns}
       />
     </div>
   );
