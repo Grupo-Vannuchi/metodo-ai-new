@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Pencil, Trash2, Plus, X, Link2, ListChecks, Paperclip, Repeat, AlarmClock } from "lucide-react";
+import { Check, Pencil, Trash2, Plus, X, Link2, ListChecks, Paperclip, Repeat, AlarmClock, Star } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ import { usePaged, Pager } from "@/components/ui/client-pager";
 import { useRealtime } from "@/components/app/realtime-provider";
 import { createTask, updateTask, toggleTask, deleteTask } from "@/app/actions/tasks";
 import type { TaskRow } from "@/lib/queries/tasks";
+import { tasksOfColumn, type BoardColumn } from "@/lib/tasks/board-core";
 
 type Option = { id: string; name: string };
 type Fixed = { contactId?: string; companyId?: string; opportunityId?: string };
@@ -44,6 +45,30 @@ function isOverdue(d: Date | string | null, done: boolean) {
   return !done && d != null && new Date(d).getTime() < Date.now();
 }
 
+/** Whether a task belongs to one of the deadline tabs (hub / non-board lists). */
+function inDeadlineTab(x: TaskRow, tab: Tab): boolean {
+  const done = x.doneAt != null;
+  if (tab === "done") return done;
+  if (done) return false;
+  if (tab === "overdue") return isOverdue(x.dueDate, false);
+  if (tab === "today") {
+    if (!x.dueDate) return false;
+    const d = new Date(x.dueDate);
+    const now = new Date();
+    return d.toDateString() === now.toDateString();
+  }
+  if (tab === "upcoming") {
+    if (!x.dueDate) return true;
+    const d = new Date(x.dueDate);
+    d.setHours(0, 0, 0, 0);
+    const tmr = new Date();
+    tmr.setHours(0, 0, 0, 0);
+    tmr.setDate(tmr.getDate() + 1);
+    return d.getTime() >= tmr.getTime();
+  }
+  return true; // open
+}
+
 export function TasksManager({
   tasks,
   members,
@@ -54,6 +79,7 @@ export function TasksManager({
   showTabs = false,
   pageSize,
   hasCrm = true,
+  boardColumns,
 }: {
   tasks: TaskRow[];
   members: Option[];
@@ -66,6 +92,9 @@ export function TasksManager({
   pageSize?: number;
   /** Show the CRM links (contact/opportunity) — only with the CRM module. */
   hasCrm?: boolean;
+  /** With `showTabs`: use the kanban's columns as the tabs (one tab per column,
+   * holding that column's tasks) instead of the deadline tabs. Only /app/tasks. */
+  boardColumns?: BoardColumn[];
 }) {
   const t = useTranslations("tasks");
   const router = useRouter();
@@ -76,6 +105,13 @@ export function TasksManager({
   const [adding, setAdding] = useState(false);
   const [formKey, setFormKey] = useState(0);
   const [tab, setTab] = useState<Tab>("open");
+  // Kanban-column tabs: the first column opens, and it's the fallback when the
+  // open column gets deleted on the board.
+  const columnTabs = showTabs && boardColumns && boardColumns.length > 0 ? boardColumns : null;
+  const [columnTab, setColumnTab] = useState<string | null>(null);
+  const activeColumnId = columnTabs
+    ? (columnTabs.find((c) => c.id === columnTab) ?? columnTabs[0]).id
+    : null;
 
   const editing = editingId ? tasks.find((x) => x.id === editingId) ?? null : null;
   const formOpen = adding || editing != null;
@@ -85,31 +121,17 @@ export function TasksManager({
     if (!formOpen) router.refresh();
   });
 
-  const filtered = tasks.filter((x) => {
-    const done = x.doneAt != null;
-    if (tab === "done") return done;
-    if (done) return false;
-    if (tab === "overdue") return isOverdue(x.dueDate, false);
-    if (tab === "today") {
-      if (!x.dueDate) return false;
-      const d = new Date(x.dueDate);
-      const now = new Date();
-      return d.toDateString() === now.toDateString();
-    }
-    if (tab === "upcoming") {
-      if (!x.dueDate) return true;
-      const d = new Date(x.dueDate);
-      d.setHours(0, 0, 0, 0);
-      const tmr = new Date();
-      tmr.setHours(0, 0, 0, 0);
-      tmr.setDate(tmr.getDate() + 1);
-      return d.getTime() >= tmr.getTime();
-    }
-    return true; // open
-  });
+  const filtered =
+    columnTabs && activeColumnId
+      ? tasksOfColumn(tasks, activeColumnId, columnTabs)
+      : tasks.filter((x) => inDeadlineTab(x, tab));
 
   // Opt-in client pagination (resets to page 1 when the tab filter changes).
-  const { pageItems, page, setPage, totalPages } = usePaged(filtered, pageSize ?? Number.MAX_SAFE_INTEGER, tab);
+  const { pageItems, page, setPage, totalPages } = usePaged(
+    filtered,
+    pageSize ?? Number.MAX_SAFE_INTEGER,
+    activeColumnId ?? tab,
+  );
 
   function closeForm() {
     setEditingId(null);
@@ -155,7 +177,21 @@ export function TasksManager({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        {showTabs ? (
+        {columnTabs ? (
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+            {columnTabs.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className={cn(tabCls(activeColumnId === c.id), "inline-flex shrink-0 items-center gap-1 whitespace-nowrap")}
+                onClick={() => setColumnTab(c.id)}
+              >
+                {c.name}
+                {c.isEntrance ? <Star className="size-3 fill-amber-400 text-amber-400" aria-label={t("board.entrance")} /> : null}
+              </button>
+            ))}
+          </div>
+        ) : showTabs ? (
           <div className="flex flex-wrap items-center gap-1">
             {(["open", "today", "overdue", "upcoming", "done"] as Tab[]).map((s) => (
               <button key={s} type="button" className={tabCls(tab === s)} onClick={() => setTab(s)}>

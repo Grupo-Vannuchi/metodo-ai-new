@@ -13,6 +13,7 @@ import {
   normalizeColumnName,
   orderForInsert,
   saoPauloDayStart,
+  tasksOfColumn,
 } from "../src/lib/tasks/board-core";
 
 let passed = 0;
@@ -91,6 +92,24 @@ check("effectiveColumnId: the card's own column, else the entrance", () => {
   assert.equal(effectiveColumnId("col-a", ids, "col-entrance"), "col-a");
   assert.equal(effectiveColumnId(null, ids, "col-entrance"), "col-entrance");
   assert.equal(effectiveColumnId("deleted", ids, "col-entrance"), "col-entrance");
+});
+
+check("tasksOfColumn: a column's cards in board order; the entrance also takes unplaced ones", () => {
+  const cols = [
+    { id: "a", name: "A", order: 0, isEntrance: false },
+    { id: "e", name: "E", order: 1, isEntrance: true },
+  ];
+  const task = (id: string, boardColumnId: string | null, boardOrder: number) => ({
+    id,
+    boardColumnId,
+    boardOrder,
+    createdAt: at("2026-01-01T00:00:00Z"),
+  });
+  const tasks = [task("1", "a", 2), task("2", null, 5), task("3", "a", 1), task("4", "gone", 3), task("5", "e", 4)];
+  assert.deepEqual(tasksOfColumn(tasks, "a", cols).map((x) => x.id), ["3", "1"]);
+  assert.deepEqual(tasksOfColumn(tasks, "e", cols).map((x) => x.id), ["4", "5", "2"]);
+  assert.deepEqual(tasksOfColumn(tasks, "a", []), []);
+  assert.deepEqual(tasks.map((x) => x.id), ["1", "2", "3", "4", "5"]); // input left untouched
 });
 
 console.log(`\n✅ task-board: ${passed} checks passed.`);
