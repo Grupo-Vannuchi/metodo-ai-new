@@ -2512,6 +2512,13 @@ model EmailBroadcast {
   audience       Json                 @default("{}")
   /// EmailAttachment[] (src/lib/email-broadcast/attachments.ts): { key, filename, size }.
   attachments    Json                 @default("[]")
+  /// Signature chosen in the composer (null = none). Deleting it nulls this.
+  signatureId    String?
+  signature      EmailSignature?      @relation(fields: [signatureId], references: [id], onDelete: SetNull)
+  /// Frozen copy taken when the send starts (sanitized HTML + text part); the
+  /// dispatcher only ever reads these, never email_signatures.
+  signatureHtml  String?              @db.Text
+  signatureText  String?              @db.Text
   /// { selected, invalid, duplicates, suppressed, total } frozen at send time.
   stats          Json                 @default("{}")
   status         EmailBroadcastStatus @default(DRAFT)
@@ -2595,4 +2602,34 @@ model EmailSenderDomain {
 
   @@index([organizationId])
   @@map("email_sender_domains")
+}
+
+enum EmailSignatureKind {
+  TEXT
+  IMAGE
+}
+
+/// A reusable e-mail signature of ONE organization (spec 2026-10-13). Anyone
+/// with the E-mail screen manages them; at most one isDefault per org (set by
+/// the actions).
+model EmailSignature {
+  id             String             @id @default(cuid())
+  organizationId String
+  name           String
+  kind           EmailSignatureKind @default(TEXT)
+  /// TEXT: editor HTML, sanitized on save and again whenever it is rendered.
+  html           String             @default("") @db.Text
+  /// IMAGE fields (null for TEXT).
+  imageUrl       String?
+  imageAlt       String?
+  imageHref      String?
+  introText      String?
+  isDefault      Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  broadcasts EmailBroadcast[]
+
+  @@index([organizationId])
+  @@map("email_signatures")
 }

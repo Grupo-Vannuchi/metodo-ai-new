@@ -238,10 +238,22 @@ async function main() {
     });
     assert(columnsB.length === 0, "task board columns scoped to org B exclude org A's column");
 
+    // 13) E-mail signatures are per org.
+    await prisma.emailSignature.create({
+      data: { organizationId: orgA.id, name: "ISO", kind: "TEXT", html: "<p>A</p>" },
+    });
+    const signaturesB = await prisma.emailSignature.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(signaturesB.length === 0, "e-mail signatures scoped to org B exclude org A's signature");
+
     console.log("\n✅ Tenant isolation: all checks passed.");
   } finally {
     // Cleanup. Companies/connections carry organizationId (no FK cascade from
     // org), so remove them explicitly before the orgs.
+    await prisma.emailSignature.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
     await prisma.taskBoardColumn.deleteMany({
       where: { organizationId: { in: created.orgs } },
     });
