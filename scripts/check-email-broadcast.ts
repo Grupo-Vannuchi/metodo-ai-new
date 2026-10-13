@@ -57,6 +57,7 @@ import {
   signatureContentOf,
   signatureImageSrc,
   signatureProblem,
+  untilStable,
 } from "../src/lib/email-broadcast/signature";
 
 let passed = 0;
@@ -635,6 +636,18 @@ check("signatureContentOf reads a stored row", () => {
   const row = { kind: "IMAGE" as const, html: "", imageUrl: IMG, imageAlt: "Ana", imageHref: null, introText: "Oi" };
   assert.deepEqual(signatureContentOf(row), { kind: "IMAGE", imageUrl: IMG, imageAlt: "Ana", imageHref: null, introText: "Oi" });
   assert.deepEqual(signatureContentOf({ ...row, kind: "TEXT", html: "<p>a</p>" }), { kind: "TEXT", html: "<p>a</p>" });
+});
+
+check("untilStable reaches a fixed point and gives up on oscillation", () => {
+  // A single-pass stripper splices a new tag together when it removes one.
+  const strip = (s: string) => s.replace(/<x>/g, "");
+  assert.equal(strip("<<x<x>>img>"), "<<x>img>");
+  assert.equal(untilStable(strip, "<<x<x>>img>"), "<img>");
+  assert.equal(strip("<<x>x>img>"), "<x>img>");
+  assert.equal(untilStable(strip, "<<x>x>img>"), "img>");
+  assert.equal(untilStable((s) => s + "a", "", 3), "");
+  assert.equal(untilStable((s) => (s === "a" ? "b" : "a"), "a"), "");
+  assert.equal(untilStable((s) => s, "abc"), "abc");
 });
 
 console.log(`\n✅ email-broadcast: ${passed} checks passed.`);

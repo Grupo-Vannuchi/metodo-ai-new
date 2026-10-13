@@ -13,6 +13,7 @@ import { useEmailImageSupport } from "@/components/email/use-email-image-support
 import { RecipientPicker } from "@/components/email/recipient-picker";
 import { AudienceSummary } from "@/components/email/audience-summary";
 import { EmailAttachments } from "@/components/email/email-attachments";
+import { SignaturePreview } from "@/components/email/signature-preview";
 import { estimateAttachmentSendMinutes } from "@/lib/email-broadcast/attachments";
 import {
   previewEmailAudience,
@@ -254,10 +255,7 @@ export function EmailComposer({
                 <option value="">{t("signature.noSignature")}</option>
               </select>
               {chosenSignature ? (
-                <div
-                  className="max-h-56 overflow-auto rounded-lg border border-border bg-white p-4 text-sm text-neutral-900"
-                  dangerouslySetInnerHTML={{ __html: chosenSignature.previewHtml }}
-                />
+                <SignaturePreview html={chosenSignature.previewHtml} title={t("signature.title")} height={180} />
               ) : (
                 <p className="text-xs text-muted-foreground">{t("signature.noneChosen")}</p>
               )}

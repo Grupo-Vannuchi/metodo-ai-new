@@ -7,10 +7,11 @@ import { useConfirm } from "@/components/ui/confirm";
 import { useToast } from "@/components/ui/toast";
 import { Link, useRouter } from "@/i18n/navigation";
 import { deleteEmailSignature, setDefaultEmailSignature } from "@/app/actions/email-signatures";
+import { SignaturePreview } from "@/components/email/signature-preview";
 import type { SignatureOption } from "@/lib/email-broadcast/types";
 
 /** One signature of the Assinaturas tab (spec 2026-10-13 §4.2). previewHtml
- * was sanitized on the server. */
+ * was sanitized on the server and is shown in a sandboxed iframe. */
 export function SignatureCard({ signature }: { signature: SignatureOption }) {
   const t = useTranslations("emailBroadcast.signatures");
   const format = useFormatter();
@@ -80,10 +81,7 @@ export function SignatureCard({ signature }: { signature: SignatureOption }) {
           </button>
         )}
       </div>
-      <div
-        className="max-h-48 overflow-hidden rounded-lg border border-border bg-white p-4 text-sm text-neutral-900"
-        dangerouslySetInnerHTML={{ __html: signature.previewHtml }}
-      />
+      <SignaturePreview html={signature.previewHtml} title={signature.name} height={150} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">
           {t("updatedAt", { date: format.dateTime(new Date(signature.updatedAt), { dateStyle: "short" }) })}

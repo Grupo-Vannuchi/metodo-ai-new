@@ -5,7 +5,7 @@ import { getOrgContext, type OrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { canAccessScreen } from "@/lib/access";
 import { hasModule } from "@/config/modules";
-import { sanitizeHtml } from "@/lib/proposals/sanitize";
+import { sanitizeHtmlStable } from "@/lib/email-broadcast/compose";
 import { emailSignatureSchema, type EmailSignatureInput } from "@/lib/validations/email-signature";
 import {
   MAX_SIGNATURES,
@@ -54,7 +54,11 @@ export async function saveEmailSignature(
   if (!parsed.success) return { ok: false, error: "invalid" };
   const f = parsed.data;
   const content = signatureContentFromForm(f);
-  const problem = signatureProblem(content);
+  // TEXT: validate what will be stored (the sanitized html), so a
+  // script-only signature is refused instead of being saved empty.
+  const cleanHtml = content.kind === "TEXT" ? sanitizeHtmlStable(content.html) : "";
+  const problem =
+    content.kind === "TEXT" ? signatureProblem({ kind: "TEXT", html: cleanHtml }) : signatureProblem(content);
   if (problem) return { ok: false, error: problem };
 
   const orgId = g.ctx.organizationId;
@@ -62,7 +66,7 @@ export async function saveEmailSignature(
   // Only the chosen kind's fields are kept; TEXT html is stored sanitized.
   const data =
     content.kind === "TEXT"
-      ? { name: f.name, kind: "TEXT" as const, html: sanitizeHtml(content.html), imageUrl: null, imageAlt: null, imageHref: null, introText: null }
+      ? { name: f.name, kind: "TEXT" as const, html: cleanHtml, imageUrl: null, imageAlt: null, imageHref: null, introText: null }
       : {
           name: f.name,
           kind: "IMAGE" as const,

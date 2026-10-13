@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/toast";
 import { Link, useRouter } from "@/i18n/navigation";
 import { RichTextEditor } from "@/components/proposals/rich-text-editor";
 import { useEmailImageSupport } from "@/components/email/use-email-image-support";
+import { SignaturePreview } from "@/components/email/signature-preview";
 import {
   MAX_SIGNATURE_LINE,
   MAX_SIGNATURE_NAME,
@@ -25,8 +26,9 @@ export type SignatureFormInitial = SignatureFormFields & { id: string | null; na
 
 /**
  * Create/edit form of an e-mail signature (spec 2026-10-13 §4.3). The preview
- * uses the same renderSignature as the send. TEXT html is either the stored
- * (sanitized-on-save) value or TipTap output; IMAGE html is fully escaped.
+ * uses the same renderSignature as the send and is shown in a sandboxed
+ * iframe, because TEXT html here may be unsanitized TipTap output (IMAGE html
+ * is fully escaped).
  */
 export function SignatureForm({ initial }: { initial: SignatureFormInitial }) {
   const t = useTranslations("emailBroadcast.signatures");
@@ -225,13 +227,13 @@ export function SignatureForm({ initial }: { initial: SignatureFormInitial }) {
         <h2 id="sigPreview" className="text-sm font-semibold">
           {t("form.preview")}
         </h2>
-        <div className="rounded-lg border border-border bg-white p-5 text-sm text-neutral-900">
-          {previewHtml ? (
-            <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
-          ) : (
+        {previewHtml ? (
+          <SignaturePreview html={previewHtml} title={t("form.preview")} height={220} />
+        ) : (
+          <div className="rounded-lg border border-border bg-white p-5 text-sm text-neutral-900">
             <p className="text-neutral-500">{t("form.previewEmpty")}</p>
-          )}
-        </div>
+          </div>
+        )}
         <p className="text-xs text-muted-foreground">{t("form.previewNote")}</p>
       </section>
     </div>

@@ -48,6 +48,19 @@ export type SignatureRow = {
   introText: string | null;
 };
 
+/** Apply `fn` until the output stops changing (max `maxPasses`); "" if it never
+ * settles. Used with the single-pass HTML sanitizer so a removed tag can't
+ * splice a new one together (`<<x>img ...>`). */
+export function untilStable(fn: (s: string) => string, input: string, maxPasses = 10): string {
+  let current = input;
+  for (let i = 0; i < maxPasses; i++) {
+    const next = fn(current);
+    if (next === current) return current;
+    current = next;
+  }
+  return "";
+}
+
 /** Image source of a signature: https, or this app's own local-disk media
  * route on localhost (dev storage serves /api/media/ over plain http). */
 export function signatureImageSrc(raw: string): string | null {

@@ -180,14 +180,26 @@ formulário, pelas actions, pelo composer, pelo início do envio e pelo `check:e
     Sem link, só o `<img>`. Os atributos e o texto são escapados com `escapeHtml`.
     `text` = intro, alt e href, um por linha, só os que existirem.
 - `signatureContentOf(row)`: lê uma linha do banco e devolve o `SignatureContent`.
+- `untilStable(fn, input, maxPasses = 10)`: aplica `fn` até a saída parar de mudar; devolve `""` se não
+  estabilizar.
 
 **Lado servidor** (em `compose.ts`, que é `server-only`):
-- `composeSignature(content)` = `renderSignature` + `sanitizeHtml` + `prepareEmailImages` no HTML.
+- `sanitizeHtmlStable(html)` = `untilStable(sanitizeHtml, html)`. O `sanitizeHtml` faz uma passada só,
+  e remover uma tag pode emendar outra (`<<x>img ...>` vira `<img ...>`). Por isso toda assinatura
+  usa a versão estável.
+- `composeSignature(content)` = `renderSignature` + `sanitizeHtmlStable` + `prepareEmailImages` no HTML.
 - O resultado é o que vai para a prévia do composer, para a lista de assinaturas e para a cópia
   congelada no início do envio.
+- **Ao salvar** uma assinatura de texto, `saveEmailSignature` roda `sanitizeHtmlStable` primeiro e
+  passa ao `signatureProblem` o HTML já limpo, que é o que fica gravado. Uma assinatura só com
+  `<script>` é recusada, em vez de ser gravada vazia.
+- **Prévias** (lista de assinaturas, composer e formulário): sempre num `<iframe sandbox="">`
+  (`SignaturePreview`), nunca no DOM da app. Sem scripts, e sem CSS vazando para dentro ou para fora.
+  A prévia do formulário mostra o HTML do editor ainda sem sanitizar.
 - `composeEmail` ganha `signature?: { html: string; text: string } | null`:
-  - **HTML:** passa por `sanitizeHtml` e `prepareEmailImages` de novo (as duas são idempotentes), e o
-    corpo enviado ao `buildEmailDocument` vira `corpo + <div style="margin-top:24px">assinatura</div>`;
+  - **HTML:** a cópia congelada já saiu do `composeSignature`; aqui ela passa de novo só pelo
+    `sanitizeHtmlStable`, nunca pelo `prepareEmailImages` (que não é idempotente). O corpo enviado ao
+    `buildEmailDocument` vira `corpo + <div style="margin-top:24px">assinatura</div>`;
   - **texto:** `corpo + "\n\n" + assinatura.text`, antes da linha do descadastro.
 
 ## 7. Actions e queries
