@@ -434,6 +434,45 @@ check("cleanAttachmentName keeps accents, drops paths and control chars, caps at
   assert.equal(cleanAttachmentName("   "), null);
 });
 
+check("uppercase .ZIP is rejected", () => {
+  assert.equal(attachmentExtension("pacote.ZIP"), null);
+  assert.equal(cleanAttachmentName("pacote.ZIP"), null);
+});
+
+const EMOJI = String.fromCodePoint(0x1f600);
+const BEL = String.fromCharCode(7);
+
+check("cleanAttachmentName is idempotent for tricky names", () => {
+  for (const x of [
+    "a " + BEL + " b.pdf",
+    `${"a".repeat(200)}.PDF`,
+    "Catálogo Outubro.pdf",
+    "a" + EMOJI.repeat(80) + ".pdf",
+    "  nome" + BEL + " com" + String.fromCharCode(9) + "espaço .pdf ",
+  ]) {
+    const once = cleanAttachmentName(x);
+    assert.ok(once !== null, x);
+    assert.equal(cleanAttachmentName(once), once, x);
+  }
+});
+
+check("cleanAttachmentName never cuts a surrogate pair at the 150 cap", () => {
+  const r = cleanAttachmentName("a" + EMOJI.repeat(80) + ".pdf");
+  assert.ok(r !== null);
+  assert.ok(r.length <= 150, String(r.length));
+  assert.ok(r.endsWith(".pdf"));
+  for (let i = 0; i < r.length; i++) {
+    const c = r.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff) {
+      const n = r.charCodeAt(i + 1);
+      assert.ok(n >= 0xdc00 && n <= 0xdfff, `lone high surrogate at ${i}`);
+      i++;
+    } else {
+      assert.ok(!(c >= 0xdc00 && c <= 0xdfff), `lone low surrogate at ${i}`);
+    }
+  }
+});
+
 check("attachmentStorageKey is ASCII-only, inside the org folder, and keeps the extension", () => {
   const key = attachmentStorageKey(ORG, UUID, "Catálogo de Preços (out).PDF");
   assert.equal(key, `email-attachments/${ORG}/${UUID}-Catalogo_de_Precos_out.pdf`);

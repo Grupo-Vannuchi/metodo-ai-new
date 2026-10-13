@@ -63,17 +63,27 @@ export function attachmentContentType(filename: string): string | null {
  * dropped, capped at 150 keeping the extension. Null when nothing valid is left. */
 export function cleanAttachmentName(raw: string): string | null {
   const base = raw.split(/[\\/]/).pop() ?? "";
-  const name = Array.from(base.replace(/\s+/g, " "))
+  // Control chars go first (whitespace ones like tab stay for the collapse), so
+  // cleaning an already clean name returns it unchanged.
+  const name = Array.from(base)
     .filter((c) => {
       const code = c.charCodeAt(0);
-      return code > 31 && code !== 127;
+      return /\s/.test(c) || (code > 31 && code !== 127);
     })
     .join("")
+    .replace(/\s+/g, " ")
     .trim();
   if (!attachmentExtension(name)) return null;
   if (name.length <= MAX_NAME) return name;
+  // Cut at a code-point boundary (never inside a surrogate pair); the limit is in UTF-16 units.
   const suffix = name.slice(name.lastIndexOf("."));
-  return `${name.slice(0, MAX_NAME - suffix.length).trimEnd()}${suffix}`;
+  const room = MAX_NAME - suffix.length;
+  let kept = "";
+  for (const cp of Array.from(name.slice(0, name.length - suffix.length))) {
+    if (kept.length + cp.length > room) break;
+    kept += cp;
+  }
+  return `${kept.trimEnd()}${suffix}`;
 }
 
 /** Storage key of an uploaded attachment: ASCII-only, inside the org's folder. */
@@ -84,7 +94,12 @@ export function attachmentStorageKey(orgId: string, uuid: string, filename: stri
     filename
       .slice(0, dot > 0 ? dot : filename.length)
       .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
+      .split("")
+      .filter((c) => {
+        const n = c.charCodeAt(0); // drop combining marks U+0300-U+036F
+        return n < 0x300 || n > 0x36f;
+      })
+      .join("")
       .replace(/[^A-Za-z0-9._-]+/g, "_")
       .replace(/^[._]+|[._]+$/g, "")
       .slice(0, MAX_STEM) || "arquivo";

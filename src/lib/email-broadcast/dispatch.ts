@@ -27,7 +27,9 @@ const LEASE_MS = 90_000;
  * the platform's Resend account (default limit 10 req/s per team) is shared
  * with login/invite/reset mail, which must keep its headroom. */
 const PACE_MS = 500;
-const MAX_PACE_FACTOR = 20; // keeps the longest wait (10 s) well inside LEASE_MS
+// Longest wait is 10 s; with an attachment call (up to 60 s) the gap between
+// heartbeats is ~70 s of the 90 s LEASE_MS.
+const MAX_PACE_FACTOR = 20;
 const MAX_RETRY_AFTER_S = 10;
 /** Per-job time budget in queue mode (the job re-enqueues itself after it). */
 export const QUEUE_BUDGET_MS = 50_000;
@@ -176,7 +178,6 @@ export async function runEmailBroadcast(
     const orgRow = await prisma.organization.findFirst({ where: { id: org }, select: { name: true } });
     const orgName = orgRow?.name ?? "";
     const from = formatFrom(b.fromName, b.fromEmail);
-    const deadline = opts.budgetMs ? Date.now() + opts.budgetMs : Number.POSITIVE_INFINITY;
 
     // Attachments are read once per run, before any batch: a send never goes
     // out without its files (spec 2026-10-09 §8).
@@ -198,21 +199,24 @@ export async function runEmailBroadcast(
           await pause("attachment_unavailable", a.filename);
           return { done: true };
         }
+        // The sizes saved with the draft come from the client; the real bytes
+        // decide, checked before encoding so a forged list never piles up in memory.
         bytes += data.byteLength;
+        if (bytes > MAX_ATTACHMENTS_BYTES || data.byteLength !== a.size) {
+          await pause("attachment_invalid", a.filename);
+          return { done: true };
+        }
         loaded.push({
           filename: a.filename,
           content: data.toString("base64"),
           content_type: attachmentContentType(a.filename) ?? "application/octet-stream",
         });
-      }
-      // The sizes saved with the draft come from the client; the real bytes decide.
-      if (bytes > MAX_ATTACHMENTS_BYTES) {
-        await pause("attachment_invalid", null);
-        return { done: true };
+        await beat();
       }
       files = loaded;
-      await beat();
     }
+    // After the (possibly slow) file reads, so they don't eat the queue budget.
+    const deadline = opts.budgetMs ? Date.now() + opts.budgetMs : Number.POSITIVE_INFINITY;
 
     const toEmail = (r: Batch[number]): ResendEmail => {
       const composed = composeEmail({
@@ -247,7 +251,8 @@ export async function runEmailBroadcast(
         ),
       );
 
-    /** Fallback when the batch as a whole is refused: one call per recipient. */
+    /** One call per recipient: the fallback when a batch as a whole is refused,
+     * and the main path for sends with attachments (/emails/batch takes none). */
     const oneByOne = async (batch: Batch, batchNo: number): Promise<Outcome> => {
       let streakStatus = -1;
       let streak = 0;
