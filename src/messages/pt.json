@@ -1915,6 +1915,18 @@
       "badType": "Formato não aceito. Use PNG, JPG, GIF ou WEBP.",
       "uploadError": "Não foi possível enviar a imagem. Tente de novo."
     },
+    "attachments": {
+      "title": "Anexos",
+      "add": "Adicionar arquivos",
+      "counter": "{count, plural, =0 {Nenhum arquivo} one {# arquivo} other {# arquivos}} · {used} de {max}",
+      "notice": "E-mails com anexo saem um por um, cerca de 2 por segundo.",
+      "uploading": "Enviando {file}…",
+      "remove": "Remover {file}",
+      "errorType": "O arquivo {file} não é aceito. Use PDF, Word, Excel, PowerPoint, OpenDocument, TXT, CSV ou imagem.",
+      "errorTotal": "{file} passa do limite de 10 MB somando todos os anexos.",
+      "errorCount": "No máximo {max} arquivos por envio.",
+      "errorUpload": "Não foi possível anexar {file}. Tente de novo."
+    },
     "title": "E-mail",
     "subtitle": "Envie e-mails em massa para contatos e empresas do CRM.",
     "new": "Novo e-mail",
@@ -1949,7 +1961,9 @@
       "quota": "Envio pausado: a cota do mês acabou.",
       "provider_error": "Envio pausado: o Resend recusou o envio.",
       "domain_not_allowed": "Envio pausado: o domínio do endereço de envio deixou de estar liberado para sua empresa.",
-      "from_missing": "Envio pausado: este envio foi criado antes da troca para a conta de e-mail da plataforma e não tem endereço de envio, então não pode ser retomado. Para enviar de novo, duplique-o (o novo envio vai para toda a lista)."
+      "from_missing": "Envio pausado: este envio foi criado antes da troca para a conta de e-mail da plataforma e não tem endereço de envio, então não pode ser retomado. Para enviar de novo, duplique-o (o novo envio vai para toda a lista).",
+      "attachment_unavailable": "Envio pausado: um anexo não pôde ser carregado. Tente retomar; se continuar, duplique o envio e anexe o arquivo de novo.",
+      "attachment_invalid": "Envio pausado: os anexos deste envio passam do limite ou estão inválidos. Duplique o envio e anexe os arquivos de novo."
     },
     "message": "Mensagem",
     "fromName": "Nome do remetente",
@@ -1998,6 +2012,8 @@
     "confirmTitle": "Enviar para {count, plural, one {# endereço} other {# endereços}}?",
     "confirmBody": "Assunto: {subject}. Ficaram de fora {duplicates} repetidos, {suppressed} bloqueados e {invalid} inválidos. Depois de enviado não dá para cancelar; se o envio for interrompido, “Retomar envio” continua só para quem ainda não recebeu.",
     "confirmSend": "Enviar para {count}",
+    "confirmAttachments": "Com anexos, o envio leva cerca de {minutes, plural, one {# minuto} other {# minutos}}.",
+    "confirmAttachmentsQuick": "Com anexos, o envio leva menos de 1 minuto.",
     "error": {
       "unauthorized": "Sua sessão expirou. Entre de novo.",
       "forbidden": "Você não tem acesso ao E-mail.",
@@ -2007,6 +2023,7 @@
       "domain_not_allowed": "O domínio do endereço de envio não está liberado para sua empresa.",
       "from_missing": "Este envio foi criado antes da troca para a conta de e-mail da plataforma e não pode ser retomado. Duplique-o para enviar de novo.",
       "from_required": "Preencha o endereço de envio.",
+      "attachments_invalid": "Os anexos deste envio são inválidos. Remova e anexe de novo.",
       "empty": "Nenhum destinatário selecionado.",
       "quota": "A cota do mês não comporta este envio.",
       "quotaDetail": "Este envio tem {total} endereços, mas restam {remaining} na cota do mês.",
@@ -2022,6 +2039,7 @@
       "removed": "Ficaram fora deste envio: {duplicates} repetidos, {suppressed} bloqueados e {invalid} inválidos.",
       "noTracking": "Sem status de entrega: o aviso de entrega da plataforma ainda não está configurado. Os e-mails ficam como “Enviado”.",
       "showing": "Mostrando os primeiros {count}.",
+      "attachments": "Anexos",
       "counters": {
         "QUEUED": "Na fila",
         "SENT": "Enviados",

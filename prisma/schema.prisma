@@ -2510,6 +2510,8 @@ model EmailBroadcast {
   fromEmail      String?
   /// AudienceSelection (src/lib/validations/email-broadcast.ts).
   audience       Json                 @default("{}")
+  /// EmailAttachment[] (src/lib/email-broadcast/attachments.ts): { key, filename, size }.
+  attachments    Json                 @default("[]")
   /// { selected, invalid, duplicates, suppressed, total } frozen at send time.
   stats          Json                 @default("{}")
   status         EmailBroadcastStatus @default(DRAFT)

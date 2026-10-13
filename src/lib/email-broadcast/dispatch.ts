@@ -6,9 +6,11 @@ import { LIMITS } from "@/config/limits";
 import { monthStart } from "@/lib/queries/email-broadcasts";
 import { composeEmail } from "./compose";
 import { formatFrom } from "./render";
+import { readMedia } from "@/lib/storage/blob";
 import { platformResendKey } from "./platform";
 import { isSenderAllowed } from "./sender-domain";
-import { sendBatch, sendOne, type ResendEmail } from "./resend";
+import { MAX_ATTACHMENTS_BYTES, attachmentContentType, checkAttachments, parseAttachments } from "./attachments";
+import { sendBatch, sendOne, type ResendAttachment, type ResendEmail } from "./resend";
 import { batchFailureAction, singleFailureAction } from "./retry-policy";
 import { emailUnsubscribeOneClickUrl, emailUnsubscribePageUrl } from "./unsubscribe";
 
@@ -25,15 +27,19 @@ const LEASE_MS = 90_000;
  * the platform's Resend account (default limit 10 req/s per team) is shared
  * with login/invite/reset mail, which must keep its headroom. */
 const PACE_MS = 500;
-const MAX_PACE_FACTOR = 20; // keeps the longest wait (10 s) well inside LEASE_MS
+// Longest wait is 10 s; with an attachment call (up to 60 s) the gap between
+// heartbeats is ~70 s of the 90 s LEASE_MS.
+const MAX_PACE_FACTOR = 20;
 const MAX_RETRY_AFTER_S = 10;
 /** Per-job time budget in queue mode (the job re-enqueues itself after it). */
 export const QUEUE_BUDGET_MS = 50_000;
+/** Per-call timeout when the e-mail carries attachments (up to ~13.3 MB of base64). */
+const ATTACHMENT_TIMEOUT_MS = 60_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type Batch = { id: string; email: string; name: string | null; companyName: string | null }[];
-type Outcome = { kind: "ok" } | { kind: "pause"; message: string };
+type Outcome = { kind: "ok" } | { kind: "pause"; message: string } | { kind: "budget" };
 
 /** Start (or continue) a SENDING broadcast in the background. */
 export async function kickEmailBroadcast(broadcastId: string): Promise<void> {
@@ -91,7 +97,17 @@ export async function runEmailBroadcast(
 ): Promise<{ done: boolean }> {
   const b = await prisma.emailBroadcast.findFirst({
     where: { id: broadcastId },
-    select: { id: true, organizationId: true, status: true, subject: true, html: true, fromName: true, fromEmail: true, replyTo: true },
+    select: {
+      id: true,
+      organizationId: true,
+      status: true,
+      subject: true,
+      html: true,
+      fromName: true,
+      fromEmail: true,
+      replyTo: true,
+      attachments: true,
+    },
   });
   if (!b || b.status !== "SENDING") return { done: true };
   const org = b.organizationId;
@@ -125,7 +141,14 @@ export async function runEmailBroadcast(
   let paceMs = PACE_MS;
 
   const pause = (
-    reason: "no_connection" | "quota" | "provider_error" | "domain_not_allowed" | "from_missing",
+    reason:
+      | "no_connection"
+      | "quota"
+      | "provider_error"
+      | "domain_not_allowed"
+      | "from_missing"
+      | "attachment_unavailable"
+      | "attachment_invalid",
     message: string | null,
   ) =>
     prisma.emailBroadcast.updateMany({
@@ -155,6 +178,44 @@ export async function runEmailBroadcast(
     const orgRow = await prisma.organization.findFirst({ where: { id: org }, select: { name: true } });
     const orgName = orgRow?.name ?? "";
     const from = formatFrom(b.fromName, b.fromEmail);
+
+    // Attachments are read once per run, before any batch: a send never goes
+    // out without its files (spec 2026-10-09 §8).
+    const attachments = parseAttachments(b.attachments);
+    if (!attachments || checkAttachments(org, attachments)) {
+      await pause("attachment_invalid", null);
+      return { done: true };
+    }
+    let files: ResendAttachment[] | null = null;
+    if (attachments.length > 0) {
+      const loaded: ResendAttachment[] = [];
+      let bytes = 0;
+      for (const a of attachments) {
+        let data: Buffer;
+        try {
+          data = await readMedia(a.key);
+        } catch (e) {
+          console.error("[email] attachment read failed", a.key, e);
+          await pause("attachment_unavailable", a.filename);
+          return { done: true };
+        }
+        // The sizes saved with the draft come from the client; the real bytes
+        // decide, checked before encoding so a forged list never piles up in memory.
+        bytes += data.byteLength;
+        if (bytes > MAX_ATTACHMENTS_BYTES || data.byteLength !== a.size) {
+          await pause("attachment_invalid", a.filename);
+          return { done: true };
+        }
+        loaded.push({
+          filename: a.filename,
+          content: data.toString("base64"),
+          content_type: attachmentContentType(a.filename) ?? "application/octet-stream",
+        });
+        await beat();
+      }
+      files = loaded;
+    }
+    // After the (possibly slow) file reads, so they don't eat the queue budget.
     const deadline = opts.budgetMs ? Date.now() + opts.budgetMs : Number.POSITIVE_INFINITY;
 
     const toEmail = (r: Batch[number]): ResendEmail => {
@@ -176,6 +237,7 @@ export async function runEmailBroadcast(
           "List-Unsubscribe": `<${emailUnsubscribeOneClickUrl(r.id)}>`,
           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
         },
+        ...(files ? { attachments: files } : {}),
       };
     };
 
@@ -189,15 +251,19 @@ export async function runEmailBroadcast(
         ),
       );
 
-    /** Fallback when the batch as a whole is refused: one call per recipient. */
+    /** One call per recipient: the fallback when a batch as a whole is refused,
+     * and the main path for sends with attachments (/emails/batch takes none). */
     const oneByOne = async (batch: Batch, batchNo: number): Promise<Outcome> => {
       let streakStatus = -1;
       let streak = 0;
       for (const r of batch) {
+        // Stop between recipients when the run's budget is over (queue mode);
+        // the rest of the batch stays QUEUED for the next run.
+        if (Date.now() >= deadline) return { kind: "budget" };
         const key = `eb-${b.id}-${batchNo}-${r.id}`;
         const counters: Counters = { rate: 0, server: 0, conflict: 0 };
         for (;;) {
-          const res = await sendOne(apiKey, toEmail(r), key);
+          const res = await sendOne(apiKey, toEmail(r), key, files ? ATTACHMENT_TIMEOUT_MS : undefined);
           if (res.ok) {
             await markSent([{ id: r.id, providerId: res.data.id ?? null }]);
             streak = 0;
@@ -293,11 +359,13 @@ export async function runEmailBroadcast(
         return { done: true };
       }
 
-      const outcome = await deliver(batch, next.batchNo);
+      // /emails/batch doesn't take attachments: with files, one call per recipient.
+      const outcome = files ? await oneByOne(batch, next.batchNo) : await deliver(batch, next.batchNo);
       if (outcome.kind === "pause") {
         await pause("provider_error", outcome.message);
         return { done: true };
       }
+      if (outcome.kind === "budget") break;
 
       await beat();
       await sleep(paceMs);

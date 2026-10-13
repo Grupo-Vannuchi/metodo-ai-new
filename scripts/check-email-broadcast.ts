@@ -35,6 +35,22 @@ import {
   isSenderAllowed,
   normalizeDomain,
 } from "../src/lib/email-broadcast/sender-domain";
+import {
+  ATTACHMENT_ACCEPT,
+  MAX_ATTACHMENTS_BYTES,
+  attachmentAddProblem,
+  attachmentContentType,
+  attachmentExtension,
+  attachmentSizeParts,
+  attachmentStorageKey,
+  checkAttachments,
+  cleanAttachmentName,
+  estimateAttachmentSendMinutes,
+  isAttachmentKeyOf,
+  parseAttachments,
+  readAttachments,
+  type EmailAttachment,
+} from "../src/lib/email-broadcast/attachments";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -368,6 +384,178 @@ check("transactionalRetryDelayMs follows retry-after, capped at 2s, 1s by defaul
   assert.equal(transactionalRetryDelayMs("30"), 2000);
   assert.equal(transactionalRetryDelayMs("abc"), 1000);
   assert.equal(transactionalRetryDelayMs("-3"), 1000);
+});
+
+// --- attachments -------------------------------------------------------------
+const ORG = "cmorg1234567890abcdefghij";
+const UUID = "123e4567-e89b-42d3-a456-426614174000";
+const att = (filename: string, size = 1000, org = ORG): EmailAttachment => ({
+  key: attachmentStorageKey(org, UUID, filename),
+  filename,
+  size,
+});
+
+check("attachmentExtension accepts the closed list, any case, and rejects the rest", () => {
+  assert.equal(attachmentExtension("Proposta.PDF"), "pdf");
+  assert.equal(attachmentExtension("planilha.Xlsx"), "xlsx");
+  assert.equal(attachmentExtension("foto.jpeg"), "jpeg");
+  for (const bad of [
+    "pacote.zip",
+    "setup.exe",
+    "macro.docm",
+    "script.js",
+    "semextensao",
+    ".pdf",
+    "fim.",
+    "arquivo.pdf.exe",
+    "x.constructor",
+  ]) {
+    assert.equal(attachmentExtension(bad), null, bad);
+  }
+});
+
+check("attachmentContentType comes from the extension, never the browser", () => {
+  assert.equal(attachmentContentType("a.PDF"), "application/pdf");
+  assert.equal(attachmentContentType("b.csv"), "text/csv");
+  assert.equal(attachmentContentType("c.zip"), null);
+  assert.ok(ATTACHMENT_ACCEPT.split(",").includes(".docx"));
+  assert.ok(!ATTACHMENT_ACCEPT.split(",").includes(".zip"));
+});
+
+check("cleanAttachmentName keeps accents, drops paths and control chars, caps at 150", () => {
+  assert.equal(cleanAttachmentName("Catálogo Outubro.pdf"), "Catálogo Outubro.pdf");
+  assert.equal(cleanAttachmentName("C:\\Users\\ana\\Proposta.docx"), "Proposta.docx");
+  assert.equal(cleanAttachmentName("../../etc/relatorio.txt"), "relatorio.txt");
+  assert.equal(cleanAttachmentName("  nome\u0007 com\tespaço .pdf "), "nome com espaço .pdf");
+  const long = cleanAttachmentName(`${"a".repeat(200)}.PDF`);
+  assert.equal(long?.length, 150);
+  assert.ok(long?.endsWith(".PDF"));
+  assert.equal(cleanAttachmentName("pacote.zip"), null);
+  assert.equal(cleanAttachmentName("   "), null);
+});
+
+check("uppercase .ZIP is rejected", () => {
+  assert.equal(attachmentExtension("pacote.ZIP"), null);
+  assert.equal(cleanAttachmentName("pacote.ZIP"), null);
+});
+
+const EMOJI = String.fromCodePoint(0x1f600);
+const BEL = String.fromCharCode(7);
+
+check("cleanAttachmentName is idempotent for tricky names", () => {
+  for (const x of [
+    "a " + BEL + " b.pdf",
+    `${"a".repeat(200)}.PDF`,
+    "Catálogo Outubro.pdf",
+    "a" + EMOJI.repeat(80) + ".pdf",
+    "  nome" + BEL + " com" + String.fromCharCode(9) + "espaço .pdf ",
+  ]) {
+    const once = cleanAttachmentName(x);
+    assert.ok(once !== null, x);
+    assert.equal(cleanAttachmentName(once), once, x);
+  }
+});
+
+check("cleanAttachmentName never cuts a surrogate pair at the 150 cap", () => {
+  const r = cleanAttachmentName("a" + EMOJI.repeat(80) + ".pdf");
+  assert.ok(r !== null);
+  assert.ok(r.length <= 150, String(r.length));
+  assert.ok(r.endsWith(".pdf"));
+  for (let i = 0; i < r.length; i++) {
+    const c = r.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff) {
+      const n = r.charCodeAt(i + 1);
+      assert.ok(n >= 0xdc00 && n <= 0xdfff, `lone high surrogate at ${i}`);
+      i++;
+    } else {
+      assert.ok(!(c >= 0xdc00 && c <= 0xdfff), `lone low surrogate at ${i}`);
+    }
+  }
+});
+
+check("attachmentStorageKey is ASCII-only, inside the org folder, and keeps the extension", () => {
+  const key = attachmentStorageKey(ORG, UUID, "Catálogo de Preços (out).PDF");
+  assert.equal(key, `email-attachments/${ORG}/${UUID}-Catalogo_de_Precos_out.pdf`);
+  assert.ok(isAttachmentKeyOf(ORG, key));
+  assert.equal(attachmentStorageKey(ORG, UUID, "###.pdf"), `email-attachments/${ORG}/${UUID}-arquivo.pdf`);
+});
+
+check("isAttachmentKeyOf only accepts this org's keys in the route's format", () => {
+  const key = attachmentStorageKey(ORG, UUID, "a.pdf");
+  assert.equal(isAttachmentKeyOf(ORG, key), true);
+  assert.equal(isAttachmentKeyOf("outraorg", key), false);
+  for (const bad of [
+    `email-attachments/${ORG}/../outra/${UUID}-a.pdf`,
+    `email-attachments/${ORG}/${UUID}-a.zip`,
+    `email-attachments/${ORG}/nao-e-uuid-a.pdf`,
+    `email/${ORG}/${UUID}-a.pdf`,
+    `https://evil.example/${UUID}-a.pdf`,
+    `email-attachments/${ORG}/sub/${UUID}-a.pdf`,
+  ]) {
+    assert.equal(isAttachmentKeyOf(ORG, bad), false, bad);
+  }
+  assert.equal(isAttachmentKeyOf("", `email-attachments//${UUID}-a.pdf`), false);
+});
+
+check("checkAttachments enforces count, type, key and the 10 MB total", () => {
+  assert.equal(checkAttachments(ORG, []), null);
+  assert.equal(checkAttachments(ORG, [att("a.pdf"), att("b.png")]), null);
+  assert.equal(checkAttachments(ORG, Array.from({ length: 10 }, (_, i) => att(`f${i}.pdf`))), null);
+  assert.equal(checkAttachments(ORG, Array.from({ length: 11 }, (_, i) => att(`f${i}.pdf`))), "count");
+  assert.equal(checkAttachments(ORG, [{ ...att("a.pdf"), filename: "a.zip" }]), "type");
+  assert.equal(checkAttachments(ORG, [{ ...att("a.pdf"), filename: "../a.pdf" }]), "type");
+  assert.equal(checkAttachments(ORG, [att("a.pdf", 1000, "outraorg")]), "key");
+  assert.equal(checkAttachments(ORG, [att("a.pdf", MAX_ATTACHMENTS_BYTES)]), null);
+  assert.equal(checkAttachments(ORG, [att("a.pdf", MAX_ATTACHMENTS_BYTES), att("b.pdf", 1)]), "total");
+});
+
+check("attachmentAddProblem pre-checks a file before upload", () => {
+  assert.equal(attachmentAddProblem([], { name: "a.pdf", size: 5 }), null);
+  assert.equal(attachmentAddProblem([], { name: "a.zip", size: 5 }), "type");
+  assert.equal(attachmentAddProblem([att("a.pdf", MAX_ATTACHMENTS_BYTES - 10)], { name: "b.pdf", size: 10 }), null);
+  assert.equal(attachmentAddProblem([att("a.pdf", MAX_ATTACHMENTS_BYTES - 10)], { name: "b.pdf", size: 11 }), "total");
+  assert.equal(attachmentAddProblem([], { name: "grande.pdf", size: MAX_ATTACHMENTS_BYTES + 1 }), "total");
+  const ten = Array.from({ length: 10 }, (_, i) => att(`f${i}.pdf`, 1));
+  assert.equal(attachmentAddProblem(ten, { name: "x.pdf", size: 1 }), "count");
+});
+
+check("parseAttachments returns null on broken JSON; readAttachments falls back to []", () => {
+  const ok = [att("a.pdf")];
+  assert.deepEqual(parseAttachments(ok), ok);
+  assert.deepEqual(parseAttachments([]), []);
+  assert.deepEqual(parseAttachments([{ ...ok[0], extra: true }]), ok);
+  for (const bad of [
+    null,
+    "x",
+    {},
+    [{ key: "k", filename: "a.pdf" }],
+    [{ key: "k", filename: "a.pdf", size: 1.5 }],
+    [{ key: "k", filename: "a.pdf", size: 0 }],
+    [ok[0], 7],
+  ]) {
+    assert.equal(parseAttachments(bad), null, JSON.stringify(bad));
+  }
+  assert.deepEqual(readAttachments([{ key: 1 }]), []);
+  assert.deepEqual(readAttachments(ok), ok);
+});
+
+check("estimateAttachmentSendMinutes: ~2 e-mails/s, 0 means under a minute", () => {
+  assert.equal(estimateAttachmentSendMinutes(0), 0);
+  assert.equal(estimateAttachmentSendMinutes(1), 0);
+  assert.equal(estimateAttachmentSendMinutes(119), 0);
+  assert.equal(estimateAttachmentSendMinutes(120), 1);
+  assert.equal(estimateAttachmentSendMinutes(179), 1);
+  assert.equal(estimateAttachmentSendMinutes(180), 2);
+  assert.equal(estimateAttachmentSendMinutes(1000), 8);
+});
+
+check("attachmentSizeParts shows KB under 1 MB and MB above", () => {
+  assert.deepEqual(attachmentSizeParts(0), { value: 0, unit: "KB" });
+  assert.deepEqual(attachmentSizeParts(1), { value: 1, unit: "KB" });
+  assert.deepEqual(attachmentSizeParts(512 * 1024), { value: 512, unit: "KB" });
+  assert.deepEqual(attachmentSizeParts(1024 * 1024), { value: 1, unit: "MB" });
+  assert.deepEqual(attachmentSizeParts(4.25 * 1024 * 1024), { value: 4.3, unit: "MB" });
+  assert.deepEqual(attachmentSizeParts(MAX_ATTACHMENTS_BYTES), { value: 10, unit: "MB" });
 });
 
 console.log(`\n✅ email-broadcast: ${passed} checks passed.`);

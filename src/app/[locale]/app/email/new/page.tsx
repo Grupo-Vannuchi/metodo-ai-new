@@ -36,6 +36,7 @@ export default async function NewEmailPage({ params }: { params: Promise<{ local
           replyTo: "",
           audience: EMPTY_AUDIENCE,
           picked: [],
+          attachments: [],
         }}
         options={data.options}
         allowedDomains={data.allowedDomains}

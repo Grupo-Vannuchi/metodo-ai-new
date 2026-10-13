@@ -57,6 +57,7 @@ export function getEmailBroadcast(organizationId: string, id: string) {
       fromEmail: true,
       replyTo: true,
       audience: true,
+      attachments: true,
       stats: true,
       status: true,
       pausedReason: true,

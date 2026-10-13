@@ -1915,6 +1915,18 @@
       "badType": "Unsupported format. Use PNG, JPG, GIF or WEBP.",
       "uploadError": "Couldn't upload the image. Try again."
     },
+    "attachments": {
+      "title": "Attachments",
+      "add": "Add files",
+      "counter": "{count, plural, =0 {No files} one {# file} other {# files}} · {used} of {max}",
+      "notice": "Emails with attachments go out one by one, about 2 per second.",
+      "uploading": "Uploading {file}…",
+      "remove": "Remove {file}",
+      "errorType": "The file {file} isn't accepted. Use PDF, Word, Excel, PowerPoint, OpenDocument, TXT, CSV or an image.",
+      "errorTotal": "{file} goes over the 10 MB limit for all attachments together.",
+      "errorCount": "At most {max} files per send.",
+      "errorUpload": "Couldn't attach {file}. Try again."
+    },
     "title": "Email",
     "subtitle": "Send bulk emails to your CRM contacts and companies.",
     "new": "New email",
@@ -1949,7 +1961,9 @@
       "quota": "Send paused: this month's quota ran out.",
       "provider_error": "Send paused: Resend rejected the send.",
       "domain_not_allowed": "Send paused: the sending address's domain is no longer allowed for your company.",
-      "from_missing": "Send paused: this send was created before the switch to the platform's e-mail account and has no sending address, so it can't be resumed. To send again, duplicate it (the new send goes to the whole list)."
+      "from_missing": "Send paused: this send was created before the switch to the platform's e-mail account and has no sending address, so it can't be resumed. To send again, duplicate it (the new send goes to the whole list).",
+      "attachment_unavailable": "Send paused: an attachment couldn't be loaded. Try resuming; if it keeps failing, duplicate the send and attach the file again.",
+      "attachment_invalid": "Send paused: this send's attachments go over the limit or are invalid. Duplicate the send and attach the files again."
     },
     "message": "Message",
     "fromName": "Sender name",
@@ -1998,6 +2012,8 @@
     "confirmTitle": "Send to {count, plural, one {# address} other {# addresses}}?",
     "confirmBody": "Subject: {subject}. Left out: {duplicates} repeats, {suppressed} blocked and {invalid} invalid. Once sent it can't be canceled; if the send is interrupted, “Resume send” continues only for those who haven't received it.",
     "confirmSend": "Send to {count}",
+    "confirmAttachments": "With attachments, sending takes about {minutes, plural, one {# minute} other {# minutes}}.",
+    "confirmAttachmentsQuick": "With attachments, sending takes less than a minute.",
     "error": {
       "unauthorized": "Your session expired. Sign in again.",
       "forbidden": "You don't have access to Email.",
@@ -2007,6 +2023,7 @@
       "domain_not_allowed": "The sending address's domain isn't allowed for your company.",
       "from_missing": "This send was created before the switch to the platform's e-mail account and can't be resumed. Duplicate it to send again.",
       "from_required": "Fill in the sending address.",
+      "attachments_invalid": "This send's attachments are invalid. Remove them and attach again.",
       "empty": "No recipients selected.",
       "quota": "This month's quota can't fit this send.",
       "quotaDetail": "This send has {total} addresses, but only {remaining} are left in this month's quota.",
@@ -2022,6 +2039,7 @@
       "removed": "Left out of this send: {duplicates} repeats, {suppressed} blocked and {invalid} invalid.",
       "noTracking": "No delivery status: the platform's delivery webhook isn't configured yet. Emails stay as “Sent”.",
       "showing": "Showing the first {count}.",
+      "attachments": "Attachments",
       "counters": {
         "QUEUED": "Queued",
         "SENT": "Sent",

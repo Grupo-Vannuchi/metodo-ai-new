@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
 import { emailComposerData, getEmailBroadcast, pickedTargets } from "@/lib/queries/email-broadcasts";
 import { readAudience } from "@/lib/validations/email-broadcast";
+import { readAttachments } from "@/lib/email-broadcast/attachments";
 import { EmailComposer } from "@/components/email/email-composer";
 import { Link, redirect } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -51,6 +52,7 @@ export default async function EditEmailPage({
           replyTo: b.replyTo ?? "",
           audience,
           picked,
+          attachments: readAttachments(b.attachments),
         }}
         options={data.options}
         allowedDomains={data.allowedDomains}
