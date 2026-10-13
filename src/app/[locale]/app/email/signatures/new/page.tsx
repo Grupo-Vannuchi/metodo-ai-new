@@ -38,7 +38,6 @@ export default async function NewEmailSignaturePage({ params }: { params: Promis
           imageUrl: "",
           imageAlt: "",
           imageHref: "",
-          introText: "",
           // The company's first default comes pre-checked.
           isDefault: !existing.some((s) => s.isDefault),
         }}

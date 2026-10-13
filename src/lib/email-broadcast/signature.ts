@@ -10,14 +10,14 @@ import { safeClickHref, safeImageSrc } from "./image-links";
 export const MAX_SIGNATURES = 20;
 export const MAX_SIGNATURE_NAME = 60;
 export const MAX_SIGNATURE_HTML = 50_000;
-/** Intro text and alt text of an image signature. */
+/** Alt text of an image signature. */
 export const MAX_SIGNATURE_LINE = 200;
 
 export type SignatureKind = "TEXT" | "IMAGE";
 
 export type SignatureContent =
   | { kind: "TEXT"; html: string }
-  | { kind: "IMAGE"; imageUrl: string; imageAlt: string; imageHref: string | null; introText: string | null };
+  | { kind: "IMAGE"; imageUrl: string; imageAlt: string; imageHref: string | null };
 
 export type SignatureProblem =
   | "html_empty"
@@ -35,7 +35,6 @@ export type SignatureFormFields = {
   imageUrl: string;
   imageAlt: string;
   imageHref: string;
-  introText: string;
 };
 
 /** The columns of an email_signatures row this module reads. */
@@ -45,7 +44,6 @@ export type SignatureRow = {
   imageUrl: string | null;
   imageAlt: string | null;
   imageHref: string | null;
-  introText: string | null;
 };
 
 /** Apply `fn` until the output stops changing (max `maxPasses`); "" if it never
@@ -84,12 +82,7 @@ export function signatureProblem(content: SignatureContent): SignatureProblem | 
   if (!content.imageUrl.trim()) return "image_required";
   if (!signatureImageSrc(content.imageUrl)) return "image_url";
   if (!content.imageAlt.trim()) return "alt_required";
-  if (
-    content.imageAlt.trim().length > MAX_SIGNATURE_LINE ||
-    (content.introText ?? "").trim().length > MAX_SIGNATURE_LINE
-  ) {
-    return "line_too_long";
-  }
+  if (content.imageAlt.trim().length > MAX_SIGNATURE_LINE) return "line_too_long";
   if (content.imageHref && !safeClickHref(content.imageHref)) return "href";
   return null;
 }
@@ -101,11 +94,10 @@ export function renderSignature(content: SignatureContent): { html: string; text
   }
   const src = signatureImageSrc(content.imageUrl) ?? "";
   const href = content.imageHref ? safeClickHref(content.imageHref) : null;
-  const intro = content.introText?.trim() || null;
   const alt = content.imageAlt.trim();
   const img = `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}">`;
-  const html = `${intro ? `<p>${escapeHtml(intro)}</p>` : ""}${href ? `<a href="${escapeHtml(href)}">${img}</a>` : img}`;
-  const text = [intro, alt, href].filter((line): line is string => Boolean(line)).join("\n");
+  const html = href ? `<a href="${escapeHtml(href)}">${img}</a>` : img;
+  const text = [alt, href].filter((line): line is string => Boolean(line)).join("\n");
   return { html, text };
 }
 
@@ -117,7 +109,6 @@ export function signatureContentFromForm(fields: SignatureFormFields): Signature
     imageUrl: fields.imageUrl.trim(),
     imageAlt: fields.imageAlt.trim(),
     imageHref: fields.imageHref.trim() || null,
-    introText: fields.introText.trim() || null,
   };
 }
 
@@ -129,7 +120,6 @@ export function signatureContentOf(row: SignatureRow): SignatureContent {
       imageUrl: row.imageUrl ?? "",
       imageAlt: row.imageAlt ?? "",
       imageHref: row.imageHref,
-      introText: row.introText,
     };
   }
   return { kind: "TEXT", html: row.html };

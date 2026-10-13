@@ -1980,8 +1980,6 @@
         "imageRemove": "Remover",
         "imageLink": "ou cole o link da imagem (https://…)",
         "imageHint": "PNG, JPG, GIF ou WEBP até 5 MB. Largura ideal: 600 px; no celular a imagem se ajusta à tela.",
-        "intro": "Texto acima da imagem",
-        "introPlaceholder": "Atenciosamente,",
         "href": "Link ao clicar na imagem",
         "hrefPlaceholder": "https://www.suaempresa.com.br",
         "alt": "Texto alternativo",
@@ -2008,7 +2006,7 @@
         "image_required": "Envie a imagem da assinatura ou cole o link dela.",
         "image_url": "Use um link https:// direto para a imagem.",
         "alt_required": "Preencha o texto alternativo.",
-        "line_too_long": "O texto acima da imagem e o texto alternativo têm até 200 caracteres.",
+        "line_too_long": "O texto alternativo tem até 200 caracteres.",
         "href": "Link de destino inválido. Use um endereço como https://suaempresa.com.br.",
         "unknown": "Algo deu errado. Tente de novo."
       }

@@ -575,23 +575,22 @@ check("renderSignature TEXT passes the html and derives the text part", () => {
   assert.equal(r.text, "Ana\n(11) 3000-0000");
 });
 
-check("renderSignature IMAGE builds intro + linked image and escapes everything", () => {
+check("renderSignature IMAGE builds the linked image and escapes everything", () => {
   const r = renderSignature({
     kind: "IMAGE",
     imageUrl: IMG,
     imageAlt: 'Ana "Diretora" <Comercial> & cia',
     imageHref: "www.suaempresa.com.br",
-    introText: "Atenciosamente,",
   });
   assert.equal(
     r.html,
-    '<p>Atenciosamente,</p><a href="https://www.suaempresa.com.br/"><img src="https://cdn.exemplo.com/assinatura.png" alt="Ana &quot;Diretora&quot; &lt;Comercial&gt; &amp; cia"></a>',
+    '<a href="https://www.suaempresa.com.br/"><img src="https://cdn.exemplo.com/assinatura.png" alt="Ana &quot;Diretora&quot; &lt;Comercial&gt; &amp; cia"></a>',
   );
-  assert.equal(r.text, 'Atenciosamente,\nAna "Diretora" <Comercial> & cia\nhttps://www.suaempresa.com.br/');
+  assert.equal(r.text, 'Ana "Diretora" <Comercial> & cia\nhttps://www.suaempresa.com.br/');
 });
 
-check("renderSignature IMAGE without intro or link is just the image", () => {
-  const r = renderSignature({ kind: "IMAGE", imageUrl: IMG, imageAlt: "Ana", imageHref: null, introText: null });
+check("renderSignature IMAGE without a link is just the image", () => {
+  const r = renderSignature({ kind: "IMAGE", imageUrl: IMG, imageAlt: "Ana", imageHref: null });
   assert.equal(r.html, '<img src="https://cdn.exemplo.com/assinatura.png" alt="Ana">');
   assert.equal(r.text, "Ana");
 });
@@ -610,31 +609,29 @@ check("signatureProblem flags what blocks a save", () => {
   assert.equal(signatureProblem({ kind: "TEXT", html: "<p>Ana</p>" }), null);
   assert.equal(signatureProblem({ kind: "TEXT", html: "<p></p>" }), "html_empty");
   assert.equal(signatureProblem({ kind: "TEXT", html: `<p>${"a".repeat(50_000)}</p>` }), "html_too_long");
-  const ok = { kind: "IMAGE" as const, imageUrl: IMG, imageAlt: "Ana", imageHref: null, introText: null };
+  const ok = { kind: "IMAGE" as const, imageUrl: IMG, imageAlt: "Ana", imageHref: null };
   assert.equal(signatureProblem(ok), null);
   assert.equal(signatureProblem({ ...ok, imageUrl: "" }), "image_required");
   assert.equal(signatureProblem({ ...ok, imageUrl: "http://evil.example/x.png" }), "image_url");
   assert.equal(signatureProblem({ ...ok, imageAlt: "  " }), "alt_required");
   assert.equal(signatureProblem({ ...ok, imageAlt: "a".repeat(201) }), "line_too_long");
-  assert.equal(signatureProblem({ ...ok, introText: "a".repeat(201) }), "line_too_long");
   assert.equal(signatureProblem({ ...ok, imageHref: "javascript:alert(1)" }), "href");
 });
 
 check("signatureContentFromForm trims and keeps only the chosen kind", () => {
-  const base = { html: "<p>x</p>", imageUrl: ` ${IMG} `, imageAlt: " Ana ", imageHref: "  ", introText: "" };
+  const base = { html: "<p>x</p>", imageUrl: ` ${IMG} `, imageAlt: " Ana ", imageHref: "  " };
   assert.deepEqual(signatureContentFromForm({ kind: "TEXT", ...base }), { kind: "TEXT", html: "<p>x</p>" });
   assert.deepEqual(signatureContentFromForm({ kind: "IMAGE", ...base }), {
     kind: "IMAGE",
     imageUrl: IMG,
     imageAlt: "Ana",
     imageHref: null,
-    introText: null,
   });
 });
 
 check("signatureContentOf reads a stored row", () => {
-  const row = { kind: "IMAGE" as const, html: "", imageUrl: IMG, imageAlt: "Ana", imageHref: null, introText: "Oi" };
-  assert.deepEqual(signatureContentOf(row), { kind: "IMAGE", imageUrl: IMG, imageAlt: "Ana", imageHref: null, introText: "Oi" });
+  const row = { kind: "IMAGE" as const, html: "", imageUrl: IMG, imageAlt: "Ana", imageHref: null };
+  assert.deepEqual(signatureContentOf(row), { kind: "IMAGE", imageUrl: IMG, imageAlt: "Ana", imageHref: null });
   assert.deepEqual(signatureContentOf({ ...row, kind: "TEXT", html: "<p>a</p>" }), { kind: "TEXT", html: "<p>a</p>" });
 });
 

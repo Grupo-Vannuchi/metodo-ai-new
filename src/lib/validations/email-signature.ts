@@ -9,7 +9,6 @@ export const emailSignatureSchema = z.object({
   imageUrl: z.string().trim().max(2000).default(""),
   imageAlt: z.string().trim().max(MAX_SIGNATURE_LINE).default(""),
   imageHref: z.string().trim().max(2000).default(""),
-  introText: z.string().trim().max(MAX_SIGNATURE_LINE).default(""),
   isDefault: z.boolean().default(false),
 });
 

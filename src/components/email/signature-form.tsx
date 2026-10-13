@@ -43,12 +43,11 @@ export function SignatureForm({ initial }: { initial: SignatureFormInitial }) {
   const [imageUrl, setImageUrl] = useState(initial.imageUrl);
   const [imageAlt, setImageAlt] = useState(initial.imageAlt);
   const [imageHref, setImageHref] = useState(initial.imageHref);
-  const [introText, setIntroText] = useState(initial.introText);
   const [isDefault, setIsDefault] = useState(initial.isDefault);
   const [uploading, setUploading] = useState(false);
   const [busy, start] = useTransition();
 
-  const fields: SignatureFormFields = { kind, html, imageUrl, imageAlt, imageHref, introText };
+  const fields: SignatureFormFields = { kind, html, imageUrl, imageAlt, imageHref };
   const content = signatureContentFromForm(fields);
   const validImage = signatureImageSrc(imageUrl) !== null;
   const showPreview = kind === "TEXT" ? html.trim() !== "" : validImage;
@@ -167,18 +166,6 @@ export function SignatureForm({ initial }: { initial: SignatureFormInitial }) {
                 onChange={(e) => setImageUrl(e.target.value)}
               />
               <p className="mt-1 text-xs text-muted-foreground">{t("form.imageHint")}</p>
-            </div>
-            <div>
-              <Label htmlFor="sigIntro">
-                {t("form.intro")} <span className="font-normal text-muted-foreground">{t("form.optional")}</span>
-              </Label>
-              <Input
-                id="sigIntro"
-                value={introText}
-                maxLength={MAX_SIGNATURE_LINE}
-                placeholder={t("form.introPlaceholder")}
-                onChange={(e) => setIntroText(e.target.value)}
-              />
             </div>
             <div>
               <Label htmlFor="sigHref">

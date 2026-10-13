@@ -12,7 +12,6 @@ const SIGNATURE_SELECT = {
   imageUrl: true,
   imageAlt: true,
   imageHref: true,
-  introText: true,
   isDefault: true,
   updatedAt: true,
 } as const;
