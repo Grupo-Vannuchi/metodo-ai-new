@@ -198,7 +198,10 @@ export async function searchEmailTargets(q: string): Promise<PickedTarget[]> {
  * unique address (@@unique([broadcastId, email]) + skipDuplicates), then kick
  * the dispatcher. The DRAFT-only updateMany is the double-submit lock.
  */
-export async function startEmailBroadcast(id: string): Promise<{ ok: true } | EmailActionFail> {
+export async function startEmailBroadcast(
+  id: string,
+  expectedSignatureId: string | null,
+): Promise<{ ok: true } | EmailActionFail> {
   const g = await gate();
   if (!g.ok) return g;
   const orgId = g.ctx.organizationId;
@@ -222,6 +225,10 @@ export async function startEmailBroadcast(id: string): Promise<{ ok: true } | Em
   if (!attachments || checkAttachments(orgId, attachments)) {
     return { ok: false, error: "attachments_invalid" };
   }
+  // The signature the user saw in the composer must still be the draft's one:
+  // a delete between save and confirm nulls signatureId (FK SET NULL).
+  const expected = typeof expectedSignatureId === "string" ? expectedSignatureId : null;
+  if ((b.signatureId ?? null) !== expected) return { ok: false, error: "signature_missing" };
   // Freeze the chosen signature on the send: later edits or deletes never
   // change what this send delivers (spec 2026-10-13 §6).
   let signature: { html: string; text: string } | null = null;

@@ -186,7 +186,7 @@ export function EmailComposer({
         confirmLabel: t("confirmSend", { count: s.total }),
       });
       if (!ok) return;
-      const r = await startEmailBroadcast(savedId);
+      const r = await startEmailBroadcast(savedId, signatureId);
       if (!r.ok) {
         toast(errorText(r), { variant: "error" });
         return;
