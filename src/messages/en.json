@@ -2024,6 +2024,7 @@
       "from_missing": "This send was created before the switch to the platform's e-mail account and can't be resumed. Duplicate it to send again.",
       "from_required": "Fill in the sending address.",
       "attachments_invalid": "This send's attachments are invalid. Remove them and attach again.",
+      "signature_missing": "The chosen signature was deleted. Pick another one.",
       "empty": "No recipients selected.",
       "quota": "This month's quota can't fit this send.",
       "quotaDetail": "This send has {total} addresses, but only {remaining} are left in this month's quota.",

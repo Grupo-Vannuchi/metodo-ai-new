@@ -35,11 +35,18 @@ export function composeEmail(input: {
   vars: TemplateVars;
   orgName: string;
   unsubscribeUrl: string;
+  /** Frozen copy from the send (already prepared by composeSignature); it is
+   * only re-sanitized here, never re-run through prepareEmailImages. */
+  signature?: ComposedSignature | null;
 }): ComposedEmail {
   const body = fillHtmlVars(prepareEmailImages(sanitizeHtml(input.bodyHtml)), input.vars);
+  const signatureHtml = input.signature?.html ? sanitizeHtml(input.signature.html) : "";
+  const html = signatureHtml ? `${body}<div style="margin-top:24px">${signatureHtml}</div>` : body;
+  const bodyText = htmlToText(body);
+  const text = input.signature?.text ? `${bodyText}\n\n${input.signature.text}` : bodyText;
   return {
     subject: fillTextVars(input.subject, input.vars),
-    html: buildEmailDocument({ bodyHtml: body, orgName: input.orgName, unsubscribeUrl: input.unsubscribeUrl }),
-    text: `${htmlToText(body)}\n\n--\nVocê recebeu este e-mail de ${input.orgName}. Para não receber mais: ${input.unsubscribeUrl}`,
+    html: buildEmailDocument({ bodyHtml: html, orgName: input.orgName, unsubscribeUrl: input.unsubscribeUrl }),
+    text: `${text}\n\n--\nVocê recebeu este e-mail de ${input.orgName}. Para não receber mais: ${input.unsubscribeUrl}`,
   };
 }

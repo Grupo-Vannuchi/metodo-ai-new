@@ -54,6 +54,7 @@ export const broadcastDraftSchema = z.object({
     .refine((v) => v === "" || isValidEmail(normalizeEmail(v)), "invalid_reply_to"),
   audience: audienceSelectionSchema,
   attachments: z.array(emailAttachmentSchema).max(MAX_ATTACHMENTS).default([]),
+  signatureId: z.string().min(1).max(64).nullable().default(null),
 });
 
 export type BroadcastDraftInput = z.input<typeof broadcastDraftSchema>;

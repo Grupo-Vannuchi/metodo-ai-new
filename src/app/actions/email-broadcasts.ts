@@ -17,6 +17,9 @@ import { resolveAudience } from "@/lib/email-broadcast/audience";
 import { hasEmailContent } from "@/lib/email-broadcast/render";
 import { platformResendKey } from "@/lib/email-broadcast/platform";
 import { checkAttachments, parseAttachments } from "@/lib/email-broadcast/attachments";
+import { composeSignature } from "@/lib/email-broadcast/compose";
+import { signatureContentOf } from "@/lib/email-broadcast/signature";
+import { getEmailSignature } from "@/lib/queries/email-signatures";
 import { isSenderAllowed } from "@/lib/email-broadcast/sender-domain";
 import { listSenderDomains } from "@/lib/queries/email-sender-domains";
 import { searchEmailTargets as searchTargets, countEmailsSentThisMonth } from "@/lib/queries/email-broadcasts";
@@ -37,6 +40,7 @@ export type EmailActionError =
   | "from_required"
   | "from_missing"
   | "attachments_invalid"
+  | "signature_missing"
   | "unknown";
 
 export type EmailActionFail = {
@@ -72,6 +76,11 @@ export async function saveEmailDraft(
   if (checkAttachments(g.ctx.organizationId, parsed.data.attachments)) {
     return { ok: false, error: "attachments_invalid" };
   }
+  // The signature must still exist in THIS org (deleted with the composer open,
+  // or another org's id sent by hand → refuse instead of saving it).
+  if (parsed.data.signatureId && !(await getEmailSignature(g.ctx.organizationId, parsed.data.signatureId))) {
+    return { ok: false, error: "signature_missing" };
+  }
 
   const data = {
     subject: parsed.data.subject,
@@ -81,6 +90,7 @@ export async function saveEmailDraft(
     replyTo: parsed.data.replyTo ? normalizeEmail(parsed.data.replyTo) : null,
     audience: parsed.data.audience as Prisma.InputJsonValue,
     attachments: parsed.data.attachments as Prisma.InputJsonValue,
+    signatureId: parsed.data.signatureId,
   };
   try {
     const db = tenantDb(g.ctx.organizationId);
@@ -123,7 +133,7 @@ export async function duplicateEmailBroadcast(id: string): Promise<{ ok: true; i
     const db = tenantDb(g.ctx.organizationId);
     const src = await db.emailBroadcast.findFirst({
       where: { id },
-      select: { subject: true, html: true, fromName: true, fromEmail: true, replyTo: true, audience: true, attachments: true },
+      select: { subject: true, html: true, fromName: true, fromEmail: true, replyTo: true, audience: true, attachments: true, signatureId: true },
     });
     if (!src) return { ok: false, error: "not_found" };
     const created = await db.emailBroadcast.create({
@@ -137,6 +147,7 @@ export async function duplicateEmailBroadcast(id: string): Promise<{ ok: true; i
         replyTo: src.replyTo,
         audience: (src.audience ?? {}) as Prisma.InputJsonValue,
         attachments: (src.attachments ?? []) as Prisma.InputJsonValue,
+        signatureId: src.signatureId,
       },
     });
     revalidatePath("/app/email");
@@ -195,7 +206,7 @@ export async function startEmailBroadcast(id: string): Promise<{ ok: true } | Em
 
   const b = await db.emailBroadcast.findFirst({
     where: { id },
-    select: { id: true, status: true, subject: true, html: true, audience: true, fromEmail: true, attachments: true },
+    select: { id: true, status: true, subject: true, html: true, audience: true, fromEmail: true, attachments: true, signatureId: true },
   });
   if (!b) return { ok: false, error: "not_found" };
   if (b.status !== "DRAFT") return { ok: false, error: "not_found" };
@@ -210,6 +221,16 @@ export async function startEmailBroadcast(id: string): Promise<{ ok: true } | Em
   const attachments = parseAttachments(b.attachments);
   if (!attachments || checkAttachments(orgId, attachments)) {
     return { ok: false, error: "attachments_invalid" };
+  }
+  // Freeze the chosen signature on the send: later edits or deletes never
+  // change what this send delivers (spec 2026-10-13 §6).
+  let signature: { html: string; text: string } | null = null;
+  let signatureName: string | null = null;
+  if (b.signatureId) {
+    const row = await getEmailSignature(orgId, b.signatureId);
+    if (!row) return { ok: false, error: "signature_missing" };
+    signature = composeSignature(signatureContentOf(row));
+    signatureName = row.name;
   }
 
   const { recipients, stats } = await resolveAudience(orgId, readAudience(b.audience));
@@ -235,6 +256,8 @@ export async function startEmailBroadcast(id: string): Promise<{ ok: true } | Em
       lastDispatchAt: new Date(),
       pausedReason: null,
       lastError: null,
+      signatureHtml: signature?.html ?? null,
+      signatureText: signature?.text ?? null,
     },
   });
   if (claimed.count === 0) return { ok: false, error: "not_found" };
@@ -272,7 +295,7 @@ export async function startEmailBroadcast(id: string): Promise<{ ok: true } | Em
     action: "email_broadcast.started",
     entity: "EmailBroadcast",
     entityId: id,
-    meta: { recipients: recipients.length, fromEmail: b.fromEmail, attachments: attachments.length },
+    meta: { recipients: recipients.length, fromEmail: b.fromEmail, attachments: attachments.length, signature: signatureName },
   });
   await kickEmailBroadcast(id);
   revalidatePath("/app/email");

@@ -48,6 +48,7 @@ export function EmailComposer({
   const [picked, setPicked] = useState(draft.picked);
   const [attachments, setAttachments] = useState(draft.attachments);
   const [uploading, setUploading] = useState(false);
+  const [signatureId] = useState(draft.signatureId);
   const [preview, setPreview] = useState<AudiencePreview | null>(null);
   const [busy, startBusy] = useTransition();
 
@@ -113,7 +114,7 @@ export function EmailComposer({
     };
   }, [audience]);
 
-  const payload = () => ({ subject, html, fromName, fromEmail, replyTo, audience, attachments });
+  const payload = () => ({ subject, html, fromName, fromEmail, replyTo, audience, attachments, signatureId });
   const errorText = (r: EmailActionFail) =>
     r.error === "quota"
       ? t("error.quotaDetail", { total: r.total ?? 0, remaining: r.remaining ?? 0 })

@@ -32,6 +32,7 @@ export type ComposerDraft = {
   audience: AudienceSelection;
   picked: PickedTarget[];
   attachments: EmailAttachment[];
+  signatureId: string | null;
 };
 
 /** A signature as the composer and the Assinaturas tab show it; previewHtml
