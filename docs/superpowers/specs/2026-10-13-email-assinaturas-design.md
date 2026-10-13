@@ -4,6 +4,10 @@
 **Complementa:** as specs do E-mail em massa (2026-10-06, 2026-10-08 e 2026-10-09). Nada do que
 elas definem muda para um envio sem assinatura.
 **Protótipo das telas:** https://claude.ai/artifact/A9rEUB6c9PQctSoFRhvgwK (privado).
+**Atualização (2026-10-13, `feature/email-assinatura-sem-texto`):** o "Texto acima da imagem" do tipo
+"Imagem pronta" foi removido — do formulário, da renderização, da validação e do banco (coluna
+`introText` apagada na migration `20261013180000_email_signatures_drop_intro_text`). As menções a
+`introText`/"texto acima" abaixo descrevem a primeira versão.
 
 ---
 

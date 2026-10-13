@@ -1980,8 +1980,6 @@
         "imageRemove": "Remove",
         "imageLink": "or paste the image link (https://…)",
         "imageHint": "PNG, JPG, GIF or WEBP up to 5 MB. Ideal width: 600 px; on phones the image fits the screen.",
-        "intro": "Text above the image",
-        "introPlaceholder": "Best regards,",
         "href": "Link when clicking the image",
         "hrefPlaceholder": "https://www.yourcompany.com",
         "alt": "Alternative text",
@@ -2008,7 +2006,7 @@
         "image_required": "Upload the signature image or paste its link.",
         "image_url": "Use a direct https:// link to the image.",
         "alt_required": "Fill in the alternative text.",
-        "line_too_long": "The text above the image and the alternative text are up to 200 characters.",
+        "line_too_long": "The alternative text is up to 200 characters.",
         "href": "Invalid destination link. Use an address like https://yourcompany.com.",
         "unknown": "Something went wrong. Try again."
       }

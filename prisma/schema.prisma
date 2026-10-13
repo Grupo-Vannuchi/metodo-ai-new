@@ -2623,7 +2623,6 @@ model EmailSignature {
   imageUrl       String?
   imageAlt       String?
   imageHref      String?
-  introText      String?
   isDefault      Boolean            @default(false)
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt

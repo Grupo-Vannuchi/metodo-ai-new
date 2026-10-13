@@ -67,7 +67,7 @@ export async function saveEmailSignature(
   // Only the chosen kind's fields are kept; TEXT html is stored sanitized.
   const data =
     content.kind === "TEXT"
-      ? { name: f.name, kind: "TEXT" as const, html: cleanHtml, imageUrl: null, imageAlt: null, imageHref: null, introText: null }
+      ? { name: f.name, kind: "TEXT" as const, html: cleanHtml, imageUrl: null, imageAlt: null, imageHref: null }
       : {
           name: f.name,
           kind: "IMAGE" as const,
@@ -75,7 +75,6 @@ export async function saveEmailSignature(
           imageUrl: content.imageUrl,
           imageAlt: content.imageAlt,
           imageHref: content.imageHref,
-          introText: content.introText,
         };
   try {
     let savedId: string;

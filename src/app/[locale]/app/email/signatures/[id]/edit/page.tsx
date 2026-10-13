@@ -44,7 +44,6 @@ export default async function EditEmailSignaturePage({
           imageUrl: s.imageUrl ?? "",
           imageAlt: s.imageAlt ?? "",
           imageHref: s.imageHref ?? "",
-          introText: s.introText ?? "",
           isDefault: s.isDefault,
         }}
       />
