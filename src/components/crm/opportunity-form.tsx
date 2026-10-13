@@ -74,6 +74,7 @@ export function OpportunityForm({
 
   const status = watch("status");
   const stageId = watch("stageId");
+  const companyId = watch("companyId");
   const contactId = watch("contactId");
   const ownerId = watch("ownerId");
   const productServiceId = watch("productServiceId");
@@ -197,12 +198,12 @@ export function OpportunityForm({
           ) : null}
           <div>
             <Label htmlFor="companyId">{t("company")}</Label>
-            <select id="companyId" className={selectCls} {...register("companyId")}>
-              <option value="">{t("none")}</option>
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <SearchSelect
+              id="companyId"
+              options={companies}
+              value={companyId}
+              onChange={(next) => setValue("companyId", next, { shouldDirty: true })}
+            />
           </div>
           <div>
             <Label htmlFor="contactId">{t("contact")}</Label>
