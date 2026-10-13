@@ -107,6 +107,8 @@ export async function runEmailBroadcast(
       fromEmail: true,
       replyTo: true,
       attachments: true,
+      signatureHtml: true,
+      signatureText: true,
     },
   });
   if (!b || b.status !== "SENDING") return { done: true };
@@ -218,6 +220,8 @@ export async function runEmailBroadcast(
     // After the (possibly slow) file reads, so they don't eat the queue budget.
     const deadline = opts.budgetMs ? Date.now() + opts.budgetMs : Number.POSITIVE_INFINITY;
 
+    // The signature frozen when the send started; email_signatures is never read here.
+    const signature = b.signatureHtml ? { html: b.signatureHtml, text: b.signatureText ?? "" } : null;
     const toEmail = (r: Batch[number]): ResendEmail => {
       const composed = composeEmail({
         subject: b.subject,
@@ -225,6 +229,7 @@ export async function runEmailBroadcast(
         vars: { nome: r.name ?? "", empresa: r.companyName ?? "" },
         orgName,
         unsubscribeUrl: emailUnsubscribePageUrl(r.id),
+        signature,
       });
       return {
         from,

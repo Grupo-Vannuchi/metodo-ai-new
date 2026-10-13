@@ -32,4 +32,16 @@ export type ComposerDraft = {
   audience: AudienceSelection;
   picked: PickedTarget[];
   attachments: EmailAttachment[];
+  signatureId: string | null;
+};
+
+/** A signature as the composer and the Assinaturas tab show it; previewHtml
+ * is server-sanitized (composeSignature). */
+export type SignatureOption = {
+  id: string;
+  name: string;
+  kind: "TEXT" | "IMAGE";
+  isDefault: boolean;
+  updatedAt: string;
+  previewHtml: string;
 };

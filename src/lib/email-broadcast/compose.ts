@@ -8,8 +8,26 @@ import {
   prepareEmailImages,
   type TemplateVars,
 } from "./render";
+import { renderSignature, untilStable, type SignatureContent } from "./signature";
 
 export type ComposedEmail = { subject: string; html: string; text: string };
+
+export type ComposedSignature = { html: string; text: string };
+
+/** sanitizeHtml run to a fixed point (see untilStable). */
+export function sanitizeHtmlStable(html: string): string {
+  return untilStable(sanitizeHtml, html);
+}
+
+/**
+ * A signature as it is shown and sent: rendered, run to a fixed point through
+ * the same allowlist sanitizer as the body, with e-mail-safe images. This is
+ * the value frozen on a send when it starts (spec 2026-10-13 §6).
+ */
+export function composeSignature(content: SignatureContent): ComposedSignature {
+  const rendered = renderSignature(content);
+  return { html: prepareEmailImages(sanitizeHtmlStable(rendered.html)), text: rendered.text };
+}
 
 /**
  * Final subject/HTML/text for one recipient. The editor HTML goes through the
@@ -22,11 +40,19 @@ export function composeEmail(input: {
   vars: TemplateVars;
   orgName: string;
   unsubscribeUrl: string;
+  /** Frozen copy from the send (already prepared by composeSignature); it is
+   * only re-sanitized here (sanitizeHtmlStable), never re-run through
+   * prepareEmailImages, which is not idempotent. */
+  signature?: ComposedSignature | null;
 }): ComposedEmail {
   const body = fillHtmlVars(prepareEmailImages(sanitizeHtml(input.bodyHtml)), input.vars);
+  const signatureHtml = input.signature?.html ? sanitizeHtmlStable(input.signature.html) : "";
+  const html = signatureHtml ? `${body}<div style="margin-top:24px">${signatureHtml}</div>` : body;
+  const bodyText = htmlToText(body);
+  const text = input.signature?.text ? `${bodyText}\n\n${input.signature.text}` : bodyText;
   return {
     subject: fillTextVars(input.subject, input.vars),
-    html: buildEmailDocument({ bodyHtml: body, orgName: input.orgName, unsubscribeUrl: input.unsubscribeUrl }),
-    text: `${htmlToText(body)}\n\n--\nVocê recebeu este e-mail de ${input.orgName}. Para não receber mais: ${input.unsubscribeUrl}`,
+    html: buildEmailDocument({ bodyHtml: html, orgName: input.orgName, unsubscribeUrl: input.unsubscribeUrl }),
+    text: `${text}\n\n--\nVocê recebeu este e-mail de ${input.orgName}. Para não receber mais: ${input.unsubscribeUrl}`,
   };
 }

@@ -73,6 +73,7 @@ export default async function EmailReportPage({
     vars: { nome: "{{nome}}", empresa: "{{empresa}}" },
     orgName: ctx.organization.name,
     unsubscribeUrl: "#",
+    signature: b.signatureHtml ? { html: b.signatureHtml, text: b.signatureText ?? "" } : null,
   });
 
   return (

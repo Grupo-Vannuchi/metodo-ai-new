@@ -53,10 +53,12 @@ export default async function EditEmailPage({
           audience,
           picked,
           attachments: readAttachments(b.attachments),
+          signatureId: b.signatureId,
         }}
         options={data.options}
         allowedDomains={data.allowedDomains}
         quota={data.quota}
+        signatures={data.signatures}
       />
     </div>
   );

@@ -51,6 +51,14 @@ import {
   readAttachments,
   type EmailAttachment,
 } from "../src/lib/email-broadcast/attachments";
+import {
+  renderSignature,
+  signatureContentFromForm,
+  signatureContentOf,
+  signatureImageSrc,
+  signatureProblem,
+  untilStable,
+} from "../src/lib/email-broadcast/signature";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -556,6 +564,90 @@ check("attachmentSizeParts shows KB under 1 MB and MB above", () => {
   assert.deepEqual(attachmentSizeParts(1024 * 1024), { value: 1, unit: "MB" });
   assert.deepEqual(attachmentSizeParts(4.25 * 1024 * 1024), { value: 4.3, unit: "MB" });
   assert.deepEqual(attachmentSizeParts(MAX_ATTACHMENTS_BYTES), { value: 10, unit: "MB" });
+});
+
+// --- signatures --------------------------------------------------------------
+const IMG = "https://cdn.exemplo.com/assinatura.png";
+
+check("renderSignature TEXT passes the html and derives the text part", () => {
+  const r = renderSignature({ kind: "TEXT", html: "<p><strong>Ana</strong></p><p>(11) 3000-0000</p>" });
+  assert.equal(r.html, "<p><strong>Ana</strong></p><p>(11) 3000-0000</p>");
+  assert.equal(r.text, "Ana\n(11) 3000-0000");
+});
+
+check("renderSignature IMAGE builds intro + linked image and escapes everything", () => {
+  const r = renderSignature({
+    kind: "IMAGE",
+    imageUrl: IMG,
+    imageAlt: 'Ana "Diretora" <Comercial> & cia',
+    imageHref: "www.suaempresa.com.br",
+    introText: "Atenciosamente,",
+  });
+  assert.equal(
+    r.html,
+    '<p>Atenciosamente,</p><a href="https://www.suaempresa.com.br/"><img src="https://cdn.exemplo.com/assinatura.png" alt="Ana &quot;Diretora&quot; &lt;Comercial&gt; &amp; cia"></a>',
+  );
+  assert.equal(r.text, 'Atenciosamente,\nAna "Diretora" <Comercial> & cia\nhttps://www.suaempresa.com.br/');
+});
+
+check("renderSignature IMAGE without intro or link is just the image", () => {
+  const r = renderSignature({ kind: "IMAGE", imageUrl: IMG, imageAlt: "Ana", imageHref: null, introText: null });
+  assert.equal(r.html, '<img src="https://cdn.exemplo.com/assinatura.png" alt="Ana">');
+  assert.equal(r.text, "Ana");
+});
+
+check("signatureImageSrc takes https or the app's own local media route only", () => {
+  assert.equal(signatureImageSrc(IMG), IMG);
+  assert.equal(signatureImageSrc("http://localhost:3000/api/media/email/x.png"), "http://localhost:3000/api/media/email/x.png");
+  assert.equal(signatureImageSrc("http://evil.example/x.png"), null);
+  assert.equal(signatureImageSrc("javascript:alert(1)"), null);
+  assert.equal(signatureImageSrc(""), null);
+  assert.equal(signatureImageSrc("http://evil.example/api/media/x.png"), null);
+  assert.equal(signatureImageSrc("http://127.0.0.1:3000/api/media/email/x.png"), "http://127.0.0.1:3000/api/media/email/x.png");
+});
+
+check("signatureProblem flags what blocks a save", () => {
+  assert.equal(signatureProblem({ kind: "TEXT", html: "<p>Ana</p>" }), null);
+  assert.equal(signatureProblem({ kind: "TEXT", html: "<p></p>" }), "html_empty");
+  assert.equal(signatureProblem({ kind: "TEXT", html: `<p>${"a".repeat(50_000)}</p>` }), "html_too_long");
+  const ok = { kind: "IMAGE" as const, imageUrl: IMG, imageAlt: "Ana", imageHref: null, introText: null };
+  assert.equal(signatureProblem(ok), null);
+  assert.equal(signatureProblem({ ...ok, imageUrl: "" }), "image_required");
+  assert.equal(signatureProblem({ ...ok, imageUrl: "http://evil.example/x.png" }), "image_url");
+  assert.equal(signatureProblem({ ...ok, imageAlt: "  " }), "alt_required");
+  assert.equal(signatureProblem({ ...ok, imageAlt: "a".repeat(201) }), "line_too_long");
+  assert.equal(signatureProblem({ ...ok, introText: "a".repeat(201) }), "line_too_long");
+  assert.equal(signatureProblem({ ...ok, imageHref: "javascript:alert(1)" }), "href");
+});
+
+check("signatureContentFromForm trims and keeps only the chosen kind", () => {
+  const base = { html: "<p>x</p>", imageUrl: ` ${IMG} `, imageAlt: " Ana ", imageHref: "  ", introText: "" };
+  assert.deepEqual(signatureContentFromForm({ kind: "TEXT", ...base }), { kind: "TEXT", html: "<p>x</p>" });
+  assert.deepEqual(signatureContentFromForm({ kind: "IMAGE", ...base }), {
+    kind: "IMAGE",
+    imageUrl: IMG,
+    imageAlt: "Ana",
+    imageHref: null,
+    introText: null,
+  });
+});
+
+check("signatureContentOf reads a stored row", () => {
+  const row = { kind: "IMAGE" as const, html: "", imageUrl: IMG, imageAlt: "Ana", imageHref: null, introText: "Oi" };
+  assert.deepEqual(signatureContentOf(row), { kind: "IMAGE", imageUrl: IMG, imageAlt: "Ana", imageHref: null, introText: "Oi" });
+  assert.deepEqual(signatureContentOf({ ...row, kind: "TEXT", html: "<p>a</p>" }), { kind: "TEXT", html: "<p>a</p>" });
+});
+
+check("untilStable reaches a fixed point and gives up on oscillation", () => {
+  // A single-pass stripper splices a new tag together when it removes one.
+  const strip = (s: string) => s.replace(/<x>/g, "");
+  assert.equal(strip("<<x<x>>img>"), "<<x>img>");
+  assert.equal(untilStable(strip, "<<x<x>>img>"), "<img>");
+  assert.equal(strip("<<x>x>img>"), "<x>img>");
+  assert.equal(untilStable(strip, "<<x>x>img>"), "img>");
+  assert.equal(untilStable((s) => s + "a", "", 3), "");
+  assert.equal(untilStable((s) => (s === "a" ? "b" : "a"), "a"), "");
+  assert.equal(untilStable((s) => s, "abc"), "abc");
 });
 
 console.log(`\n✅ email-broadcast: ${passed} checks passed.`);

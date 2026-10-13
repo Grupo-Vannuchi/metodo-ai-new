@@ -6,6 +6,7 @@ import { deliveryTrackingConfigured } from "@/lib/email-broadcast/platform";
 import { listSenderDomains } from "@/lib/queries/email-sender-domains";
 import { DeleteButton } from "@/components/crm/delete-button";
 import { deleteEmailDraft } from "@/app/actions/email-broadcasts";
+import { EmailTabs } from "@/components/email/email-tabs";
 import { StatusBadge } from "@/components/email/status-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { LIMITS } from "@/config/limits";
@@ -41,6 +42,8 @@ export default async function EmailPage({ params }: { params: Promise<{ locale: 
           {t("new")}
         </Link>
       </div>
+
+      <EmailTabs active="sends" />
 
       <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         {domains.length > 0 ? (

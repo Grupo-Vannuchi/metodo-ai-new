@@ -1,18 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
 import { useConfirm } from "@/components/ui/confirm";
 import { useToast } from "@/components/ui/toast";
-import { useRouter } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { isSenderAllowed } from "@/lib/email-broadcast/sender-domain";
-import { RichTextEditor, type EditorImageSupport } from "@/components/proposals/rich-text-editor";
-import { safeClickHref, safeImageSrc } from "@/lib/email-broadcast/image-links";
+import { RichTextEditor } from "@/components/proposals/rich-text-editor";
+import { useEmailImageSupport } from "@/components/email/use-email-image-support";
 import { RecipientPicker } from "@/components/email/recipient-picker";
 import { AudienceSummary } from "@/components/email/audience-summary";
 import { EmailAttachments } from "@/components/email/email-attachments";
+import { SignaturePreview } from "@/components/email/signature-preview";
 import { estimateAttachmentSendMinutes } from "@/lib/email-broadcast/attachments";
 import {
   previewEmailAudience,
@@ -20,7 +21,7 @@ import {
   startEmailBroadcast,
   type EmailActionFail,
 } from "@/app/actions/email-broadcasts";
-import type { AudiencePreview, ComposerDraft, ComposerOptions } from "@/lib/email-broadcast/types";
+import type { AudiencePreview, ComposerDraft, ComposerOptions, SignatureOption } from "@/lib/email-broadcast/types";
 
 /** New/edit screen of a mass e-mail: message on the left, recipients + summary on the right. */
 export function EmailComposer({
@@ -28,11 +29,13 @@ export function EmailComposer({
   options,
   allowedDomains,
   quota,
+  signatures,
 }: {
   draft: ComposerDraft;
   options: ComposerOptions;
   allowedDomains: string[];
   quota: { used: number; limit: number };
+  signatures: SignatureOption[];
 }) {
   const t = useTranslations("emailBroadcast");
   const router = useRouter();
@@ -48,50 +51,15 @@ export function EmailComposer({
   const [picked, setPicked] = useState(draft.picked);
   const [attachments, setAttachments] = useState(draft.attachments);
   const [uploading, setUploading] = useState(false);
+  // The user's choice; effectiveSignatureId normalizes it against the current
+  // list (a signature deleted in another tab drops out after a refresh).
+  const [signatureId, setSignatureId] = useState<string | null>(draft.signatureId);
+  const chosenSignature = signatures.find((s) => s.id === signatureId) ?? null;
+  const effectiveSignatureId = chosenSignature?.id ?? null;
   const [preview, setPreview] = useState<AudiencePreview | null>(null);
   const [busy, startBusy] = useTransition();
 
-  // Image support for the body editor: upload goes to /api/email/image (same
-  // gates as this screen); pasted links are validated client-side.
-  const imageSupport = useMemo<EditorImageSupport>(
-    () => ({
-      upload: async (file) => {
-        const form = new FormData();
-        form.append("file", file);
-        try {
-          const res = await fetch("/api/email/image", { method: "POST", body: form });
-          const data = (await res.json().catch(() => ({}))) as { ok?: boolean; url?: string; error?: string };
-          if (res.ok && data.ok && data.url) return data.url;
-          const key = data.error === "size" ? "image.tooLarge" : data.error === "type" ? "image.badType" : "image.uploadError";
-          toast(t(key), { variant: "error" });
-        } catch (error) {
-          console.error("[email-image] upload failed", error);
-          toast(t("image.uploadError"), { variant: "error" });
-        }
-        return null;
-      },
-      validateSrc: safeImageSrc,
-      validateHref: safeClickHref,
-      labels: {
-        button: t("image.button"),
-        title: t("image.title"),
-        upload: t("image.upload"),
-        uploading: t("image.uploading"),
-        uploaded: t("image.uploaded"),
-        orLink: t("image.orLink"),
-        linkPlaceholder: t("image.linkPlaceholder"),
-        href: t("image.href"),
-        hrefPlaceholder: t("image.hrefPlaceholder"),
-        alt: t("image.alt"),
-        altPlaceholder: t("image.altPlaceholder"),
-        insert: t("image.insert"),
-        cancel: t("image.cancel"),
-        invalidSrc: t("image.invalidSrc"),
-        invalidHref: t("image.invalidHref"),
-      },
-    }),
-    [t, toast],
-  );
+  const imageSupport = useEmailImageSupport();
   const noDomains = allowedDomains.length === 0;
   const fromAllowed = isSenderAllowed(fromEmail, allowedDomains);
   const fromProblem = fromEmail.trim() !== "" && !fromAllowed;
@@ -113,7 +81,24 @@ export function EmailComposer({
     };
   }, [audience]);
 
-  const payload = () => ({ subject, html, fromName, fromEmail, replyTo, audience, attachments });
+  // Signatures are managed in another tab: refresh the list on return (client
+  // state survives router.refresh()).
+  useEffect(() => {
+    const onFocus = () => router.refresh();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [router]);
+
+  const payload = () => ({
+    subject,
+    html,
+    fromName,
+    fromEmail,
+    replyTo,
+    audience,
+    attachments,
+    signatureId: effectiveSignatureId,
+  });
   const errorText = (r: EmailActionFail) =>
     r.error === "quota"
       ? t("error.quotaDetail", { total: r.total ?? 0, remaining: r.remaining ?? 0 })
@@ -122,6 +107,8 @@ export function EmailComposer({
   async function save(): Promise<string | null> {
     const r = await saveEmailDraft(id, payload());
     if (!r.ok) {
+      // A deleted signature must leave the select.
+      if (r.error === "signature_missing") router.refresh();
       toast(errorText(r), { variant: "error" });
       return null;
     }
@@ -185,8 +172,9 @@ export function EmailComposer({
         confirmLabel: t("confirmSend", { count: s.total }),
       });
       if (!ok) return;
-      const r = await startEmailBroadcast(savedId);
+      const r = await startEmailBroadcast(savedId, effectiveSignatureId);
       if (!r.ok) {
+        if (r.error === "signature_missing") router.refresh();
         toast(errorText(r), { variant: "error" });
         return;
       }
@@ -257,6 +245,60 @@ export function EmailComposer({
           <p className="mt-2 text-xs text-muted-foreground">
             {t("footerNotice")} {t("emptyVarHint")}
           </p>
+        </div>
+        {/* Signature links open in a new tab so the e-mail being written is kept;
+            the list refreshes when this window regains focus. */}
+        <div className="flex flex-col gap-2">
+          {signatures.length === 0 ? (
+            <>
+              <p className="text-sm font-medium">{t("signature.title")}</p>
+              <p className="text-sm text-muted-foreground">
+                {t("signature.none")}{" "}
+                <Link
+                  href="/app/email/signatures/new"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-brand hover:underline"
+                >
+                  {t("signature.create")}
+                </Link>
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label htmlFor="signature" className="mb-0">
+                  {t("signature.title")}
+                </Label>
+                <Link
+                  href="/app/email/signatures"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-brand hover:underline"
+                >
+                  {t("signature.manage")}
+                </Link>
+              </div>
+              <select
+                id="signature"
+                value={effectiveSignatureId ?? ""}
+                onChange={(e) => setSignatureId(e.target.value || null)}
+                className="w-full max-w-sm rounded-lg border border-border bg-card px-4 py-2.5 text-sm focus-visible:border-brand focus-visible:outline-none"
+              >
+                {signatures.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.isDefault ? t("signature.defaultOption", { name: s.name }) : s.name}
+                  </option>
+                ))}
+                <option value="">{t("signature.noSignature")}</option>
+              </select>
+              {chosenSignature ? (
+                <SignaturePreview html={chosenSignature.previewHtml} title={t("signature.title")} height={180} />
+              ) : (
+                <p className="text-xs text-muted-foreground">{t("signature.noneChosen")}</p>
+              )}
+            </>
+          )}
         </div>
         <EmailAttachments value={attachments} onChange={setAttachments} onUploadingChange={setUploading} />
       </section>
