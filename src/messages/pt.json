@@ -1918,7 +1918,7 @@
     "attachments": {
       "title": "Anexos",
       "add": "Adicionar arquivos",
-      "counter": "{count, plural, one {# arquivo} other {# arquivos}} · {used} de {max}",
+      "counter": "{count, plural, =0 {Nenhum arquivo} one {# arquivo} other {# arquivos}} · {used} de {max}",
       "notice": "E-mails com anexo saem um por um, cerca de 2 por segundo.",
       "uploading": "Enviando {file}…",
       "remove": "Remover {file}",

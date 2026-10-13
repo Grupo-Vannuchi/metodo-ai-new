@@ -1918,7 +1918,7 @@
     "attachments": {
       "title": "Attachments",
       "add": "Add files",
-      "counter": "{count, plural, one {# file} other {# files}} · {used} of {max}",
+      "counter": "{count, plural, =0 {No files} one {# file} other {# files}} · {used} of {max}",
       "notice": "Emails with attachments go out one by one, about 2 per second.",
       "uploading": "Uploading {file}…",
       "remove": "Remove {file}",
