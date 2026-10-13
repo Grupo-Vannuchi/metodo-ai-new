@@ -20,15 +20,17 @@ export function SignatureCard({ signature }: { signature: SignatureOption }) {
   const router = useRouter();
   const [busy, start] = useTransition();
 
-  const onDelete = () =>
+  const onDelete = async () => {
+    // Ask first, outside the transition: React 19 holds state updates made at the
+    // start of an async transition until it ends, so a dialog opened there never shows.
+    const ok = await confirm({
+      title: t("deleteTitle", { name: signature.name }),
+      description: t("deleteBody"),
+      confirmLabel: t("deleteConfirm"),
+      variant: "danger",
+    });
+    if (!ok) return;
     start(async () => {
-      const ok = await confirm({
-        title: t("deleteTitle", { name: signature.name }),
-        description: t("deleteBody"),
-        confirmLabel: t("deleteConfirm"),
-        variant: "danger",
-      });
-      if (!ok) return;
       try {
         const r = await deleteEmailSignature(signature.id);
         if (!r.ok) {
@@ -41,6 +43,7 @@ export function SignatureCard({ signature }: { signature: SignatureOption }) {
         toast(t("errors.unknown"), { variant: "error" });
       }
     });
+  };
 
   const onSetDefault = () =>
     start(async () => {
@@ -90,7 +93,7 @@ export function SignatureCard({ signature }: { signature: SignatureOption }) {
           <Link href={`/app/email/signatures/${signature.id}/edit`} className={buttonVariants({ variant: "outline", size: "sm" })}>
             {t("edit")}
           </Link>
-          <Button type="button" variant="outline" size="sm" onClick={onDelete} disabled={busy} className="text-red-600">
+          <Button type="button" variant="outline" size="sm" onClick={() => void onDelete()} disabled={busy} className="text-red-600">
             {t("delete")}
           </Button>
         </div>
