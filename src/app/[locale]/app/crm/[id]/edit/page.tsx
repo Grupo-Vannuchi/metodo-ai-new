@@ -1,7 +1,8 @@
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { requireOrgContext } from "@/lib/tenant";
-import { getOpportunity, stageOptions, productServiceOptions } from "@/lib/queries/crm";
+import { getOpportunity, productServiceOptions } from "@/lib/queries/crm";
+import { listPipelinesWithStages } from "@/lib/queries/pipelines";
 import { companyOptions } from "@/lib/queries/companies";
 import { contactOptions } from "@/lib/queries/contacts";
 import { listMembers } from "@/lib/queries/organizations";
@@ -22,9 +23,11 @@ export default async function EditOpportunityPage({
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("crm.opportunity");
 
-  const [opp, stages, companies, contacts, rawMembers, products] = await Promise.all([
+  // Every pipeline (not just the default) so the card's own stage is listed and
+  // it can be moved to another pipeline.
+  const [opp, pipelines, companies, contacts, rawMembers, products] = await Promise.all([
     getOpportunity(ctx.organizationId, id),
-    stageOptions(ctx.organizationId),
+    listPipelinesWithStages(ctx.organizationId),
     companyOptions(ctx.organizationId),
     contactOptions(ctx.organizationId),
     listMembers(ctx.organizationId),
@@ -56,7 +59,7 @@ export default async function EditOpportunityPage({
           notes: opp.notes ?? "",
           outcomeReason: opp.outcomeReason ?? "",
         }}
-        stages={stages.stages}
+        pipelines={pipelines}
         companies={companies}
         contacts={contacts}
         members={members.map((m) => ({ id: m.userId, name: m.name }))}
