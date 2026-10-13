@@ -51,8 +51,11 @@ export function EmailComposer({
   const [picked, setPicked] = useState(draft.picked);
   const [attachments, setAttachments] = useState(draft.attachments);
   const [uploading, setUploading] = useState(false);
+  // The user's choice; effectiveSignatureId normalizes it against the current
+  // list (a signature deleted in another tab drops out after a refresh).
   const [signatureId, setSignatureId] = useState<string | null>(draft.signatureId);
   const chosenSignature = signatures.find((s) => s.id === signatureId) ?? null;
+  const effectiveSignatureId = chosenSignature?.id ?? null;
   const [preview, setPreview] = useState<AudiencePreview | null>(null);
   const [busy, startBusy] = useTransition();
 
@@ -78,7 +81,24 @@ export function EmailComposer({
     };
   }, [audience]);
 
-  const payload = () => ({ subject, html, fromName, fromEmail, replyTo, audience, attachments, signatureId });
+  // Signatures are managed in another tab: refresh the list on return (client
+  // state survives router.refresh()).
+  useEffect(() => {
+    const onFocus = () => router.refresh();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [router]);
+
+  const payload = () => ({
+    subject,
+    html,
+    fromName,
+    fromEmail,
+    replyTo,
+    audience,
+    attachments,
+    signatureId: effectiveSignatureId,
+  });
   const errorText = (r: EmailActionFail) =>
     r.error === "quota"
       ? t("error.quotaDetail", { total: r.total ?? 0, remaining: r.remaining ?? 0 })
@@ -87,6 +107,8 @@ export function EmailComposer({
   async function save(): Promise<string | null> {
     const r = await saveEmailDraft(id, payload());
     if (!r.ok) {
+      // A deleted signature must leave the select.
+      if (r.error === "signature_missing") router.refresh();
       toast(errorText(r), { variant: "error" });
       return null;
     }
@@ -150,8 +172,9 @@ export function EmailComposer({
         confirmLabel: t("confirmSend", { count: s.total }),
       });
       if (!ok) return;
-      const r = await startEmailBroadcast(savedId, signatureId);
+      const r = await startEmailBroadcast(savedId, effectiveSignatureId);
       if (!r.ok) {
+        if (r.error === "signature_missing") router.refresh();
         toast(errorText(r), { variant: "error" });
         return;
       }
@@ -223,27 +246,42 @@ export function EmailComposer({
             {t("footerNotice")} {t("emptyVarHint")}
           </p>
         </div>
+        {/* Signature links open in a new tab so the e-mail being written is kept;
+            the list refreshes when this window regains focus. */}
         <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Label htmlFor="signature" className="mb-0">
-              {t("signature.title")}
-            </Label>
-            <Link href="/app/email/signatures" className="text-sm font-medium text-brand hover:underline">
-              {t("signature.manage")}
-            </Link>
-          </div>
           {signatures.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {t("signature.none")}{" "}
-              <Link href="/app/email/signatures/new" className="font-medium text-brand hover:underline">
-                {t("signature.create")}
-              </Link>
-            </p>
+            <>
+              <p className="text-sm font-medium">{t("signature.title")}</p>
+              <p className="text-sm text-muted-foreground">
+                {t("signature.none")}{" "}
+                <Link
+                  href="/app/email/signatures/new"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-brand hover:underline"
+                >
+                  {t("signature.create")}
+                </Link>
+              </p>
+            </>
           ) : (
             <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label htmlFor="signature" className="mb-0">
+                  {t("signature.title")}
+                </Label>
+                <Link
+                  href="/app/email/signatures"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-brand hover:underline"
+                >
+                  {t("signature.manage")}
+                </Link>
+              </div>
               <select
                 id="signature"
-                value={signatureId ?? ""}
+                value={effectiveSignatureId ?? ""}
                 onChange={(e) => setSignatureId(e.target.value || null)}
                 className="w-full max-w-sm rounded-lg border border-border bg-card px-4 py-2.5 text-sm focus-visible:border-brand focus-visible:outline-none"
               >
