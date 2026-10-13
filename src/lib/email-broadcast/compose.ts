@@ -8,8 +8,21 @@ import {
   prepareEmailImages,
   type TemplateVars,
 } from "./render";
+import { renderSignature, type SignatureContent } from "./signature";
 
 export type ComposedEmail = { subject: string; html: string; text: string };
+
+export type ComposedSignature = { html: string; text: string };
+
+/**
+ * A signature as it is shown and sent: rendered, run through the same
+ * allowlist sanitizer as the body, with e-mail-safe images. This is the value
+ * frozen on a send when it starts (spec 2026-10-13 §6).
+ */
+export function composeSignature(content: SignatureContent): ComposedSignature {
+  const rendered = renderSignature(content);
+  return { html: prepareEmailImages(sanitizeHtml(rendered.html)), text: rendered.text };
+}
 
 /**
  * Final subject/HTML/text for one recipient. The editor HTML goes through the
