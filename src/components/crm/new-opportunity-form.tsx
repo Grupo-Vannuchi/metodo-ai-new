@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { useTranslations } from "next-intl";
 import { Plus, X, Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { createOpportunity } from "@/app/actions/opportunities";
 import { createContact } from "@/app/actions/contacts";
 import { createCompany, lookupCnpj } from "@/app/actions/companies";
 import { createProductService } from "@/app/actions/product-services";
+import { PipelineStageFields, type PipelineOption } from "@/components/crm/pipeline-stage-fields";
 
 type Option = { id: string; name: string };
 type ProductOption = { id: string; name: string; kind: "PRODUCT" | "SERVICE"; price: number | null };
@@ -42,7 +43,8 @@ const miniCls = cn(
 );
 
 export function NewOpportunityForm({
-  stages,
+  pipelines,
+  initialPipelineId,
   companies,
   contacts,
   members,
@@ -51,7 +53,8 @@ export function NewOpportunityForm({
   initialCompanyId,
   isMemberRole,
 }: {
-  stages: Option[];
+  pipelines: PipelineOption[];
+  initialPipelineId: string;
   companies: Option[];
   contacts: Option[];
   members: Option[];
@@ -92,12 +95,13 @@ export function NewOpportunityForm({
     handleSubmit,
     setValue,
     getValues,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<Values>({
     defaultValues: {
       title: "",
       value: "",
-      stageId: stages[0]?.id ?? "",
+      stageId: pipelines.find((p) => p.id === initialPipelineId)?.stages[0]?.id ?? "",
       companyId: initialCompanyId ?? "",
       contactId: initialContactId ?? "",
       productServiceId: "",
@@ -106,6 +110,7 @@ export function NewOpportunityForm({
       notes: "",
     },
   });
+  const stageId = useWatch({ control, name: "stageId" });
 
   // AI copilot pre-fill (review only; never saves). Money/company/contact/owner
   // stay with the user (uncontrolled money input / need real ids).
@@ -121,7 +126,9 @@ export function NewOpportunityForm({
           name: "stageId",
           label: "Etapa do funil",
           type: "select",
-          options: stages.map((s) => ({ value: s.id, label: s.name })),
+          options: pipelines.flatMap((p) =>
+            p.stages.map((s) => ({ value: s.id, label: `${p.name} › ${s.name}` })),
+          ),
         },
       ],
       apply: (values) => {
@@ -136,7 +143,7 @@ export function NewOpportunityForm({
         }
       },
     }),
-    [stages, setValue],
+    [pipelines, setValue],
   );
   useRegisterAssistantForm(bridge);
 
@@ -256,19 +263,20 @@ export function NewOpportunityForm({
             <Input id="title" aria-invalid={Boolean(errors.title)} {...register("title", { required: tv("required") })} />
             <FieldError>{errors.title?.message}</FieldError>
           </div>
+          <PipelineStageFields
+            pipelines={pipelines}
+            stageId={stageId}
+            onStageChange={(next) => setValue("stageId", next, { shouldDirty: true })}
+            pipelineLabel={t("pipeline")}
+            stageLabel={t("stage")}
+            selectClassName={selectCls}
+          />
           <div>
             <Label htmlFor="value">{t("value")}</Label>
             <MoneyInput id="value" onValueChange={(n) => setValue("value", String(n))} />
             <input type="hidden" {...register("value")} />
           </div>
-          <div>
-            <Label htmlFor="stageId">{t("stage")}</Label>
-            <select id="stageId" className={selectCls} {...register("stageId", { required: true })}>
-              {stages.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
+          <div className="hidden sm:block" />
 
           <div>
             <FieldRow label={t("company")} onAdd={() => toggle("company")} open={open === "company"} addLabel={tf("newCompany")} />
