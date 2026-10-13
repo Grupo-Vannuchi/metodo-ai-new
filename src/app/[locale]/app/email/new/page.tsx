@@ -37,11 +37,12 @@ export default async function NewEmailPage({ params }: { params: Promise<{ local
           audience: EMPTY_AUDIENCE,
           picked: [],
           attachments: [],
-          signatureId: null,
+          signatureId: data.signatures.find((s) => s.isDefault)?.id ?? null,
         }}
         options={data.options}
         allowedDomains={data.allowedDomains}
         quota={data.quota}
+        signatures={data.signatures}
       />
     </div>
   );

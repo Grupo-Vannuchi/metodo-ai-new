@@ -1932,6 +1932,15 @@
       "sends": "Envios",
       "signatures": "Assinaturas"
     },
+    "signature": {
+      "title": "Assinatura",
+      "manage": "Gerenciar assinaturas",
+      "defaultOption": "{name} (padrão)",
+      "noSignature": "Sem assinatura",
+      "noneChosen": "Este e-mail vai sem assinatura. O aviso de descadastro continua no rodapé.",
+      "none": "Nenhuma assinatura cadastrada.",
+      "create": "Criar assinatura"
+    },
     "signatures": {
       "title": "Assinaturas",
       "intro": "As assinaturas são da empresa e aparecem para todos que usam o E-mail. A padrão já vem escolhida em cada e-mail novo.",

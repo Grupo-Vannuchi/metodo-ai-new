@@ -3,6 +3,7 @@ import type { EmailRecipientStatus } from "@prisma/client";
 import { tenantDb } from "@/lib/tenant-db";
 import { LIMITS } from "@/config/limits";
 import { listSenderDomains } from "@/lib/queries/email-sender-domains";
+import { listSignatureOptions } from "@/lib/queries/email-signatures";
 import type { ComposerOptions, PickedTarget } from "@/lib/email-broadcast/types";
 
 const PROBLEM_STATUSES: EmailRecipientStatus[] = ["BOUNCED", "COMPLAINED", "FAILED"];
@@ -146,15 +147,17 @@ export async function emailComposerOptions(organizationId: string): Promise<Comp
 
 /** Everything the composer page needs besides the draft itself. */
 export async function emailComposerData(organizationId: string) {
-  const [options, allowedDomains, used] = await Promise.all([
+  const [options, allowedDomains, used, signatures] = await Promise.all([
     emailComposerOptions(organizationId),
     listSenderDomains(organizationId),
     countEmailsSentThisMonth(organizationId),
+    listSignatureOptions(organizationId),
   ]);
   return {
     options,
     allowedDomains,
     quota: { used, limit: LIMITS.emailBroadcastQuotaPerMonth },
+    signatures,
   };
 }
 

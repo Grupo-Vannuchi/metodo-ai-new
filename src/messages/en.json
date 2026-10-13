@@ -1932,6 +1932,15 @@
       "sends": "Sends",
       "signatures": "Signatures"
     },
+    "signature": {
+      "title": "Signature",
+      "manage": "Manage signatures",
+      "defaultOption": "{name} (default)",
+      "noSignature": "No signature",
+      "noneChosen": "This email goes without a signature. The unsubscribe notice stays in the footer.",
+      "none": "No signatures yet.",
+      "create": "Create signature"
+    },
     "signatures": {
       "title": "Signatures",
       "intro": "Signatures belong to the company and show up for everyone who uses Email. The default one comes selected in every new email.",

@@ -58,6 +58,7 @@ export default async function EditEmailPage({
         options={data.options}
         allowedDomains={data.allowedDomains}
         quota={data.quota}
+        signatures={data.signatures}
       />
     </div>
   );
