@@ -7,6 +7,7 @@ import { Plus, X, Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea, FieldError } from "@/components/ui/field";
 import { MoneyInput } from "@/components/ui/money-input";
+import { SearchSelect } from "@/components/ui/search-select";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { onlyDigits, formatCnpj } from "@/lib/cnpj";
@@ -111,6 +112,9 @@ export function NewOpportunityForm({
     },
   });
   const stageId = useWatch({ control, name: "stageId" });
+  const contactId = useWatch({ control, name: "contactId" });
+  const ownerId = useWatch({ control, name: "ownerId" });
+  const productServiceId = useWatch({ control, name: "productServiceId" });
 
   // AI copilot pre-fill (review only; never saves). Money/company/contact/owner
   // stay with the user (uncontrolled money input / need real ids).
@@ -309,13 +313,13 @@ export function NewOpportunityForm({
           </div>
 
           <div>
-            <FieldRow label={t("contact")} onAdd={() => toggle("contact")} open={open === "contact"} addLabel={tf("newContact")} />
-            <select id="contactId" className={selectCls} {...register("contactId")}>
-              <option value="">—</option>
-              {contactOpts.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <FieldRow htmlFor="contactId" label={t("contact")} onAdd={() => toggle("contact")} open={open === "contact"} addLabel={tf("newContact")} />
+            <SearchSelect
+              id="contactId"
+              options={contactOpts}
+              value={contactId}
+              onChange={(next) => setValue("contactId", next, { shouldDirty: true })}
+            />
             {open === "contact" ? (
               <div className="mt-2 flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-2.5">
                 <input value={ctName} onChange={(e) => setCtName(e.target.value)} placeholder={tf("contactNamePlaceholder")} className={miniCls} />
@@ -333,21 +337,22 @@ export function NewOpportunityForm({
         <div className="mt-2 grid gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="ownerId">{tf("owner")}</Label>
-            <select id="ownerId" className={selectCls} {...register("ownerId")}>
-              {!isMemberRole && <option value="">{tf("none")}</option>}
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
+            <SearchSelect
+              id="ownerId"
+              options={members}
+              value={ownerId}
+              onChange={(next) => setValue("ownerId", next, { shouldDirty: true })}
+              clearable={!isMemberRole}
+            />
           </div>
           <div>
-            <FieldRow label={tf("productService")} onAdd={() => toggle("product")} open={open === "product"} addLabel={tf("newProduct")} />
-            <select id="productServiceId" className={selectCls} {...register("productServiceId")}>
-              <option value="">{tf("none")}</option>
-              {productOpts.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+            <FieldRow htmlFor="productServiceId" label={tf("productService")} onAdd={() => toggle("product")} open={open === "product"} addLabel={tf("newProduct")} />
+            <SearchSelect
+              id="productServiceId"
+              options={productOpts}
+              value={productServiceId}
+              onChange={(next) => setValue("productServiceId", next, { shouldDirty: true })}
+            />
             {open === "product" ? (
               <div className="mt-2 flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-2.5">
                 <input value={pName} onChange={(e) => setPName(e.target.value)} placeholder={tf("productNamePlaceholder")} className={miniCls} />
@@ -391,10 +396,10 @@ export function NewOpportunityForm({
   );
 }
 
-function FieldRow({ label, onAdd, open, addLabel }: { label: string; onAdd: () => void; open: boolean; addLabel: string }) {
+function FieldRow({ label, onAdd, open, addLabel, htmlFor }: { label: string; onAdd: () => void; open: boolean; addLabel: string; htmlFor?: string }) {
   return (
     <div className="mb-1.5 flex items-center justify-between">
-      <Label className="mb-0">{label}</Label>
+      <Label htmlFor={htmlFor} className="mb-0">{label}</Label>
       <button type="button" onClick={onAdd} className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline">
         {open ? <X className="size-3.5" /> : <Plus className="size-3.5" />}
         {addLabel}

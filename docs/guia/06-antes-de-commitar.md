@@ -31,6 +31,12 @@ espera da nova tentativa do e-mail transacional). Não usa banco nem rede. Rode 
 ([src/lib/tasks/board-core.ts](../../src/lib/tasks/board-core.ts): distribuição inicial por data no
 horário de Brasília, posição entre cards, nome de coluna). Rode sempre que mexer nesse arquivo.
 
+`npm run check:search` cobre o filtro da busca ao digitar
+([src/lib/search-options.ts](../../src/lib/search-options.ts): sem acento e sem maiúscula, quem começa
+com o texto vem primeiro, limite da lista). Ele é usado pelo `SearchSelect`
+([src/components/ui/search-select.tsx](../../src/components/ui/search-select.tsx)), que hoje atende
+Contato, Responsável e Produto/Serviço da oportunidade. Rode sempre que mexer nesse arquivo.
+
 ## `check:isolation`
 
 Isolamento multi-tenant é [a regra inviolável nº 1 do `CLAUDE.md`](../../CLAUDE.md) e o

@@ -7,6 +7,7 @@ import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea, FieldError } from "@/components/ui/field";
 import { MoneyInput } from "@/components/ui/money-input";
+import { SearchSelect } from "@/components/ui/search-select";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/ui/confirm";
@@ -73,6 +74,9 @@ export function OpportunityForm({
 
   const status = watch("status");
   const stageId = watch("stageId");
+  const contactId = watch("contactId");
+  const ownerId = watch("ownerId");
+  const productServiceId = watch("productServiceId");
   const needsReason = status === "LOST" || status === "CANCELED";
 
   // Let the AI copilot pre-fill this form for review (it never saves). Money is
@@ -202,12 +206,12 @@ export function OpportunityForm({
           </div>
           <div>
             <Label htmlFor="contactId">{t("contact")}</Label>
-            <select id="contactId" className={selectCls} {...register("contactId")}>
-              <option value="">{t("none")}</option>
-              {contacts.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <SearchSelect
+              id="contactId"
+              options={contacts}
+              value={contactId}
+              onChange={(next) => setValue("contactId", next, { shouldDirty: true })}
+            />
           </div>
         </div>
       </fieldset>
@@ -217,21 +221,22 @@ export function OpportunityForm({
         <div className="mt-2 grid gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="ownerId">{t("owner")}</Label>
-            <select id="ownerId" className={selectCls} {...register("ownerId")}>
-              {!isMemberRole && <option value="">{t("none")}</option>}
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
+            <SearchSelect
+              id="ownerId"
+              options={members}
+              value={ownerId}
+              onChange={(next) => setValue("ownerId", next, { shouldDirty: true })}
+              clearable={!isMemberRole}
+            />
           </div>
           <div>
             <Label htmlFor="productServiceId">{t("productService")}</Label>
-            <select id="productServiceId" className={selectCls} {...register("productServiceId")}>
-              <option value="">{t("none")}</option>
-              {productServices.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+            <SearchSelect
+              id="productServiceId"
+              options={productServices}
+              value={productServiceId}
+              onChange={(next) => setValue("productServiceId", next, { shouldDirty: true })}
+            />
           </div>
           <div>
             <Label htmlFor="expectedCloseDate">{t("expectedCloseDate")}</Label>
