@@ -50,6 +50,7 @@ export async function saveEmailSignature(
 ): Promise<{ ok: true; id: string } | Fail> {
   const g = await gate();
   if (!g.ok) return g;
+  if (id !== null && typeof id !== "string") return { ok: false, error: "invalid" };
   const parsed = emailSignatureSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   const f = parsed.data;
@@ -103,6 +104,7 @@ export async function saveEmailSignature(
 export async function deleteEmailSignature(id: string): Promise<{ ok: true } | Fail> {
   const g = await gate();
   if (!g.ok) return g;
+  if (typeof id !== "string") return { ok: false, error: "invalid" };
   try {
     const res = await tenantDb(g.ctx.organizationId).emailSignature.deleteMany({ where: { id } });
     if (res.count === 0) return { ok: false, error: "not_found" };
@@ -117,6 +119,7 @@ export async function deleteEmailSignature(id: string): Promise<{ ok: true } | F
 export async function setDefaultEmailSignature(id: string): Promise<{ ok: true } | Fail> {
   const g = await gate();
   if (!g.ok) return g;
+  if (typeof id !== "string") return { ok: false, error: "invalid" };
   const orgId = g.ctx.organizationId;
   try {
     const found = await tenantDb(orgId).emailSignature.findFirst({ where: { id }, select: { id: true } });

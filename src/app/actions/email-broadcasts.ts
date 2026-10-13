@@ -107,6 +107,8 @@ export async function saveEmailDraft(
     revalidatePath("/app/email");
     return { ok: true, id };
   } catch (error) {
+    // FK violation: the signature was deleted between the check above and the write.
+    if ((error as { code?: string })?.code === "P2003") return { ok: false, error: "signature_missing" };
     console.error("Failed to save email draft", error);
     return { ok: false, error: "unknown" };
   }
