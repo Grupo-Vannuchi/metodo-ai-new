@@ -49,13 +49,14 @@ export type SignatureRow = {
 };
 
 /** Image source of a signature: https, or this app's own local-disk media
- * route (dev storage serves /api/media/ over plain http). */
+ * route on localhost (dev storage serves /api/media/ over plain http). */
 export function signatureImageSrc(raw: string): string | null {
   const https = safeImageSrc(raw);
   if (https) return https;
   try {
     const url = new URL(raw.trim());
-    return url.protocol === "http:" && url.pathname.startsWith("/api/media/") ? url.href : null;
+    const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    return url.protocol === "http:" && local && url.pathname.startsWith("/api/media/") ? url.href : null;
   } catch {
     return null;
   }
@@ -70,7 +71,10 @@ export function signatureProblem(content: SignatureContent): SignatureProblem | 
   if (!content.imageUrl.trim()) return "image_required";
   if (!signatureImageSrc(content.imageUrl)) return "image_url";
   if (!content.imageAlt.trim()) return "alt_required";
-  if (content.imageAlt.length > MAX_SIGNATURE_LINE || (content.introText ?? "").length > MAX_SIGNATURE_LINE) {
+  if (
+    content.imageAlt.trim().length > MAX_SIGNATURE_LINE ||
+    (content.introText ?? "").trim().length > MAX_SIGNATURE_LINE
+  ) {
     return "line_too_long";
   }
   if (content.imageHref && !safeClickHref(content.imageHref)) return "href";

@@ -601,6 +601,8 @@ check("signatureImageSrc takes https or the app's own local media route only", (
   assert.equal(signatureImageSrc("http://evil.example/x.png"), null);
   assert.equal(signatureImageSrc("javascript:alert(1)"), null);
   assert.equal(signatureImageSrc(""), null);
+  assert.equal(signatureImageSrc("http://evil.example/api/media/x.png"), null);
+  assert.equal(signatureImageSrc("http://127.0.0.1:3000/api/media/email/x.png"), "http://127.0.0.1:3000/api/media/email/x.png");
 });
 
 check("signatureProblem flags what blocks a save", () => {
