@@ -35,7 +35,7 @@ horário de Brasília, posição entre cards, nome de coluna). Rode sempre que m
 ([src/lib/search-options.ts](../../src/lib/search-options.ts): sem acento e sem maiúscula, quem começa
 com o texto vem primeiro, limite da lista). Ele é usado pelo `SearchSelect`
 ([src/components/ui/search-select.tsx](../../src/components/ui/search-select.tsx)), que hoje atende
-Contato, Responsável e Produto/Serviço da oportunidade. Rode sempre que mexer nesse arquivo.
+Empresa, Contato, Responsável e Produto/Serviço da oportunidade. Rode sempre que mexer nesse arquivo.
 
 ## `check:isolation`
 
