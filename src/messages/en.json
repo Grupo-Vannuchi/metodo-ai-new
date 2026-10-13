@@ -13,7 +13,13 @@
   "common": {
     "login": "Log in",
     "getStarted": "Get started",
-    "talkToUs": "Talk to us"
+    "talkToUs": "Talk to us",
+    "searchSelect": {
+      "placeholder": "Type to search",
+      "noResults": "No results",
+      "keepTyping": "Keep typing to narrow it down",
+      "clear": "Clear"
+    }
   },
   "home": {
     "hero": {
