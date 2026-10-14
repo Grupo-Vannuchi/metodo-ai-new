@@ -506,7 +506,10 @@
       "pickSome": "Check the contacts or the groups.",
       "lineContacts": "Contacts: {created} added, {skipped} already existed.",
       "line": "{name}: {created} added, {skipped} already existed.",
-      "lineFailed": "{name}: couldn't read the group.",
+      "lineFailed": "{name}: couldn't read the members. WhatsApp only shows the members to people in the group: check that your number is still in it and connected.",
+      "unreadable": "Couldn't export “{name}”. WhatsApp only shows the members to people in the group: check that your number is still in it and connected.",
+      "downloaded": "“{name}” exported: {count, plural, =0 {no numbers} =1 {# number} other {# numbers}}.",
+      "downloadError": "Couldn't download the file. Try again.",
       "importError": "Couldn't add to the CRM."
     },
     "empty": "No conversations yet. Incoming WhatsApp messages show up here.",

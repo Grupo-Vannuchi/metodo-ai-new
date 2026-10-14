@@ -92,17 +92,17 @@ export async function getGroupMembers(
   return { title, readable: info !== null, members: info?.participants ?? [] };
 }
 
-/** A group's members as export rows. */
+/** A group's members as export rows; `readable` as in getGroupMembers. */
 export async function getGroupRows(
   organizationId: string,
   conversationId: string,
   userId: string,
-): Promise<{ title: string; rows: ExportRow[] } | null> {
+): Promise<{ title: string; readable: boolean; rows: ExportRow[] } | null> {
   const group = await getGroupMembers(organizationId, conversationId, userId);
   if (!group) return null;
   const rows: ExportRow[] = group.members.map((p) => {
     const number = formatBrPhone(p.number) || p.number;
     return { name: p.admin ? `${number} (admin)` : number, number };
   });
-  return { title: group.title, rows };
+  return { title: group.title, readable: group.readable, rows };
 }
