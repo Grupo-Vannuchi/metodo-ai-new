@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Pencil, Trash2, Plus, X, Link2, ListChecks, Paperclip, Repeat, AlarmClock, Star } from "lucide-react";
+import { Check, CircleCheck, Pencil, Trash2, Plus, X, Link2, ListChecks, Paperclip, Repeat, AlarmClock, Star } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
@@ -188,6 +188,7 @@ export function TasksManager({
               >
                 {c.name}
                 {c.isEntrance ? <Star className="size-3 fill-amber-400 text-amber-400" aria-label={t("board.entrance")} /> : null}
+                {c.isDone ? <CircleCheck className="size-3 text-emerald-600" aria-label={t("board.doneColumn")} /> : null}
               </button>
             ))}
           </div>

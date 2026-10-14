@@ -2,6 +2,13 @@
 
 **Data:** 2026-10-08 · **Status:** design aprovado em conversa; spec aguardando revisão.
 **Tela:** `/app/tasks?view=kanban` ([src/components/tasks/tasks-board.tsx](../../../src/components/tasks/tasks-board.tsx)).
+**Atualização (2026-10-14, `feature/tarefas-concluir-move-coluna`):** a decisão "Coluna × tarefa concluída:
+independentes" foi revertida a pedido. Agora existe a coluna de concluídas (`task_board_columns.isDone`):
+- concluir (pelo check, pelo status ou soltando o card nela) leva o card para o topo dela;
+- reabrir (desmarcando ou arrastando o card para fora) leva para o fim da entrada;
+- ela não pode ser excluída nem virar a entrada.
+
+As linhas abaixo que dizem que o card não muda de coluna descrevem a primeira versão.
 
 ---
 

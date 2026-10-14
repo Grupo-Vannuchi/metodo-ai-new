@@ -8,10 +8,26 @@ import { canAccessScreen } from "@/lib/access";
 import { hasModule } from "@/config/modules";
 import { LIMITS } from "@/config/limits";
 import { audit } from "@/lib/audit";
+import { toggleTask } from "@/app/actions/tasks";
 import { lockTaskBoard } from "@/lib/tasks/board";
-import { compareBoardCards, normalizeColumnName, ORDER_STEP, orderForInsert } from "@/lib/tasks/board-core";
+import {
+  compareBoardCards,
+  doneAfterMove,
+  effectiveColumnId,
+  normalizeColumnName,
+  ORDER_STEP,
+  orderForInsert,
+} from "@/lib/tasks/board-core";
 
-export type TaskBoardError = "unauthorized" | "forbidden" | "invalid" | "not_found" | "limit" | "entrance" | "unknown";
+export type TaskBoardError =
+  | "unauthorized"
+  | "forbidden"
+  | "invalid"
+  | "not_found"
+  | "limit"
+  | "entrance"
+  | "done_column"
+  | "unknown";
 export type TaskBoardResult = { ok: true } | { ok: false; error: TaskBoardError };
 
 type Gate = { ok: true; ctx: OrgContext } | { ok: false; error: TaskBoardError };
@@ -45,7 +61,8 @@ function saved(): TaskBoardResult {
   return { ok: true };
 }
 
-/** Put a card in `columnId`, right above `beforeTaskId` (null = at the end). */
+/** Put a card in `columnId`, right above `beforeTaskId` (null = at the end).
+ * Dropping it in the done column completes the task; taking it out reopens it. */
 export async function moveTaskOnBoard(
   taskId: string,
   columnId: string,
@@ -58,17 +75,25 @@ export async function moveTaskOnBoard(
   if (!g.ok) return g;
   const orgId = g.ctx.organizationId;
   try {
-    await tenantDb(orgId).$transaction(
+    const doneNow = await tenantDb(orgId).$transaction(
       async (tx) => {
         await lockTaskBoard(tx, orgId);
-        const [task, column] = await Promise.all([
-          tx.task.findFirst({ where: { id: taskId, organizationId: orgId }, select: { id: true } }),
-          tx.taskBoardColumn.findFirst({
-            where: { id: columnId, organizationId: orgId },
-            select: { id: true, isEntrance: true },
+        const [task, columns] = await Promise.all([
+          tx.task.findFirst({
+            where: { id: taskId, organizationId: orgId },
+            select: { id: true, boardColumnId: true, doneAt: true },
+          }),
+          tx.taskBoardColumn.findMany({
+            where: { organizationId: orgId },
+            select: { id: true, name: true, order: true, isEntrance: true, isDone: true },
           }),
         ]);
-        if (!task || !column) throw new BoardError("not_found");
+        const column = columns.find((c) => c.id === columnId);
+        const entrance = columns.find((c) => c.isEntrance) ?? columns[0];
+        if (!task || !column || !entrance) throw new BoardError("not_found");
+        const wasDone = task.doneAt != null;
+        const from = effectiveColumnId(task.boardColumnId, new Set(columns.map((c) => c.id)), entrance.id);
+        const isDone = doneAfterMove(wasDone, from, columnId, columns);
 
         // The column's OTHER cards in display order; the entrance also holds the
         // cards with no column yet (new tasks).
@@ -113,9 +138,17 @@ export async function moveTaskOnBoard(
           data: { boardColumnId: columnId, boardOrder: order },
         });
         if (res.count !== 1) throw new BoardError("not_found");
+        return isDone === wasDone ? null : isDone;
       },
       { timeout: 20_000 },
     );
+    // Complete/reopen through the same action as the check (status, progress,
+    // next occurrence, automations). The card is already where the new state
+    // wants it, so that action leaves it in place.
+    if (doneNow !== null) {
+      const r = await toggleTask(taskId, doneNow);
+      if (!r.ok) return { ok: false, error: "unknown" };
+    }
     return saved();
   } catch (error) {
     return fail(error, "Failed to move task on board");
@@ -199,10 +232,12 @@ export async function setTaskBoardEntrance(id: string): Promise<TaskBoardResult>
     const previous = await tenantDb(orgId).$transaction(async (tx) => {
       await lockTaskBoard(tx, orgId);
       const [target, current] = await Promise.all([
-        tx.taskBoardColumn.findFirst({ where: { id, organizationId: orgId }, select: { id: true } }),
+        tx.taskBoardColumn.findFirst({ where: { id, organizationId: orgId }, select: { id: true, isDone: true } }),
         tx.taskBoardColumn.findFirst({ where: { isEntrance: true, organizationId: orgId }, select: { id: true } }),
       ]);
       if (!target) throw new BoardError("not_found");
+      // New and reopened tasks land in the entrance: it can't be the done column.
+      if (target.isDone) throw new BoardError("done_column");
       if (current?.id === target.id) return null;
       if (current) {
         await tx.task.updateMany({
@@ -233,7 +268,7 @@ export async function setTaskBoardEntrance(id: string): Promise<TaskBoardResult>
 }
 
 /** Delete a column; its cards go back to the entrance (no column). The
- * entrance itself can't be deleted. */
+ * entrance and the done column can't be deleted. */
 export async function deleteTaskBoardColumn(id: string): Promise<TaskBoardResult> {
   if (typeof id !== "string") return INVALID;
   const g = await gate();
@@ -244,10 +279,11 @@ export async function deleteTaskBoardColumn(id: string): Promise<TaskBoardResult
       await lockTaskBoard(tx, orgId);
       const column = await tx.taskBoardColumn.findFirst({
         where: { id, organizationId: orgId },
-        select: { id: true, name: true, isEntrance: true },
+        select: { id: true, name: true, isEntrance: true, isDone: true },
       });
       if (!column) throw new BoardError("not_found");
       if (column.isEntrance) throw new BoardError("entrance");
+      if (column.isDone) throw new BoardError("done_column");
       const entrance = await tx.taskBoardColumn.findFirst({
         where: { isEntrance: true, organizationId: orgId },
         select: { id: true },
@@ -267,7 +303,9 @@ export async function deleteTaskBoardColumn(id: string): Promise<TaskBoardResult
             AND ("boardColumnId" = ${entrance?.id ?? ""} OR "boardColumnId" IS NULL)
         ) AS base
         WHERE t."id" = s."id" AND t."organizationId" = ${orgId}`;
-      const res = await tx.taskBoardColumn.deleteMany({ where: { organizationId: orgId, id: column.id, isEntrance: false } });
+      const res = await tx.taskBoardColumn.deleteMany({
+        where: { organizationId: orgId, id: column.id, isEntrance: false, isDone: false },
+      });
       if (res.count !== 1) throw new BoardError("not_found");
       return { column, cardsMoved };
     });

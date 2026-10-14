@@ -1,7 +1,16 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { tenantDb } from "@/lib/tenant-db";
-import { ENTRANCE_BUCKET, INITIAL_BUCKETS, initialBucket, ORDER_STEP, type BoardBucket } from "@/lib/tasks/board-core";
+import {
+  columnForDoneChange,
+  compareBoardCards,
+  ENTRANCE_BUCKET,
+  INITIAL_BUCKETS,
+  initialBucket,
+  ORDER_STEP,
+  orderForInsert,
+  type BoardBucket,
+} from "@/lib/tasks/board-core";
 
 /**
  * Serializes every board mutation of an org: a per-org advisory lock held until
@@ -32,7 +41,7 @@ export async function ensureTaskBoard(organizationId: string, names: Record<Boar
       const idByBucket = {} as Record<BoardBucket, string>;
       for (const [order, bucket] of INITIAL_BUCKETS.entries()) {
         const column = await tx.taskBoardColumn.create({
-          data: { organizationId, name: names[bucket], order, isEntrance: bucket === ENTRANCE_BUCKET },
+          data: { organizationId, name: names[bucket], order, isEntrance: bucket === ENTRANCE_BUCKET, isDone: bucket === "done" },
           select: { id: true },
         });
         idByBucket[bucket] = column.id;
@@ -69,6 +78,53 @@ export async function ensureTaskBoard(organizationId: string, names: Record<Boar
           FROM "tasks" WHERE "organizationId" = ${organizationId}
         ) AS s
         WHERE t."id" = s."id" AND t."organizationId" = ${organizationId}`;
+    },
+    { timeout: 20_000 },
+  );
+}
+
+/**
+ * Puts a task's card where its done state says (columnForDoneChange): a
+ * completed task at the top of the done column, a reopened one that sat there
+ * at the end of the entrance. Reads the state under the board lock, so two
+ * quick toggles end in the right column. No-op without a board or a done
+ * column. Call it after every write that may complete or reopen a task.
+ */
+export async function placeTaskByDoneState(organizationId: string, taskId: string): Promise<void> {
+  await tenantDb(organizationId).$transaction(
+    async (tx) => {
+      await lockTaskBoard(tx, organizationId);
+      const [task, columns] = await Promise.all([
+        tx.task.findFirst({ where: { id: taskId, organizationId }, select: { boardColumnId: true, doneAt: true } }),
+        tx.taskBoardColumn.findMany({
+          where: { organizationId },
+          select: { id: true, name: true, order: true, isEntrance: true, isDone: true },
+        }),
+      ]);
+      if (!task) return;
+      const target = columnForDoneChange(task.doneAt != null, task.boardColumnId, columns);
+      const column = target ? columns.find((c) => c.id === target.columnId) : undefined;
+      if (!target || !column) return;
+
+      // The column's OTHER cards in display order; the entrance also holds the
+      // cards with no column yet.
+      const inColumn = column.isEntrance
+        ? { OR: [{ boardColumnId: column.id }, { boardColumnId: null }] }
+        : { boardColumnId: column.id };
+      const orders = (
+        await tx.task.findMany({
+          where: { organizationId, id: { not: taskId }, ...inColumn },
+          select: { id: true, boardOrder: true, createdAt: true },
+        })
+      )
+        .sort(compareBoardCards)
+        .map((c) => c.boardOrder);
+      // At an end there's at most one neighbour, so orderForInsert never returns null.
+      const order = orderForInsert(orders, target.at === "start" ? 0 : orders.length) ?? 0;
+      await tx.task.updateMany({
+        where: { id: taskId, organizationId },
+        data: { boardColumnId: column.id, boardOrder: order },
+      });
     },
     { timeout: 20_000 },
   );

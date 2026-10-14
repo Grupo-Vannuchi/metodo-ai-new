@@ -20,7 +20,9 @@ import {
 } from "@/app/actions/task-board";
 import { LIMITS } from "@/config/limits";
 import {
+  columnForDoneChange,
   compareBoardCards,
+  doneAfterMove,
   effectiveColumnId,
   normalizeColumnName,
   orderForInsert,
@@ -35,8 +37,9 @@ const SCROLL_STEP = 24;
 
 /**
  * The org's task kanban: free columns (renamed/added/removed by members) and
- * cards dragged between and inside them. A column means nothing to the task —
- * completing is only the check, and it never moves the card. Cards open on click.
+ * cards dragged between and inside them. One column is the done column:
+ * completing a task (check or drop there) puts its card in it, and reopening
+ * (uncheck or drag out) takes it out. Cards open on click.
  */
 export function TasksBoard({ tasks, columns }: { tasks: TaskRow[]; columns: BoardColumn[] }) {
   const t = useTranslations("tasks");
@@ -76,6 +79,7 @@ export function TasksBoard({ tasks, columns }: { tasks: TaskRow[]; columns: Boar
     if (r.ok) return "";
     if (r.error === "limit") return t("board.errorLimit", { max: LIMITS.taskBoardColumnsMax });
     if (r.error === "entrance") return t("board.entranceCantDelete");
+    if (r.error === "done_column") return t("board.doneColumnLocked");
     return t("board.errorSave");
   }
 
@@ -88,7 +92,17 @@ export function TasksBoard({ tasks, columns }: { tasks: TaskRow[]; columns: Boar
     });
   }
 
+  /** The board column a card shows in right now. */
+  function columnOf(task: TaskRow): string {
+    return entrance ? effectiveColumnId(task.boardColumnId, columnIds, entrance.id) : "";
+  }
+
   function moveCard(taskId: string, columnId: string, beforeId: string | null) {
+    const task = items.find((x) => x.id === taskId);
+    // Dropping in / taking out of the done column completes / reopens (the
+    // server does the same).
+    const done = task ? doneAfterMove(task.doneAt != null, columnOf(task), columnId, cols) : false;
+    const doneAt = task && done !== (task.doneAt != null) ? (done ? new Date() : null) : task?.doneAt ?? null;
     const list = (grouped.get(columnId) ?? []).filter((c) => c.id !== taskId);
     const found = beforeId ? list.findIndex((c) => c.id === beforeId) : -1;
     const index = found === -1 ? list.length : found;
@@ -100,7 +114,7 @@ export function TasksBoard({ tasks, columns }: { tasks: TaskRow[]; columns: Boar
         index,
       ) ?? list[index]?.boardOrder ?? 0;
     setItems((prevItems) =>
-      prevItems.map((x) => (x.id === taskId ? { ...x, boardColumnId: columnId, boardOrder: order } : x)),
+      prevItems.map((x) => (x.id === taskId ? { ...x, boardColumnId: columnId, boardOrder: order, doneAt } : x)),
     );
     run(() => moveTaskOnBoard(taskId, columnId, beforeId));
   }
@@ -150,7 +164,28 @@ export function TasksBoard({ tasks, columns }: { tasks: TaskRow[]; columns: Boar
   }
 
   function setDone(id: string, done: boolean) {
-    setItems((prevItems) => prevItems.map((x) => (x.id === id ? { ...x, doneAt: done ? new Date() : null } : x)));
+    // Optimistic: completing moves the card to the top of the done column,
+    // reopening it from there to the end of the entrance (as the server does).
+    const task = items.find((x) => x.id === id);
+    const target = task ? columnForDoneChange(done, task.boardColumnId, cols) : null;
+    const others = target ? (grouped.get(target.columnId) ?? []).filter((c) => c.id !== id) : [];
+    const order = target
+      ? orderForInsert(
+          others.map((c) => c.boardOrder),
+          target.at === "start" ? 0 : others.length,
+        ) ?? 0
+      : null;
+    setItems((prevItems) =>
+      prevItems.map((x) =>
+        x.id !== id
+          ? x
+          : {
+              ...x,
+              doneAt: done ? new Date() : null,
+              ...(target && order !== null ? { boardColumnId: target.columnId, boardOrder: order } : {}),
+            },
+      ),
+    );
     start(async () => {
       await toggleTask(id, done);
       router.refresh();

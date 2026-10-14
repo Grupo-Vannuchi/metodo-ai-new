@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ArrowLeft, ArrowRight, MoreHorizontal, Pencil, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, CircleCheck, MoreHorizontal, Pencil, Star, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { COLUMN_NAME_MAX, type BoardColumn } from "@/lib/tasks/board-core";
 import type { TaskRow } from "@/lib/queries/tasks";
@@ -110,6 +110,11 @@ export function BoardColumnView(props: Props) {
             <Star className="size-3.5 fill-amber-400 text-amber-400" aria-label={t("board.entrance")} />
           </span>
         ) : null}
+        {column.isDone ? (
+          <span title={t("board.doneColumn")} className="shrink-0">
+            <CircleCheck className="size-3.5 text-emerald-600" aria-label={t("board.doneColumn")} />
+          </span>
+        ) : null}
         <span className="ml-auto rounded-full bg-card px-2 py-0.5 text-xs text-muted-foreground">{cards.length}</span>
         <div ref={menuRef} className="relative">
           <button
@@ -132,7 +137,8 @@ export function BoardColumnView(props: Props) {
                 type="button"
                 role="menuitem"
                 className={item}
-                disabled={column.isEntrance}
+                disabled={column.isEntrance || column.isDone}
+                title={column.isDone ? t("board.doneColumnLocked") : undefined}
                 onClick={() => {
                   setMenuOpen(false);
                   props.onMakeEntrance();
@@ -171,8 +177,14 @@ export function BoardColumnView(props: Props) {
                 type="button"
                 role="menuitem"
                 className={cn(item, "text-red-600")}
-                disabled={column.isEntrance}
-                title={column.isEntrance ? t("board.entranceCantDelete") : undefined}
+                disabled={column.isEntrance || column.isDone}
+                title={
+                  column.isEntrance
+                    ? t("board.entranceCantDelete")
+                    : column.isDone
+                      ? t("board.doneColumnLocked")
+                      : undefined
+                }
                 onClick={() => {
                   setMenuOpen(false);
                   props.onDelete();
