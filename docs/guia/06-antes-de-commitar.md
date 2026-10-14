@@ -29,7 +29,8 @@ espera da nova tentativa do e-mail transacional). Não usa banco nem rede. Rode 
 
 `npm run check:tasks` faz o mesmo para as regras puras do kanban de Tarefas
 ([src/lib/tasks/board-core.ts](../../src/lib/tasks/board-core.ts): distribuição inicial por data no
-horário de Brasília, posição entre cards, nome de coluna). Rode sempre que mexer nesse arquivo.
+horário de Brasília, posição entre cards, nome de coluna, para onde vai o card ao concluir, reabrir ou
+arrastar para a coluna de concluídas). Rode sempre que mexer nesse arquivo.
 
 `npm run check:search` cobre o filtro da busca ao digitar
 ([src/lib/search-options.ts](../../src/lib/search-options.ts): sem acento e sem maiúscula, quem começa

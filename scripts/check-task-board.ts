@@ -5,7 +5,9 @@
 import assert from "node:assert/strict";
 import {
   COLUMN_NAME_MAX,
+  columnForDoneChange,
   compareBoardCards,
+  doneAfterMove,
   effectiveColumnId,
   ENTRANCE_BUCKET,
   INITIAL_BUCKETS,
@@ -96,8 +98,8 @@ check("effectiveColumnId: the card's own column, else the entrance", () => {
 
 check("tasksOfColumn: a column's cards in board order; the entrance also takes unplaced ones", () => {
   const cols = [
-    { id: "a", name: "A", order: 0, isEntrance: false },
-    { id: "e", name: "E", order: 1, isEntrance: true },
+    { id: "a", name: "A", order: 0, isEntrance: false, isDone: false },
+    { id: "e", name: "E", order: 1, isEntrance: true, isDone: false },
   ];
   const task = (id: string, boardColumnId: string | null, boardOrder: number) => ({
     id,
@@ -110,6 +112,42 @@ check("tasksOfColumn: a column's cards in board order; the entrance also takes u
   assert.deepEqual(tasksOfColumn(tasks, "e", cols).map((x) => x.id), ["4", "5", "2"]);
   assert.deepEqual(tasksOfColumn(tasks, "a", []), []);
   assert.deepEqual(tasks.map((x) => x.id), ["1", "2", "3", "4", "5"]); // input left untouched
+});
+
+const board = [
+  { id: "late", name: "Atrasadas", order: 0, isEntrance: false, isDone: false },
+  { id: "nodate", name: "Sem data", order: 1, isEntrance: true, isDone: false },
+  { id: "done", name: "Concluídas", order: 2, isEntrance: false, isDone: true },
+];
+const withoutDone = board.map((c) => ({ ...c, isDone: false }));
+
+check("columnForDoneChange: completing sends the card to the top of the done column", () => {
+  assert.deepEqual(columnForDoneChange(true, "late", board), { columnId: "done", at: "start" });
+  assert.deepEqual(columnForDoneChange(true, null, board), { columnId: "done", at: "start" });
+  assert.deepEqual(columnForDoneChange(true, "gone", board), { columnId: "done", at: "start" });
+  assert.equal(columnForDoneChange(true, "done", board), null); // already there
+});
+
+check("columnForDoneChange: reopening leaves the done column for the end of the entrance", () => {
+  assert.deepEqual(columnForDoneChange(false, "done", board), { columnId: "nodate", at: "end" });
+  assert.equal(columnForDoneChange(false, "late", board), null); // reopened elsewhere: stays
+  assert.equal(columnForDoneChange(false, null, board), null);
+});
+
+check("columnForDoneChange: no board or no done column means the card stays", () => {
+  assert.equal(columnForDoneChange(true, "late", []), null);
+  assert.equal(columnForDoneChange(true, "late", withoutDone), null);
+  assert.equal(columnForDoneChange(false, "done", withoutDone), null);
+});
+
+check("doneAfterMove: dropping in the done column completes, taking it out reopens", () => {
+  assert.equal(doneAfterMove(false, "late", "done", board), true);
+  assert.equal(doneAfterMove(true, "done", "late", board), false);
+  assert.equal(doneAfterMove(true, "done", "nodate", board), false);
+  assert.equal(doneAfterMove(true, "done", "done", board), true); // reordered inside
+  assert.equal(doneAfterMove(false, "late", "nodate", board), false);
+  assert.equal(doneAfterMove(true, "late", "nodate", board), true); // done outside the done column stays done
+  assert.equal(doneAfterMove(false, "late", "done", withoutDone), false);
 });
 
 console.log(`\n✅ task-board: ${passed} checks passed.`);

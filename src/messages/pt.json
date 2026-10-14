@@ -2433,6 +2433,8 @@
       "deleteColumn": "Excluir coluna",
       "deleteColumnConfirm": "Excluir a coluna \"{name}\"? {count, plural, =0 {Ela está vazia.} one {O card dela vai para \"{entrance}\".} other {Os # cards dela vão para \"{entrance}\".}}",
       "entranceCantDelete": "Defina outra coluna como entrada antes de excluir esta.",
+      "doneColumn": "Concluídas: tarefas concluídas vêm para cá",
+      "doneColumnLocked": "A coluna de concluídas não pode ser excluída nem virar a entrada.",
       "moveTo": "Mover para…",
       "errorLimit": "Limite de {max} colunas atingido.",
       "errorName": "O nome da coluna precisa ter de 1 a 40 caracteres.",

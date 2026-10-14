@@ -1370,6 +1370,9 @@ model TaskBoardColumn {
   order          Int      @default(0)
   /// New tasks (boardColumnId null) show here. Exactly one per org.
   isEntrance     Boolean  @default(false)
+  /// Completed tasks go here (and reopened ones leave it). At most one per org;
+  /// it can't be deleted nor be the entrance.
+  isDone         Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

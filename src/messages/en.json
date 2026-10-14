@@ -2433,6 +2433,8 @@
       "deleteColumn": "Delete column",
       "deleteColumnConfirm": "Delete the column \"{name}\"? {count, plural, =0 {It's empty.} one {Its card moves to \"{entrance}\".} other {Its # cards move to \"{entrance}\".}}",
       "entranceCantDelete": "Set another column as the entrance before deleting this one.",
+      "doneColumn": "Done: completed tasks move here",
+      "doneColumnLocked": "The done column can't be deleted or become the entrance.",
       "moveTo": "Move to…",
       "errorLimit": "You've reached the {max}-column limit.",
       "errorName": "The column name must have 1 to 40 characters.",

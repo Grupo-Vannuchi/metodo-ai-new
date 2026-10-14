@@ -13,7 +13,8 @@ export type BoardBucket = (typeof INITIAL_BUCKETS)[number];
 /** New tasks (no column yet) show in this one. */
 export const ENTRANCE_BUCKET: BoardBucket = "nodate";
 
-export type BoardColumn = { id: string; name: string; order: number; isEntrance: boolean };
+/** `isDone` marks the column that holds the completed tasks (at most one). */
+export type BoardColumn = { id: string; name: string; order: number; isEntrance: boolean; isDone: boolean };
 
 /** Brazil dropped daylight saving in 2019: São Paulo is UTC-3 all year. */
 const SAO_PAULO_UTC_OFFSET_HOURS = 3;
@@ -86,6 +87,39 @@ export function effectiveColumnId(
   entranceId: string,
 ): string {
   return boardColumnId && columnIds.has(boardColumnId) ? boardColumnId : entranceId;
+}
+
+/** Where a card goes when its task is completed (`done`) or reopened: completing
+ * sends it to the top of the done column; reopening a card that sits in the done
+ * column sends it to the end of the entrance. null = it stays (no done column,
+ * already there, or reopened outside the done column). */
+export function columnForDoneChange(
+  done: boolean,
+  boardColumnId: string | null,
+  columns: readonly BoardColumn[],
+): { columnId: string; at: "start" | "end" } | null {
+  const doneColumn = columns.find((c) => c.isDone);
+  const entrance = columns.find((c) => c.isEntrance) ?? columns[0];
+  if (!doneColumn || !entrance) return null;
+  const current = effectiveColumnId(boardColumnId, new Set(columns.map((c) => c.id)), entrance.id);
+  if (done) return current === doneColumn.id ? null : { columnId: doneColumn.id, at: "start" };
+  return current === doneColumn.id && entrance.id !== doneColumn.id ? { columnId: entrance.id, at: "end" } : null;
+}
+
+/** Whether a task is done after its card moves from column `fromColumnId` to
+ * `toColumnId` (both as shown on the board): dropping it in the done column
+ * completes it, taking it out of there reopens it, any other move keeps it. */
+export function doneAfterMove(
+  wasDone: boolean,
+  fromColumnId: string,
+  toColumnId: string,
+  columns: readonly BoardColumn[],
+): boolean {
+  const doneColumn = columns.find((c) => c.isDone);
+  if (!doneColumn) return wasDone;
+  if (toColumnId === doneColumn.id) return true;
+  if (fromColumnId === doneColumn.id) return false;
+  return wasDone;
 }
 
 /** The tasks a column shows, in board order: the ones placed in it, plus — for

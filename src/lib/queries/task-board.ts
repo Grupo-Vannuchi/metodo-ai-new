@@ -6,6 +6,6 @@ import type { BoardColumn } from "@/lib/tasks/board-core";
 export async function listTaskBoardColumns(organizationId: string): Promise<BoardColumn[]> {
   return tenantDb(organizationId).taskBoardColumn.findMany({
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
-    select: { id: true, name: true, order: true, isEntrance: true },
+    select: { id: true, name: true, order: true, isEntrance: true, isDone: true },
   });
 }
