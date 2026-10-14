@@ -1373,11 +1373,16 @@ model TaskBoardColumn {
   /// Completed tasks go here (and reopened ones leave it). At most one per org;
   /// it can't be deleted nor be the entrance.
   isDone         Boolean  @default(false)
+  /// New tasks whose due date falls in this bucket ("overdue" | "today" |
+  /// "upcoming" | "nodate", as of the day they were created) land here. At most
+  /// one column per bucket per org; null = none.
+  dateBucket     String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   tasks Task[]
 
+  @@unique([organizationId, dateBucket])
   @@index([organizationId, order])
   @@map("task_board_columns")
 }

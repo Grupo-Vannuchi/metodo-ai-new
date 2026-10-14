@@ -85,7 +85,7 @@ export async function moveTaskOnBoard(
           }),
           tx.taskBoardColumn.findMany({
             where: { organizationId: orgId },
-            select: { id: true, name: true, order: true, isEntrance: true, isDone: true },
+            select: { id: true, name: true, order: true, isEntrance: true, isDone: true, dateBucket: true },
           }),
         ]);
         const column = columns.find((c) => c.id === columnId);
@@ -267,8 +267,8 @@ export async function setTaskBoardEntrance(id: string): Promise<TaskBoardResult>
   }
 }
 
-/** Delete a column; its cards go back to the entrance (no column). The
- * entrance and the done column can't be deleted. */
+/** Delete a column; its cards go to the end of the entrance. The entrance and
+ * the done column can't be deleted. */
 export async function deleteTaskBoardColumn(id: string): Promise<TaskBoardResult> {
   if (typeof id !== "string") return INVALID;
   const g = await gate();
@@ -288,11 +288,13 @@ export async function deleteTaskBoardColumn(id: string): Promise<TaskBoardResult
         where: { isEntrance: true, organizationId: orgId },
         select: { id: true },
       });
-      // ONE statement: the cards land at the END of the entrance (no column),
-      // numbered after its current max so they never tie with its own cards.
-      // Raw SQL is not intercepted by tenantDb: organizationId is explicit.
+      // ONE statement: the cards land at the END of the entrance, numbered after
+      // its current max so they never tie with its own cards. The entrance is
+      // written on them: "no column" means "not placed yet", and the tasks page
+      // would spread those by date. Raw SQL is not intercepted by tenantDb:
+      // organizationId is explicit.
       const cardsMoved = await tx.$executeRaw`
-        UPDATE "tasks" AS t SET "boardColumnId" = NULL, "boardOrder" = base.max_order + s.rn * 0.001
+        UPDATE "tasks" AS t SET "boardColumnId" = ${entrance?.id ?? null}, "boardOrder" = base.max_order + s.rn * 0.001
         FROM (
           SELECT "id", row_number() OVER (ORDER BY "boardOrder" ASC, "createdAt" ASC, "id" ASC) AS rn
           FROM "tasks" WHERE "organizationId" = ${orgId} AND "boardColumnId" = ${column.id}

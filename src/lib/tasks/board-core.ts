@@ -1,6 +1,7 @@
 /**
  * Pure rules of the task kanban (no DB, no `server-only`): the board's initial
- * placement, card ordering and column-name validation. Shared by the server
+ * placement, where new, completed and reopened cards go, card ordering and
+ * column-name validation. Shared by the server
  * (src/lib/tasks/board.ts, src/app/actions/task-board.ts) and the board UI;
  * covered by `npm run check:tasks`.
  */
@@ -10,11 +11,24 @@
 export const INITIAL_BUCKETS = ["overdue", "today", "upcoming", "nodate", "done"] as const;
 export type BoardBucket = (typeof INITIAL_BUCKETS)[number];
 
-/** New tasks (no column yet) show in this one. */
+/** The initial entrance: reopened cards with no date column, and cards of a
+ * deleted column, go to the entrance. */
 export const ENTRANCE_BUCKET: BoardBucket = "nodate";
 
-/** `isDone` marks the column that holds the completed tasks (at most one). */
-export type BoardColumn = { id: string; name: string; order: number; isEntrance: boolean; isDone: boolean };
+/** The buckets a column can take new tasks for, by due date. */
+export type DateBucket = Exclude<BoardBucket, "done">;
+
+/** `isDone` marks the column that holds the completed tasks (at most one);
+ * `dateBucket` the column that takes the new tasks of that due-date bucket
+ * (at most one per bucket). */
+export type BoardColumn = {
+  id: string;
+  name: string;
+  order: number;
+  isEntrance: boolean;
+  isDone: boolean;
+  dateBucket: string | null;
+};
 
 /** Brazil dropped daylight saving in 2019: São Paulo is UTC-3 all year. */
 const SAO_PAULO_UTC_OFFSET_HOURS = 3;
@@ -89,21 +103,43 @@ export function effectiveColumnId(
   return boardColumnId && columnIds.has(boardColumnId) ? boardColumnId : entranceId;
 }
 
+/** The column that takes tasks due `dueDate`, seen from `now` (São Paulo
+ * days): the one marked with that date bucket, or null when there's none. */
+function columnForDate(dueDate: Date | null, now: Date, columns: readonly BoardColumn[]): string | null {
+  const bucket = initialBucket({ doneAt: null, dueDate }, now);
+  return columns.find((c) => !c.isDone && c.dateBucket === bucket)?.id ?? null;
+}
+
 /** Where a card goes when its task is completed (`done`) or reopened: completing
  * sends it to the top of the done column; reopening a card that sits in the done
- * column sends it to the end of the entrance. null = it stays (no done column,
- * already there, or reopened outside the done column). */
+ * column sends it to the end of its date's column as of `now` (the entrance
+ * when there's none). null = it stays (no done column, already there, or
+ * reopened outside the done column). */
 export function columnForDoneChange(
   done: boolean,
-  boardColumnId: string | null,
+  task: { boardColumnId: string | null; dueDate: Date | null },
   columns: readonly BoardColumn[],
+  now: Date,
 ): { columnId: string; at: "start" | "end" } | null {
   const doneColumn = columns.find((c) => c.isDone);
   const entrance = columns.find((c) => c.isEntrance) ?? columns[0];
   if (!doneColumn || !entrance) return null;
-  const current = effectiveColumnId(boardColumnId, new Set(columns.map((c) => c.id)), entrance.id);
+  const current = effectiveColumnId(task.boardColumnId, new Set(columns.map((c) => c.id)), entrance.id);
   if (done) return current === doneColumn.id ? null : { columnId: doneColumn.id, at: "start" };
-  return current === doneColumn.id && entrance.id !== doneColumn.id ? { columnId: entrance.id, at: "end" } : null;
+  if (current !== doneColumn.id) return null;
+  const target = columnForDate(task.dueDate, now, columns) ?? entrance.id;
+  return target !== doneColumn.id ? { columnId: target, at: "end" } : null;
+}
+
+/** The column a task that has none yet (just created, by any path) goes to:
+ * the done column when it's done, else the column for its due date as of the
+ * day it was created. null = the entrance (no such column). */
+export function columnForNewTask(
+  task: { doneAt: Date | null; dueDate: Date | null; createdAt: Date },
+  columns: readonly BoardColumn[],
+): string | null {
+  if (task.doneAt) return columns.find((c) => c.isDone)?.id ?? null;
+  return columnForDate(task.dueDate, new Date(task.createdAt), columns);
 }
 
 /** Whether a task is done after its card moves from column `fromColumnId` to
