@@ -266,8 +266,9 @@ entrada. Não apaga nada, e o código anterior ignora a flag. **Não** use `migr
 `prisma/migrations/20261014160000_task_board_date_buckets/migration.sql` com `prisma db execute --file … --schema
 prisma/schema.prisma` e depois `prisma migrate resolve --applied 20261014160000_task_board_date_buckets`. Ela
 acrescenta `task_board_columns.dateBucket` (único por empresa), liga a marca nas colunas "Atrasadas", "Hoje",
-"Em breve" e "Sem data" (ou "Overdue", "Today", "Upcoming", "No date") e grava a entrada nas tarefas que estavam
-nela sem coluna, para que continuem lá. Não apaga nada, e o código anterior continua funcionando com ela.
+"Em breve" e "Sem data" (ou "Overdue", "Today", "Upcoming", "No date") e coloca as tarefas que nunca foram
+colocadas (sem coluna; caíam na entrada) na coluna da data delas **no dia da migration** (horário de São Paulo),
+as concluídas em "Concluídas" e, sem a coluna, na entrada. Não apaga nada, e o código anterior continua funcionando com ela.
 **Não** use `migrate deploy`.
 
 Sempre **backup antes** de migração destrutiva. Confira com `npx prisma migrate status`.

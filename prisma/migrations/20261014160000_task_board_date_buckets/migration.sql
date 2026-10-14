@@ -27,9 +27,30 @@ FROM (
 ) AS d
 WHERE c."id" = d."id";
 
--- Until now "no column" meant "the entrance". From here on it means "not
--- placed yet" (the tasks page places those by date), so the cards already in
--- the entrance with no column get the entrance written on them and stay put.
-UPDATE "tasks" AS t SET "boardColumnId" = e."id"
-FROM "task_board_columns" AS e
-WHERE e."organizationId" = t."organizationId" AND e."isEntrance" AND t."boardColumnId" IS NULL;
+-- Until now "no column" meant "the entrance", so every new task fell there.
+-- From here on it means "not placed yet". The tasks no one ever placed (in
+-- orgs that have a board) go to their date's column as of TODAY in São Paulo
+-- (dueDate is stored as UTC), the done ones to the done column, and the
+-- entrance when there's no such column.
+UPDATE "tasks" AS t SET "boardColumnId" = s."columnId"
+FROM (
+  SELECT t2."id",
+    COALESCE(
+      CASE WHEN t2."doneAt" IS NOT NULL THEN dn."id" ELSE db."id" END,
+      e."id"
+    ) AS "columnId"
+  FROM "tasks" AS t2
+  JOIN "task_board_columns" AS e ON e."organizationId" = t2."organizationId" AND e."isEntrance"
+  LEFT JOIN "task_board_columns" AS dn ON dn."organizationId" = t2."organizationId" AND dn."isDone"
+  LEFT JOIN "task_board_columns" AS db ON db."organizationId" = t2."organizationId" AND NOT db."isDone"
+    AND db."dateBucket" = CASE
+      WHEN t2."dueDate" IS NULL THEN 'nodate'
+      WHEN ((t2."dueDate" AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo')::date
+           < (now() AT TIME ZONE 'America/Sao_Paulo')::date THEN 'overdue'
+      WHEN ((t2."dueDate" AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo')::date
+           = (now() AT TIME ZONE 'America/Sao_Paulo')::date THEN 'today'
+      ELSE 'upcoming'
+    END
+  WHERE t2."boardColumnId" IS NULL
+) AS s
+WHERE t."id" = s."id";
