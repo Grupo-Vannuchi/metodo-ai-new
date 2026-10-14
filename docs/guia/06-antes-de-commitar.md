@@ -39,6 +39,12 @@ com o texto vem primeiro, limite da lista). Ele é usado pelo `SearchSelect`
 Empresa, Contato, Responsável e Produto/Serviço da oportunidade e Empresa, Contato e o produto de cada
 item da proposta. Rode sempre que mexer nesse arquivo.
 
+`npm run check:groups` cobre o "Adicionar aos contatos" com grupos do WhatsApp
+([src/lib/integrations/evolution-groups.ts](../../src/lib/integrations/evolution-groups.ts): o número do
+membro vem de `phoneNumber` quando o id é um LID; [src/lib/whatsapp/group-import.ts](../../src/lib/whatsapp/group-import.ts):
+o 9 nos celulares antigos de 12 dígitos, o nome "Contato #N" continuando a numeração da pasta do grupo e os
+números que já estão no CRM sendo pulados). Rode sempre que mexer nesses dois arquivos.
+
 ## `check:isolation`
 
 Isolamento multi-tenant é [a regra inviolável nº 1 do `CLAUDE.md`](../../CLAUDE.md) e o

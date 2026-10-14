@@ -3,6 +3,7 @@ import { tenantDb } from "@/lib/tenant-db";
 import { WHATSAPP_PROVIDERS } from "@/lib/queries/connections";
 import { loadEvoCredsById } from "@/lib/integrations/evolution-creds";
 import { findGroupInfo } from "@/lib/integrations/evolution-client";
+import type { GroupParticipant } from "@/lib/integrations/evolution-groups";
 import { formatBrPhone } from "@/lib/phone";
 
 /**
@@ -48,15 +49,37 @@ export async function getContactRows(organizationId: string, userId: string): Pr
   });
 }
 
-/** A group's participants as number rows (Evolution gives JIDs, not names). */
-export async function getGroupRows(
+/** Every group on the user's own numbers (not only the recent conversations the inbox loads), by name. */
+export async function listExportGroups(
+  organizationId: string,
+  userId: string,
+): Promise<{ id: string; name: string }[]> {
+  const db = tenantDb(organizationId);
+  const ids = await ownedConnIds(db, userId);
+  if (ids.length === 0) return [];
+  const groups = await db.conversation.findMany({
+    where: { isGroup: true, connectionId: { in: ids } },
+    take: 1000,
+    select: { id: true, name: true, customName: true },
+  });
+  return groups
+    .map((g) => ({ id: g.id, name: g.customName || g.name || "Grupo" }))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+}
+
+/**
+ * A group's members as country-coded numbers (Evolution gives numbers, not
+ * names). `readable` is false when Evolution didn't answer, so callers can
+ * tell "couldn't read the group" from "no members with a number".
+ */
+export async function getGroupMembers(
   organizationId: string,
   conversationId: string,
   userId: string,
-): Promise<{ title: string; rows: ExportRow[] } | null> {
+): Promise<{ title: string; readable: boolean; members: GroupParticipant[] } | null> {
   const db = tenantDb(organizationId);
   const ids = await ownedConnIds(db, userId);
-  // Only export a group that lives on one of the user's own numbers.
+  // Only a group that lives on one of the user's own numbers.
   const conv = await db.conversation.findFirst({
     where: { id: conversationId, isGroup: true, connectionId: { in: ids } },
     select: { remoteJid: true, connectionId: true, name: true, customName: true },
@@ -66,9 +89,20 @@ export async function getGroupRows(
   const creds = await loadEvoCredsById(conv.connectionId);
   const info = creds ? await findGroupInfo(creds, conv.remoteJid) : null;
   const title = conv.customName || conv.name || "Grupo";
-  const rows: ExportRow[] = (info?.participants ?? []).map((p) => {
+  return { title, readable: info !== null, members: info?.participants ?? [] };
+}
+
+/** A group's members as export rows. */
+export async function getGroupRows(
+  organizationId: string,
+  conversationId: string,
+  userId: string,
+): Promise<{ title: string; rows: ExportRow[] } | null> {
+  const group = await getGroupMembers(organizationId, conversationId, userId);
+  if (!group) return null;
+  const rows: ExportRow[] = group.members.map((p) => {
     const number = formatBrPhone(p.number) || p.number;
     return { name: p.admin ? `${number} (admin)` : number, number };
   });
-  return { title, rows };
+  return { title: group.title, rows };
 }

@@ -5,6 +5,7 @@ import { hasFeatureByModules, hasModule } from "@/config/modules";
 import { prisma } from "@/lib/prisma";
 import { listConversations, listConversationFolders } from "@/lib/queries/inbox";
 import { listQuickReplies } from "@/lib/queries/quick-replies";
+import { listExportGroups } from "@/lib/whatsapp/export";
 import { getWhatsappAgent } from "@/lib/queries/whatsapp-agent";
 import { InboxClient } from "@/components/inbox/inbox-client";
 import { TeamChatClient } from "@/components/inbox/team-chat-client";
@@ -48,9 +49,9 @@ export default async function InboxPage({
     mode === "whatsapp" ? listQuickReplies(ctx.organizationId) : Promise.resolve([]),
   ]);
 
-  const exportGroups = conversations
-    .filter((c) => c.isGroup)
-    .map((c) => ({ id: c.id, name: c.customName || c.name || "Grupo" }));
+  // Every group on the caller's numbers, not only the recent conversations loaded above.
+  const exportGroups =
+    mode === "whatsapp" && hasModule(ctx.modules, "crm") ? await listExportGroups(ctx.organizationId, ctx.userId) : [];
 
   // One-click WhatsApp lives here in Conversas. Show the connect card when the
   // caller hasn't linked their own number yet (platform Evolution configured).

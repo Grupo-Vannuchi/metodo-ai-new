@@ -1,17 +1,23 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
-import { prisma } from "@/lib/prisma";
 import { decryptCredentials } from "@/lib/integrations/crypto";
 import { resolveEvoCreds } from "@/lib/integrations/evolution-creds";
 import { getChannelAdapter } from "@/lib/integrations/channels";
 import type { SendInput } from "@/lib/integrations/channels/types";
 import { normalizeWhatsappNumber, formatBrPhone, brPhoneKey, looksLikeWhatsappMobile } from "@/lib/phone";
 import { onlyDigits } from "@/lib/cnpj";
-import { getContactRows, getGroupRows } from "@/lib/whatsapp/export";
-import { ensureContactFolder, lazyFolder, whatsappFolderName } from "@/lib/crm/import-folders";
+import { getContactRows, getGroupMembers } from "@/lib/whatsapp/export";
+import { ensureContactFolder, findContactFolder, whatsappFolderName } from "@/lib/crm/import-folders";
+import {
+  CONTACT_NAME_PREFIX,
+  MAX_IMPORT_GROUPS,
+  lastContactNumber,
+  planGroupImport,
+} from "@/lib/whatsapp/group-import";
 import { purgeConversationMedia } from "@/lib/whatsapp/media";
 import { applyReaction, myReaction } from "@/lib/whatsapp/reactions";
 
@@ -377,82 +383,140 @@ export async function deleteConversationFolder(id: string): Promise<Ok> {
   }
 }
 
+export type ImportLine = {
+  /** "contacts" or the group's conversation id. */
+  id: string;
+  label: string;
+  created: number;
+  skipped: number;
+  /** The group couldn't be read (not one of the caller's groups, or Evolution didn't answer). */
+  failed?: boolean;
+};
+
 export type ImportContactsResult =
-  | { ok: true; created: number; skipped: number }
-  | { ok: false; error: "unauthorized" | "not_found" | "unknown" };
+  | { ok: true; lines: ImportLine[] }
+  | { ok: false; error: "unauthorized" | "invalid" | "unknown" };
+
+const importTargetSchema = z.object({
+  contacts: z.boolean(),
+  groupIds: z.array(z.string().min(1).max(64)).max(MAX_IMPORT_GROUPS),
+});
+
+type Db = ReturnType<typeof tenantDb>;
+type ContactData = { name: string; phone: string; folderId: string };
+
+/** createMany in chunks, so one big group doesn't become one huge statement. */
+async function createContacts(db: Db, organizationId: string, rows: ContactData[]): Promise<void> {
+  for (let i = 0; i < rows.length; i += 500) {
+    await db.contact.createMany({
+      data: rows.slice(i, i + 500).map((r) => ({
+        organizationId,
+        name: r.name,
+        phone: r.phone,
+        folderId: r.folderId,
+        tags: ["whatsapp"],
+        source: "whatsapp-import",
+      })),
+    });
+  }
+}
+
+/** The caller's individual conversations, under their names, in a new dated folder. */
+async function importConversationContacts(
+  db: Db,
+  organizationId: string,
+  userId: string,
+  known: Set<string>,
+): Promise<ImportLine> {
+  const rows = await getContactRows(organizationId, userId);
+  const picked: { name: string; phone: string }[] = [];
+  let skipped = 0;
+  for (const r of rows) {
+    const digits = onlyDigits(r.number);
+    const key = brPhoneKey(digits);
+    // Skip non-WhatsApp-capable numbers (LIDs, landlines, malformed) so we
+    // don't create junk CRM contacts that would fail on send.
+    if (!key || known.has(key) || !looksLikeWhatsappMobile(normalizeWhatsappNumber(digits))) {
+      skipped++;
+      continue;
+    }
+    known.add(key);
+    const phone = formatBrPhone(digits) || digits;
+    picked.push({ name: r.name?.trim() || phone, phone });
+  }
+  // The folder is created only when something is filed: a run where everything
+  // is a duplicate leaves no empty folder behind.
+  if (picked.length > 0) {
+    const folderId = await ensureContactFolder(db, organizationId, whatsappFolderName("Contatos", new Date()));
+    await createContacts(db, organizationId, picked.map((p) => ({ ...p, folderId })));
+  }
+  return { id: "contacts", label: "Contatos", created: picked.length, skipped };
+}
+
+/** A group's members as "Contato #N" in the folder named after the group, numbered after the last one there. */
+async function importGroup(
+  db: Db,
+  organizationId: string,
+  userId: string,
+  conversationId: string,
+  known: Set<string>,
+): Promise<ImportLine> {
+  const group = await getGroupMembers(organizationId, conversationId, userId);
+  if (!group || !group.readable) {
+    return { id: conversationId, label: group?.title ?? "", created: 0, skipped: 0, failed: true };
+  }
+
+  const existingFolder = await findContactFolder(db, group.title);
+  const numbered = existingFolder
+    ? await db.contact.findMany({
+        where: { folderId: existingFolder, name: { startsWith: CONTACT_NAME_PREFIX } },
+        select: { name: true },
+      })
+    : [];
+  const plan = planGroupImport(
+    group.members.map((m) => m.number),
+    known,
+    lastContactNumber(numbered.map((c) => c.name)),
+  );
+  if (plan.create.length > 0) {
+    const folderId = existingFolder ?? (await ensureContactFolder(db, organizationId, group.title));
+    await createContacts(db, organizationId, plan.create.map((c) => ({ name: c.name, phone: c.phone, folderId })));
+    for (const c of plan.create) known.add(c.key);
+  }
+  return { id: conversationId, label: group.title, created: plan.create.length, skipped: plan.skipped };
+}
 
 /**
- * Import WhatsApp contacts into the CRM: either every individual conversation,
- * or an entire group's participants. Creates a Contact per number, deduping by
- * phone (skips numbers already in the CRM and repeats within the batch).
+ * "Adicionar aos contatos": the caller's individual conversations and/or the
+ * members of one or more of their groups become CRM contacts. Numbers already
+ * in the CRM are skipped (compared by brPhoneKey), including ones added earlier
+ * in the same run, so a member of two picked groups lands only in the first.
  */
-export async function importWhatsappContactsToCrm(
-  target: { type: "contacts" } | { type: "group"; conversationId: string },
-): Promise<ImportContactsResult> {
+export async function importWhatsappContactsToCrm(target: {
+  contacts: boolean;
+  groupIds: string[];
+}): Promise<ImportContactsResult> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false, error: "unauthorized" };
+  const parsed = importTargetSchema.safeParse(target);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+  const groupIds = [...new Set(parsed.data.groupIds)];
 
   try {
-    let rows: { name: string; number: string }[];
-    let batchLabel: string;
-    if (target.type === "group") {
-      const group = await getGroupRows(ctx.organizationId, target.conversationId, ctx.userId);
-      if (!group) return { ok: false, error: "not_found" };
-      // Groups expose numbers, not names — use the number as the contact name.
-      rows = group.rows.map((r) => ({ name: r.number, number: r.number }));
-      batchLabel = group.title;
-    } else {
-      rows = await getContactRows(ctx.organizationId, ctx.userId);
-      batchLabel = "Contatos";
-    }
-
     const db = tenantDb(ctx.organizationId);
-    // This import's own folder, created only once a contact is actually filed —
-    // a run where everything is a duplicate leaves no empty folder behind.
-    const folderName = whatsappFolderName(batchLabel, new Date());
-    const folder = lazyFolder(() => ensureContactFolder(db, ctx.organizationId, folderName));
-    const seen = new Set<string>();
-    let created = 0;
-    let skipped = 0;
+    const phones = await db.contact.findMany({ where: { phone: { not: null } }, select: { phone: true } });
+    const known = new Set(phones.map((c) => brPhoneKey(c.phone ?? "")).filter(Boolean));
 
-    for (const r of rows) {
-      const digits = onlyDigits(r.number);
-      const key = brPhoneKey(digits);
-      // Skip non-WhatsApp-capable numbers (LIDs, landlines, malformed) so we
-      // don't create junk CRM contacts that would fail on send.
-      if (!key || seen.has(key) || !looksLikeWhatsappMobile(normalizeWhatsappNumber(digits))) {
-        skipped++;
-        continue;
-      }
-      seen.add(key);
-
-      const existing = await prisma.$queryRaw<{ id: string }[]>`
-        SELECT id FROM contacts
-        WHERE "organizationId" = ${ctx.organizationId}
-          AND phone IS NOT NULL
-          AND right(regexp_replace(phone, '\D', '', 'g'), 11) = ${key}
-        LIMIT 1`;
-      if (existing[0]) {
-        skipped++;
-        continue;
-      }
-
-      const phone = formatBrPhone(digits) || digits;
-      await db.contact.create({
-        data: {
-          organizationId: ctx.organizationId,
-          name: r.name?.trim() || phone,
-          phone,
-          tags: ["whatsapp"],
-          source: "whatsapp-import",
-          folderId: await folder(),
-        },
-      });
-      created++;
+    const lines: ImportLine[] = [];
+    if (parsed.data.contacts) {
+      lines.push(await importConversationContacts(db, ctx.organizationId, ctx.userId, known));
+    }
+    for (const id of groupIds) {
+      lines.push(await importGroup(db, ctx.organizationId, ctx.userId, id, known));
     }
 
     revalidatePath("/app/contacts");
-    return { ok: true, created, skipped };
+    return { ok: true, lines };
   } catch (error) {
     console.error("Failed to import WhatsApp contacts to CRM", error);
     return { ok: false, error: "unknown" };

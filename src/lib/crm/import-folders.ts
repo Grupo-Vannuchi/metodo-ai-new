@@ -34,6 +34,12 @@ export async function ensureContactFolder(
   return folder.id;
 }
 
+/** Id of the contact folder with this name (cleaned the same way), or null. Never creates. */
+export async function findContactFolder(db: Db, rawName: string): Promise<string | null> {
+  const folder = await db.contactFolder.findFirst({ where: { name: clean(rawName) }, select: { id: true } });
+  return folder?.id ?? null;
+}
+
 export async function ensureCompanyFolder(
   db: Db,
   organizationId: string,
