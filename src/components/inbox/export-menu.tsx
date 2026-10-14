@@ -7,9 +7,11 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { importWhatsappContactsToCrm, type ImportLine } from "@/app/actions/inbox";
 import { normalizeSearch } from "@/lib/search-options";
+import { cn } from "@/lib/utils";
 import { MAX_IMPORT_GROUPS } from "@/lib/whatsapp/group-import";
 
 type Group = { id: string; name: string };
+type Notice = { tone: "ok" | "error"; text: string };
 
 /**
  * Export the WhatsApp contact list, or a group's members, as PDF / Word / XML,
@@ -31,10 +33,13 @@ export function ExportMenu({ groups }: { groups: Group[] }) {
   const [groupIds, setGroupIds] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [importing, startImport] = useTransition();
-  const [lines, setLines] = useState<ImportLine[] | null>(null);
-  const [importError, setImportError] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  // Result of the last download or "Adicionar aos contatos"; each new run clears it.
+  const [notice, setNotice] = useState<Notice[] | null>(null);
+  const busy = importing || downloading;
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const noticeRef = useRef<HTMLUListElement>(null);
 
   function place() {
     const r = btnRef.current?.getBoundingClientRect();
@@ -69,6 +74,11 @@ export function ExportMenu({ groups }: { groups: Group[] }) {
     };
   }, [open]);
 
+  // On a short window the menu scrolls; bring a new result into view so it isn't missed.
+  useEffect(() => {
+    if (notice) noticeRef.current?.scrollIntoView({ block: "nearest" });
+  }, [notice]);
+
   const picked = (contacts ? 1 : 0) + groupIds.length;
   const atMax = groupIds.length >= MAX_IMPORT_GROUPS;
   const q = normalizeSearch(query);
@@ -78,8 +88,11 @@ export function ExportMenu({ groups }: { groups: Group[] }) {
   const toggleGroup = (id: string) =>
     setGroupIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
 
-  function download(format: "pdf" | "doc" | "xlsx") {
-    if (picked !== 1) return;
+  // Fetched (not a plain link) so a group WhatsApp won't show turns into a message, not an empty file.
+  async function download(format: "pdf" | "doc" | "xlsx") {
+    if (picked !== 1 || busy) return;
+    setNotice(null);
+    const name = contacts ? t("export.allContacts") : (nameOf.get(groupIds[0]) ?? "");
     const params = new URLSearchParams();
     if (contacts) {
       params.set("type", "contacts");
@@ -88,29 +101,52 @@ export function ExportMenu({ groups }: { groups: Group[] }) {
       params.set("conversationId", groupIds[0]);
     }
     params.set("format", format);
-    const a = document.createElement("a");
-    a.href = `/api/inbox/export?${params.toString()}`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setOpen(false);
+    setDownloading(true);
+    try {
+      const res = await fetch(`/api/inbox/export?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        const text =
+          body?.error === "group_unreadable" ? t("export.unreadable", { name }) : t("export.downloadError");
+        setNotice([{ tone: "error", text }]);
+        return;
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `export.${format}`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const count = Number(res.headers.get("X-Export-Rows") ?? 0);
+      setNotice([{ tone: "ok", text: t("export.downloaded", { name, count }) }]);
+    } catch {
+      // Network blip.
+      setNotice([{ tone: "error", text: t("export.downloadError") }]);
+    } finally {
+      setDownloading(false);
+    }
   }
 
   function importToCrm() {
-    setLines(null);
-    setImportError(false);
+    if (busy) return;
+    setNotice(null);
     startImport(async () => {
       try {
         const r = await importWhatsappContactsToCrm({ contacts, groupIds });
         if (r.ok) {
-          setLines(r.lines);
+          setNotice(r.lines.map((l) => ({ tone: l.failed ? "error" : "ok", text: lineText(l) })));
           router.refresh();
         } else {
-          setImportError(true);
+          setNotice([{ tone: "error", text: t("export.importError") }]);
         }
       } catch {
         // Network blip or stale action id after a deploy.
-        setImportError(true);
+        setNotice([{ tone: "error", text: t("export.importError") }]);
       }
     });
   }
@@ -210,14 +246,14 @@ export function ExportMenu({ groups }: { groups: Group[] }) {
 
               <p className="mt-3 text-xs font-medium text-muted-foreground">{t("export.format")}</p>
               <div className="mt-1 grid grid-cols-3 gap-2">
-                <FormatBtn icon={FileText} label="PDF" disabled={picked !== 1} onClick={() => download("pdf")} />
+                <FormatBtn icon={FileText} label="PDF" disabled={picked !== 1 || busy} onClick={() => download("pdf")} />
                 <FormatBtn
                   icon={FileSpreadsheet}
                   label="Excel"
-                  disabled={picked !== 1}
+                  disabled={picked !== 1 || busy}
                   onClick={() => download("xlsx")}
                 />
-                <FormatBtn icon={FileType} label="Word" disabled={picked !== 1} onClick={() => download("doc")} />
+                <FormatBtn icon={FileType} label="Word" disabled={picked !== 1 || busy} onClick={() => download("doc")} />
               </div>
               {picked > 1 ? <p className="mt-1 text-xs text-muted-foreground">{t("export.pickOne")}</p> : null}
 
@@ -226,24 +262,32 @@ export function ExportMenu({ groups }: { groups: Group[] }) {
                 <button
                   type="button"
                   onClick={importToCrm}
-                  disabled={importing || picked === 0}
+                  disabled={busy || picked === 0}
                   className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
                 >
                   {importing ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
                   {t("export.toCrm")}
                 </button>
                 {picked === 0 ? <p className="mt-1 text-xs text-muted-foreground">{t("export.pickSome")}</p> : null}
-                {importError ? <p className="mt-2 text-xs text-red-600">{t("export.importError")}</p> : null}
-                {lines ? (
-                  <ul className="mt-2 flex max-h-32 flex-col gap-1 overflow-y-auto text-xs text-muted-foreground">
-                    {lines.map((l) => (
-                      <li key={l.id} className={l.failed ? "text-red-600" : undefined}>
-                        {lineText(l)}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
               </div>
+
+              {notice ? (
+                <ul ref={noticeRef} role="status" className="mt-3 flex max-h-40 flex-col gap-1.5 overflow-y-auto text-xs">
+                  {notice.map((n, i) => (
+                    <li
+                      key={i}
+                      className={cn(
+                        "rounded-md px-2.5 py-1.5",
+                        n.tone === "ok"
+                          ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"
+                          : "bg-red-500/10 text-red-700 dark:text-red-300",
+                      )}
+                    >
+                      {n.text}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>,
             document.body,
           )
