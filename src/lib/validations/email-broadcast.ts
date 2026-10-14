@@ -2,20 +2,34 @@ import { z } from "zod";
 import { isValidEmail, normalizeEmail } from "@/lib/email-broadcast/normalize";
 import { MAX_ATTACHMENTS } from "@/lib/email-broadcast/attachments";
 import type { AudienceStats } from "@/lib/email-broadcast/audience-core";
+import {
+  MAX_AUDIENCE_EMAILS,
+  MAX_IMPORTS,
+  MAX_IMPORT_NAME,
+  audienceEmailCount,
+} from "@/lib/email-broadcast/spreadsheet";
 
 const id = z.string().min(1).max(64);
+const emailList = z.array(z.string().max(320)).max(MAX_AUDIENCE_EMAILS);
 
 /** Who receives a send: the UNION of every criterion. Stored as JSON on the draft. */
-export const audienceSelectionSchema = z.object({
-  allContacts: z.boolean().default(false),
-  contactTags: z.array(z.string().min(1).max(100)).max(200).default([]),
-  contactFolderIds: z.array(id).max(200).default([]),
-  contactIds: z.array(id).max(1000).default([]),
-  allCompanies: z.boolean().default(false),
-  companyFolderIds: z.array(id).max(200).default([]),
-  companyIds: z.array(id).max(1000).default([]),
-  emails: z.array(z.string().max(320)).max(5000).default([]),
-});
+export const audienceSelectionSchema = z
+  .object({
+    allContacts: z.boolean().default(false),
+    contactTags: z.array(z.string().min(1).max(100)).max(200).default([]),
+    contactFolderIds: z.array(id).max(200).default([]),
+    contactIds: z.array(id).max(1000).default([]),
+    allCompanies: z.boolean().default(false),
+    companyFolderIds: z.array(id).max(200).default([]),
+    companyIds: z.array(id).max(1000).default([]),
+    emails: emailList.default([]),
+    // One entry per imported spreadsheet; drafts saved before imports existed parse with [].
+    imports: z
+      .array(z.object({ fileName: z.string().trim().min(1).max(MAX_IMPORT_NAME), emails: emailList }))
+      .max(MAX_IMPORTS)
+      .default([]),
+  })
+  .refine((sel) => audienceEmailCount(sel) <= MAX_AUDIENCE_EMAILS, "too_many_emails");
 
 export type AudienceSelection = z.infer<typeof audienceSelectionSchema>;
 
@@ -28,6 +42,7 @@ export const EMPTY_AUDIENCE: AudienceSelection = {
   companyFolderIds: [],
   companyIds: [],
   emails: [],
+  imports: [],
 };
 
 /** One uploaded attachment as the composer sends it back; the server checks

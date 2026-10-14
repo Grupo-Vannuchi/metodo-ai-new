@@ -2059,12 +2059,34 @@
     "manual": "Typed addresses",
     "manualPlaceholder": "Search a contact or paste emails…",
     "manualHint": "Type to search contacts and companies by name, or paste a list separated by commas, semicolons or line breaks.",
-    "manualLimit": "Limit of 5,000 typed addresses per send; the rest was ignored.",
+    "manualLimit": "Limit of 5,000 addresses per send, typed and spreadsheets combined; the rest was ignored.",
     "invalidChip": "invalid",
     "remove": "Remove {email}",
+    "sheet": {
+      "title": "Spreadsheet",
+      "drop": "Drop the spreadsheet here or",
+      "choose": "Choose file",
+      "formats": ".xlsx or .csv",
+      "another": "Import another spreadsheet",
+      "reading": "Reading spreadsheet…",
+      "count": "{count, plural, =1 {# email} other {# emails}}",
+      "remove": "Remove spreadsheet",
+      "removeNamed": "Remove the spreadsheet {file}",
+      "hint": "We take the emails from every sheet and skip repeated and invalid ones. Spreadsheets and typed addresses add up to 5,000 per send.",
+      "imported": "{count, plural, =1 {# email imported} other {# emails imported}} from {file}.",
+      "ignored": "{invalid, plural, =0 {No invalid} =1 {# invalid} other {# invalid}} and {duplicates, plural, =0 {no repeated} =1 {# repeated} other {# repeated}} skipped.",
+      "limit": "Limit of 5,000 emails per send: we imported {kept, number} from {file} and {dropped, number} were left out.",
+      "full": "Limit of 5,000 emails per send reached; nothing was imported from {file}.",
+      "maxFiles": "Limit of {max} spreadsheets per send; {file} wasn't imported.",
+      "xls": "The .xls format isn't supported. Open it in Excel and save as .xlsx or .csv.",
+      "unsupported": "{file} isn't a supported spreadsheet. Upload an .xlsx or .csv file.",
+      "tooBig": "{file} is over 10 MB.",
+      "empty": "No emails found in {file}.",
+      "unreadable": "Couldn't read {file}. Check that it opens in Excel."
+    },
     "summary": {
       "title": "Send summary",
-      "selected": "Addresses in groups and typed",
+      "selected": "Addresses in groups, typed and spreadsheets",
       "duplicates": "Repeats (same email in more than one place)",
       "suppressed": "Unsubscribed, bounced or spam",
       "invalid": "Invalid address",
@@ -2127,7 +2149,7 @@
         "problems": "Problems"
       },
       "col": { "recipient": "Recipient", "source": "Came from", "status": "Status", "updated": "Updated" },
-      "source": { "contact": "Contact", "company": "Company", "manual": "Typed" }
+      "source": { "contact": "Contact", "company": "Company", "manual": "Typed", "spreadsheet": "Spreadsheet" }
     }
   },
   "pricing": {

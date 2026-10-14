@@ -7,9 +7,9 @@ import { isValidEmail, normalizeEmail } from "./normalize";
  * dedupe rules are checked by scripts/check-email-broadcast.ts.
  */
 
-export type CandidateSource = "contact" | "company" | "manual";
+export type CandidateSource = "contact" | "company" | "manual" | "spreadsheet";
 
-/** One address as found in one place (a contact, a company or the typed list). */
+/** One address as found in one place (a contact, a company, the typed list or an imported spreadsheet). */
 export type Candidate = {
   email: string;
   source: CandidateSource;
@@ -38,7 +38,7 @@ export type AudienceStats = {
 };
 
 /** Which source names the recipient ({{nome}}/{{empresa}}) when an address repeats. */
-const PRIORITY: Record<CandidateSource, number> = { contact: 0, company: 1, manual: 2 };
+const PRIORITY: Record<CandidateSource, number> = { contact: 0, company: 1, manual: 2, spreadsheet: 3 };
 
 export function mergeCandidates(
   candidates: readonly Candidate[],

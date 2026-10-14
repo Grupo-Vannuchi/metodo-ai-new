@@ -61,6 +61,7 @@ export async function resolveAudience(organizationId: string, sel: AudienceSelec
       companyId: c.id,
     })),
     ...sel.emails.map((email) => ({ email, source: "manual" as const })),
+    ...sel.imports.flatMap((i) => i.emails.map((email) => ({ email, source: "spreadsheet" as const }))),
   ];
 
   const blocked = new Set<string>([

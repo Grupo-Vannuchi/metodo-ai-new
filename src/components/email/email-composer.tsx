@@ -51,6 +51,7 @@ export function EmailComposer({
   const [picked, setPicked] = useState(draft.picked);
   const [attachments, setAttachments] = useState(draft.attachments);
   const [uploading, setUploading] = useState(false);
+  const [readingSheet, setReadingSheet] = useState(false);
   // The user's choice; effectiveSignatureId normalizes it against the current
   // list (a signature deleted in another tab drops out after a refresh).
   const [signatureId, setSignatureId] = useState<string | null>(draft.signatureId);
@@ -310,17 +311,24 @@ export function EmailComposer({
           onAudienceChange={setAudience}
           picked={picked}
           onPickedChange={setPicked}
+          onReadingChange={setReadingSheet}
         />
         <AudienceSummary preview={preview} quota={quota}>
           <div className="flex flex-wrap gap-3">
-            <Button type="button" variant="outline" className="flex-1" onClick={onSaveDraft} disabled={busy || uploading}>
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={onSaveDraft}
+              disabled={busy || uploading || readingSheet}
+            >
               {t("saveDraft")}
             </Button>
             <Button
               type="button"
               className="flex-1"
               onClick={onSend}
-              disabled={busy || uploading || fromProblem || preview?.stats.total === 0}
+              disabled={busy || uploading || readingSheet || fromProblem || preview?.stats.total === 0}
             >
               {busy ? t("working") : t("reviewSend")}
             </Button>

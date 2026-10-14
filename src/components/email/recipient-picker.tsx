@@ -1,17 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { useTranslations } from "next-intl";
 import { Building2, Contact, Mail, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
+import { SpreadsheetImport } from "@/components/email/spreadsheet-import";
 import { searchEmailTargets } from "@/app/actions/email-broadcasts";
 import { isValidEmail, normalizeEmail, parseEmailList } from "@/lib/email-broadcast/normalize";
+import { MAX_AUDIENCE_EMAILS, audienceEmailCount } from "@/lib/email-broadcast/spreadsheet";
 import type { AudienceSelection } from "@/lib/validations/email-broadcast";
 import type { ComposerOptions, PickedTarget } from "@/lib/email-broadcast/types";
-
-// Same cap as the audience schema (emails max).
-const MAX_MANUAL = 5000;
 
 const toggle = (list: string[], value: string) =>
   list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
@@ -32,25 +31,28 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
   );
 }
 
-/** Groups (contacts by tag/folder, companies by folder) + typed/searched addresses, all summed. */
+/** Groups (contacts by tag/folder, companies by folder) + typed/searched addresses + spreadsheets, all summed. */
 export function RecipientPicker({
   options,
   audience,
   onAudienceChange,
   picked,
   onPickedChange,
+  onReadingChange,
 }: {
   options: ComposerOptions;
   audience: AudienceSelection;
-  onAudienceChange: (next: AudienceSelection) => void;
+  onAudienceChange: Dispatch<SetStateAction<AudienceSelection>>;
   picked: PickedTarget[];
   onPickedChange: (next: PickedTarget[]) => void;
+  onReadingChange: (reading: boolean) => void;
 }) {
   const t = useTranslations("emailBroadcast");
   const toast = useToast();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PickedTarget[]>([]);
-  const set = (patch: Partial<AudienceSelection>) => onAudienceChange({ ...audience, ...patch });
+  // Functional: a spreadsheet finishes reading after an await and must not undo edits made meanwhile.
+  const set = (patch: Partial<AudienceSelection>) => onAudienceChange((a) => ({ ...a, ...patch }));
 
   // Debounced search; state only changes inside the timeout.
   useEffect(() => {
@@ -75,8 +77,10 @@ export function RecipientPicker({
     if (parsed.length === 0) return;
     const next = [...audience.emails];
     for (const email of parsed) if (!next.includes(email)) next.push(email);
-    if (next.length > MAX_MANUAL) {
-      next.length = MAX_MANUAL;
+    // Typed and imported addresses share one cap.
+    const room = Math.max(0, MAX_AUDIENCE_EMAILS - audienceEmailCount({ emails: [], imports: audience.imports }));
+    if (next.length > room) {
+      next.length = room;
       toast(t("manualLimit"), { variant: "error" });
     }
     set({ emails: next });
@@ -296,6 +300,15 @@ export function RecipientPicker({
         </div>
         <p className="text-xs text-muted-foreground">{t("manualHint")}</p>
       </div>
+
+      <hr className="border-border" />
+
+      <SpreadsheetImport
+        imports={audience.imports}
+        typedCount={audience.emails.length}
+        onChange={(imports) => set({ imports })}
+        onReadingChange={onReadingChange}
+      />
     </section>
   );
 }
