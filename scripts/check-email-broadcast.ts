@@ -7,6 +7,7 @@
  * Next's bundler there is no `server-only` package to resolve.
  */
 import assert from "node:assert/strict";
+import ExcelJS from "exceljs";
 import { isValidEmail, normalizeEmail, parseEmailList } from "../src/lib/email-broadcast/normalize";
 import { mergeCandidates, type Candidate } from "../src/lib/email-broadcast/audience-core";
 import { transactionalRetryDelayMs } from "../src/lib/email/retry-after";
@@ -59,6 +60,16 @@ import {
   signatureProblem,
   untilStable,
 } from "../src/lib/email-broadcast/signature";
+import {
+  MAX_AUDIENCE_EMAILS,
+  MAX_IMPORTS,
+  audienceEmailCount,
+  extractEmails,
+  fitImport,
+  spreadsheetKind,
+  xlsxCellTexts,
+} from "../src/lib/email-broadcast/spreadsheet";
+import { EMPTY_AUDIENCE, audienceSelectionSchema } from "../src/lib/validations/email-broadcast";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -137,6 +148,25 @@ check("mergeCandidates lets a contact's name win over an earlier manual entry", 
   assert.deepEqual(recipients, [
     { email: "a@x.com", name: "Ana", companyName: "ACME", sources: ["contact", "manual"], contactId: "c9", companyId: null },
   ]);
+});
+
+check("mergeCandidates tags spreadsheet addresses and orders them after manual ones", () => {
+  const { recipients, stats } = mergeCandidates(
+    [
+      { email: "a@x.com", source: "spreadsheet" },
+      { email: "A@x.com", source: "manual" },
+      { email: "b@x.com", source: "spreadsheet" },
+    ],
+    new Set(),
+  );
+  assert.deepEqual(stats, { selected: 3, invalid: 0, duplicates: 1, suppressed: 0, total: 2 });
+  assert.deepEqual(
+    recipients.map((r) => [r.email, r.sources]),
+    [
+      ["a@x.com", ["manual", "spreadsheet"]],
+      ["b@x.com", ["spreadsheet"]],
+    ],
+  );
 });
 
 check("mergeCandidates with nothing selected yields zeros", () => {
@@ -647,4 +677,108 @@ check("untilStable reaches a fixed point and gives up on oscillation", () => {
   assert.equal(untilStable((s) => s, "abc"), "abc");
 });
 
-console.log(`\n✅ email-broadcast: ${passed} checks passed.`);
+// --- spreadsheet import --------------------------------------------------------
+check("spreadsheetKind reads the extension, case-insensitively", () => {
+  assert.equal(spreadsheetKind("Clientes Evento.XLSX"), "xlsx");
+  assert.equal(spreadsheetKind("lista.csv"), "csv");
+  assert.equal(spreadsheetKind("antiga.xls"), "xls");
+  assert.equal(spreadsheetKind("planilha.ods"), null);
+  assert.equal(spreadsheetKind("sem-extensao"), null);
+  assert.equal(spreadsheetKind("xlsx"), null);
+});
+
+check("extractEmails keeps unique valid addresses in order and counts the rest", () => {
+  const r = extractEmails([
+    "Nome",
+    "E-mail",
+    " Ana@Exemplo.com.br ",
+    "joao@x.com; bia@y.com",
+    "Maria <maria@z.com>",
+    "ana@exemplo.com.br",
+    "maria@@exemplo",
+    "@instagram",
+    "sem arroba",
+    "",
+  ]);
+  assert.deepEqual(r.emails, ["ana@exemplo.com.br", "joao@x.com", "bia@y.com", "maria@z.com"]);
+  assert.equal(r.duplicates, 1);
+  assert.equal(r.invalid, 2);
+});
+
+check("extractEmails strips CSV quotes and mailto: links", () => {
+  const csv = 'nome,email\n"Silva, Ana","ana@x.com"\nBia;mailto:bia@y.com\r\n"Caio"\t"caio@z.com"\n';
+  assert.deepEqual(extractEmails([csv]).emails, ["ana@x.com", "bia@y.com", "caio@z.com"]);
+  assert.deepEqual(extractEmails(["MAILTO:Dani@W.com"]).emails, ["dani@w.com"]);
+});
+
+check("fitImport keeps what fits under the cap and counts the rest", () => {
+  assert.equal(MAX_AUDIENCE_EMAILS, 5000);
+  assert.deepEqual(fitImport(["a@x.com", "b@x.com", "c@x.com"], 4998), { kept: ["a@x.com", "b@x.com"], dropped: 1 });
+  assert.deepEqual(fitImport(["a@x.com"], 5000), { kept: [], dropped: 1 });
+  assert.deepEqual(fitImport(["a@x.com"], 0), { kept: ["a@x.com"], dropped: 0 });
+});
+
+check("audienceEmailCount sums typed addresses and every imported list", () => {
+  assert.equal(audienceEmailCount(EMPTY_AUDIENCE), 0);
+  const sel = {
+    ...EMPTY_AUDIENCE,
+    emails: ["a@x.com"],
+    imports: [
+      { fileName: "a.xlsx", emails: ["b@x.com", "c@x.com"] },
+      { fileName: "b.csv", emails: ["d@x.com"] },
+    ],
+  };
+  assert.equal(audienceEmailCount(sel), 4);
+});
+
+check("audience schema keeps old drafts and caps typed + imported at 5,000", () => {
+  const old = audienceSelectionSchema.parse({ allContacts: true, emails: ["a@x.com"] });
+  assert.deepEqual(old.imports, []);
+  const many = (n: number, p: string) => Array.from({ length: n }, (_, i) => `${p}${i}@x.com`);
+  const at = { emails: many(1000, "m"), imports: [{ fileName: "a.xlsx", emails: many(4000, "s") }] };
+  assert.ok(audienceSelectionSchema.safeParse(at).success);
+  const over = { emails: many(1001, "m"), imports: [{ fileName: "a.xlsx", emails: many(4000, "s") }] };
+  assert.ok(!audienceSelectionSchema.safeParse(over).success);
+  assert.ok(!audienceSelectionSchema.safeParse({ imports: [{ fileName: "", emails: [] }] }).success);
+  const files = (n: number) => Array.from({ length: n }, (_, i) => ({ fileName: `f${i}.csv`, emails: [`a${i}@x.com`] }));
+  assert.equal(MAX_IMPORTS, 20);
+  assert.ok(audienceSelectionSchema.safeParse({ imports: files(MAX_IMPORTS) }).success);
+  assert.ok(!audienceSelectionSchema.safeParse({ imports: files(MAX_IMPORTS + 1) }).success);
+});
+
+async function checkAsync(name: string, fn: () => Promise<void>): Promise<void> {
+  await fn();
+  passed++;
+  console.log(`  ✓ ${name}`);
+}
+
+async function main() {
+  await checkAsync("xlsxCellTexts reads every sheet, link targets and rich text of a real .xlsx", async () => {
+    const wb = new ExcelJS.Workbook();
+    const a = wb.addWorksheet("Evento SP");
+    a.addRow(["Nome", "E-mail", "Idade"]);
+    a.addRow(["Ana", "ana@x.com", 31]);
+    a.addRow(["Bia", { text: "Escreva para a Bia", hyperlink: "mailto:bia@x.com" }]);
+    a.addRow(["Caio", { text: "caio@x.com", hyperlink: "mailto:caio@x.com" }]);
+    a.addRow(["Dani", { richText: [{ text: "dani@" }, { text: "x.com", font: { bold: true } }] }]);
+    const b = wb.addWorksheet("Evento RJ");
+    b.addRow(["Edu", "edu@x.com"]);
+    const data = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
+
+    const r = extractEmails(await xlsxCellTexts(ExcelJS, data));
+    assert.deepEqual(r.emails, ["ana@x.com", "bia@x.com", "caio@x.com", "dani@x.com", "edu@x.com"]);
+    assert.equal(r.duplicates, 0);
+    assert.equal(r.invalid, 0);
+  });
+
+  await checkAsync("xlsxCellTexts rejects a file that isn't an .xlsx", async () => {
+    await assert.rejects(xlsxCellTexts(ExcelJS, new TextEncoder().encode("ana@x.com").buffer as ArrayBuffer));
+  });
+
+  console.log(`\n✅ email-broadcast: ${passed} checks passed.`);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

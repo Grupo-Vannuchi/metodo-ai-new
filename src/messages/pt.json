@@ -2059,12 +2059,34 @@
     "manual": "E-mails avulsos",
     "manualPlaceholder": "Busque um contato ou cole e-mails…",
     "manualHint": "Digite para buscar contatos e empresas pelo nome, ou cole uma lista separada por vírgula, ponto e vírgula ou quebra de linha.",
-    "manualLimit": "Limite de 5.000 e-mails avulsos por envio; o excedente foi ignorado.",
+    "manualLimit": "Limite de 5.000 e-mails por envio, somando avulsos e planilhas; o excedente foi ignorado.",
     "invalidChip": "inválido",
     "remove": "Remover {email}",
+    "sheet": {
+      "title": "Planilha",
+      "drop": "Arraste a planilha aqui ou",
+      "choose": "Escolher arquivo",
+      "formats": ".xlsx ou .csv",
+      "another": "Importar outra planilha",
+      "reading": "Lendo planilha…",
+      "count": "{count, plural, =1 {# e-mail} other {# e-mails}}",
+      "remove": "Remover planilha",
+      "removeNamed": "Remover a planilha {file}",
+      "hint": "Pegamos os e-mails de todas as abas e ignoramos repetidos e inválidos. Planilhas e e-mails avulsos somam até 5.000 por envio.",
+      "imported": "{count, plural, =1 {# e-mail importado} other {# e-mails importados}} de {file}.",
+      "ignored": "{invalid, plural, =0 {Nenhum inválido} =1 {# inválido} other {# inválidos}} e {duplicates, plural, =0 {nenhum repetido} =1 {# repetido} other {# repetidos}} ignorados.",
+      "limit": "Limite de 5.000 e-mails por envio: importamos {kept, number} de {file} e {dropped, number} ficaram de fora.",
+      "full": "Limite de 5.000 e-mails por envio atingido; nada foi importado de {file}.",
+      "maxFiles": "Limite de {max} planilhas por envio; {file} não foi importada.",
+      "xls": "O formato .xls não é aceito. Abra no Excel e salve como .xlsx ou .csv.",
+      "unsupported": "{file} não é uma planilha aceita. Envie um arquivo .xlsx ou .csv.",
+      "tooBig": "{file} passa de 10 MB.",
+      "empty": "Nenhum e-mail encontrado em {file}.",
+      "unreadable": "Não foi possível ler {file}. Confira se ele abre no Excel."
+    },
     "summary": {
       "title": "Resumo do envio",
-      "selected": "Endereços nos grupos e avulsos",
+      "selected": "Endereços nos grupos, avulsos e planilhas",
       "duplicates": "Repetidos (mesmo e-mail em mais de um lugar)",
       "suppressed": "Descadastrados, bounce ou spam",
       "invalid": "Endereço inválido",
@@ -2127,7 +2149,7 @@
         "problems": "Problemas"
       },
       "col": { "recipient": "Destinatário", "source": "Veio de", "status": "Status", "updated": "Atualizado" },
-      "source": { "contact": "Contato", "company": "Empresa", "manual": "Avulso" }
+      "source": { "contact": "Contato", "company": "Empresa", "manual": "Avulso", "spreadsheet": "Planilha" }
     }
   },
   "pricing": {
