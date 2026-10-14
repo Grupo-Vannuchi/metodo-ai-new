@@ -1,4 +1,5 @@
 import "server-only";
+import { parseGroupParticipants, type GroupParticipant } from "./evolution-groups";
 
 /**
  * Thin REST client for the Evolution API (v2) instance lifecycle. Endpoints and
@@ -209,7 +210,7 @@ export async function getBase64FromMediaMessage(
 export type EvoGroupInfo = {
   subject: string | null;
   pictureUrl: string | null;
-  participants: { number: string; jid: string; admin: boolean }[];
+  participants: GroupParticipant[];
 };
 
 /**
@@ -235,23 +236,7 @@ export async function findGroupInfo(
   const subject = typeof g.subject === "string" ? g.subject.trim() || null : null;
   const pictureUrl =
     typeof g.pictureUrl === "string" && g.pictureUrl.startsWith("http") ? g.pictureUrl : null;
-  const rawParts = Array.isArray(g.participants) ? (g.participants as Json[]) : [];
-  const participants = rawParts
-    .map((p) => {
-      const jid = String(p.id ?? "").trim();
-      const number = jid.split("@")[0] ?? "";
-      const admin = p.admin === "admin" || p.admin === "superadmin";
-      return { number, jid, admin };
-    })
-    // Keep only real phone numbers. Newer WhatsApp exposes participants as LIDs
-    // (`@lid` privacy identifiers) that are NOT phone numbers — importing those
-    // would create junk contacts that fail on send. Drop them.
-    .filter(
-      (p) =>
-        /^\d{10,15}$/.test(p.number) &&
-        !p.jid.endsWith("@lid") &&
-        (p.jid.includes("@s.whatsapp.net") || p.jid.includes("@c.us") || !p.jid.includes("@")),
-    );
+  const participants = parseGroupParticipants(Array.isArray(g.participants) ? g.participants : []);
 
   return { subject, pictureUrl, participants };
 }
