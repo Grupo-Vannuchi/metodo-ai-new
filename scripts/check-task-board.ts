@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import {
   COLUMN_NAME_MAX,
   columnForDoneChange,
+  columnForNewTask,
   compareBoardCards,
   doneAfterMove,
   effectiveColumnId,
@@ -98,8 +99,8 @@ check("effectiveColumnId: the card's own column, else the entrance", () => {
 
 check("tasksOfColumn: a column's cards in board order; the entrance also takes unplaced ones", () => {
   const cols = [
-    { id: "a", name: "A", order: 0, isEntrance: false, isDone: false },
-    { id: "e", name: "E", order: 1, isEntrance: true, isDone: false },
+    { id: "a", name: "A", order: 0, isEntrance: false, isDone: false, dateBucket: null },
+    { id: "e", name: "E", order: 1, isEntrance: true, isDone: false, dateBucket: null },
   ];
   const task = (id: string, boardColumnId: string | null, boardOrder: number) => ({
     id,
@@ -115,29 +116,61 @@ check("tasksOfColumn: a column's cards in board order; the entrance also takes u
 });
 
 const board = [
-  { id: "late", name: "Atrasadas", order: 0, isEntrance: false, isDone: false },
-  { id: "nodate", name: "Sem data", order: 1, isEntrance: true, isDone: false },
-  { id: "done", name: "Concluídas", order: 2, isEntrance: false, isDone: true },
+  { id: "late", name: "Atrasadas", order: 0, isEntrance: false, isDone: false, dateBucket: "overdue" },
+  { id: "today", name: "Hoje", order: 1, isEntrance: false, isDone: false, dateBucket: "today" },
+  { id: "soon", name: "Em breve", order: 2, isEntrance: false, isDone: false, dateBucket: "upcoming" },
+  { id: "nodate", name: "Sem data", order: 3, isEntrance: true, isDone: false, dateBucket: "nodate" },
+  { id: "done", name: "Concluídas", order: 4, isEntrance: false, isDone: true, dateBucket: null },
 ];
 const withoutDone = board.map((c) => ({ ...c, isDone: false }));
+const withoutToday = board.filter((c) => c.id !== "today");
+// Noon of Oct 14 in São Paulo (UTC-3).
+const now = at("2026-10-14T15:00:00Z");
+const DUE = {
+  yesterday: at("2026-10-13T20:00:00Z"),
+  today: at("2026-10-14T20:00:00Z"),
+  lateToday: at("2026-10-15T02:00:00Z"), // 23:00 of Oct 14 in São Paulo
+  later: at("2026-10-20T12:00:00Z"),
+};
+const card = (boardColumnId: string | null, dueDate: Date | null = null) => ({ boardColumnId, dueDate });
 
 check("columnForDoneChange: completing sends the card to the top of the done column", () => {
-  assert.deepEqual(columnForDoneChange(true, "late", board), { columnId: "done", at: "start" });
-  assert.deepEqual(columnForDoneChange(true, null, board), { columnId: "done", at: "start" });
-  assert.deepEqual(columnForDoneChange(true, "gone", board), { columnId: "done", at: "start" });
-  assert.equal(columnForDoneChange(true, "done", board), null); // already there
+  assert.deepEqual(columnForDoneChange(true, card("late"), board, now), { columnId: "done", at: "start" });
+  assert.deepEqual(columnForDoneChange(true, card(null), board, now), { columnId: "done", at: "start" });
+  assert.deepEqual(columnForDoneChange(true, card("gone"), board, now), { columnId: "done", at: "start" });
+  assert.equal(columnForDoneChange(true, card("done"), board, now), null); // already there
 });
 
-check("columnForDoneChange: reopening leaves the done column for the end of the entrance", () => {
-  assert.deepEqual(columnForDoneChange(false, "done", board), { columnId: "nodate", at: "end" });
-  assert.equal(columnForDoneChange(false, "late", board), null); // reopened elsewhere: stays
-  assert.equal(columnForDoneChange(false, null, board), null);
+check("columnForDoneChange: reopening leaves the done column for its date's column, at the end", () => {
+  assert.deepEqual(columnForDoneChange(false, card("done", DUE.yesterday), board, now), { columnId: "late", at: "end" });
+  assert.deepEqual(columnForDoneChange(false, card("done", DUE.today), board, now), { columnId: "today", at: "end" });
+  assert.deepEqual(columnForDoneChange(false, card("done", DUE.lateToday), board, now), { columnId: "today", at: "end" });
+  assert.deepEqual(columnForDoneChange(false, card("done", DUE.later), board, now), { columnId: "soon", at: "end" });
+  assert.deepEqual(columnForDoneChange(false, card("done"), board, now), { columnId: "nodate", at: "end" });
+  // That date's column was deleted: the entrance.
+  assert.deepEqual(columnForDoneChange(false, card("done", DUE.today), withoutToday, now), { columnId: "nodate", at: "end" });
+  assert.equal(columnForDoneChange(false, card("late", DUE.today), board, now), null); // reopened elsewhere: stays
+  assert.equal(columnForDoneChange(false, card(null), board, now), null);
 });
 
 check("columnForDoneChange: no board or no done column means the card stays", () => {
-  assert.equal(columnForDoneChange(true, "late", []), null);
-  assert.equal(columnForDoneChange(true, "late", withoutDone), null);
-  assert.equal(columnForDoneChange(false, "done", withoutDone), null);
+  assert.equal(columnForDoneChange(true, card("late"), [], now), null);
+  assert.equal(columnForDoneChange(true, card("late"), withoutDone, now), null);
+  assert.equal(columnForDoneChange(false, card("done"), withoutDone, now), null);
+});
+
+check("columnForNewTask: by due date against the day the task was created", () => {
+  const task = (dueDate: Date | null, createdAt = now, doneAt: Date | null = null) => ({ dueDate, createdAt, doneAt });
+  assert.equal(columnForNewTask(task(DUE.yesterday), board), "late");
+  assert.equal(columnForNewTask(task(DUE.today), board), "today");
+  assert.equal(columnForNewTask(task(DUE.lateToday), board), "today");
+  assert.equal(columnForNewTask(task(DUE.later), board), "soon");
+  assert.equal(columnForNewTask(task(null), board), "nodate");
+  // Created on Oct 10, due Oct 14: it was "upcoming" when created.
+  assert.equal(columnForNewTask(task(DUE.today, at("2026-10-10T15:00:00Z")), board), "soon");
+  assert.equal(columnForNewTask(task(DUE.today, now, now), board), "done"); // created already done
+  assert.equal(columnForNewTask(task(DUE.today), withoutToday), null); // no such column: the entrance
+  assert.equal(columnForNewTask(task(null), []), null);
 });
 
 check("doneAfterMove: dropping in the done column completes, taking it out reopens", () => {

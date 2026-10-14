@@ -8,7 +8,15 @@ independentes" foi revertida a pedido. Agora existe a coluna de concluídas (`ta
 - reabrir (desmarcando ou arrastando o card para fora) leva para o fim da entrada;
 - ela não pode ser excluída nem virar a entrada.
 
-As linhas abaixo que dizem que o card não muda de coluna descrevem a primeira versão.
+**Atualização (2026-10-14, `feature/tarefas-coluna-pela-data`):** as colunas de data ganharam a marca
+`task_board_columns.dateBucket`:
+- tarefa nova vai para "Atrasadas", "Hoje", "Em breve" ou "Sem data" conforme o prazo no dia em que foi
+  criada, e não muda sozinha quando vence;
+- reabrir uma tarefa de "Concluídas" usa a mesma regra, com o dia da reabertura;
+- sem a coluna daquela faixa, a tarefa vai para a entrada.
+
+As linhas abaixo que dizem que o card não muda de coluna, ou que tarefa nova cai na entrada, descrevem a
+primeira versão.
 
 ---
 

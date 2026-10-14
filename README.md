@@ -185,12 +185,16 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 - **E-mail em massa (submenu E-mail):** `src/lib/email-broadcast/` e as tabelas `email_broadcasts`, `email_broadcast_recipients` e `email_suppressions`. Um destinatário por endereço por envio, garantido por `@@unique`. Lotes de 100 com `Idempotency-Key` (um 409 `concurrent_idempotent_requests` repete com a mesma chave; política em `retry-policy.ts`); sem QStash, roda em `after()` com lease verificado por dono e tem o botão "Retomar envio". A cota conta também os endereços ainda na fila de envios em andamento. O webhook de entrega é o webhook único da plataforma: `/api/email/webhook` (segredo `RESEND_WEBHOOK_SECRET`), com assinatura Svix; se aplicar o evento falha, apaga o evento guardado e responde 500 para o Svix repetir. Envia pela conta Resend da plataforma (`RESEND_API_KEY`). O remetente é digitado em cada envio e o domínio dele precisa estar em `email_sender_domains` daquela empresa (comando `email:dominio`, runbook §8). O ritmo é de ~2 req/s somando todos os envios em andamento (a conta Resend aceita 10 req/s por equipe), para preservar os e-mails de login e reset. O descadastro é próprio (`/email-unsubscribe/...` e o one-click `/api/email/unsubscribe/...`) e **não** altera `Contact.optedOut`. Imagens no corpo: botão "Imagem" do editor (opção desligada por padrão no `RichTextEditor`, as Propostas não usam), por upload em `/api/email/image` (mesmo gating da tela, guarda via `putMedia`) ou link https; podem ser clicáveis (`<a><img></a>`), e no envio ganham estilo responsivo e base64 é removido (`prepareEmailImages`). Anexos: até 10 arquivos e 10 MB por envio, com os tipos da lista fechada em `src/lib/email-broadcast/attachments.ts`. Sobem por `/api/email/attachment` (mesmo gating da tela) para o storage, na pasta `email-attachments/<org>/`. O envio guarda só as chaves, na coluna `attachments`, e o servidor confere que são da empresa. Com anexo, o despachante lê os arquivos uma vez por execução (`readMedia`) e manda um e-mail por chamada, porque o `/emails/batch` do Resend não aceita anexos; o ritmo fica em ~2 e-mails/s, e a confirmação mostra o tempo estimado. Se um arquivo não puder ser lido, o envio pausa (`attachment_unavailable`) sem mandar nada. Com anexo, um envio de algumas centenas de destinatários leva minutos e roda dentro do processo da app (`after()`): um redeploy (todo merge na `main`) ou um restart do Passenger o interrompe — ninguém recebe duas vezes e "Retomar envio" continua de onde parou; evite mergear na `main` enquanto um envio com anexo estiver rodando. Assinaturas: aba E-mail → Assinaturas (`/app/email/signatures`). São da empresa e têm dois tipos: "Texto e imagens" (o editor do corpo) ou "Imagem pronta" (imagem, link opcional e texto alternativo obrigatório). Cada empresa tem no máximo uma padrão e no máximo 20 assinaturas, e quem tem acesso ao E-mail gerencia. O rascunho guarda `signatureId`. Ao iniciar o envio, a assinatura é montada e sanitizada (`composeSignature`) e congelada em `signatureHtml`/`signatureText` no próprio envio: o despachante só lê essa cópia, e editar ou excluir a assinatura não muda envios feitos. Tabela `email_signatures`; regras puras em `src/lib/email-broadcast/signature.ts`. Specs: `docs/superpowers/specs/2026-10-06-email-em-massa-design.md`, para a conta da plataforma e os domínios, `docs/superpowers/specs/2026-10-08-email-dominios-plataforma-design.md`, para os anexos, `docs/superpowers/specs/2026-10-09-email-anexos-design.md`, e, para as assinaturas, `docs/superpowers/specs/2026-10-13-email-assinaturas-design.md`.
 - **Kanban de Tarefas (`/app/tasks?view=kanban`):** colunas livres da empresa (tabela
   `task_board_columns`, até 20), montadas na primeira abertura com as 5 antigas e cada tarefa onde
-  aparecia (horário de Brasília). `tasks.boardColumnId` nulo = coluna de entrada (★), onde caem as
-  tarefas novas; `tasks.boardOrder` tem padrão no banco (instante da criação), então nenhum caminho
-  que cria tarefa precisa conhecer o quadro. A coluna de concluídas (`task_board_columns.isDone`, ✓) recebe
-  toda tarefa concluída: concluir (check, status "Concluída" ou soltar o card nela) leva o card para o topo
-  dela, e reabrir (desmarcar ou arrastar para fora) leva para o fim da entrada (`columnForDoneChange`,
-  `doneAfterMove`, `placeTaskByDoneState`). Ela não pode ser excluída nem virar a entrada. A visão em lista (`/app/tasks`) usa as mesmas colunas como abas (`tasksOfColumn`); "Meus itens" e as listas do CRM seguem com as abas por prazo. Toda alteração que depende do estado do quadro (mover card, criar, reordenar, trocar a entrada, excluir coluna)
+  aparecia (horário de Brasília). Tarefa nova nasce com `tasks.boardColumnId` nulo ("ainda não colocada")
+  e `tasks.boardOrder` com padrão no banco (instante da criação). Ao abrir `/app/tasks`, `placeNewTasks` põe
+  cada uma na coluna da data dela no dia em que foi criada (`task_board_columns.dateBucket`: "Atrasadas",
+  "Hoje", "Em breve", "Sem data"; `columnForNewTask`); sem essa coluna, vai para a entrada (★). Depois disso
+  só muda de coluna se alguém mover ou concluir — vencer não move. Assim nenhum caminho que cria tarefa
+  (formulário, recorrência, Copiloto, automações, WhatsApp) precisa conhecer o quadro. A coluna de concluídas
+  (`task_board_columns.isDone`, ✓) recebe toda tarefa concluída: concluir (check, status "Concluída" ou soltar
+  o card nela) leva o card para o topo dela, e reabrir (desmarcar ou arrastar para fora) leva para o fim da
+  coluna da data dela no dia da reabertura, ou da entrada (`columnForDoneChange`, `doneAfterMove`,
+  `placeTaskByDoneState`). Ela não pode ser excluída nem virar a entrada. A visão em lista (`/app/tasks`) usa as mesmas colunas como abas (`tasksOfColumn`); "Meus itens" e as listas do CRM seguem com as abas por prazo. Toda alteração que depende do estado do quadro (mover card, criar, reordenar, trocar a entrada, excluir coluna)
   passa pela mesma trava por empresa (`lockTaskBoard`); renomear é uma única escrita. Regras puras em
   `src/lib/tasks/board-core.ts` (`npm run check:tasks`).
 - **Prospecção:** Google Places com **chave do próprio cliente (BYO)**, assíncrona via QStash, descarte LGPD.
@@ -257,6 +261,15 @@ prisma/schema.prisma` e depois `prisma migrate resolve --applied 20261014120000_
 acrescenta `task_board_columns.isDone`, liga a flag na coluna "Concluídas"/"Done" de cada empresa, leva as
 tarefas concluídas que estavam em outras colunas para o topo dela e as abertas que estavam nela para o fim da
 entrada. Não apaga nada, e o código anterior ignora a flag. **Não** use `migrate deploy`.
+
+**Antes do merge da branch `feature/tarefas-coluna-pela-data`:** aplicar no Supabase
+`prisma/migrations/20261014160000_task_board_date_buckets/migration.sql` com `prisma db execute --file … --schema
+prisma/schema.prisma` e depois `prisma migrate resolve --applied 20261014160000_task_board_date_buckets`. Ela
+acrescenta `task_board_columns.dateBucket` (único por empresa), liga a marca nas colunas "Atrasadas", "Hoje",
+"Em breve" e "Sem data" (ou "Overdue", "Today", "Upcoming", "No date") e coloca as tarefas que nunca foram
+colocadas (sem coluna; caíam na entrada) na coluna da data delas **no dia da migration** (horário de São Paulo),
+as concluídas em "Concluídas" e, sem a coluna, na entrada. Não apaga nada, e o código anterior continua funcionando com ela.
+**Não** use `migrate deploy`.
 
 Sempre **backup antes** de migração destrutiva. Confira com `npx prisma migrate status`.
 

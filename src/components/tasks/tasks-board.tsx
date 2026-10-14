@@ -165,9 +165,9 @@ export function TasksBoard({ tasks, columns }: { tasks: TaskRow[]; columns: Boar
 
   function setDone(id: string, done: boolean) {
     // Optimistic: completing moves the card to the top of the done column,
-    // reopening it from there to the end of the entrance (as the server does).
+    // reopening it from there to the end of its date's column (as the server does).
     const task = items.find((x) => x.id === id);
-    const target = task ? columnForDoneChange(done, task.boardColumnId, cols) : null;
+    const target = task ? columnForDoneChange(done, task, cols, new Date()) : null;
     const others = target ? (grouped.get(target.columnId) ?? []).filter((c) => c.id !== id) : [];
     const order = target
       ? orderForInsert(
@@ -255,7 +255,8 @@ export function TasksBoard({ tasks, columns }: { tasks: TaskRow[]; columns: Boar
       variant: "danger",
     }).then((ok) => {
       if (!ok) return;
-      setItems((prevItems) => prevItems.map((x) => (x.boardColumnId === column.id ? { ...x, boardColumnId: null } : x)));
+      const entranceId = entrance?.id ?? null;
+      setItems((prevItems) => prevItems.map((x) => (x.boardColumnId === column.id ? { ...x, boardColumnId: entranceId } : x)));
       setCols((prevCols) => prevCols.filter((c) => c.id !== column.id));
       run(() => deleteTaskBoardColumn(column.id));
     });
