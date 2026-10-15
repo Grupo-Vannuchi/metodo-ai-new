@@ -37,7 +37,7 @@ Yahoo/SMTP ficam para depois (seção 12).
 | App no Azure | **Um app só, da plataforma**, novo e separado do "Entrar com Microsoft" (que segue com o app antigo). O cliente nunca entra no Azure. |
 | Limite diário | **Não bloqueia** antes de enviar; a confirmação **avisa quantos recebem agora**. |
 | Quem passou do limite | O envio **pausa e espera** alguém clicar em "Retomar envio". |
-| Anexos | **Até 10 MB**, igual à plataforma. |
+| Anexos | **Até 10 MB**, igual à plataforma. Acima do limite de uma chamada (~4 MB) o envio monta um rascunho e sobe os anexos, o que exige a permissão **`Mail.ReadWrite`** (decidido em 2026-10-15, já adicionada no Azure). |
 | Itens enviados | **Salvar todos** na caixa conectada. |
 | Motivo de falha | **Em vermelho**, em português, na lista de envios e no relatório, **nos dois canais**. |
 | Corpo do e-mail | O **mesmo editor de texto rico** de hoje. |
@@ -50,9 +50,12 @@ App registrado no diretório "Moraes Vannuchi" (2026-10-15):
 - **Plataforma Web**, URIs de redirecionamento:
   - `https://metodotia.com/api/email/microsoft/callback`;
   - `http://localhost:3000/api/email/microsoft/callback`.
-- **Permissões delegadas do Microsoft Graph:** `Mail.Send`, `offline_access`, `User.Read`. Nenhuma exige
-  consentimento de administrador; algumas empresas com Microsoft 365 podem exigir mesmo assim (política
-  delas). A verificação do editor (Publisher verification) é recomendada e fica como passo opcional.
+- **Permissões delegadas do Microsoft Graph:** `Mail.Send`, `Mail.ReadWrite`, `offline_access`, `User.Read`.
+  Nenhuma exige consentimento de administrador; algumas empresas com Microsoft 365 podem exigir mesmo assim
+  (política delas). A verificação do editor (Publisher verification) é recomendada e fica como passo
+  opcional.
+- App registrado como **"MetodoIA"**, ID do aplicativo `297b2411-883f-43d7-b385-2f277d1f3531`; segredo
+  "Envio de e-mail 2026-10-15", vence em **14/10/2028**.
 - **Segredo do cliente** com validade de 24 meses. A data de vencimento vai para o runbook do README.
 
 Variáveis novas em [src/lib/env.ts](../../../src/lib/env.ts), opcionais:
@@ -130,7 +133,7 @@ As duas rotas se protegem sozinhas (guia 05): exigem sessão, `canAccessScreen(c
   - guarda os dois em cookies `httpOnly` de 10 minutos, como em
     [src/app/api/auth/[provider]/route.ts](../../../src/app/api/auth/[provider]/route.ts);
   - redireciona para a Microsoft (`MicrosoftEntraId("common", …)`) com os escopos
-    `openid profile email offline_access User.Read Mail.Send` e `prompt=select_account`;
+    `openid profile email offline_access User.Read Mail.Send Mail.ReadWrite` e `prompt=select_account`;
   - aceita `?intent=reconnect` só para voltar com a mensagem certa.
 - **`GET /api/email/microsoft/callback`**:
   1. confere o `state` e troca o código por tokens;
@@ -175,14 +178,17 @@ destinatário (o link de descadastro é individual). Pelo canal `MICROSOFT`, o "
    rodapé e cabeçalhos de descadastro `List-Unsubscribe` + `List-Unsubscribe-Post`). Vira uma mensagem
    **MIME** com o `MailComposer` do pacote `nodemailer`, usado só para montar a mensagem (não envia por
    SMTP). Dependência nova, conferida pelo `check:node`.
-2. **Até ~3 MB de MIME:** `POST /me/sendMail` com o MIME em base64 (limite de 4 MB por chamada do
-   Graph). A Microsoft guarda em "Itens enviados".
-3. **Acima disso e até 10 MB de anexos:**
-   - `POST /me/messages` com o MIME **sem os anexos**, o que cria um rascunho;
-   - cada anexo vai em seguida: abaixo de 3 MB por `POST /messages/{id}/attachments`; a partir de 3 MB
-     por sessão de upload (`createUploadSession`, partes múltiplas de 320 KiB);
+2. **Chamada única:** se o MIME completo, já em base64, cabe em **3,9 MB** (o Graph recusa chamadas acima
+   de ~4 MB com 413), vai por `POST /me/sendMail` (`Content-Type: text/plain`, corpo = MIME em base64).
+   A Microsoft guarda em "Itens enviados". Isso cobre e-mails sem anexo e anexos pequenos (o base64
+   duplo deixa caber até ~2,2 MB de arquivos).
+3. **Rascunho (o resto, até 10 MB de anexos; exige `Mail.ReadWrite`):**
+   - `POST /me/messages` com o MIME **sem os anexos** (mesmo formato), o que cria um rascunho;
+   - cada anexo vai em seguida: abaixo de 3 MB por `POST /me/messages/{id}/attachments`
+     (`#microsoft.graph.fileAttachment`); a partir de 3 MB por sessão de upload
+     (`createUploadSession` + `PUT` em partes de até 4 MB, múltiplas de 320 KiB, sem `Authorization`);
    - por fim, `POST /me/messages/{id}/send`, que guarda em "Itens enviados".
-   
+
    Se algo falhar no meio, o rascunho é apagado (`DELETE /me/messages/{id}`).
 4. Os arquivos são lidos uma vez por execução (`readMedia`), como hoje.
 
@@ -252,8 +258,9 @@ O protótipo tem as quatro.
    - o bloco "Nome do remetente / Endereço de envio" vira **"De: Nome <endereço> (conta Microsoft)"**, sem
      edição, com o link "Trocar canal";
    - o resto é igual: **editor de texto rico**, lista, planilha, assinatura, anexos até 10 MB;
-   - "Enviar teste" também sai pela caixa conectada;
    - o rascunho guarda o canal e abre nele em `/app/email/[id]/edit`.
+   - (O protótipo mostra um "Enviar teste", mas esse botão não existe no formulário de hoje e fica fora
+     desta fase.)
 3. **Confirmação**, pela Microsoft, acrescenta:
    - *"X dos Y destinatários recebem agora. Esta conta envia cerca de N por dia, e M já saíram nas últimas
      24 h. Ao chegar no limite, o envio pausa e espera você retomar."* (ou "Todos recebem agora");
@@ -276,7 +283,8 @@ no guia 04.
 
 - Tokens só criptografados no banco, abertos só no servidor, na hora de enviar. Nunca vão para o cliente
   nem para logs.
-- Escopos mínimos: só enviar (`Mail.Send`). Não lê a caixa.
+- Escopos: `Mail.Send` para enviar e `Mail.ReadWrite` **só** para criar, anexar, enviar e apagar o
+  rascunho do próprio envio. O código nunca lista nem lê mensagens da caixa.
 - `state` e PKCE no fluxo de conexão; as rotas exigem sessão, tela e módulo.
 - A tabela nova é isolada por empresa (`TENANT_MODELS` + `check:isolation`).
 - O despachante continua como contexto de sistema, com `organizationId` explícito em toda consulta.
@@ -314,6 +322,9 @@ no guia 04.
   recusa real.
 - **Empresas com Microsoft 365 restrito:** podem exigir aprovação do administrador delas para o app.
   A verificação do editor reduz isso.
+- **Tela de autorização mais ampla:** por causa do `Mail.ReadWrite`, a Microsoft mostra "ler e escrever
+  seus e-mails". Alguns clientes podem estranhar; a tela de conexão do MétodoAI explica que a permissão
+  só serve para montar e-mails com anexos grandes.
 - **Segredo do app vence em 24 meses:** sem troca, todas as contas passam a "precisa reconectar".
 
 ## 12. Fora de escopo
