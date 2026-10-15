@@ -1894,6 +1894,52 @@
     }
   },
   "emailBroadcast": {
+    "channel": {
+      "title": "Where should this e-mail go out from?",
+      "platformTitle": "Through the platform",
+      "platformBody": "Goes out through MétodoAI from an address on a domain enabled for your company. The usual way.",
+      "platformPoint1": "You type the sender name and address",
+      "platformPoint2": "Up to {limit} e-mails a month",
+      "platformPoint3": "Report with delivered and bounced",
+      "platformContinue": "Continue through the platform",
+      "microsoftTitle": "Through the Microsoft account",
+      "microsoftBody": "Goes out from the company's Outlook or Microsoft 365 mailbox. Replies land there and every e-mail is saved in Sent Items.",
+      "noneTitle": "No account connected",
+      "noneBody": "You sign in to Microsoft and allow sending on the mailbox's behalf. Each company has one sending account.",
+      "consentNote": "Microsoft will ask for permission to read and write e-mail: MétodoAI only uses it to build e-mails with large attachments, never to read your mailbox.",
+      "connect": "Connect Microsoft account",
+      "connected": "Connected",
+      "kindPersonal": "Personal Outlook",
+      "kindWork": "Microsoft 365",
+      "dailyLimit": "About {count} e-mails a day",
+      "sent24h": "{count} sent in the last 24 h",
+      "use": "Use this account",
+      "switch": "Switch account",
+      "switchConfirm": "Sign in to Microsoft with another mailbox? It replaces {email} for this company, and paused sends go out from it when resumed.",
+      "switchConfirmLabel": "Sign in with another account",
+      "disconnect": "Disconnect",
+      "disconnectConfirm": "Disconnect {email}? MétodoAI stops sending from this mailbox, and sends in progress through it pause until an account is connected again. To revoke access on Microsoft's side too, remove the app in your Microsoft account's privacy settings.",
+      "disconnected": "Microsoft account disconnected.",
+      "reconnectTitle": "The account {email} needs to be reconnected",
+      "reconnectBody": "Microsoft refused access (password changed or access revoked). Sends through this account are paused until you reconnect.",
+      "reconnect": "Reconnect",
+      "connectedToast": "Microsoft account connected.",
+      "error": {
+        "cancelled": "Connecting to Microsoft was cancelled.",
+        "admin_required": "This Microsoft 365 organization requires its administrator to approve the app first. Ask your IT admin.",
+        "not_configured": "Sending through a Microsoft account isn't set up. Contact support.",
+        "failed": "Couldn't connect the Microsoft account. Try again."
+      }
+    },
+    "fromMicrosoft": "From",
+    "microsoftChip": "Microsoft account",
+    "fromMicrosoftHint": "The name and address come from the connected account. Replies land in that mailbox.",
+    "switchChannel": "Change channel",
+    "microsoftMissing": "There's no active Microsoft account for this company. Connect or reconnect it in New e-mail before sending.",
+    "confirmMicrosoftPartial": "{now} of the {total} recipients get it now. This account sends about {limit} a day, and {sent} went out in the last 24 h. At the limit, the send pauses and waits for you to click “Resume send”.",
+    "confirmMicrosoftAll": "All {total} recipients get it now.",
+    "confirmMicrosoftPace": "Microsoft's pace: about 28 e-mails a minute; this part takes about {minutes, plural, one {# minute} other {# minutes}}.",
+    "confirmMicrosoftSentItems": "The e-mails are saved in {email}'s Sent Items, and Microsoft doesn't report delivery or opens.",
     "image": {
       "button": "Image",
       "title": "Insert image",
@@ -2131,7 +2177,9 @@
       "empty": "No recipients selected.",
       "quota": "This month's quota can't fit this send.",
       "quotaDetail": "This send has {total} addresses, but only {remaining} are left in this month's quota.",
-      "unknown": "Something went wrong. Try again."
+      "unknown": "Something went wrong. Try again.",
+      "sender_account_missing": "Connect a Microsoft account to send through it.",
+      "sender_account_reconnect": "The Microsoft account needs to be reconnected."
     },
     "report": {
       "started": "Started {date}",

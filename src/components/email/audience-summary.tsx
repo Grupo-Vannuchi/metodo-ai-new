@@ -19,13 +19,13 @@ export function AudienceSummary({
   children,
 }: {
   preview: AudiencePreview | null;
-  quota: { used: number; limit: number };
+  quota: { used: number; limit: number } | null;
   children?: React.ReactNode;
 }) {
   const t = useTranslations("emailBroadcast.summary");
   const format = useFormatter();
   const s = preview?.stats;
-  const pct = Math.min(100, (quota.used / quota.limit) * 100);
+  const pct = quota ? Math.min(100, (quota.used / quota.limit) * 100) : 0;
 
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-6">
@@ -65,17 +65,19 @@ export function AudienceSummary({
         </details>
       ) : null}
 
-      <div className="flex flex-col gap-1.5 rounded-lg bg-muted/60 p-3">
-        <div className="flex justify-between text-xs tabular-nums text-muted-foreground">
-          <span>{t("quota")}</span>
-          <span>
-            {format.number(quota.used)} / {format.number(quota.limit)}
-          </span>
+      {quota ? (
+        <div className="flex flex-col gap-1.5 rounded-lg bg-muted/60 p-3">
+          <div className="flex justify-between text-xs tabular-nums text-muted-foreground">
+            <span>{t("quota")}</span>
+            <span>
+              {format.number(quota.used)} / {format.number(quota.limit)}
+            </span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-border">
+            <div className="h-full bg-brand" style={{ width: `${pct}%` }} />
+          </div>
         </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-border">
-          <div className="h-full bg-brand" style={{ width: `${pct}%` }} />
-        </div>
-      </div>
+      ) : null}
       {children}
     </section>
   );
