@@ -103,7 +103,9 @@ const DENIED_CODES = new Set([
 /**
  * What the Microsoft dispatcher does with a failed Graph call. `stage` "send"
  * is the call that hands the e-mail over (sendMail, or the draft's send): a
- * timeout there may have gone through, so it is never retried ("uncertain").
+ * timeout, a network error or a gateway 5xx (500, 502, 504...) there may have
+ * gone through, so it is never retried ("uncertain"). Only 503 (Graph's
+ * "not processed, try later") and 429 are retried at that stage.
  * `attempt` counts earlier retries of this same e-mail.
  */
 export function graphFailureAction(
@@ -117,7 +119,8 @@ export function graphFailureAction(
   if (status === 401) return attempt < 1 ? "refresh" : "reconnect";
   if (status === 403) return code && DENIED_CODES.has(code) ? "reconnect" : "pause";
   if (status === 413 || code === "ErrorMessageSizeExceeded") return "pause";
-  if (status === 0 || status === 504) return stage === "send" ? "uncertain" : attempt < 3 ? "retry" : "pause";
+  if (stage === "send" && (status === 0 || (status >= 500 && status !== 503))) return "uncertain";
+  if (status === 0 || status === 504) return attempt < 3 ? "retry" : "pause";
   if (status === 429) return attempt < 5 ? "retry" : "pause";
   if (status >= 500) return attempt < 3 ? "retry" : "pause";
   if (status >= 400) return "recipient";

@@ -14,7 +14,7 @@ import { sendBatch, sendOne, type ResendAttachment, type ResendEmail } from "./r
 import { batchFailureAction, singleFailureAction } from "./retry-policy";
 import { emailUnsubscribeOneClickUrl, emailUnsubscribePageUrl } from "./unsubscribe";
 import type { MimeFile } from "./microsoft/mime";
-import { runMicrosoftBroadcast } from "./microsoft/deliver";
+import { markInterruptedUncertain, runMicrosoftBroadcast } from "./microsoft/deliver";
 
 /**
  * Mass e-mail dispatcher. Runs as SYSTEM (raw Prisma, organizationId explicit
@@ -119,6 +119,9 @@ export async function runEmailBroadcast(
   const org = b.organizationId;
   let stamp: Date | null = await takeLease(b.id, org);
   if (!stamp) return { done: true }; // another runner is alive
+  // Only the lease owner sweeps: a recipient left SENDING was cut mid-call and is never resent.
+  // Done before any early pause so leftover rows never show as "queued".
+  if (b.channel === "MICROSOFT") await markInterruptedUncertain(b.id, org);
 
   /** Owner-checked heartbeat; throws LeaseLost when we are no longer the owner. */
   const beat = async () => {
@@ -219,9 +222,6 @@ export async function runEmailBroadcast(
       raw.push({ filename: a.filename, contentType: attachmentContentType(a.filename) ?? "application/octet-stream", data });
       await beat();
     }
-    const files: ResendAttachment[] | null = raw.length
-      ? raw.map((f) => ({ filename: f.filename, content: f.data.toString("base64"), content_type: f.contentType }))
-      : null;
     // After the (possibly slow) file reads, so they don't eat the queue budget.
     const deadline = opts.budgetMs ? Date.now() + opts.budgetMs : Number.POSITIVE_INFINITY;
 
@@ -271,6 +271,9 @@ export async function runEmailBroadcast(
       if (outcome.done) return outcome;
     } else {
       const resendKey = apiKey as string;
+      const files: ResendAttachment[] | null = raw.length
+        ? raw.map((f) => ({ filename: f.filename, content: f.data.toString("base64"), content_type: f.contentType }))
+        : null;
       const toEmail = (r: Batch[number]): ResendEmail => {
         const c = composeFor(r);
         return {

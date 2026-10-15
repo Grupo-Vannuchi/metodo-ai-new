@@ -31,19 +31,36 @@ const MAX_PACE_FACTOR = 20;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * Turns the recipients a dead run left SENDING into UNCERTAIN (never resent).
+ * Call it only from the lease owner, right after the lease is taken.
+ */
+export async function markInterruptedUncertain(broadcastId: string, organizationId: string): Promise<void> {
+  await prisma.emailBroadcastRecipient.updateMany({
+    where: { broadcastId, organizationId, status: "SENDING" },
+    data: { status: "UNCERTAIN", error: INTERRUPTED_ERROR },
+  });
+}
+
+/**
  * Microsoft channel of the mass e-mail dispatcher (spec §6). One recipient at
  * a time: re-read the account, check today's estimate, reserve the recipient
  * (QUEUED → SENDING, sentAt stamped), hand it to Graph, then SENT / FAILED /
- * UNCERTAIN. A recipient still SENDING when a run starts was cut mid-call:
- * it becomes UNCERTAIN and is never resent. System context: organizationId
+ * UNCERTAIN. A recipient still SENDING from a dead run was cut mid-call
+ * (markInterruptedUncertain, called by the dispatcher): it is never resent. System context: organizationId
  * explicit everywhere.
  */
 export async function runMicrosoftBroadcast(run: MicrosoftRun): Promise<{ done: boolean }> {
   const org = run.organizationId;
-  await prisma.emailBroadcastRecipient.updateMany({
-    where: { broadcastId: run.broadcastId, organizationId: org, status: "SENDING" },
-    data: { status: "UNCERTAIN", error: INTERRUPTED_ERROR },
-  });
+
+  /** Honours Retry-After up to 60 s, in chunks of at most 10 s (each run.wait renews the lease). */
+  const waitUpTo = async (seconds: number) => {
+    let left = Math.min(seconds, 60);
+    while (left > 0) {
+      const chunk = Math.min(left, 10);
+      await run.wait(chunk);
+      left -= chunk;
+    }
+  };
 
   let streak = 0;
   let tokenFailures = 0;
@@ -146,12 +163,12 @@ export async function runMicrosoftBroadcast(run: MicrosoftRun): Promise<{ done: 
           continue;
         }
         await release();
-        await run.pause("reconnect", again.message);
+        await run.pause(again.reason === "temporary" ? "provider_error" : "reconnect", again.message);
         return { done: true };
       }
       if (action === "retry") {
         attempt++;
-        await run.wait(res.retryAfter ?? 2 ** attempt);
+        await waitUpTo(res.retryAfter ?? 2 ** attempt);
         continue;
       }
       if (action === "uncertain") {

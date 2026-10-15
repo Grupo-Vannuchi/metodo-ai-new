@@ -17,8 +17,8 @@ export type MicrosoftSendOutcome = { ok: true } | (GraphFailure & { stage: "prep
  * One e-mail out of the connected mailbox (spec §6.1): a single sendMail when
  * the base64 MIME fits, else a MIME draft without the files, each file
  * attached (POST under 3 MB, upload session above), then the draft's send. A
- * failure before the send deletes the draft. A timeout ON the send keeps it
- * (it may have gone out). Never throws.
+ * failure before the send deletes the draft. A timeout or gateway error ON the
+ * send keeps it (it may have gone out). Never throws.
  */
 export async function sendMicrosoftMail(
   token: string,
@@ -53,7 +53,8 @@ export async function sendMicrosoftMail(
 
     const sent = await graphSendDraft(token, id);
     if (sent.ok) return { ok: true };
-    if (sent.status !== 0 && sent.status !== 504) await graphDeleteMessage(token, id);
+    // Keep the draft when the send may have gone through (timeout, network, gateway 5xx).
+    if (!(sent.status === 0 || (sent.status >= 500 && sent.status !== 503))) await graphDeleteMessage(token, id);
     return { ...sent, stage: "send" };
   } catch (e) {
     return {

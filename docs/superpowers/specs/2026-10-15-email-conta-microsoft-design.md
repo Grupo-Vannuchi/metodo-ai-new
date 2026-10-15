@@ -223,7 +223,7 @@ O Resend descarta repetições pela chave de idempotência; o Graph não. Por is
 |---|---|
 | 401 / `InvalidAuthenticationToken` | renova o token e repete uma vez; falhando, pausa com `reconnect` |
 | 429 ou 503 com `Retry-After` | espera o tempo indicado (até 60 s) e repete |
-| 5xx, timeout, rede | repete com espera crescente (`retry-policy.ts`); esgotado, pausa com `provider_error` |
+| 5xx, timeout, rede | antes da entrega (rascunho, anexos), repete com espera crescente; esgotado, pausa com `provider_error`. Na chamada que entrega o e-mail (`sendMail` ou `/send`), 500/502/504, timeout e erro de rede viram `UNCERTAIN`, sem reenvio; o 503 repete como o 429 |
 | 400 `ErrorInvalidRecipients` e afins, por destinatário | só esse destinatário vira `FAILED`; o envio segue |
 | recusa por limite de envio (`ErrorExceededMessageLimit`, `ErrorQuotaExceeded`) | pausa com `daily_limit` |
 | caixa bloqueada para envio (`ErrorMessageSubmissionBlocked`, `ErrorAccountSuspend`) | pausa com `account_blocked` |

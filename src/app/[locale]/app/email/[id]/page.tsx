@@ -116,7 +116,9 @@ export default async function EmailReportPage({
 
       {b.status === "PAUSED" && b.pausedReason ? (
         <p className="rounded-xl border border-red-300 bg-red-50 px-5 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
-          {t(`paused.${pausedReasonKey(b.pausedReason)}`)}
+          {microsoft && pausedReasonKey(b.pausedReason) === "provider_error"
+            ? t("paused.provider_error_microsoft")
+            : t(`paused.${pausedReasonKey(b.pausedReason)}`)}
           {b.lastError ? <span title={b.lastError}> ({b.lastError.slice(0, 160)})</span> : null}
         </p>
       ) : null}

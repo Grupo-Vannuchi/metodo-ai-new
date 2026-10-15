@@ -2090,6 +2090,7 @@
       "no_connection": "Envio pausado: o envio de e-mail da plataforma não está configurado. Fale com o suporte.",
       "quota": "Envio pausado: a cota do mês acabou.",
       "provider_error": "Envio pausado: o Resend recusou o envio.",
+      "provider_error_microsoft": "Envio pausado: a Microsoft recusou ou não respondeu ao envio. Veja o detalhe técnico e clique em “Retomar envio” para tentar de novo.",
       "domain_not_allowed": "Envio pausado: o domínio do endereço de envio deixou de estar liberado para sua empresa.",
       "from_missing": "Envio pausado: este envio foi criado antes da troca para a conta de e-mail da plataforma e não tem endereço de envio, então não pode ser retomado. Para enviar de novo, duplique-o (o novo envio vai para toda a lista).",
       "attachment_unavailable": "Envio pausado: um anexo não pôde ser carregado. Tente retomar; se continuar, duplique o envio e anexe o arquivo de novo.",
@@ -2097,7 +2098,7 @@
       "daily_limit": "Envio pausado: o limite diário da conta Microsoft foi atingido. Clique em “Retomar envio” amanhã para continuar até o próximo limite.",
       "reconnect": "Envio pausado: a conta Microsoft precisa ser reconectada (em Novo e-mail). Depois, clique em “Retomar envio”.",
       "no_sender_account": "Envio pausado: a conta Microsoft foi desconectada ou trocada. Conecte uma conta e clique em “Retomar envio”.",
-      "account_blocked": "Envio pausado: a Microsoft bloqueou o envio por esta caixa (pode ter sido considerado spam). Verifique a conta na Microsoft antes de retomar."
+      "account_blocked": "Envio pausado: a Microsoft não permite enviar por esta caixa (conta bloqueada, considerada spam ou sem caixa de correio do Outlook). Verifique a conta na Microsoft antes de retomar."
     },
     "listReason": {
       "paused": {
@@ -2111,7 +2112,7 @@
         "daily_limit": "Pausado: limite diário da conta Microsoft atingido. Retome amanhã.",
         "reconnect": "Pausado: a conta Microsoft precisa ser reconectada.",
         "no_sender_account": "Pausado: a conta Microsoft foi desconectada.",
-        "account_blocked": "Pausado: a Microsoft bloqueou o envio por esta caixa."
+        "account_blocked": "Pausado: a Microsoft não permite enviar por esta caixa."
       },
       "failed": "{count, plural, one {# falha} other {# falhas}}",
       "uncertain": "{count, plural, one {# com situação incerta} other {# com situação incerta}}"

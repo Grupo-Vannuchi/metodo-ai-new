@@ -167,6 +167,7 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 | `OPENAI_API_KEY` | p/ IA | transcrição de áudio, geração de imagem |
 | `RESEND_API_KEY`, `EMAIL_FROM` | p/ e-mail | verificação, convites, reset e o envio em massa do submenu E-mail |
 | `RESEND_WEBHOOK_SECRET` | não | segredo do webhook de entrega do E-mail em massa (painel Resend → Webhooks) |
+| `MICROSOFT_MAIL_CLIENT_ID`, `MICROSOFT_MAIL_CLIENT_SECRET` | opcional | envio de e-mail em massa pela caixa Microsoft da empresa (app "MetodoIA" no Entra); sem as duas, a opção "Pela conta Microsoft" não aparece |
 | `BLOB_READ_WRITE_TOKEN` | p/ mídia | Vercel Blob (mídia do inbox) |
 | `QSTASH_TOKEN`, `QSTASH_URL`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` | p/ jobs | fila (prospecção, mídia). Sem eles, degrada. |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | não | rate-limit |
@@ -278,6 +279,7 @@ Sempre **backup antes** de migração destrutiva. Confira com `npx prisma migrat
 1. Aplicar no Supabase `prisma/migrations/20261015120000_email_sender_accounts/migration.sql` com `prisma db execute --file … --schema prisma/schema.prisma` e depois `prisma migrate resolve --applied 20261015120000_email_sender_accounts`. É aditiva: tabela nova, duas colunas com padrão, dois valores de enum e FK `SET NULL`. **Não** use `migrate deploy`.
 2. Pôr `MICROSOFT_MAIL_CLIENT_ID` e `MICROSOFT_MAIL_CLIENT_SECRET` no hPanel (as duas) e reiniciar o app — as variáveis são lidas na subida.
 3. O retorno de produção (`https://metodotia.com/api/email/microsoft/callback`) já está cadastrado no app.
+4. Depois que houver envios pela Microsoft em produção, não volte o código para antes desta branch: os status `SENDING`/`UNCERTAIN` dos destinatários quebram a leitura no código antigo. Corrija para frente.
 
 **Segredo do app Microsoft do E-mail:** o segredo "Envio de e-mail 2026-10-15" vence em **14/10/2028**. Para trocar: Azure → Registros de aplicativo → MetodoIA → Certificados e segredos → Novo segredo; atualizar `.env` e hPanel; apagar o antigo. Sem troca, os envios pela Microsoft pausam com erro do provedor até o segredo ser trocado; depois da troca, basta clicar em “Retomar envio” (as contas não precisam ser reconectadas).
 

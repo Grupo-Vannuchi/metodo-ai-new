@@ -840,6 +840,10 @@ check("graphFailureAction maps Graph answers to dispatcher moves", () => {
   assert.equal(graphFailureAction(503, null, 3, "send"), "pause");
   assert.equal(graphFailureAction(0, null, 0, "send"), "uncertain");
   assert.equal(graphFailureAction(504, null, 0, "send"), "uncertain");
+  assert.equal(graphFailureAction(500, null, 0, "send"), "uncertain");
+  assert.equal(graphFailureAction(502, null, 0, "send"), "uncertain");
+  assert.equal(graphFailureAction(503, null, 0, "send"), "retry");
+  assert.equal(graphFailureAction(500, null, 0, "prepare"), "retry");
   assert.equal(graphFailureAction(0, null, 0, "prepare"), "retry");
   assert.equal(graphFailureAction(0, null, 3, "prepare"), "pause");
   assert.equal(graphFailureAction(413, null, 0, "prepare"), "pause");
