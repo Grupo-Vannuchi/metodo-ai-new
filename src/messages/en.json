@@ -2674,6 +2674,7 @@
         "started": "Launched a campaign"
       },
       "email_broadcast": { "started": "Started a bulk email send" },
+      "email_sender": { "connected": "Connected the Microsoft sending account", "replaced": "Replaced the Microsoft sending account", "disconnected": "Disconnected the Microsoft sending account" },
       "task_board": { "entrance_changed": "Changed the task board's entrance column", "column_deleted": "Deleted a task board column" },
       "connection": {
         "created": "Connected an integration",
@@ -2723,6 +2724,7 @@
       "AccessTemplate": "Access template",
       "Campaign": "Campaign",
       "EmailBroadcast": "Email send",
+      "EmailSenderAccount": "E-mail sending account",
       "ExtractionJob": "Prospecting",
       "FinanceEntry": "Finance",
       "IntegrationConnection": "Connection",

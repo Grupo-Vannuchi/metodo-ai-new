@@ -2674,6 +2674,7 @@
         "started": "Disparou uma campanha"
       },
       "email_broadcast": { "started": "Iniciou um envio de e-mail em massa" },
+      "email_sender": { "connected": "Conectou a conta Microsoft de envio", "replaced": "Trocou a conta Microsoft de envio", "disconnected": "Desconectou a conta Microsoft de envio" },
       "task_board": { "entrance_changed": "Trocou a coluna de entrada do quadro de tarefas", "column_deleted": "Excluiu uma coluna do quadro de tarefas" },
       "connection": {
         "created": "Conectou uma integração",
@@ -2723,6 +2724,7 @@
       "AccessTemplate": "Template de acesso",
       "Campaign": "Campanha",
       "EmailBroadcast": "Envio de e-mail",
+      "EmailSenderAccount": "Conta de envio de e-mail",
       "ExtractionJob": "Prospecção",
       "FinanceEntry": "Financeiro",
       "IntegrationConnection": "Conexão",
