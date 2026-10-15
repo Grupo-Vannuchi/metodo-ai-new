@@ -27,8 +27,11 @@ export type TokenResult =
 
 /** Renew when the access token ends within this. */
 const SKEW_MS = 5 * 60 * 1000;
-/** Refusals that only a new consent fixes (revoked access, password change, expired app secret). */
-const RECONNECT_CODES = new Set(["invalid_grant", "invalid_client", "interaction_required", "consent_required"]);
+/**
+ * Refusals that only a new consent fixes (revoked access, password change, missing consent).
+ * An invalid app secret ("invalid_client") is a platform problem, handled as temporary.
+ */
+const RECONNECT_CODES = new Set(["invalid_grant", "interaction_required", "consent_required"]);
 
 export async function markNeedsReconnect(organizationId: string, accountId: string, message: string): Promise<void> {
   await prisma.emailSenderAccount.updateMany({
