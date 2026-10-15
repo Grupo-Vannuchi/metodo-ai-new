@@ -13,6 +13,8 @@ import { MAX_ATTACHMENTS_BYTES, attachmentContentType, checkAttachments, parseAt
 import { sendBatch, sendOne, type ResendAttachment, type ResendEmail } from "./resend";
 import { batchFailureAction, singleFailureAction } from "./retry-policy";
 import { emailUnsubscribeOneClickUrl, emailUnsubscribePageUrl } from "./unsubscribe";
+import type { MimeFile } from "./microsoft/mime";
+import { runMicrosoftBroadcast } from "./microsoft/deliver";
 
 /**
  * Mass e-mail dispatcher. Runs as SYSTEM (raw Prisma, organizationId explicit
@@ -109,6 +111,8 @@ export async function runEmailBroadcast(
       attachments: true,
       signatureHtml: true,
       signatureText: true,
+      channel: true,
+      senderAccountId: true,
     },
   });
   if (!b || b.status !== "SENDING") return { done: true };
@@ -138,7 +142,7 @@ export async function runEmailBroadcast(
    * total stays ~2 req/s. */
   const activeSends = () =>
     prisma.emailBroadcast.count({
-      where: { status: "SENDING", lastDispatchAt: { gte: new Date(Date.now() - LEASE_MS) } },
+      where: { status: "SENDING", channel: "PLATFORM", lastDispatchAt: { gte: new Date(Date.now() - LEASE_MS) } },
     });
   let paceMs = PACE_MS;
 
@@ -150,7 +154,11 @@ export async function runEmailBroadcast(
       | "domain_not_allowed"
       | "from_missing"
       | "attachment_unavailable"
-      | "attachment_invalid",
+      | "attachment_invalid"
+      | "daily_limit"
+      | "reconnect"
+      | "no_sender_account"
+      | "account_blocked",
     message: string | null,
   ) =>
     prisma.emailBroadcast.updateMany({
@@ -168,8 +176,9 @@ export async function runEmailBroadcast(
   };
 
   try {
+    const microsoft = b.channel === "MICROSOFT";
     const apiKey = platformResendKey();
-    if (!apiKey) {
+    if (!microsoft && !apiKey) {
       await pause("no_connection", null);
       return { done: true };
     }
@@ -181,48 +190,44 @@ export async function runEmailBroadcast(
     const orgName = orgRow?.name ?? "";
     const from = formatFrom(b.fromName, b.fromEmail);
 
-    // Attachments are read once per run, before any batch: a send never goes
-    // out without its files (spec 2026-10-09 §8).
+    // Attachments are read once per run, before any e-mail: a send never goes
+    // out without its files (spec 2026-10-09 §8). Raw bytes serve both
+    // channels; Resend gets base64.
     const attachments = parseAttachments(b.attachments);
     if (!attachments || checkAttachments(org, attachments)) {
       await pause("attachment_invalid", null);
       return { done: true };
     }
-    let files: ResendAttachment[] | null = null;
-    if (attachments.length > 0) {
-      const loaded: ResendAttachment[] = [];
-      let bytes = 0;
-      for (const a of attachments) {
-        let data: Buffer;
-        try {
-          data = await readMedia(a.key);
-        } catch (e) {
-          console.error("[email] attachment read failed", a.key, e);
-          await pause("attachment_unavailable", a.filename);
-          return { done: true };
-        }
-        // The sizes saved with the draft come from the client; the real bytes
-        // decide, checked before encoding so a forged list never piles up in memory.
-        bytes += data.byteLength;
-        if (bytes > MAX_ATTACHMENTS_BYTES || data.byteLength !== a.size) {
-          await pause("attachment_invalid", a.filename);
-          return { done: true };
-        }
-        loaded.push({
-          filename: a.filename,
-          content: data.toString("base64"),
-          content_type: attachmentContentType(a.filename) ?? "application/octet-stream",
-        });
-        await beat();
+    const raw: MimeFile[] = [];
+    let bytes = 0;
+    for (const a of attachments) {
+      let data: Buffer;
+      try {
+        data = await readMedia(a.key);
+      } catch (e) {
+        console.error("[email] attachment read failed", a.key, e);
+        await pause("attachment_unavailable", a.filename);
+        return { done: true };
       }
-      files = loaded;
+      // The sizes saved with the draft come from the client; the real bytes
+      // decide, checked before encoding so a forged list never piles up in memory.
+      bytes += data.byteLength;
+      if (bytes > MAX_ATTACHMENTS_BYTES || data.byteLength !== a.size) {
+        await pause("attachment_invalid", a.filename);
+        return { done: true };
+      }
+      raw.push({ filename: a.filename, contentType: attachmentContentType(a.filename) ?? "application/octet-stream", data });
+      await beat();
     }
+    const files: ResendAttachment[] | null = raw.length
+      ? raw.map((f) => ({ filename: f.filename, content: f.data.toString("base64"), content_type: f.contentType }))
+      : null;
     // After the (possibly slow) file reads, so they don't eat the queue budget.
     const deadline = opts.budgetMs ? Date.now() + opts.budgetMs : Number.POSITIVE_INFINITY;
 
     // The signature frozen when the send started; email_signatures is never read here.
     const signature = b.signatureHtml ? { html: b.signatureHtml, text: b.signatureText ?? "" } : null;
-    const toEmail = (r: Batch[number]): ResendEmail => {
+    const composeFor = (r: Batch[number]) => {
       const composed = composeEmail({
         subject: b.subject,
         bodyHtml: b.html,
@@ -232,148 +237,183 @@ export async function runEmailBroadcast(
         signature,
       });
       return {
-        from,
-        to: [r.email],
         subject: composed.subject,
         html: composed.html,
         text: composed.text,
-        ...(b.replyTo ? { reply_to: b.replyTo } : {}),
         headers: {
           "List-Unsubscribe": `<${emailUnsubscribeOneClickUrl(r.id)}>`,
           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
         },
-        ...(files ? { attachments: files } : {}),
       };
     };
 
-    const markSent = (rows: { id: string; providerId: string | null }[]) =>
-      prisma.$transaction(
-        rows.map((row) =>
-          prisma.emailBroadcastRecipient.updateMany({
-            where: { id: row.id, organizationId: org, status: "QUEUED" },
-            data: { status: "SENT", providerMessageId: row.providerId, sentAt: new Date(), error: null },
-          }),
-        ),
-      );
+    if (microsoft) {
+      const outcome = await runMicrosoftBroadcast({
+        broadcastId: b.id,
+        organizationId: org,
+        fromName: b.fromName,
+        fromEmail: b.fromEmail,
+        replyTo: b.replyTo,
+        deadline,
+        files: raw,
+        compose: composeFor,
+        beat,
+        wait,
+        pause,
+        finish: async () => {
+          await prisma.emailBroadcast.updateMany({
+            where: { id: b.id, organizationId: org, status: "SENDING", lastDispatchAt: stamp },
+            data: { status: "DONE", finishedAt: new Date(), lastDispatchAt: null },
+          });
+        },
+        activeSince: () => new Date(Date.now() - LEASE_MS),
+      });
+      if (outcome.done) return outcome;
+    } else {
+      const resendKey = apiKey as string;
+      const toEmail = (r: Batch[number]): ResendEmail => {
+        const c = composeFor(r);
+        return {
+          from,
+          to: [r.email],
+          subject: c.subject,
+          html: c.html,
+          text: c.text,
+          ...(b.replyTo ? { reply_to: b.replyTo } : {}),
+          headers: c.headers,
+          ...(files ? { attachments: files } : {}),
+        };
+      };
 
-    /** One call per recipient: the fallback when a batch as a whole is refused,
-     * and the main path for sends with attachments (/emails/batch takes none). */
-    const oneByOne = async (batch: Batch, batchNo: number): Promise<Outcome> => {
-      let streakStatus = -1;
-      let streak = 0;
-      for (const r of batch) {
-        // Stop between recipients when the run's budget is over (queue mode);
-        // the rest of the batch stays QUEUED for the next run.
-        if (Date.now() >= deadline) return { kind: "budget" };
-        const key = `eb-${b.id}-${batchNo}-${r.id}`;
+      const markSent = (rows: { id: string; providerId: string | null }[]) =>
+        prisma.$transaction(
+          rows.map((row) =>
+            prisma.emailBroadcastRecipient.updateMany({
+              where: { id: row.id, organizationId: org, status: "QUEUED" },
+              data: { status: "SENT", providerMessageId: row.providerId, sentAt: new Date(), error: null },
+            }),
+          ),
+        );
+
+      /** One call per recipient: the fallback when a batch as a whole is refused,
+       * and the main path for sends with attachments (/emails/batch takes none). */
+      const oneByOne = async (batch: Batch, batchNo: number): Promise<Outcome> => {
+        let streakStatus = -1;
+        let streak = 0;
+        for (const r of batch) {
+          // Stop between recipients when the run's budget is over (queue mode);
+          // the rest of the batch stays QUEUED for the next run.
+          if (Date.now() >= deadline) return { kind: "budget" };
+          const key = `eb-${b.id}-${batchNo}-${r.id}`;
+          const counters: Counters = { rate: 0, server: 0, conflict: 0 };
+          for (;;) {
+            const res = await sendOne(resendKey, toEmail(r), key, files ? ATTACHMENT_TIMEOUT_MS : undefined);
+            if (res.ok) {
+              await markSent([{ id: r.id, providerId: res.data.id ?? null }]);
+              streak = 0;
+              streakStatus = -1;
+              break;
+            }
+            const cls = failureClass(res.status);
+            const attempt = counters[cls];
+            const action = singleFailureAction(res.status, res.name, attempt);
+            if (action === "retry_same_key") {
+              counters[cls]++;
+              await wait(retryDelay(res.status, res.retryAfter, attempt));
+              continue;
+            }
+            if (action === "pause") return { kind: "pause", message: res.message };
+            // fail_recipient
+            await prisma.emailBroadcastRecipient.updateMany({
+              where: { id: r.id, organizationId: org, status: "QUEUED" },
+              data: { status: "FAILED", error: res.message.slice(0, 500) },
+            });
+            streak = res.status === streakStatus ? streak + 1 : 1;
+            streakStatus = res.status;
+            if (streak >= 5) {
+              return { kind: "pause", message: `5 consecutive failures (${res.status}): ${res.message}` };
+            }
+            break;
+          }
+          await beat();
+          await sleep(paceMs);
+        }
+        return { kind: "ok" };
+      };
+
+      const deliver = async (batch: Batch, batchNo: number): Promise<Outcome> => {
+        const emails = batch.map(toEmail);
         const counters: Counters = { rate: 0, server: 0, conflict: 0 };
         for (;;) {
-          const res = await sendOne(apiKey, toEmail(r), key, files ? ATTACHMENT_TIMEOUT_MS : undefined);
+          const res = await sendBatch(resendKey, emails, `eb-${b.id}-${batchNo}`);
           if (res.ok) {
-            await markSent([{ id: r.id, providerId: res.data.id ?? null }]);
-            streak = 0;
-            streakStatus = -1;
-            break;
+            const ids = res.data.data ?? [];
+            await markSent(batch.map((r, i) => ({ id: r.id, providerId: ids[i]?.id ?? null })));
+            return { kind: "ok" };
           }
           const cls = failureClass(res.status);
           const attempt = counters[cls];
-          const action = singleFailureAction(res.status, res.name, attempt);
+          const action = batchFailureAction(res.status, res.name, attempt);
           if (action === "retry_same_key") {
             counters[cls]++;
             await wait(retryDelay(res.status, res.retryAfter, attempt));
             continue;
           }
-          if (action === "pause") return { kind: "pause", message: res.message };
-          // fail_recipient
-          await prisma.emailBroadcastRecipient.updateMany({
-            where: { id: r.id, organizationId: org, status: "QUEUED" },
-            data: { status: "FAILED", error: res.message.slice(0, 500) },
-          });
-          streak = res.status === streakStatus ? streak + 1 : 1;
-          streakStatus = res.status;
-          if (streak >= 5) {
-            return { kind: "pause", message: `5 consecutive failures (${res.status}): ${res.message}` };
-          }
-          break;
+          if (action === "per_recipient") return oneByOne(batch, batchNo);
+          return { kind: "pause", message: res.message };
         }
+      };
+
+      while (Date.now() < deadline) {
+        const current = await prisma.emailBroadcast.findFirst({
+          where: { id: b.id, organizationId: org },
+          select: { status: true },
+        });
+        if (current?.status !== "SENDING") return { done: true };
+        if (!(await senderStillAllowed())) {
+          await pause("domain_not_allowed", null);
+          return { done: true };
+        }
+        paceMs = PACE_MS * Math.min(Math.max(1, await activeSends()), MAX_PACE_FACTOR);
+
+        const next = await prisma.emailBroadcastRecipient.findFirst({
+          where: { broadcastId: b.id, organizationId: org, status: "QUEUED" },
+          orderBy: { batchNo: "asc" },
+          select: { batchNo: true },
+        });
+        if (!next) {
+          await prisma.emailBroadcast.updateMany({
+            where: { id: b.id, organizationId: org, status: "SENDING", lastDispatchAt: stamp },
+            data: { status: "DONE", finishedAt: new Date(), lastDispatchAt: null },
+          });
+          return { done: true };
+        }
+
+        const batch: Batch = await prisma.emailBroadcastRecipient.findMany({
+          where: { broadcastId: b.id, organizationId: org, status: "QUEUED", batchNo: next.batchNo },
+          orderBy: { email: "asc" },
+          select: { id: true, email: true, name: true, companyName: true },
+        });
+
+        const sent = await prisma.emailBroadcastRecipient.count({
+          where: { organizationId: org, sentAt: { gte: monthStart() }, broadcast: { channel: "PLATFORM" } },
+        });
+        if (sent + batch.length > LIMITS.emailBroadcastQuotaPerMonth) {
+          await pause("quota", null);
+          return { done: true };
+        }
+
+        // /emails/batch doesn't take attachments: with files, one call per recipient.
+        const outcome = files ? await oneByOne(batch, next.batchNo) : await deliver(batch, next.batchNo);
+        if (outcome.kind === "pause") {
+          await pause("provider_error", outcome.message);
+          return { done: true };
+        }
+        if (outcome.kind === "budget") break;
+
         await beat();
         await sleep(paceMs);
       }
-      return { kind: "ok" };
-    };
-
-    const deliver = async (batch: Batch, batchNo: number): Promise<Outcome> => {
-      const emails = batch.map(toEmail);
-      const counters: Counters = { rate: 0, server: 0, conflict: 0 };
-      for (;;) {
-        const res = await sendBatch(apiKey, emails, `eb-${b.id}-${batchNo}`);
-        if (res.ok) {
-          const ids = res.data.data ?? [];
-          await markSent(batch.map((r, i) => ({ id: r.id, providerId: ids[i]?.id ?? null })));
-          return { kind: "ok" };
-        }
-        const cls = failureClass(res.status);
-        const attempt = counters[cls];
-        const action = batchFailureAction(res.status, res.name, attempt);
-        if (action === "retry_same_key") {
-          counters[cls]++;
-          await wait(retryDelay(res.status, res.retryAfter, attempt));
-          continue;
-        }
-        if (action === "per_recipient") return oneByOne(batch, batchNo);
-        return { kind: "pause", message: res.message };
-      }
-    };
-
-    while (Date.now() < deadline) {
-      const current = await prisma.emailBroadcast.findFirst({
-        where: { id: b.id, organizationId: org },
-        select: { status: true },
-      });
-      if (current?.status !== "SENDING") return { done: true };
-      if (!(await senderStillAllowed())) {
-        await pause("domain_not_allowed", null);
-        return { done: true };
-      }
-      paceMs = PACE_MS * Math.min(Math.max(1, await activeSends()), MAX_PACE_FACTOR);
-
-      const next = await prisma.emailBroadcastRecipient.findFirst({
-        where: { broadcastId: b.id, organizationId: org, status: "QUEUED" },
-        orderBy: { batchNo: "asc" },
-        select: { batchNo: true },
-      });
-      if (!next) {
-        await prisma.emailBroadcast.updateMany({
-          where: { id: b.id, organizationId: org, status: "SENDING", lastDispatchAt: stamp },
-          data: { status: "DONE", finishedAt: new Date(), lastDispatchAt: null },
-        });
-        return { done: true };
-      }
-
-      const batch: Batch = await prisma.emailBroadcastRecipient.findMany({
-        where: { broadcastId: b.id, organizationId: org, status: "QUEUED", batchNo: next.batchNo },
-        orderBy: { email: "asc" },
-        select: { id: true, email: true, name: true, companyName: true },
-      });
-
-      const sent = await prisma.emailBroadcastRecipient.count({
-        where: { organizationId: org, sentAt: { gte: monthStart() } },
-      });
-      if (sent + batch.length > LIMITS.emailBroadcastQuotaPerMonth) {
-        await pause("quota", null);
-        return { done: true };
-      }
-
-      // /emails/batch doesn't take attachments: with files, one call per recipient.
-      const outcome = files ? await oneByOne(batch, next.batchNo) : await deliver(batch, next.batchNo);
-      if (outcome.kind === "pause") {
-        await pause("provider_error", outcome.message);
-        return { done: true };
-      }
-      if (outcome.kind === "budget") break;
-
-      await beat();
-      await sleep(paceMs);
     }
 
     // Budget over (queue mode): release the lease so the re-enqueued job can take it.
