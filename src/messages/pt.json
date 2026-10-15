@@ -2080,7 +2080,10 @@
       "recipients": "Destinatários",
       "delivered": "Entregues",
       "problems": "Problemas",
-      "date": "Data"
+      "date": "Data",
+      "from": "De",
+      "channelPlatform": "Plataforma",
+      "channelMicrosoft": "Conta Microsoft"
     },
     "status": { "DRAFT": "Rascunho", "SENDING": "Enviando", "PAUSED": "Pausado", "DONE": "Concluído" },
     "paused": {
@@ -2090,7 +2093,34 @@
       "domain_not_allowed": "Envio pausado: o domínio do endereço de envio deixou de estar liberado para sua empresa.",
       "from_missing": "Envio pausado: este envio foi criado antes da troca para a conta de e-mail da plataforma e não tem endereço de envio, então não pode ser retomado. Para enviar de novo, duplique-o (o novo envio vai para toda a lista).",
       "attachment_unavailable": "Envio pausado: um anexo não pôde ser carregado. Tente retomar; se continuar, duplique o envio e anexe o arquivo de novo.",
-      "attachment_invalid": "Envio pausado: os anexos deste envio passam do limite ou estão inválidos. Duplique o envio e anexe os arquivos de novo."
+      "attachment_invalid": "Envio pausado: os anexos deste envio passam do limite ou estão inválidos. Duplique o envio e anexe os arquivos de novo.",
+      "daily_limit": "Envio pausado: o limite diário da conta Microsoft foi atingido. Clique em “Retomar envio” amanhã para continuar até o próximo limite.",
+      "reconnect": "Envio pausado: a conta Microsoft precisa ser reconectada (em Novo e-mail). Depois, clique em “Retomar envio”.",
+      "no_sender_account": "Envio pausado: a conta Microsoft foi desconectada ou trocada. Conecte uma conta e clique em “Retomar envio”.",
+      "account_blocked": "Envio pausado: a Microsoft bloqueou o envio por esta caixa (pode ter sido considerado spam). Verifique a conta na Microsoft antes de retomar."
+    },
+    "listReason": {
+      "paused": {
+        "no_connection": "Pausado: o envio da plataforma não está configurado.",
+        "quota": "Pausado: cota mensal da plataforma atingida.",
+        "provider_error": "Pausado: o provedor recusou o envio.",
+        "domain_not_allowed": "Pausado: o domínio de envio não está mais liberado.",
+        "from_missing": "Pausado: envio antigo sem endereço de envio.",
+        "attachment_unavailable": "Pausado: um anexo não pôde ser carregado.",
+        "attachment_invalid": "Pausado: anexos inválidos.",
+        "daily_limit": "Pausado: limite diário da conta Microsoft atingido. Retome amanhã.",
+        "reconnect": "Pausado: a conta Microsoft precisa ser reconectada.",
+        "no_sender_account": "Pausado: a conta Microsoft foi desconectada.",
+        "account_blocked": "Pausado: a Microsoft bloqueou o envio por esta caixa."
+      },
+      "failed": "{count, plural, one {# falha} other {# falhas}}",
+      "uncertain": "{count, plural, one {# com situação incerta} other {# com situação incerta}}"
+    },
+    "failure": {
+      "invalid_address": "Endereço recusado: o e-mail do destinatário é inválido.",
+      "message_too_large": "O e-mail ficou grande demais para a Microsoft.",
+      "interrupted": "Situação incerta: o envio foi interrompido antes da confirmação. Não reenviamos, para não duplicar.",
+      "generic": "Falha ao enviar para este endereço."
     },
     "message": "Mensagem",
     "fromName": "Nome do remetente",
@@ -2190,6 +2220,8 @@
       "processed": "{done} de {total} processados",
       "removed": "Ficaram fora deste envio: {duplicates} repetidos, {suppressed} bloqueados e {invalid} inválidos.",
       "noTracking": "Sem status de entrega: o aviso de entrega da plataforma ainda não está configurado. Os e-mails ficam como “Enviado”.",
+      "viaMicrosoft": "Enviado pela conta Microsoft {email}",
+      "noTrackingMicrosoft": "A Microsoft não avisa entrega nem abertura: aqui aparecem só os enviados e as falhas. Devoluções de endereço inexistente chegam na própria caixa, como resposta automática do Outlook.",
       "showing": "Mostrando os primeiros {count}.",
       "attachments": "Anexos",
       "counters": {
@@ -2207,7 +2239,8 @@
         "queued": "Na fila",
         "sent": "Enviados",
         "delivered": "Entregues",
-        "problems": "Problemas"
+        "problems": "Problemas",
+        "uncertain": "Situação incerta"
       },
       "col": { "recipient": "Destinatário", "source": "Veio de", "status": "Status", "updated": "Atualizado" },
       "source": { "contact": "Contato", "company": "Empresa", "manual": "Avulso", "spreadsheet": "Planilha" }
