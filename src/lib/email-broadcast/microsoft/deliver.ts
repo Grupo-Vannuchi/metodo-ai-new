@@ -53,6 +53,16 @@ export async function runMicrosoftBroadcast(run: MicrosoftRun): Promise<{ done: 
       select: { status: true, senderAccountId: true },
     });
     if (current?.status !== "SENDING") return { done: true };
+    const r = await prisma.emailBroadcastRecipient.findFirst({
+      where: { broadcastId: run.broadcastId, organizationId: org, status: "QUEUED" },
+      orderBy: [{ batchNo: "asc" }, { email: "asc" }],
+      select: { id: true, email: true, name: true, companyName: true },
+    });
+    if (!r) {
+      await run.finish();
+      return { done: true };
+    }
+
     const account = current.senderAccountId
       ? await prisma.emailSenderAccount.findFirst({
           where: { id: current.senderAccountId, organizationId: org },
@@ -73,16 +83,6 @@ export async function runMicrosoftBroadcast(run: MicrosoftRun): Promise<{ done: 
     });
     if (remainingToday(microsoftDailyLimit(account.accountKind), used) <= 0) {
       await run.pause("daily_limit", null);
-      return { done: true };
-    }
-
-    const r = await prisma.emailBroadcastRecipient.findFirst({
-      where: { broadcastId: run.broadcastId, organizationId: org, status: "QUEUED" },
-      orderBy: [{ batchNo: "asc" }, { email: "asc" }],
-      select: { id: true, email: true, name: true, companyName: true },
-    });
-    if (!r) {
-      await run.finish();
       return { done: true };
     }
 
@@ -137,7 +137,7 @@ export async function runMicrosoftBroadcast(run: MicrosoftRun): Promise<{ done: 
         break;
       }
       const action = graphFailureAction(res.status, res.code, attempt, res.stage);
-      if (action === "refresh" && !refreshed) {
+      if ((action === "refresh" || res.status === 401) && !refreshed) {
         refreshed = true;
         const again = await getMicrosoftAccessToken(org, account.id, { force: true });
         if (again.ok) {
