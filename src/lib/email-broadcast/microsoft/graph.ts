@@ -1,4 +1,6 @@
 import "server-only";
+import type { MimeFile } from "./mime";
+import { uploadRanges } from "./core";
 
 /**
  * Minimal Microsoft Graph client for the mass e-mail's Microsoft channel.
@@ -74,3 +76,80 @@ export async function graphMe(
 }
 
 export { GRAPH };
+
+const msg = (id: string) => `${GRAPH}/me/messages/${encodeURIComponent(id)}`;
+
+/** POST /me/sendMail with a base64 MIME body: 202, saved to Sent Items. */
+export function graphSendMime(token: string, mimeBase64: string) {
+  return graphCall<Record<string, never>>(`${GRAPH}/me/sendMail`, {
+    method: "POST",
+    token,
+    body: mimeBase64,
+    contentType: "text/plain",
+    timeoutMs: 60_000,
+  });
+}
+
+/** POST /me/messages with a base64 MIME body: creates a draft (needs Mail.ReadWrite). */
+export function graphCreateMimeDraft(token: string, mimeBase64: string) {
+  return graphCall<{ id?: string }>(`${GRAPH}/me/messages`, {
+    method: "POST",
+    token,
+    body: mimeBase64,
+    contentType: "text/plain",
+    timeoutMs: 60_000,
+  });
+}
+
+/** A file under 3 MB, in one POST. */
+export function graphAddAttachment(token: string, messageId: string, file: MimeFile) {
+  return graphCall<{ id?: string }>(`${msg(messageId)}/attachments`, {
+    method: "POST",
+    token,
+    contentType: "application/json",
+    body: JSON.stringify({
+      "@odata.type": "#microsoft.graph.fileAttachment",
+      name: file.filename,
+      contentType: file.contentType,
+      contentBytes: file.data.toString("base64"),
+    }),
+    timeoutMs: 60_000,
+  });
+}
+
+/** A file from 3 MB on, through an upload session (chunks of UPLOAD_CHUNK_BYTES, in order). */
+export async function graphUploadAttachment(token: string, messageId: string, file: MimeFile): Promise<GraphResult<unknown>> {
+  const session = await graphCall<{ uploadUrl?: string }>(`${msg(messageId)}/attachments/createUploadSession`, {
+    method: "POST",
+    token,
+    contentType: "application/json",
+    body: JSON.stringify({
+      AttachmentItem: { attachmentType: "file", name: file.filename, size: file.data.byteLength, contentType: file.contentType },
+    }),
+  });
+  if (!session.ok) return session;
+  const uploadUrl = session.data.uploadUrl;
+  if (!uploadUrl) return { ok: false, status: 502, code: null, message: "upload session without url", retryAfter: null };
+  let last: GraphResult<unknown> = session;
+  for (const { start, end } of uploadRanges(file.data.byteLength)) {
+    // Pre-authenticated URL: no Authorization header (Graph docs).
+    last = await graphCall<unknown>(uploadUrl, {
+      method: "PUT",
+      body: file.data.subarray(start, end + 1),
+      contentType: "application/octet-stream",
+      contentRange: `bytes ${start}-${end}/${file.data.byteLength}`,
+      timeoutMs: 120_000,
+    });
+    if (!last.ok) return last;
+  }
+  return last;
+}
+
+/** Send a prepared draft: 202, saved to Sent Items. Empty body = Content-Length 0. */
+export function graphSendDraft(token: string, messageId: string) {
+  return graphCall<Record<string, never>>(`${msg(messageId)}/send`, { method: "POST", token, body: "", timeoutMs: 60_000 });
+}
+
+export function graphDeleteMessage(token: string, messageId: string) {
+  return graphCall<Record<string, never>>(msg(messageId), { method: "DELETE", token });
+}

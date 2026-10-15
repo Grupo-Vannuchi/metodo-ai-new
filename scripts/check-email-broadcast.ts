@@ -11,6 +11,7 @@ import ExcelJS from "exceljs";
 import { isValidEmail, normalizeEmail, parseEmailList } from "../src/lib/email-broadcast/normalize";
 import { mergeCandidates, type Candidate } from "../src/lib/email-broadcast/audience-core";
 import { transactionalRetryDelayMs } from "../src/lib/email/retry-after";
+import { buildMime } from "../src/lib/email-broadcast/microsoft/mime";
 import {
   buildEmailDocument,
   fillHtmlVars,
@@ -938,6 +939,55 @@ async function main() {
 
   await checkAsync("xlsxCellTexts rejects a file that isn't an .xlsx", async () => {
     await assert.rejects(xlsxCellTexts(ExcelJS, new TextEncoder().encode("ana@x.com").buffer as ArrayBuffer));
+  });
+
+  await checkAsync("buildMime encodes accents and keeps the unsubscribe headers and both parts", async () => {
+    const acc = String.fromCharCode(0xe7, 0xe3); // the two accented letters of "çã"
+    const mime = (
+      await buildMime({
+        from: { name: `Loja Solu${acc}o`, address: "contato@loja.com" },
+        to: "ana@x.com",
+        replyTo: "resp@loja.com",
+        subject: `Promo${acc}o de outubro`,
+        html: "<p>Oi</p>",
+        text: "Oi",
+        headers: {
+          "List-Unsubscribe": "<https://metodotia.com/api/email/unsubscribe/r1/sig>",
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
+        attachments: [{ filename: `cat${acc}logo.pdf`, contentType: "application/pdf", data: Buffer.from("PDFDATA") }],
+      })
+    ).toString("utf8");
+    assert.match(mime, /^Subject: =\?UTF-8\?/m);
+    assert.match(mime, /^From: =\?UTF-8\?.+<contato@loja\.com>/m);
+    assert.match(mime, /^To: ana@x\.com/m);
+    assert.match(mime, /^Reply-To: resp@loja\.com/m);
+    assert.match(mime, /^List-Unsubscribe: <https:\/\/metodotia\.com\/api\/email\/unsubscribe\/r1\/sig>/m);
+    assert.match(mime, /^List-Unsubscribe-Post: List-Unsubscribe=One-Click/m);
+    assert.match(mime, /multipart\/alternative/);
+    assert.match(mime, /Content-Type: text\/html/);
+    assert.match(mime, /Content-Type: text\/plain/);
+    assert.match(mime, /Content-Disposition: attachment/);
+    assert.ok(mime.includes(Buffer.from("PDFDATA").toString("base64")));
+    assert.ok(!mime.includes(`cat${acc}logo.pdf`), "a non-ASCII file name is encoded");
+  });
+
+  await checkAsync("buildMime without attachments or reply-to has no mixed part", async () => {
+    const mime = (
+      await buildMime({
+        from: { name: null, address: "a@b.com" },
+        to: "c@d.com",
+        replyTo: null,
+        subject: "Oi",
+        html: "<p>Oi</p>",
+        text: "Oi",
+        headers: {},
+        attachments: [],
+      })
+    ).toString("utf8");
+    assert.match(mime, /^From: a@b\.com/m);
+    assert.ok(!/multipart\/mixed/.test(mime));
+    assert.ok(!/^Reply-To:/m.test(mime));
   });
 
   console.log(`\n✅ email-broadcast: ${passed} checks passed.`);
