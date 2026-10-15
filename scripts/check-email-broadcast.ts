@@ -71,6 +71,13 @@ import {
 } from "../src/lib/email-broadcast/spreadsheet";
 import { EMPTY_AUDIENCE, audienceSelectionSchema } from "../src/lib/validations/email-broadcast";
 import {
+  INTERRUPTED_ERROR,
+  listReason,
+  microsoftRecipientError,
+  pausedReasonKey,
+  recipientFailure,
+} from "../src/lib/email-broadcast/failure-reason";
+import {
   MICROSOFT_CONSUMER_TENANT_ID,
   UPLOAD_CHUNK_BYTES,
   accountKindFromTid,
@@ -853,6 +860,55 @@ check("joinSiteUrl never doubles the slash", () => {
   );
   assert.equal(joinSiteUrl("https://metodotia.com", "api/x"), "https://metodotia.com/api/x");
   assert.equal(joinSiteUrl("http://localhost:3000//", "/api/x"), "http://localhost:3000/api/x");
+});
+
+// --- failure reasons -----------------------------------------------------------
+check("pausedReasonKey keeps known reasons and folds the rest into provider_error", () => {
+  assert.equal(pausedReasonKey("daily_limit"), "daily_limit");
+  assert.equal(pausedReasonKey("quota"), "quota");
+  assert.equal(pausedReasonKey("something_new"), "provider_error");
+  assert.equal(pausedReasonKey(null), "provider_error");
+});
+
+check("microsoftRecipientError stores code and message, capped at 500", () => {
+  assert.equal(microsoftRecipientError("ErrorInvalidRecipients", "bad"), "ms:ErrorInvalidRecipients|bad");
+  assert.equal(microsoftRecipientError(null, "x"), "ms:unknown|x");
+  assert.equal(microsoftRecipientError("C", "y".repeat(600)).length, 500);
+});
+
+check("recipientFailure translates stored errors and keeps the technical text", () => {
+  assert.equal(recipientFailure(null), null);
+  assert.equal(recipientFailure(""), null);
+  assert.deepEqual(recipientFailure(INTERRUPTED_ERROR), { key: "interrupted", technical: "interrupted" });
+  assert.deepEqual(recipientFailure("ms:ErrorInvalidRecipients|At least one recipient is not valid."), {
+    key: "invalid_address",
+    technical: "ErrorInvalidRecipients: At least one recipient is not valid.",
+  });
+  assert.deepEqual(recipientFailure("ms:ErrorMessageSizeExceeded|too big"), {
+    key: "message_too_large",
+    technical: "ErrorMessageSizeExceeded: too big",
+  });
+  assert.deepEqual(recipientFailure("ms:Weird|x"), { key: "generic", technical: "Weird: x" });
+  assert.equal(recipientFailure("Invalid `to` field. The email address needs to follow...")?.key, "invalid_address");
+  assert.deepEqual(recipientFailure("Resend 500"), { key: "generic", technical: "Resend 500" });
+});
+
+check("listReason picks the red line of the sends list", () => {
+  assert.deepEqual(listReason({ status: "PAUSED", pausedReason: "daily_limit", problems: 0, uncertain: 0 }), {
+    kind: "paused",
+    reason: "daily_limit",
+  });
+  assert.deepEqual(listReason({ status: "PAUSED", pausedReason: null, problems: 3, uncertain: 0 }), {
+    kind: "paused",
+    reason: "provider_error",
+  });
+  assert.deepEqual(listReason({ status: "DONE", pausedReason: null, problems: 12, uncertain: 1 }), {
+    kind: "problems",
+    failed: 12,
+    uncertain: 1,
+  });
+  assert.equal(listReason({ status: "DONE", pausedReason: null, problems: 0, uncertain: 0 }), null);
+  assert.equal(listReason({ status: "DRAFT", pausedReason: null, problems: 0, uncertain: 0 }), null);
 });
 
 async function checkAsync(name: string, fn: () => Promise<void>): Promise<void> {
