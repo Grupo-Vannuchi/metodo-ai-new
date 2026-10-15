@@ -70,6 +70,21 @@ import {
   xlsxCellTexts,
 } from "../src/lib/email-broadcast/spreadsheet";
 import { EMPTY_AUDIENCE, audienceSelectionSchema } from "../src/lib/validations/email-broadcast";
+import {
+  MICROSOFT_CONSUMER_TENANT_ID,
+  UPLOAD_CHUNK_BYTES,
+  accountKindFromTid,
+  attachmentUploadMode,
+  graphFailureAction,
+  joinSiteUrl,
+  microsoftConsentError,
+  microsoftDailyLimit,
+  microsoftSendMinutes,
+  microsoftSendPath,
+  remainingToday,
+  sentLast24hWhere,
+  uploadRanges,
+} from "../src/lib/email-broadcast/microsoft/core";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -744,6 +759,100 @@ check("audience schema keeps old drafts and caps typed + imported at 5,000", () 
   assert.equal(MAX_IMPORTS, 20);
   assert.ok(audienceSelectionSchema.safeParse({ imports: files(MAX_IMPORTS) }).success);
   assert.ok(!audienceSelectionSchema.safeParse({ imports: files(MAX_IMPORTS + 1) }).success);
+});
+
+// --- Microsoft channel ---------------------------------------------------------
+check("accountKindFromTid tells a personal account from Microsoft 365", () => {
+  assert.equal(accountKindFromTid(MICROSOFT_CONSUMER_TENANT_ID), "personal");
+  assert.equal(accountKindFromTid(MICROSOFT_CONSUMER_TENANT_ID.toUpperCase()), "personal");
+  assert.equal(accountKindFromTid("3a6f5659-ec46-4740-b69c-8eb97d2dd677"), "work");
+  assert.equal(accountKindFromTid(undefined), "work");
+});
+
+check("microsoftDailyLimit and remainingToday", () => {
+  assert.equal(microsoftDailyLimit("personal"), 300);
+  assert.equal(microsoftDailyLimit("work"), 10_000);
+  assert.equal(microsoftDailyLimit("anything"), 10_000);
+  assert.equal(remainingToday(300, 120), 180);
+  assert.equal(remainingToday(300, 300), 0);
+  assert.equal(remainingToday(300, 450), 0);
+  assert.equal(remainingToday(300, -5), 300);
+});
+
+check("sentLast24hWhere counts SENT, SENDING and UNCERTAIN of one account since 24 h ago", () => {
+  const now = new Date("2026-10-15T12:00:00Z");
+  const w = sentLast24hWhere("acc1", now);
+  assert.deepEqual(w.status.in, ["SENT", "SENDING", "UNCERTAIN"]);
+  assert.equal(w.sentAt.gte.toISOString(), "2026-10-14T12:00:00.000Z");
+  assert.deepEqual(w.broadcast, { senderAccountId: "acc1" });
+});
+
+check("microsoftSendMinutes rounds up at ~28 per minute", () => {
+  assert.equal(microsoftSendMinutes(0), 1);
+  assert.equal(microsoftSendMinutes(28), 1);
+  assert.equal(microsoftSendMinutes(29), 2);
+  assert.equal(microsoftSendMinutes(300), 11);
+});
+
+check("microsoftSendPath goes direct only when the request fits", () => {
+  assert.equal(microsoftSendPath(0, null), "direct");
+  assert.equal(microsoftSendPath(0, 3_900_000), "direct");
+  assert.equal(microsoftSendPath(0, 3_900_001), "draft");
+  assert.equal(microsoftSendPath(2_200_000, 3_000_000), "direct");
+  assert.equal(microsoftSendPath(2_200_001, null), "draft");
+});
+
+check("attachmentUploadMode and uploadRanges follow Graph's 3 MB / 320 KiB rules", () => {
+  assert.equal(attachmentUploadMode(3 * 1024 * 1024 - 1), "inline");
+  assert.equal(attachmentUploadMode(3 * 1024 * 1024), "session");
+  assert.equal(UPLOAD_CHUNK_BYTES % (320 * 1024), 0);
+  assert.ok(UPLOAD_CHUNK_BYTES < 4 * 1024 * 1024);
+  assert.deepEqual(uploadRanges(10, 4), [
+    { start: 0, end: 3 },
+    { start: 4, end: 7 },
+    { start: 8, end: 9 },
+  ]);
+  assert.deepEqual(uploadRanges(8, 4), [
+    { start: 0, end: 3 },
+    { start: 4, end: 7 },
+  ]);
+  assert.deepEqual(uploadRanges(0, 4), []);
+});
+
+check("graphFailureAction maps Graph answers to dispatcher moves", () => {
+  assert.equal(graphFailureAction(401, "InvalidAuthenticationToken", 0, "send"), "refresh");
+  assert.equal(graphFailureAction(401, null, 1, "send"), "reconnect");
+  assert.equal(graphFailureAction(403, "ErrorAccessDenied", 0, "prepare"), "reconnect");
+  assert.equal(graphFailureAction(403, "ErrorMessageSubmissionBlocked", 0, "send"), "blocked");
+  assert.equal(graphFailureAction(403, "SomethingElse", 0, "send"), "pause");
+  assert.equal(graphFailureAction(400, "ErrorExceededMessageLimit", 0, "send"), "daily_limit");
+  assert.equal(graphFailureAction(429, null, 0, "send"), "retry");
+  assert.equal(graphFailureAction(429, null, 5, "send"), "pause");
+  assert.equal(graphFailureAction(503, null, 2, "send"), "retry");
+  assert.equal(graphFailureAction(503, null, 3, "send"), "pause");
+  assert.equal(graphFailureAction(0, null, 0, "send"), "uncertain");
+  assert.equal(graphFailureAction(504, null, 0, "send"), "uncertain");
+  assert.equal(graphFailureAction(0, null, 0, "prepare"), "retry");
+  assert.equal(graphFailureAction(0, null, 3, "prepare"), "pause");
+  assert.equal(graphFailureAction(413, null, 0, "prepare"), "pause");
+  assert.equal(graphFailureAction(400, "ErrorMessageSizeExceeded", 0, "send"), "pause");
+  assert.equal(graphFailureAction(400, "ErrorInvalidRecipients", 0, "send"), "recipient");
+});
+
+check("microsoftConsentError reads the provider's error", () => {
+  assert.equal(microsoftConsentError("access_denied", "AADSTS65004: User declined to consent"), "cancelled");
+  assert.equal(microsoftConsentError("access_denied", "AADSTS90094: admin approval required"), "admin_required");
+  assert.equal(microsoftConsentError("consent_required", "AADSTS65001: needs consent"), "admin_required");
+  assert.equal(microsoftConsentError("server_error", ""), "failed");
+});
+
+check("joinSiteUrl never doubles the slash", () => {
+  assert.equal(
+    joinSiteUrl("https://metodotia.com/", "/api/email/microsoft/callback"),
+    "https://metodotia.com/api/email/microsoft/callback",
+  );
+  assert.equal(joinSiteUrl("https://metodotia.com", "api/x"), "https://metodotia.com/api/x");
+  assert.equal(joinSiteUrl("http://localhost:3000//", "/api/x"), "http://localhost:3000/api/x");
 });
 
 async function checkAsync(name: string, fn: () => Promise<void>): Promise<void> {
