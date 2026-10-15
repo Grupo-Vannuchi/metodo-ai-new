@@ -2146,11 +2146,13 @@
       "attachments": "Attachments",
       "counters": {
         "QUEUED": "Queued",
+        "SENDING": "Sending",
         "SENT": "Sent",
         "DELIVERED": "Delivered",
         "BOUNCED": "Bounced",
         "COMPLAINED": "Marked spam",
-        "FAILED": "Failed"
+        "FAILED": "Failed",
+        "UNCERTAIN": "Uncertain"
       },
       "filter": {
         "all": "All",

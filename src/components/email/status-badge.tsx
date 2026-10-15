@@ -11,6 +11,7 @@ const STYLES: Record<string, string> = {
   DELIVERED: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
   BOUNCED: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
   FAILED: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+  UNCERTAIN: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
 };
 
 /** Status pill for broadcasts and recipients (label already translated). */

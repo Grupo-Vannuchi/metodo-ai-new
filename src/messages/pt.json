@@ -2146,11 +2146,13 @@
       "attachments": "Anexos",
       "counters": {
         "QUEUED": "Na fila",
+        "SENDING": "Enviando",
         "SENT": "Enviados",
         "DELIVERED": "Entregues",
         "BOUNCED": "Bounce",
         "COMPLAINED": "Marcou spam",
-        "FAILED": "Falhou"
+        "FAILED": "Falhou",
+        "UNCERTAIN": "Situação incerta"
       },
       "filter": {
         "all": "Todos",

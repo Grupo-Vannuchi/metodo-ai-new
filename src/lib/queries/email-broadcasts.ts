@@ -99,11 +99,13 @@ export async function getEmailBroadcastReport(organizationId: string, id: string
 
   const counts: Record<EmailRecipientStatus, number> = {
     QUEUED: 0,
+    SENDING: 0,
     SENT: 0,
     DELIVERED: 0,
     BOUNCED: 0,
     COMPLAINED: 0,
     FAILED: 0,
+    UNCERTAIN: 0,
   };
   for (const g of grouped) counts[g.status] = g._count._all;
 
