@@ -65,6 +65,7 @@ export default async function EmailReportPage({
     sent: counts.SENT,
     delivered: counts.DELIVERED,
     problems: counts.BOUNCED + counts.COMPLAINED + counts.FAILED,
+    uncertain: counts.UNCERTAIN,
   };
   // Preview of what went out, with the tokens left visible.
   const preview = composeEmail({

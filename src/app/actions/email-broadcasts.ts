@@ -41,6 +41,8 @@ export type EmailActionError =
   | "from_missing"
   | "attachments_invalid"
   | "signature_missing"
+  | "sender_account_missing"
+  | "sender_account_reconnect"
   | "unknown";
 
 export type EmailActionFail = {
@@ -82,11 +84,14 @@ export async function saveEmailDraft(
     return { ok: false, error: "signature_missing" };
   }
 
+  const microsoft = parsed.data.channel === "MICROSOFT";
   const data = {
     subject: parsed.data.subject,
     html: parsed.data.html,
-    fromName: parsed.data.fromName || null,
-    fromEmail: parsed.data.fromEmail ? normalizeEmail(parsed.data.fromEmail) : null,
+    channel: parsed.data.channel,
+    // The Microsoft sender comes from the connected account when the send starts.
+    fromName: microsoft ? null : parsed.data.fromName || null,
+    fromEmail: microsoft ? null : parsed.data.fromEmail ? normalizeEmail(parsed.data.fromEmail) : null,
     replyTo: parsed.data.replyTo ? normalizeEmail(parsed.data.replyTo) : null,
     audience: parsed.data.audience as Prisma.InputJsonValue,
     attachments: parsed.data.attachments as Prisma.InputJsonValue,
@@ -135,7 +140,7 @@ export async function duplicateEmailBroadcast(id: string): Promise<{ ok: true; i
     const db = tenantDb(g.ctx.organizationId);
     const src = await db.emailBroadcast.findFirst({
       where: { id },
-      select: { subject: true, html: true, fromName: true, fromEmail: true, replyTo: true, audience: true, attachments: true, signatureId: true },
+      select: { subject: true, html: true, fromName: true, fromEmail: true, replyTo: true, audience: true, attachments: true, signatureId: true, channel: true },
     });
     if (!src) return { ok: false, error: "not_found" };
     const created = await db.emailBroadcast.create({
@@ -144,8 +149,9 @@ export async function duplicateEmailBroadcast(id: string): Promise<{ ok: true; i
         createdById: g.ctx.userId,
         subject: src.subject,
         html: src.html,
-        fromName: src.fromName,
-        fromEmail: src.fromEmail,
+        channel: src.channel,
+        fromName: src.channel === "MICROSOFT" ? null : src.fromName,
+        fromEmail: src.channel === "MICROSOFT" ? null : src.fromEmail,
         replyTo: src.replyTo,
         audience: (src.audience ?? {}) as Prisma.InputJsonValue,
         attachments: (src.attachments ?? []) as Prisma.InputJsonValue,
@@ -211,17 +217,26 @@ export async function startEmailBroadcast(
 
   const b = await db.emailBroadcast.findFirst({
     where: { id },
-    select: { id: true, status: true, subject: true, html: true, audience: true, fromEmail: true, attachments: true, signatureId: true },
+    select: { id: true, status: true, subject: true, html: true, audience: true, fromEmail: true, attachments: true, signatureId: true, channel: true },
   });
   if (!b) return { ok: false, error: "not_found" };
   if (b.status !== "DRAFT") return { ok: false, error: "not_found" };
   if (!b.subject.trim() || !hasEmailContent(b.html)) return { ok: false, error: "invalid" };
 
-  if (!platformResendKey()) return { ok: false, error: "no_connection" };
-  if (!b.fromEmail) return { ok: false, error: "from_required" };
-  // Server-side gate: the composer checks too, but only this decides.
-  if (!isSenderAllowed(b.fromEmail, await listSenderDomains(orgId))) {
-    return { ok: false, error: "domain_not_allowed" };
+  const microsoft = b.channel === "MICROSOFT";
+  let account: { id: string; email: string; displayName: string | null } | null = null;
+  if (microsoft) {
+    const row = await db.emailSenderAccount.findFirst({ select: { id: true, email: true, displayName: true, status: true } });
+    if (!row) return { ok: false, error: "sender_account_missing" };
+    if (row.status !== "ACTIVE") return { ok: false, error: "sender_account_reconnect" };
+    account = row;
+  } else {
+    if (!platformResendKey()) return { ok: false, error: "no_connection" };
+    if (!b.fromEmail) return { ok: false, error: "from_required" };
+    // Server-side gate: the composer checks too, but only this decides.
+    if (!isSenderAllowed(b.fromEmail, await listSenderDomains(orgId))) {
+      return { ok: false, error: "domain_not_allowed" };
+    }
   }
   const attachments = parseAttachments(b.attachments);
   if (!attachments || checkAttachments(orgId, attachments)) {
@@ -245,13 +260,16 @@ export async function startEmailBroadcast(
   const { recipients, stats } = await resolveAudience(orgId, readAudience(b.audience));
   if (recipients.length === 0) return { ok: false, error: "empty" };
 
-  // Addresses still queued in other in-flight sends count as used: no partial start.
-  const queued = await db.emailBroadcastRecipient.count({
-    where: { status: "QUEUED", broadcast: { status: { in: ["SENDING", "PAUSED"] } } },
-  });
-  const remaining = LIMITS.emailBroadcastQuotaPerMonth - ((await countEmailsSentThisMonth(orgId)) + queued);
-  if (recipients.length > remaining) {
-    return { ok: false, error: "quota", remaining: Math.max(0, remaining), total: recipients.length };
+  // The monthly quota is a platform (Resend) limit: Microsoft sends skip it.
+  if (!microsoft) {
+    // Addresses still queued in other in-flight sends count as used: no partial start.
+    const queued = await db.emailBroadcastRecipient.count({
+      where: { status: "QUEUED", broadcast: { status: { in: ["SENDING", "PAUSED"] }, channel: "PLATFORM" } },
+    });
+    const remaining = LIMITS.emailBroadcastQuotaPerMonth - ((await countEmailsSentThisMonth(orgId)) + queued);
+    if (recipients.length > remaining) {
+      return { ok: false, error: "quota", remaining: Math.max(0, remaining), total: recipients.length };
+    }
   }
 
   // Claim: only one request can move this draft forward. The fresh heartbeat
@@ -267,6 +285,7 @@ export async function startEmailBroadcast(
       lastError: null,
       signatureHtml: signature?.html ?? null,
       signatureText: signature?.text ?? null,
+      ...(account ? { senderAccountId: account.id, fromEmail: account.email, fromName: account.displayName } : {}),
     },
   });
   if (claimed.count === 0) return { ok: false, error: "not_found" };
@@ -304,7 +323,13 @@ export async function startEmailBroadcast(
     action: "email_broadcast.started",
     entity: "EmailBroadcast",
     entityId: id,
-    meta: { recipients: recipients.length, fromEmail: b.fromEmail, attachments: attachments.length, signature: signatureName },
+    meta: {
+      recipients: recipients.length,
+      channel: b.channel,
+      fromEmail: account ? account.email : b.fromEmail,
+      attachments: attachments.length,
+      signature: signatureName,
+    },
   });
   await kickEmailBroadcast(id);
   revalidatePath("/app/email");
@@ -318,18 +343,27 @@ export async function resumeEmailBroadcast(id: string): Promise<{ ok: true } | E
   const g = await gate();
   if (!g.ok) return g;
   const db = tenantDb(g.ctx.organizationId);
-  const b = await db.emailBroadcast.findFirst({ where: { id }, select: { status: true, fromEmail: true } });
+  const b = await db.emailBroadcast.findFirst({ where: { id }, select: { status: true, fromEmail: true, channel: true } });
   if (!b) return { ok: false, error: "not_found" };
 
   if (b.status === "PAUSED") {
-    if (!platformResendKey()) return { ok: false, error: "no_connection" };
-    if (!b.fromEmail) return { ok: false, error: "from_missing" };
-    if (!isSenderAllowed(b.fromEmail, await listSenderDomains(g.ctx.organizationId))) {
-      return { ok: false, error: "domain_not_allowed" };
+    let repoint = {};
+    if (b.channel === "MICROSOFT") {
+      const account = await db.emailSenderAccount.findFirst({ select: { id: true, email: true, displayName: true, status: true } });
+      if (!account) return { ok: false, error: "sender_account_missing" };
+      if (account.status !== "ACTIVE") return { ok: false, error: "sender_account_reconnect" };
+      // Resumes through the account connected now (it may have been switched).
+      repoint = { senderAccountId: account.id, fromEmail: account.email, fromName: account.displayName };
+    } else {
+      if (!platformResendKey()) return { ok: false, error: "no_connection" };
+      if (!b.fromEmail) return { ok: false, error: "from_missing" };
+      if (!isSenderAllowed(b.fromEmail, await listSenderDomains(g.ctx.organizationId))) {
+        return { ok: false, error: "domain_not_allowed" };
+      }
     }
     const res = await db.emailBroadcast.updateMany({
       where: { id, status: "PAUSED" },
-      data: { status: "SENDING", pausedReason: null, lastError: null, lastDispatchAt: null },
+      data: { status: "SENDING", pausedReason: null, lastError: null, lastDispatchAt: null, ...repoint },
     });
     if (res.count === 0) return { ok: false, error: "not_found" };
   } else if (b.status !== "SENDING") {

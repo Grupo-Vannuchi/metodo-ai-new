@@ -38,6 +38,7 @@ export default async function NewEmailPage({ params }: { params: Promise<{ local
           picked: [],
           attachments: [],
           signatureId: data.signatures.find((s) => s.isDefault)?.id ?? null,
+          channel: "PLATFORM",
         }}
         options={data.options}
         allowedDomains={data.allowedDomains}
