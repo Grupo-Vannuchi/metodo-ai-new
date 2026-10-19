@@ -2,13 +2,13 @@
 
 import { useEffect } from "react";
 import { useFormatter, useTranslations } from "next-intl";
-import { Mail, Send } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { Link, useRouter } from "@/i18n/navigation";
 import { emailListHref } from "@/lib/email-broadcast/list-channel";
 import type { SenderAccountView } from "@/lib/email-broadcast/types";
 import { MicrosoftAccountPanel } from "@/components/email/microsoft-account-panel";
+import { ChannelIcon } from "@/components/email/channel-icon";
 
 type ConnectError = "cancelled" | "admin_required" | "not_configured" | "failed";
 
@@ -46,12 +46,11 @@ export function ChannelChoice({
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-muted-foreground">{t("channel.title")}</p>
       <div className="grid max-w-5xl gap-6 md:grid-cols-2">
         <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-6">
           <div className="flex items-center gap-3">
-            <span className="flex size-11 items-center justify-center rounded-xl bg-muted">
-              <Send className="size-5" aria-hidden="true" />
+            <span className="flex size-11 items-center justify-center rounded-xl border border-border bg-card">
+              <ChannelIcon channel="plataforma" className="size-6" />
             </span>
             <h2 className="text-lg font-semibold">{t("channel.platformTitle")}</h2>
           </div>
@@ -73,8 +72,8 @@ export function ChannelChoice({
 
         <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-6">
           <div className="flex items-center gap-3">
-            <span className="flex size-11 items-center justify-center rounded-xl bg-muted">
-              <Mail className="size-5" aria-hidden="true" />
+            <span className="flex size-11 items-center justify-center rounded-xl border border-border bg-card">
+              <ChannelIcon channel="microsoft" className="size-6" />
             </span>
             <h2 className="text-lg font-semibold">{t("channel.microsoftTitle")}</h2>
           </div>

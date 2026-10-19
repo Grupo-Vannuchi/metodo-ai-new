@@ -12,6 +12,7 @@ import { BackButton } from "@/components/app/back-bar";
 import { DeleteButton } from "@/components/crm/delete-button";
 import { deleteEmailDraft } from "@/app/actions/email-broadcasts";
 import { ChannelChoice } from "@/components/email/channel-choice";
+import { ChannelIcon } from "@/components/email/channel-icon";
 import { MicrosoftAccountPanel } from "@/components/email/microsoft-account-panel";
 import { StatusBadge } from "@/components/email/status-badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -79,7 +80,10 @@ export default async function EmailPage({
         {header(microsoft ? "/app/email/new?via=microsoft" : "/app/email/new?via=platform")}
 
         <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-lg font-semibold">{t(`listChannel.${view}`)}</h2>
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <ChannelIcon channel={view} />
+            {t(`listChannel.${view}`)}
+          </h2>
           {configured ? (
             <Link href={emailListHref(null)} className="text-sm font-medium text-brand hover:underline">
               {t("switchChannel")}
