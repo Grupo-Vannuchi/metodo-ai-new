@@ -1,7 +1,8 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { INTERRUPTED_ERROR, microsoftRecipientError } from "../failure-reason";
-import { MICROSOFT_PACE_MS, graphFailureAction, microsoftDailyLimit, remainingToday, sentLast24hWhere } from "./core";
+import { MAILBOX_PACE_MS, remainingToday, sentLast24hWhere } from "../mailbox/core";
+import { graphFailureAction, microsoftDailyLimit } from "./core";
 import type { MimeFile, MimeMail } from "./mime";
 import { sendMicrosoftMail } from "./send";
 import { getMicrosoftAccessToken, markNeedsReconnect } from "./token";
@@ -204,7 +205,7 @@ export async function runMicrosoftBroadcast(run: MicrosoftRun): Promise<{ done: 
         lastDispatchAt: { gte: run.activeSince() },
       },
     });
-    await sleep(MICROSOFT_PACE_MS * Math.min(Math.max(1, running), MAX_PACE_FACTOR));
+    await sleep(MAILBOX_PACE_MS * Math.min(Math.max(1, running), MAX_PACE_FACTOR));
   }
   return { done: false };
 }

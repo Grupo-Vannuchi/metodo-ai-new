@@ -4,6 +4,7 @@
  * import it.
  */
 import { LIMITS } from "@/config/limits";
+import type { MailboxFailureAction } from "../mailbox/core";
 
 /** Tenant id Microsoft puts in the id token of personal accounts (outlook.com, hotmail.com, live.com). */
 export const MICROSOFT_CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
@@ -18,32 +19,6 @@ export function accountKindFromTid(tid: unknown): MicrosoftAccountKind {
 /** Estimated sends per 24 h for a mailbox kind (Microsoft doesn't expose the real figure). */
 export function microsoftDailyLimit(kind: string): number {
   return kind === "personal" ? LIMITS.microsoftDailyPersonal : LIMITS.microsoftDailyWork;
-}
-
-/** What is left of the estimated daily limit (never negative). */
-export function remainingToday(limit: number, usedLast24h: number): number {
-  return Math.max(0, limit - Math.max(0, usedLast24h));
-}
-
-/**
- * Prisma `where` (EmailBroadcastRecipient) for the e-mails that left, or may
- * have left, one Microsoft mailbox in the last 24 h. `sentAt` is stamped when
- * a recipient is reserved, so SENDING and UNCERTAIN count too.
- */
-export function sentLast24hWhere(accountId: string, now: Date) {
-  return {
-    status: { in: ["SENT", "SENDING", "UNCERTAIN"] as ("SENT" | "SENDING" | "UNCERTAIN")[] },
-    sentAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
-    broadcast: { senderAccountId: accountId },
-  };
-}
-
-/** One e-mail every 2.1 s per mailbox: ~28 per minute, under Exchange's 30. */
-export const MICROSOFT_PACE_MS = 2_100;
-
-/** Minutes the dispatcher needs for `count` e-mails at MICROSOFT_PACE_MS (at least 1). */
-export function microsoftSendMinutes(count: number): number {
-  return Math.max(1, Math.ceil((Math.max(0, count) * MICROSOFT_PACE_MS) / 60_000));
 }
 
 /** Graph refuses requests over ~4 MB (413): a direct send's base64 MIME stays under this. */
@@ -76,15 +51,7 @@ export function uploadRanges(total: number, chunk: number = UPLOAD_CHUNK_BYTES):
   return ranges;
 }
 
-export type GraphFailureAction =
-  | "refresh"
-  | "retry"
-  | "uncertain"
-  | "recipient"
-  | "daily_limit"
-  | "blocked"
-  | "reconnect"
-  | "pause";
+export type GraphFailureAction = MailboxFailureAction;
 
 const DAILY_LIMIT_CODES = new Set(["ErrorExceededMessageLimit", "ErrorQuotaExceeded", "ErrorSubmissionQuotaExceeded"]);
 const BLOCKED_CODES = new Set([
@@ -134,9 +101,4 @@ export function microsoftConsentError(error: string, description: string): Micro
   if (error === "consent_required" || /AADSTS(90094|90095|65001)/.test(description)) return "admin_required";
   if (error === "access_denied") return "cancelled";
   return "failed";
-}
-
-/** Site URL + path with exactly one slash between (prod's NEXT_PUBLIC_SITE_URL ends in "/"). */
-export function joinSiteUrl(base: string, path: string): string {
-  return `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
 }

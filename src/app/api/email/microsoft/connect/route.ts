@@ -4,7 +4,7 @@ import { env } from "@/lib/env";
 import { getOrgContext } from "@/lib/tenant";
 import { canAccessScreen } from "@/lib/access";
 import { hasModule } from "@/config/modules";
-import { joinSiteUrl } from "@/lib/email-broadcast/microsoft/core";
+import { joinSiteUrl } from "@/lib/email-broadcast/mailbox/core";
 import {
   MICROSOFT_MAIL_SCOPES,
   MS_MAIL_ORG_COOKIE,

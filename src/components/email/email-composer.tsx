@@ -15,7 +15,7 @@ import { AudienceSummary } from "@/components/email/audience-summary";
 import { EmailAttachments } from "@/components/email/email-attachments";
 import { SignaturePreview } from "@/components/email/signature-preview";
 import { estimateAttachmentSendMinutes } from "@/lib/email-broadcast/attachments";
-import { microsoftSendMinutes } from "@/lib/email-broadcast/microsoft/core";
+import { mailboxSendMinutes } from "@/lib/email-broadcast/mailbox/core";
 import {
   previewEmailAudience,
   saveEmailDraft,
@@ -189,7 +189,7 @@ export function EmailComposer({
                     sent: microsoft.sentLast24h,
                   })
                 : t("confirmMicrosoftAll", { total: s.total }),
-              t("confirmMicrosoftPace", { minutes: microsoftSendMinutes(nowCount) }),
+              t("confirmMicrosoftPace", { minutes: mailboxSendMinutes(nowCount) }),
               t("confirmMicrosoftSentItems", { email: microsoft.email }),
             ].join(" ")}`
           : "";

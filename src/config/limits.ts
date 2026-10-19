@@ -19,6 +19,10 @@ export const LIMITS: {
   microsoftDailyPersonal: number;
   /** Estimated recipients per 24 h through a Microsoft 365 mailbox. */
   microsoftDailyWork: number;
+  /** Estimated e-mails per 24 h through a connected Gmail / Google Workspace account: personal Gmail. */
+  googleDailyPersonal: number;
+  /** Estimated e-mails per 24 h through a connected Gmail / Google Workspace account: Google Workspace. */
+  googleDailyWork: number;
   /** Prospecting leads per month. */
   prospectingQuotaPerMonth: number;
   /** Prospecting extraction jobs per month. */
@@ -39,6 +43,8 @@ export const LIMITS: {
   emailBroadcastQuotaPerMonth: 50_000,
   microsoftDailyPersonal: 300,
   microsoftDailyWork: 10_000,
+  googleDailyPersonal: 500,
+  googleDailyWork: 2_000,
   prospectingQuotaPerMonth: 10_000,
   extractionsPerMonth: 500,
   assistantDailyLimit: 750,

@@ -1,6 +1,7 @@
 import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
-import { microsoftDailyLimit, remainingToday, sentLast24hWhere } from "@/lib/email-broadcast/microsoft/core";
+import { remainingToday, sentLast24hWhere } from "@/lib/email-broadcast/mailbox/core";
+import { microsoftDailyLimit } from "@/lib/email-broadcast/microsoft/core";
 import type { SenderAccountView } from "@/lib/email-broadcast/types";
 
 /** The org's connected Microsoft mailbox with today's estimate, or null. */
