@@ -32,7 +32,7 @@
             "**The Customer is the controller of that data.** It is up to the Customer to have a legal basis to use it, including the contacts' prior authorization (opt-in) to receive WhatsApp messages."
           ]
         },
-        { "p": "If you talked to a company that uses MétodoAI, that company decides how your data is used. Section 12 explains how to request deletion." }
+        { "p": "If you talked to a company that uses MétodoAI, that company decides how your data is used. Section 13 explains how to request deletion." }
       ]
     },
     {
@@ -77,10 +77,10 @@
         { "p": "MétodoAI integrates with Meta's WhatsApp Business Platform (Cloud API) so Customers can support and message their contacts. Regarding the data received through this integration:" },
         {
           "ul": [
-            "**We use this data only to** show conversations to the Customer, send the messages the Customer requests, display delivery and read status and, if the Customer turns the feature on, generate replies with the AI agent (section 6).",
+            "**We use this data only to** show conversations to the Customer, send the messages the Customer requests, display delivery and read status and, if the Customer turns the feature on, generate replies with the AI agent (section 7).",
             "**We do not sell or rent this data.** Nor do we use it for advertising, profiling or any purpose of our own.",
             "**We do not use conversation content to train artificial intelligence models.**",
-            "We do not share this data with third parties, except the providers needed to run the service (section 7) or when required by law.",
+            "We do not share this data with third parties, except the providers needed to run the service (section 8) or when required by law.",
             "Each number's access token is stored encrypted. Within the Customer's company, only the user responsible for the number can access its conversations.",
             "The Customer is responsible for obtaining contacts' opt-in before messaging them, for complying with the WhatsApp Business Policy and the Commerce Policy, and for the content it sends.",
             "To stop receiving messages, a contact can ask the company, use the unsubscribe option when offered (unsubscribed contacts are left out of campaigns) or, in WhatsApp itself, block the company or stop receiving marketing messages.",
@@ -91,8 +91,28 @@
       ]
     },
     {
+      "id": "connected-mailboxes",
+      "title": "5. Connected e-mail accounts (Google and Microsoft)",
+      "blocks": [
+        { "p": "Customers can connect the company's e-mail account (Google or Microsoft) to MétodoAI to send, through it, the mass e-mails they build on the platform, so that recipients get them from the Customer's own address. Regarding the data received through this integration:" },
+        {
+          "ul": [
+            "**What we access:** the account's e-mail address and name, and the permission to send e-mails on the Customer's behalf. The account's access token is stored encrypted.",
+            "**We use this data only to** send the e-mails the Customer builds in MétodoAI, through the account the Customer connected, and to show the progress and result of each send on the platform.",
+            "**We do not read, store or share the contents of the mailbox.** We do not read received messages, contacts or folders. The e-mails the Customer writes in MétodoAI are recorded with the send, like any other Customer data on the platform.",
+            "On Microsoft, the access granted also allows creating a draft of the message before sending, which we use only for e-mails with larger attachments. We never use it to read the mailbox.",
+            "**We do not sell or rent this data.** Nor do we use it for advertising, profiling or to train artificial intelligence models.",
+            "**How to revoke access:** the Customer disconnects the account in MétodoAI (E-mail screen) and we delete the stored token. To remove access on the provider's side too, remove the app in the account settings: on Google, at https://myaccount.google.com/permissions; on Microsoft, in the account's privacy settings.",
+            "The Customer is responsible for the e-mails' content, for having a legal basis to send them to recipients and for following Google's and Microsoft's usage rules, including daily sending limits.",
+            "Sends are also processed by Google or Microsoft, depending on the connected account, under each one's terms and privacy policy."
+          ]
+        },
+        { "p": "MétodoAI's use and transfer to any other app of information received from Google APIs will adhere to the Google API Services User Data Policy, including the Limited Use requirements (https://developers.google.com/terms/api-services-user-data-policy)." }
+      ]
+    },
+    {
       "id": "purposes",
-      "title": "5. Why we use data and on what legal basis",
+      "title": "6. Why we use data and on what legal basis",
       "blocks": [
         {
           "table": {
@@ -112,7 +132,7 @@
     },
     {
       "id": "ai",
-      "title": "6. Artificial intelligence",
+      "title": "7. Artificial intelligence",
       "blocks": [
         {
           "ul": [
@@ -126,7 +146,7 @@
     },
     {
       "id": "sharing",
-      "title": "7. Who we share data with",
+      "title": "8. Who we share data with",
       "blocks": [
         { "p": "We do not sell personal data. We share data only with the providers that help us run the platform, and only as far as needed:" },
         {
@@ -151,14 +171,14 @@
     },
     {
       "id": "international-transfers",
-      "title": "8. International transfers",
+      "title": "9. International transfers",
       "blocks": [
         { "p": "Some providers store or process data outside Brazil, mainly in the United States. In those cases, the transfer follows article 33 of the LGPD and relies on contractual clauses and the data protection safeguards offered by those providers." }
       ]
     },
     {
       "id": "retention",
-      "title": "9. How long we keep data",
+      "title": "10. How long we keep data",
       "blocks": [
         {
           "ul": [
@@ -175,7 +195,7 @@
     },
     {
       "id": "security",
-      "title": "10. Security",
+      "title": "11. Security",
       "blocks": [
         {
           "ul": [
@@ -191,7 +211,7 @@
     },
     {
       "id": "your-rights",
-      "title": "11. Your rights",
+      "title": "12. Your rights",
       "blocks": [
         { "p": "Under the LGPD (art. 18), you can request:" },
         {
@@ -215,14 +235,14 @@
     },
     {
       "id": "data-deletion",
-      "title": "12. How to request deletion of your data",
+      "title": "13. How to request deletion of your data",
       "blocks": [
         { "h3": "If you are a MétodoAI User" },
         {
           "ol": [
             "Inside the platform, you can delete contacts, conversations and other records. Removing a WhatsApp number connected through the official API deletes that number's conversations and files.",
             "To delete the account and all its data, send an e-mail to {email} with the subject **\"Data deletion\"**, from the registered e-mail address, stating the company name.",
-            "We confirm the request within 15 days and complete the deletion within 30 days. Only the data the law requires us to keep is excluded (section 9)."
+            "We confirm the request within 15 days and complete the deletion within 30 days. Only the data the law requires us to keep is excluded (section 10)."
           ]
         },
         { "h3": "If you talked to a company on WhatsApp or were registered by a Customer" },
@@ -236,7 +256,7 @@
     },
     {
       "id": "cookies",
-      "title": "13. Cookies",
+      "title": "14. Cookies",
       "blocks": [
         { "p": "We only use essential cookies:" },
         {
@@ -250,21 +270,21 @@
     },
     {
       "id": "children",
-      "title": "14. Children and adolescents",
+      "title": "15. Children and adolescents",
       "blocks": [
         { "p": "The platform is intended for businesses and for people aged 18 or over. We do not knowingly collect data from children or adolescents as Users." }
       ]
     },
     {
       "id": "changes",
-      "title": "15. Changes to this Policy",
+      "title": "16. Changes to this Policy",
       "blocks": [
         { "p": "We may update this Policy. The \"Last updated\" date at the top shows the version in force. We announce relevant changes by e-mail or by a notice on the platform." }
       ]
     },
     {
       "id": "contact",
-      "title": "16. Contact",
+      "title": "17. Contact",
       "blocks": [
         {
           "ul": [

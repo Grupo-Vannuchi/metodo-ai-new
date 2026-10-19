@@ -58,7 +58,7 @@ sobrou.
 
 `/api/email/microsoft/connect` e `/callback` (spec 2026-10-15) só redirecionam. O endereço de retorno cadastrado no app do Azure é `${NEXT_PUBLIC_SITE_URL}/api/email/microsoft/callback`, montado por `joinSiteUrl` sem barra dupla. As credenciais vão criptografadas para `email_sender_accounts` e nunca para o navegador ou para o log.
 
-`/api/email/google/connect` e `/callback` (spec 2026-10-19) seguem o mesmo molde. O endereço de retorno cadastrado no projeto do Google Cloud é `${NEXT_PUBLIC_SITE_URL}/api/email/google/callback` (também por `joinSiteUrl`), e o `access_type=offline` com `prompt=consent select_account` da autorização é o que faz o Google devolver o refresh token.
+`/api/email/google/connect` e `/callback` (spec 2026-10-19) seguem o mesmo molde. O endereço de retorno cadastrado no projeto do Google Cloud é `${NEXT_PUBLIC_SITE_URL}/api/email/google/callback` (também por `joinSiteUrl`), e só o `access_type=offline` com `prompt=consent` faz o Google devolver o refresh token; o `select_account` apenas deixa a pessoa escolher a conta.
 
 `/api/email/unsubscribe/[recipientId]/[sig]` é **pública de propósito** (RFC 8058); a assinatura é a primeira checagem, só aceita POST, e a server action `confirmEmailUnsubscribe` segue o mesmo padrão (server actions também são endpoints públicos).
 
