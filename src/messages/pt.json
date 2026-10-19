@@ -2204,8 +2204,8 @@
       "quota": "A cota do mês não comporta este envio.",
       "quotaDetail": "Este envio tem {total} endereços, mas restam {remaining} na cota do mês.",
       "unknown": "Algo deu errado. Tente de novo.",
-      "sender_account_missing": "Conecte uma conta Microsoft para enviar por ela.",
-      "sender_account_reconnect": "A conta Microsoft precisa ser reconectada."
+      "sender_account_missing": "Conecte a conta de envio desse canal para enviar por ela.",
+      "sender_account_reconnect": "A conta de envio precisa ser reconectada."
     },
     "report": {
       "started": "Iniciado em {date}",

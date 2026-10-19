@@ -33,7 +33,7 @@ export type ComposerDraft = {
   picked: PickedTarget[];
   attachments: EmailAttachment[];
   signatureId: string | null;
-  channel: "PLATFORM" | "MICROSOFT";
+  channel: "PLATFORM" | "MICROSOFT" | "GOOGLE";
 };
 
 /** A signature as the composer and the Assinaturas tab show it; previewHtml
@@ -47,7 +47,7 @@ export type SignatureOption = {
   previewHtml: string;
 };
 
-/** The org's Microsoft sending account as the screens show it (no credentials). */
+/** The org's sending account (Microsoft or Google) as the screens show it (no credentials). */
 export type SenderAccountView = {
   id: string;
   email: string;

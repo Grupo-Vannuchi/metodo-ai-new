@@ -2204,8 +2204,8 @@
       "quota": "This month's quota can't fit this send.",
       "quotaDetail": "This send has {total} addresses, but only {remaining} are left in this month's quota.",
       "unknown": "Something went wrong. Try again.",
-      "sender_account_missing": "Connect a Microsoft account to send through it.",
-      "sender_account_reconnect": "The Microsoft account needs to be reconnected."
+      "sender_account_missing": "Connect this channel's sending account to send through it.",
+      "sender_account_reconnect": "The sending account needs to be reconnected."
     },
     "report": {
       "started": "Started {date}",

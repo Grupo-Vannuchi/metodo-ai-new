@@ -63,9 +63,7 @@ export default async function EmailPage({
 
   const microsoft = view === "microsoft";
   const [rows, domains, used, account] = await Promise.all([
-    // `view` is never "google" yet (the page passes google: false above); the cast goes away when
-    // listEmailBroadcasts accepts the Google channel.
-    listEmailBroadcasts(ctx.organizationId, broadcastChannelOf(view) as "PLATFORM" | "MICROSOFT"),
+    listEmailBroadcasts(ctx.organizationId, broadcastChannelOf(view)),
     microsoft ? Promise.resolve([] as string[]) : listSenderDomains(ctx.organizationId),
     microsoft ? Promise.resolve(0) : countEmailsSentThisMonth(ctx.organizationId),
     microsoft ? getSenderAccountView(ctx.organizationId, "MICROSOFT") : Promise.resolve(null),

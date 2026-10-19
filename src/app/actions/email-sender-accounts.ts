@@ -20,6 +20,8 @@ export async function disconnectSenderAccount(provider: "MICROSOFT" | "GOOGLE"):
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false, error: "unauthorized" };
   if (!canAccessScreen(ctx, "email") || !hasModule(ctx.modules, "marketing")) return { ok: false, error: "forbidden" };
+  // Server actions are public endpoints: the TS union is not enforced at runtime.
+  if (provider !== "MICROSOFT" && provider !== "GOOGLE") return { ok: false, error: "not_found" };
   try {
     const db = tenantDb(ctx.organizationId);
     const row = await db.emailSenderAccount.findFirst({ where: { provider }, select: { id: true, email: true } });
