@@ -64,9 +64,15 @@
             "**From the Customer:** WhatsApp Business account and phone number identifiers, access token (stored encrypted) and message templates."
           ]
         },
-        { "h3": "3.4 Prospecting" },
+        { "h3": "3.4 Connected e-mail accounts" },
+        {
+          "ul": [
+            "When the Customer connects a Google or Microsoft account to send mass e-mail: the account's e-mail address and name, the access credentials (tokens) granted by the Customer, stored encrypted, and the record of each send (recipient, date and status). We do not access the mailbox's messages, contacts or folders."
+          ]
+        },
+        { "h3": "3.5 Prospecting" },
         { "p": "Search results from public sources, such as Google Places and the searched company's own website: business name, phone number, address and website." },
-        { "h3": "3.5 Technical data" },
+        { "h3": "3.6 Technical data" },
         { "p": "IP address, access date and time, browser and device data, and a record of actions taken on the platform (audit log)." }
       ]
     },
@@ -97,12 +103,13 @@
         { "p": "Customers can connect the company's e-mail account (Google or Microsoft) to MétodoAI to send, through it, the mass e-mails they build on the platform, so that recipients get them from the Customer's own address. Regarding the data received through this integration:" },
         {
           "ul": [
-            "**What we access:** the account's e-mail address and name, and the permission to send e-mails on the Customer's behalf. The account's access token is stored encrypted.",
+            "**What we access:** the account's e-mail address and name, and the permission to send e-mails on the Customer's behalf. The account's access credentials (tokens) are stored encrypted.",
             "**We use this data only to** send the e-mails the Customer builds in MétodoAI, through the account the Customer connected, and to show the progress and result of each send on the platform.",
             "**We do not read, store or share the contents of the mailbox.** We do not read received messages, contacts or folders. The e-mails the Customer writes in MétodoAI are recorded with the send, like any other Customer data on the platform.",
-            "On Microsoft, the access granted also allows creating a draft of the message before sending, which we use only for e-mails with larger attachments. We never use it to read the mailbox.",
+            "On Microsoft, the permission granted (Mail.ReadWrite) technically covers reading and changing messages; MétodoAI uses it only to create the draft of an e-mail with large attachments, attach the files, send it and delete the draft.",
             "**We do not sell or rent this data.** Nor do we use it for advertising, profiling or to train artificial intelligence models.",
-            "**How to revoke access:** the Customer disconnects the account in MétodoAI (E-mail screen) and we delete the stored token. To remove access on the provider's side too, remove the app in the account settings: on Google, at https://myaccount.google.com/permissions; on Microsoft, in the account's privacy settings.",
+            "We do not share this data with third parties, except the providers needed to run the service (section 8) or when the law requires.",
+            "**How to revoke access:** the Customer disconnects the account in MétodoAI (E-mail screen) and we delete the stored credentials. To remove access on the provider's side too, remove the app in the account settings: on Google, at https://myaccount.google.com/permissions; on Microsoft, in the account's privacy settings.",
             "The Customer is responsible for the e-mails' content, for having a legal basis to send them to recipients and for following Google's and Microsoft's usage rules, including daily sending limits.",
             "Sends are also processed by Google or Microsoft, depending on the connected account, under each one's terms and privacy policy."
           ]
@@ -160,8 +167,8 @@
               ["Resend", "Service e-mails"],
               ["Anthropic", "Copilot and AI agent"],
               ["OpenAI", "Image generation and audio transcription"],
-              ["Google", "Sign in with Google and prospecting searches (Google Places)"],
-              ["Microsoft and LinkedIn", "Sign in with those accounts"],
+              ["Google", "Sign in with Google and prospecting searches (Google Places); sending mass e-mail through the Google account the Customer connects"],
+              ["Microsoft and LinkedIn", "Sign in with those accounts; and, for Microsoft, sending mass e-mail through the connected account"],
               ["Dedicated server provider", "Messaging for QR code connections"]
             ]
           }
@@ -187,6 +194,7 @@
             "**Tax and billing data:** for the period required by law, usually 5 years.",
             "**Prospecting results:** automatically deleted after 30 days. Only what the Customer imports into the CRM remains.",
             "**WhatsApp conversations:** for as long as the Customer keeps them. Users can delete conversations. Removing a number connected through the official API deletes that number's conversations, messages and files.",
+            "**Credentials of connected e-mail accounts:** until the Customer disconnects the account or deletes their MétodoAI account; on disconnect, we delete the credentials immediately.",
             "**Backups:** erased in the automatic rotation cycle."
           ]
         },

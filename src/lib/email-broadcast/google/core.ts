@@ -50,11 +50,12 @@ export function gmailUploadMode(mimeBytes: number): "simple" | "resumable" {
  * first `errors[].reason` of the API's error body. `stage` "send" is the call
  * that hands the e-mail over (the simple POST, or the resumable PUT): a
  * timeout, a network error or a gateway 5xx (500, 502, 504...) there may have
- * gone through, so it is never retried ("uncertain"). Only 503 and 429 are
- * retried at that stage, and an exhausted retry pauses the send: it never
- * turns into a recipient failure. Only a 400 malformed request ("badRequest",
- * "invalidArgument" or no reason) fails the recipient; every other 4xx pauses,
- * so an account or project refusal never fails recipients one by one.
+ * gone through, so it is never retried ("uncertain"), whatever `reason` the
+ * body carries. Only 503 and 429 are retried at that stage, and an exhausted
+ * retry pauses the send: it never turns into a recipient failure. Only a 400
+ * malformed request ("badRequest", "invalidArgument" or no reason) fails the
+ * recipient; every other 4xx pauses, so an account or project refusal never
+ * fails recipients one by one.
  * `attempt` counts earlier retries of this same e-mail.
  */
 export function gmailFailureAction(
@@ -65,21 +66,22 @@ export function gmailFailureAction(
   stage: "prepare" | "send",
 ): MailboxFailureAction {
   if (status === 401) return attempt < 1 ? "refresh" : "reconnect";
+  // A network error or a 5xx runs before every reason rule, so a reason on a 5xx never turns it into a
+  // block, a pause or a reconnect: at the hand-over call (the 503 below aside) it may have gone through,
+  // so it is uncertain; at prepare nothing was handed over, so it is a plain retry.
+  if (status === 0 || status >= 500) {
+    if (stage === "send" && status !== 503) return "uncertain";
+    if (stage === "prepare") return attempt < 3 ? "retry" : "pause";
+  }
   if (status === 429 && /mail sending/i.test(message)) return "daily_limit";
   if (reason === "domainPolicy" || reason === "failedPrecondition") return "blocked";
   if (reason === "dailyLimitExceeded") return "pause";
   if (reason === "insufficientPermissions") return "reconnect";
-  // A 5xx (or a network error) that carries a rate-limit reason is still a 5xx: the stage rule below decides.
   if (status === 429 || (status > 0 && status < 500 && (reason === "userRateLimitExceeded" || reason === "rateLimitExceeded"))) {
     return attempt < 5 ? "retry" : "pause";
   }
-  if (status === 0 || status >= 500) {
-    if (stage === "send") {
-      if (status !== 503) return "uncertain";
-      return attempt < 3 ? "retry" : "pause";
-    }
-    return attempt < 3 ? "retry" : "pause";
-  }
+  // 503 at the hand-over call: the only 5xx there that is retried (and an exhausted retry pauses).
+  if (status === 503) return attempt < 3 ? "retry" : "pause";
   // Only a malformed request is the recipient's fault; any other refusal is about the account or the project.
   if (status === 400 && (reason === null || reason === "badRequest" || reason === "invalidArgument")) return "recipient";
   return "pause";

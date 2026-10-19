@@ -943,6 +943,10 @@ check("gmailFailureAction maps Gmail answers to dispatcher moves", () => {
   assert.equal(gmailFailureAction(500, "rateLimitExceeded", "", 0, "send"), "uncertain");
   assert.equal(gmailFailureAction(429, null, "", 5, "send"), "pause");
   assert.equal(gmailFailureAction(504, null, "", 0, "send"), "uncertain");
+  // An ambiguous 5xx at the hand-over call is uncertain whatever reason it carries; prepare is a plain retry.
+  assert.equal(gmailFailureAction(500, "failedPrecondition", "", 0, "send"), "uncertain");
+  assert.equal(gmailFailureAction(502, "dailyLimitExceeded", "", 0, "send"), "uncertain");
+  assert.equal(gmailFailureAction(500, "failedPrecondition", "", 0, "prepare"), "retry");
 });
 
 check("googleConsentError reads the provider's error", () => {

@@ -64,9 +64,15 @@
             "**Do Cliente:** identificadores da conta WhatsApp Business e do número, token de acesso (guardado cifrado) e modelos de mensagem."
           ]
         },
-        { "h3": "3.4 Prospecção" },
+        { "h3": "3.4 Contas de e-mail conectadas" },
+        {
+          "ul": [
+            "Quando o Cliente conecta uma conta Google ou Microsoft para enviar e-mails em massa: o endereço de e-mail e o nome da conta, as credenciais de acesso (tokens) concedidas pelo próprio Cliente, guardadas cifradas, e o registro de cada envio (destinatário, data e situação). Não acessamos as mensagens, os contatos nem as pastas da caixa."
+          ]
+        },
+        { "h3": "3.5 Prospecção" },
         { "p": "Resultados de buscas em fontes públicas, como o Google Places e o site da própria empresa pesquisada: nome do estabelecimento, telefone, endereço e site." },
-        { "h3": "3.5 Dados técnicos" },
+        { "h3": "3.6 Dados técnicos" },
         { "p": "Endereço IP, data e hora de acesso, dados do navegador e do dispositivo, e registro das ações feitas na plataforma (auditoria)." }
       ]
     },
@@ -97,12 +103,13 @@
         { "p": "O Cliente pode conectar ao MétodoAI a conta de e-mail da empresa (Google ou Microsoft) para enviar por ela os e-mails em massa que monta na plataforma, de modo que cheguem aos destinatários a partir do endereço do próprio Cliente. Sobre os dados recebidos por essa integração:" },
         {
           "ul": [
-            "**O que acessamos:** o endereço de e-mail e o nome da conta, e a permissão de enviar e-mails em nome do Cliente. O token de acesso da conta é guardado cifrado.",
+            "**O que acessamos:** o endereço de e-mail e o nome da conta, e a permissão de enviar e-mails em nome do Cliente. As credenciais de acesso (tokens) da conta são guardadas cifradas.",
             "**Usamos esses dados apenas para** enviar os e-mails que o Cliente monta no MétodoAI, pela conta que ele conectou, e mostrar na plataforma o andamento e o resultado de cada envio.",
             "**Não lemos, não guardamos e não compartilhamos o conteúdo da caixa de e-mail.** Não lemos mensagens recebidas, contatos nem pastas. Os e-mails que o Cliente escreve no MétodoAI ficam registrados no envio, como qualquer outro dado do Cliente na plataforma.",
-            "Na Microsoft, o acesso concedido também permite criar o rascunho da mensagem antes do envio, o que usamos só nos e-mails com anexos maiores. Nunca o usamos para ler a caixa.",
+            "Na Microsoft, a permissão concedida (Mail.ReadWrite) tecnicamente cobre ler e alterar mensagens; o MétodoAI a usa só para criar o rascunho de um e-mail com anexos grandes, anexar os arquivos, enviá-lo e apagar o rascunho.",
             "**Não vendemos nem alugamos esses dados.** Também não os usamos para publicidade, para criar perfis nem para treinar modelos de inteligência artificial.",
-            "**Como revogar o acesso:** o Cliente desconecta a conta no MétodoAI (tela E-mail) e nós apagamos o token guardado. Para tirar o acesso também do lado do provedor, basta remover o app nas configurações da conta: no Google, em https://myaccount.google.com/permissions; na Microsoft, nas configurações de privacidade da conta.",
+            "Não compartilhamos esses dados com terceiros, exceto com os provedores necessários para operar o serviço (seção 8) ou quando a lei exigir.",
+            "**Como revogar o acesso:** o Cliente desconecta a conta no MétodoAI (tela E-mail) e nós apagamos as credenciais guardadas. Para tirar o acesso também do lado do provedor, basta remover o app nas configurações da conta: no Google, em https://myaccount.google.com/permissions; na Microsoft, nas configurações de privacidade da conta.",
             "O Cliente é responsável pelo conteúdo dos e-mails, por ter base legal para enviá-los aos destinatários e por cumprir as regras de uso do Google e da Microsoft, inclusive os limites diários de envio.",
             "Os envios também são tratados pelo Google ou pela Microsoft, conforme a conta conectada, de acordo com os termos e a política de privacidade de cada um."
           ]
@@ -160,8 +167,8 @@
               ["Resend", "Envio de e-mails de serviço"],
               ["Anthropic", "Copiloto e agente de IA"],
               ["OpenAI", "Geração de imagens e transcrição de áudio"],
-              ["Google", "Login com Google e buscas de prospecção (Google Places)"],
-              ["Microsoft e LinkedIn", "Login com essas contas"],
+              ["Google", "Login com Google e buscas de prospecção (Google Places); envio dos e-mails em massa pela conta Google que o Cliente conectar"],
+              ["Microsoft e LinkedIn", "Login com essas contas; e, para a Microsoft, envio dos e-mails em massa pela conta conectada"],
               ["Provedor de servidor dedicado", "Mensageria das conexões por QR code"]
             ]
           }
@@ -187,6 +194,7 @@
             "**Dados fiscais e de cobrança:** pelo prazo da legislação, em geral 5 anos.",
             "**Resultados de prospecção:** excluídos automaticamente depois de 30 dias. Só permanece o que o Cliente importar para o CRM.",
             "**Conversas do WhatsApp:** enquanto o Cliente as mantiver. O Usuário pode apagar conversas. Ao remover um número conectado pela API oficial, as conversas, mensagens e arquivos desse número são apagados.",
+            "**Credenciais de contas de e-mail conectadas:** até o Cliente desconectar a conta ou excluir a conta do MétodoAI; ao desconectar, apagamos as credenciais na hora.",
             "**Cópias de segurança (backups):** eliminadas no ciclo automático de rotação."
           ]
         },

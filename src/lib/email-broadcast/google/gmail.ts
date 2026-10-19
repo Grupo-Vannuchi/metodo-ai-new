@@ -13,6 +13,12 @@ export type GmailMessage = { id?: string; threadId?: string; labelIds?: string[]
 export type GmailFailure = { ok: false; status: number; code: string | null; message: string; retryAfter: number | null };
 export type GmailResult<T> = { ok: true; status: number; data: T; location: string | null } | GmailFailure;
 
+/** FAILED_PRECONDITION -> failedPrecondition; any other shape is left as it is. */
+function statusAsReason(status: string): string {
+  if (!/^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$/.test(status)) return status;
+  return status.toLowerCase().replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+}
+
 export async function gmailCall<T>(
   url: string,
   init: {
@@ -35,7 +41,9 @@ export async function gmailCall<T>(
     let json: Record<string, unknown> = {};
     if (text) {
       try {
-        json = JSON.parse(text) as Record<string, unknown>;
+        // The literal `null`, a number, a string or an array parses fine but is not a plain object.
+        const parsed: unknown = JSON.parse(text);
+        json = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
       } catch {
         json = {};
       }
@@ -45,11 +53,13 @@ export async function gmailCall<T>(
       const err = (json.error && typeof json.error === "object" ? json.error : {}) as Record<string, unknown>;
       const first = Array.isArray(err.errors) ? (err.errors[0] as Record<string, unknown> | undefined) : undefined;
       const reason = first && typeof first.reason === "string" && first.reason ? first.reason : null;
+      // Without errors[].reason, error.status is UPPER_SNAKE (FAILED_PRECONDITION): as camelCase it matches the reason rules.
+      const statusReason = typeof err.status === "string" && err.status ? statusAsReason(err.status) : null;
       const retryAfter = Number(res.headers.get("retry-after"));
       return {
         ok: false,
         status: res.status,
-        code: reason ?? (typeof err.status === "string" && err.status ? err.status : null),
+        code: reason ?? statusReason,
         message: typeof err.message === "string" && err.message ? err.message : `Gmail ${res.status}`,
         retryAfter: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
       };
