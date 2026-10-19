@@ -3,7 +3,6 @@ import { Plus } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { listSignatureOptions } from "@/lib/queries/email-signatures";
 import { MAX_SIGNATURES } from "@/lib/email-broadcast/signature";
-import { EmailTabs } from "@/components/email/email-tabs";
 import { SignatureCard } from "@/components/email/signature-card";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
@@ -11,8 +10,10 @@ import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
 
-/** E-mail → Assinaturas (spec 2026-10-13 §4.2). The E-mail layout already
- * requires the "email" screen and the Marketing module. */
+/** E-mail → Assinaturas (spec 2026-10-13 §4.2), opened from the composer's
+ * "Gerenciar assinaturas" / "Criar assinatura" links (the E-mail page has no
+ * tabs since 2026-10-19). The E-mail layout already requires the "email"
+ * screen and the Marketing module. */
 export default async function EmailSignaturesPage({ params }: { params: Promise<{ locale: string }> }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
@@ -24,8 +25,13 @@ export default async function EmailSignaturesPage({ params }: { params: Promise<
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
-          <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
+          <p className="text-sm text-muted-foreground">
+            <Link href="/app/email" className="hover:underline">
+              {t("title")}
+            </Link>{" "}
+            / {t("signatures.title")}
+          </p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">{t("signatures.title")}</h1>
         </div>
         {!atLimit ? (
           <Link href="/app/email/signatures/new" className={buttonVariants()}>
@@ -34,8 +40,6 @@ export default async function EmailSignaturesPage({ params }: { params: Promise<
           </Link>
         ) : null}
       </div>
-
-      <EmailTabs active="signatures" />
 
       <p className="max-w-3xl text-sm text-muted-foreground">{t("signatures.intro")}</p>
       {atLimit ? (
