@@ -14,6 +14,7 @@ import { deliveryTrackingConfigured } from "@/lib/email-broadcast/platform";
 import { StatusBadge } from "@/components/email/status-badge";
 import { ReportActions } from "@/components/email/report-actions";
 import { AutoRefresh } from "@/components/email/auto-refresh";
+import { emailListHref, listChannelOf } from "@/lib/email-broadcast/list-channel";
 import { Link, redirect } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
@@ -94,7 +95,7 @@ export default async function EmailReportPage({
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <p className="text-sm text-muted-foreground">
-            <Link href="/app/email" className="hover:underline">
+            <Link href={emailListHref(listChannelOf(b.channel))} className="hover:underline">
               {t("title")}
             </Link>
           </p>

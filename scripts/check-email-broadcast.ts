@@ -13,6 +13,12 @@ import { mergeCandidates, type Candidate } from "../src/lib/email-broadcast/audi
 import { transactionalRetryDelayMs } from "../src/lib/email/retry-after";
 import { buildMime } from "../src/lib/email-broadcast/microsoft/mime";
 import {
+  broadcastChannelOf,
+  emailListHref,
+  listChannelFromParam,
+  listChannelOf,
+} from "../src/lib/email-broadcast/list-channel";
+import {
   buildEmailDocument,
   fillHtmlVars,
   fillTextVars,
@@ -914,6 +920,28 @@ check("listReason picks the red line of the sends list", () => {
   });
   assert.equal(listReason({ status: "DONE", pausedReason: null, problems: 0, uncertain: 0 }), null);
   assert.equal(listReason({ status: "DRAFT", pausedReason: null, problems: 0, uncertain: 0 }), null);
+});
+
+// --- sends list per channel ----------------------------------------------------
+check("listChannelFromParam: no ?canal= means asking, unless Microsoft isn't set up", () => {
+  assert.equal(listChannelFromParam(undefined, true), null);
+  assert.equal(listChannelFromParam("", true), null);
+  assert.equal(listChannelFromParam("outra", true), null);
+  assert.equal(listChannelFromParam("plataforma", true), "plataforma");
+  assert.equal(listChannelFromParam("microsoft", true), "microsoft");
+  assert.equal(listChannelFromParam(["microsoft", "plataforma"], true), "microsoft");
+  assert.equal(listChannelFromParam(undefined, false), "plataforma");
+  assert.equal(listChannelFromParam("microsoft", false), "plataforma");
+});
+
+check("list channel links and the broadcast channel they map to", () => {
+  assert.equal(emailListHref(null), "/app/email");
+  assert.equal(emailListHref("plataforma"), "/app/email?canal=plataforma");
+  assert.equal(emailListHref("microsoft"), "/app/email?canal=microsoft");
+  assert.equal(listChannelOf("PLATFORM"), "plataforma");
+  assert.equal(listChannelOf("MICROSOFT"), "microsoft");
+  assert.equal(broadcastChannelOf("plataforma"), "PLATFORM");
+  assert.equal(broadcastChannelOf("microsoft"), "MICROSOFT");
 });
 
 async function checkAsync(name: string, fn: () => Promise<void>): Promise<void> {

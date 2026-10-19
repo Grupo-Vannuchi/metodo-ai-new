@@ -4,6 +4,7 @@ import { emailComposerData } from "@/lib/queries/email-broadcasts";
 import { EMPTY_AUDIENCE } from "@/lib/validations/email-broadcast";
 import { EmailComposer } from "@/components/email/email-composer";
 import { ChannelChoice } from "@/components/email/channel-choice";
+import { emailListHref } from "@/lib/email-broadcast/list-channel";
 import { LIMITS } from "@/config/limits";
 import { Link, redirect } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
@@ -37,7 +38,10 @@ export default async function NewEmailPage({
     <div className="flex flex-col gap-6">
       <div>
         <p className="text-sm text-muted-foreground">
-          <Link href="/app/email" className="hover:underline">
+          <Link
+            href={emailListHref(via === "microsoft" ? "microsoft" : via === "platform" ? "plataforma" : null)}
+            className="hover:underline"
+          >
             {t("title")}
           </Link>{" "}
           / {t("newTitle")}
