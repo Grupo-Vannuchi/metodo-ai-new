@@ -1974,11 +1974,6 @@
       "errorCount": "At most {max} files per send.",
       "errorUpload": "Couldn't attach {file}. Try again."
     },
-    "tabs": {
-      "label": "Email sections",
-      "sends": "Sends",
-      "signatures": "Signatures"
-    },
     "signature": {
       "title": "Signature",
       "manage": "Manage signatures",

@@ -1974,11 +1974,6 @@
       "errorCount": "No máximo {max} arquivos por envio.",
       "errorUpload": "Não foi possível anexar {file}. Tente de novo."
     },
-    "tabs": {
-      "label": "Seções do E-mail",
-      "sends": "Envios",
-      "signatures": "Assinaturas"
-    },
     "signature": {
       "title": "Assinatura",
       "manage": "Gerenciar assinaturas",
