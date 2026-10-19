@@ -22,7 +22,7 @@ export function remainingToday(limit: number, usedLast24h: number): number {
   return Math.max(0, limit - Math.max(0, usedLast24h));
 }
 
-/** One e-mail every 2.1 s per mailbox: ~28 per minute, under Exchange's 30. */
+/** One e-mail every 2.1 s per mailbox: ~28 per minute, within Exchange's 30/min and Gmail's per-user API quota. */
 export const MAILBOX_PACE_MS = 2_100;
 
 /** Minutes the dispatcher needs for `count` e-mails at MAILBOX_PACE_MS (at least 1). */

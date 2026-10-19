@@ -934,6 +934,12 @@ check("gmailFailureAction maps Gmail answers to dispatcher moves", () => {
   assert.equal(gmailFailureAction(503, null, "", 3, "send"), "pause");
   assert.equal(gmailFailureAction(0, null, "", 0, "prepare"), "retry");
   assert.equal(gmailFailureAction(500, null, "", 3, "prepare"), "pause");
+  assert.equal(gmailFailureAction(403, "accessNotConfigured", "", 0, "send"), "pause");
+  assert.equal(gmailFailureAction(404, null, "", 0, "send"), "pause");
+  assert.equal(gmailFailureAction(400, null, "", 0, "send"), "recipient");
+  assert.equal(gmailFailureAction(500, "rateLimitExceeded", "", 0, "send"), "uncertain");
+  assert.equal(gmailFailureAction(429, null, "", 5, "send"), "pause");
+  assert.equal(gmailFailureAction(504, null, "", 0, "send"), "uncertain");
 });
 
 check("googleConsentError reads the provider's error", () => {

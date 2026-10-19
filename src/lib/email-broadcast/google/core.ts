@@ -52,8 +52,10 @@ export function gmailUploadMode(mimeBytes: number): "simple" | "resumable" {
  * timeout, a network error or a gateway 5xx (500, 502, 504...) there may have
  * gone through, so it is never retried ("uncertain"). Only 503 and 429 are
  * retried at that stage, and an exhausted retry pauses the send: it never
- * turns into a recipient failure. `attempt` counts earlier retries of this
- * same e-mail.
+ * turns into a recipient failure. Only a 400 malformed request ("badRequest",
+ * "invalidArgument" or no reason) fails the recipient; every other 4xx pauses,
+ * so an account or project refusal never fails recipients one by one.
+ * `attempt` counts earlier retries of this same e-mail.
  */
 export function gmailFailureAction(
   status: number,
@@ -67,7 +69,8 @@ export function gmailFailureAction(
   if (reason === "domainPolicy" || reason === "failedPrecondition") return "blocked";
   if (reason === "dailyLimitExceeded") return "pause";
   if (reason === "insufficientPermissions") return "reconnect";
-  if (status === 429 || reason === "userRateLimitExceeded" || reason === "rateLimitExceeded") {
+  // A 5xx (or a network error) that carries a rate-limit reason is still a 5xx: the stage rule below decides.
+  if (status === 429 || (status > 0 && status < 500 && (reason === "userRateLimitExceeded" || reason === "rateLimitExceeded"))) {
     return attempt < 5 ? "retry" : "pause";
   }
   if (status === 0 || status >= 500) {
@@ -77,7 +80,8 @@ export function gmailFailureAction(
     }
     return attempt < 3 ? "retry" : "pause";
   }
-  if (status >= 400) return "recipient";
+  // Only a malformed request is the recipient's fault; any other refusal is about the account or the project.
+  if (status === 400 && (reason === null || reason === "badRequest" || reason === "invalidArgument")) return "recipient";
   return "pause";
 }
 
