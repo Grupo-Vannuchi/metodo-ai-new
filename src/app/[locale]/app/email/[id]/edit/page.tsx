@@ -5,6 +5,7 @@ import { emailComposerData, getEmailBroadcast, pickedTargets } from "@/lib/queri
 import { readAudience } from "@/lib/validations/email-broadcast";
 import { readAttachments } from "@/lib/email-broadcast/attachments";
 import { EmailComposer } from "@/components/email/email-composer";
+import { emailListHref, listChannelOf } from "@/lib/email-broadcast/list-channel";
 import { Link, redirect } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 
@@ -34,7 +35,7 @@ export default async function EditEmailPage({
     <div className="flex flex-col gap-6">
       <div>
         <p className="text-sm text-muted-foreground">
-          <Link href="/app/email" className="hover:underline">
+          <Link href={emailListHref(listChannelOf(b.channel))} className="hover:underline">
             {t("title")}
           </Link>{" "}
           / {t("editTitle")}

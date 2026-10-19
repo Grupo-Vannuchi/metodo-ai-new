@@ -24,9 +24,11 @@ export function countEmailsSentThisMonth(organizationId: string): Promise<number
   });
 }
 
-export async function listEmailBroadcasts(organizationId: string) {
+/** The sends list, optionally only one channel's sends (the E-mail page shows one at a time). */
+export async function listEmailBroadcasts(organizationId: string, channel?: "PLATFORM" | "MICROSOFT") {
   const db = tenantDb(organizationId);
   const rows = await db.emailBroadcast.findMany({
+    ...(channel ? { where: { channel } } : {}),
     orderBy: { createdAt: "desc" },
     take: 200,
     select: { id: true, subject: true, status: true, pausedReason: true, startedAt: true, updatedAt: true, channel: true, fromEmail: true },

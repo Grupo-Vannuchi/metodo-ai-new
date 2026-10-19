@@ -1902,6 +1902,8 @@
       "platformPoint2": "Up to {limit} e-mails a month",
       "platformPoint3": "Report with delivered and bounced",
       "platformContinue": "Continue through the platform",
+      "platformBrowse": "See platform sends",
+      "microsoftBrowse": "See Microsoft account sends",
       "microsoftTitle": "Through the Microsoft account",
       "microsoftBody": "Goes out from the company's Outlook or Microsoft 365 mailbox. Replies land there and every e-mail is saved in Sent Items.",
       "noneTitle": "No account connected",
@@ -2081,10 +2083,9 @@
       "delivered": "Delivered",
       "problems": "Problems",
       "date": "Date",
-      "from": "From",
-      "channelPlatform": "Platform",
-      "channelMicrosoft": "Microsoft account"
+      "from": "From"
     },
+    "listChannel": { "plataforma": "Platform sends", "microsoft": "Microsoft account sends" },
     "status": { "DRAFT": "Draft", "SENDING": "Sending", "PAUSED": "Paused", "DONE": "Done" },
     "paused": {
       "no_connection": "Send paused: the platform's e-mail sending isn't configured. Contact support.",

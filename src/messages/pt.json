@@ -1902,6 +1902,8 @@
       "platformPoint2": "Até {limit} e-mails por mês",
       "platformPoint3": "Relatório com entregues e devolvidos",
       "platformContinue": "Continuar pela plataforma",
+      "platformBrowse": "Ver envios pela plataforma",
+      "microsoftBrowse": "Ver envios pela conta Microsoft",
       "microsoftTitle": "Pela conta Microsoft",
       "microsoftBody": "Sai da caixa Outlook ou Microsoft 365 da empresa. As respostas chegam nessa caixa e cada e-mail fica salvo em Itens enviados.",
       "noneTitle": "Nenhuma conta conectada",
@@ -2081,10 +2083,9 @@
       "delivered": "Entregues",
       "problems": "Problemas",
       "date": "Data",
-      "from": "De",
-      "channelPlatform": "Plataforma",
-      "channelMicrosoft": "Conta Microsoft"
+      "from": "De"
     },
+    "listChannel": { "plataforma": "Envios pela plataforma", "microsoft": "Envios pela conta Microsoft" },
     "status": { "DRAFT": "Rascunho", "SENDING": "Enviando", "PAUSED": "Pausado", "DONE": "Concluído" },
     "paused": {
       "no_connection": "Envio pausado: o envio de e-mail da plataforma não está configurado. Fale com o suporte.",
