@@ -33,6 +33,14 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: allowedOrigins,
   experimental: {
     serverActions: { allowedOrigins },
+    /**
+     * Cap the build's worker processes. By default Next spawns one per CPU
+     * minus one — 63 on Hostinger's build machine — and on 19/10/2026 the
+     * "Collecting page data" step died there with SIGABRT: "OS can't spawn
+     * worker thread: Resource temporarily unavailable (os error 11)", i.e. the
+     * shared host's thread/process limit, not our code. 4 is plenty for ~145 pages.
+     */
+    cpus: 4,
   },
   images: {
     // Remote image sources. Add a tenant's CDN / avatar host here as needed.
