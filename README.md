@@ -360,6 +360,11 @@ isso a `main` exige PR e `enforce_admins` está ligado — sem isso, um push dir
    .prisma/client/query_compiler_bg.wasm`: login dá 500, `/app` e telas logadas mostram "This page
    couldn't load" (foi o que aconteceu em 01/10, entre 10:51 e a correção). O erro real só aparece em
    hPanel → Logs de execução; localmente não reproduz, porque o `node_modules` está inteiro.
+   **O build também precisa do `experimental.cpus: 4` do `next.config.ts`.** Sem ele, o Next abre um
+   processo por CPU (63 na máquina de build da Hostinger) para "Collecting page data", e em 19/10 o
+   deploy do PR #237 morreu ali com `SIGABRT` / `OS can't spawn worker thread: Resource temporarily
+   unavailable (os error 11)`: o limite de threads do servidor compartilhado, não o código. A falha
+   depende da carga da máquina (builds anteriores passaram com 63), por isso o limite fica fixo.
 
 ### Crons — só o `extractions` deve rodar
 
