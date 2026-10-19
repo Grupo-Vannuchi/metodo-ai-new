@@ -35,7 +35,7 @@ export default async function EmailPage({
   const format = await getFormatter();
   const configured = microsoftMailConfigured();
   // Entering E-mail always asks the channel first (no remembered choice).
-  const view = listChannelFromParam((await searchParams).canal, configured);
+  const view = listChannelFromParam((await searchParams).canal, { microsoft: configured, google: false });
   const limit = LIMITS.emailBroadcastQuotaPerMonth;
 
   const header = (newHref: string) => (
@@ -63,7 +63,9 @@ export default async function EmailPage({
 
   const microsoft = view === "microsoft";
   const [rows, domains, used, account] = await Promise.all([
-    listEmailBroadcasts(ctx.organizationId, broadcastChannelOf(view)),
+    // `view` is never "google" yet (the page passes google: false above); the cast goes away when
+    // listEmailBroadcasts accepts the Google channel.
+    listEmailBroadcasts(ctx.organizationId, broadcastChannelOf(view) as "PLATFORM" | "MICROSOFT"),
     microsoft ? Promise.resolve([] as string[]) : listSenderDomains(ctx.organizationId),
     microsoft ? Promise.resolve(0) : countEmailsSentThisMonth(ctx.organizationId),
     microsoft ? getSenderAccountView(ctx.organizationId) : Promise.resolve(null),
