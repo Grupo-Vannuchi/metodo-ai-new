@@ -195,7 +195,7 @@ Os códigos acima ficam numa função pura do Google, irmã de `graphFailureActi
   - motivo de falha: `failure.message_too_large`.
 
   Cada um ganha a versão Google, escolhida pelo canal do envio, do mesmo jeito que `provider_error_microsoft` já é escolhido hoje. pt e en com as mesmas chaves.
-- **Ícones:** depende do PR `feature/email-icones-provedores` (`ChannelIcon`). Se ele já estiver na `main`, o Google entra no mesmo componente.
+- **Ícones:** o `ChannelIcon` (já na `main`, PR dos ícones) ganha o canal `google`, com o "G" oficial do `ProviderMark`, usado no cartão e no título da lista Google.
 
 ## 8. Liberação gradual
 
