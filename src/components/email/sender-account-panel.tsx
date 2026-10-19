@@ -9,42 +9,96 @@ import { useRouter } from "@/i18n/navigation";
 import { disconnectSenderAccount } from "@/app/actions/email-sender-accounts";
 import type { SenderAccountView } from "@/lib/email-broadcast/types";
 
-/** Full navigation (not a client route): the API redirects to Microsoft. */
-const CONNECT_URL = "/api/email/microsoft/connect";
+type Provider = "MICROSOFT" | "GOOGLE";
+
+/** Full navigation (not a client route): the API redirects to the provider. */
+const CONNECT_URL: Record<Provider, string> = {
+  MICROSOFT: "/api/email/microsoft/connect",
+  GOOGLE: "/api/email/google/connect",
+};
+
+/** The i18n keys (under emailBroadcast.channel) that differ per provider; the rest is shared. */
+const TEXT: Record<
+  Provider,
+  {
+    noneBody: string;
+    consentNote: string;
+    connect: string;
+    switchConfirm: string;
+    disconnectConfirm: string;
+    disconnected: string;
+    reconnectBody: string;
+    kindPersonal: string;
+    kindWork: string;
+  }
+> = {
+  MICROSOFT: {
+    noneBody: "noneBody",
+    consentNote: "consentNote",
+    connect: "connect",
+    switchConfirm: "switchConfirm",
+    disconnectConfirm: "disconnectConfirm",
+    disconnected: "disconnected",
+    reconnectBody: "reconnectBody",
+    kindPersonal: "kindPersonal",
+    kindWork: "kindWork",
+  },
+  GOOGLE: {
+    noneBody: "googleNoneBody",
+    consentNote: "googleConsentNote",
+    connect: "googleConnect",
+    switchConfirm: "googleSwitchConfirm",
+    disconnectConfirm: "googleDisconnectConfirm",
+    disconnected: "googleDisconnected",
+    reconnectBody: "googleReconnectBody",
+    kindPersonal: "googleKindPersonal",
+    kindWork: "googleKindWork",
+  },
+};
 
 /**
- * The company's Microsoft sending account: connect (none), reconnect
+ * The company's sending account at one provider: connect (none), reconnect
  * (NEEDS_RECONNECT) or the connected mailbox with switch / disconnect.
  * `action` goes first in the connected mailbox's buttons.
  */
-export function MicrosoftAccountPanel({ account, action }: { account: SenderAccountView | null; action?: ReactNode }) {
+export function SenderAccountPanel({
+  provider,
+  account,
+  action,
+}: {
+  provider: Provider;
+  account: SenderAccountView | null;
+  action?: ReactNode;
+}) {
   const t = useTranslations("emailBroadcast");
   const format = useFormatter();
   const router = useRouter();
   const confirm = useConfirm();
   const toast = useToast();
   const [busy, start] = useTransition();
+  const connectUrl = CONNECT_URL[provider];
+  const text = TEXT[provider];
 
   async function onSwitch() {
     if (!account) return;
     const ok = await confirm({
-      description: t("channel.switchConfirm", { email: account.email }),
+      description: t(`channel.${text.switchConfirm}`, { email: account.email }),
       confirmLabel: t("channel.switchConfirmLabel"),
     });
-    if (ok) window.location.assign(new URL(CONNECT_URL, window.location.origin).href);
+    if (ok) window.location.assign(new URL(connectUrl, window.location.origin).href);
   }
 
   async function onDisconnect() {
     if (!account) return;
     const ok = await confirm({
-      description: t("channel.disconnectConfirm", { email: account.email }),
+      description: t(`channel.${text.disconnectConfirm}`, { email: account.email }),
       confirmLabel: t("channel.disconnect"),
       variant: "danger",
     });
     if (!ok) return;
     start(async () => {
-      const r = await disconnectSenderAccount("MICROSOFT");
-      if (r.ok) toast(t("channel.disconnected"));
+      const r = await disconnectSenderAccount(provider);
+      if (r.ok) toast(t(`channel.${text.disconnected}`));
       else toast(t("error.unknown"), { variant: "error" });
       router.refresh();
     });
@@ -54,11 +108,11 @@ export function MicrosoftAccountPanel({ account, action }: { account: SenderAcco
     return (
       <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border p-4">
         <p className="text-sm font-medium">{t("channel.noneTitle")}</p>
-        <p className="text-sm text-muted-foreground">{t("channel.noneBody")}</p>
-        <p className="text-xs text-muted-foreground">{t("channel.consentNote")}</p>
+        <p className="text-sm text-muted-foreground">{t(`channel.${text.noneBody}`)}</p>
+        <p className="text-xs text-muted-foreground">{t(`channel.${text.consentNote}`)}</p>
         <div>
-          <a href={CONNECT_URL} className={buttonVariants()}>
-            {t("channel.connect")}
+          <a href={connectUrl} className={buttonVariants()}>
+            {t(`channel.${text.connect}`)}
           </a>
         </div>
       </div>
@@ -69,9 +123,9 @@ export function MicrosoftAccountPanel({ account, action }: { account: SenderAcco
     return (
       <div className="flex flex-col gap-3 rounded-lg border border-red-300 bg-red-50 p-4 text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
         <p className="text-sm font-medium">{t("channel.reconnectTitle", { email: account.email })}</p>
-        <p className="text-sm">{t("channel.reconnectBody")}</p>
+        <p className="text-sm">{t(`channel.${text.reconnectBody}`)}</p>
         <div>
-          <a href={CONNECT_URL} className={buttonVariants()}>
+          <a href={connectUrl} className={buttonVariants()}>
             {t("channel.reconnect")}
           </a>
         </div>
@@ -92,7 +146,7 @@ export function MicrosoftAccountPanel({ account, action }: { account: SenderAcco
       </div>
       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
         <span className="rounded-full border border-border bg-card px-2.5 py-1">
-          {account.accountKind === "personal" ? t("channel.kindPersonal") : t("channel.kindWork")}
+          {account.accountKind === "personal" ? t(`channel.${text.kindPersonal}`) : t(`channel.${text.kindWork}`)}
         </span>
         <span className="rounded-full border border-border bg-card px-2.5 py-1">
           {t("channel.dailyLimit", { count: format.number(account.dailyLimit) })}

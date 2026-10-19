@@ -6,7 +6,7 @@ import {
   getEmailBroadcastReport,
   type ReportFilter,
 } from "@/lib/queries/email-broadcasts";
-import { pausedReasonKey, recipientFailure } from "@/lib/email-broadcast/failure-reason";
+import { pausedMessageKey, pausedReasonKey, recipientFailure } from "@/lib/email-broadcast/failure-reason";
 import { readStats } from "@/lib/validations/email-broadcast";
 import { attachmentSizeParts, readAttachments } from "@/lib/email-broadcast/attachments";
 import { composeEmail } from "@/lib/email-broadcast/compose";
@@ -22,10 +22,10 @@ import { cn } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 const PLATFORM_FILTERS: ReportFilter[] = ["all", "queued", "sent", "delivered", "problems"];
-const MICROSOFT_FILTERS: ReportFilter[] = ["all", "queued", "sent", "problems", "uncertain"];
+const MAILBOX_FILTERS: ReportFilter[] = ["all", "queued", "sent", "problems", "uncertain"];
 const PLATFORM_COUNTERS = ["QUEUED", "SENT", "DELIVERED", "BOUNCED", "COMPLAINED", "FAILED"] as const;
-const MICROSOFT_COUNTERS = ["QUEUED", "SENT", "FAILED", "UNCERTAIN"] as const;
-type Counter = (typeof PLATFORM_COUNTERS)[number] | (typeof MICROSOFT_COUNTERS)[number];
+const MAILBOX_COUNTERS = ["QUEUED", "SENT", "FAILED", "UNCERTAIN"] as const;
+type Counter = (typeof PLATFORM_COUNTERS)[number] | (typeof MAILBOX_COUNTERS)[number];
 const BAR_COLORS: Record<Counter, string> = {
   QUEUED: "bg-transparent",
   SENT: "bg-blue-500",
@@ -52,9 +52,11 @@ export default async function EmailReportPage({
   const b = await getEmailBroadcast(ctx.organizationId, id);
   if (!b) notFound();
   if (b.status === "DRAFT") redirect({ href: `/app/email/${id}/edit`, locale });
-  const microsoft = b.channel === "MICROSOFT";
-  const FILTERS = microsoft ? MICROSOFT_FILTERS : PLATFORM_FILTERS;
-  const COUNTERS: readonly Counter[] = microsoft ? MICROSOFT_COUNTERS : PLATFORM_COUNTERS;
+  // Microsoft and Google send from the company's own mailbox: same counters and filters, no delivery tracking.
+  const google = b.channel === "GOOGLE";
+  const mailbox = b.channel === "MICROSOFT" || google;
+  const FILTERS = mailbox ? MAILBOX_FILTERS : PLATFORM_FILTERS;
+  const COUNTERS: readonly Counter[] = mailbox ? MAILBOX_COUNTERS : PLATFORM_COUNTERS;
 
   const requested = (await searchParams).status ?? "all";
   const filter: ReportFilter = (FILTERS as string[]).includes(requested) ? (requested as ReportFilter) : "all";
@@ -108,8 +110,10 @@ export default async function EmailReportPage({
               {t("report.started", { date: format.dateTime(b.startedAt, { dateStyle: "short", timeStyle: "short" }) })}
             </p>
           ) : null}
-          {microsoft && b.fromEmail ? (
-            <p className="mt-1 text-sm text-muted-foreground">{t("report.viaMicrosoft", { email: b.fromEmail })}</p>
+          {mailbox && b.fromEmail ? (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t(google ? "report.viaGoogle" : "report.viaMicrosoft", { email: b.fromEmail })}
+            </p>
           ) : null}
         </div>
         <ReportActions id={b.id} canResume={canResume} />
@@ -117,14 +121,14 @@ export default async function EmailReportPage({
 
       {b.status === "PAUSED" && b.pausedReason ? (
         <p className="rounded-xl border border-red-300 bg-red-50 px-5 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
-          {microsoft && pausedReasonKey(b.pausedReason) === "provider_error"
-            ? t("paused.provider_error_microsoft")
-            : t(`paused.${pausedReasonKey(b.pausedReason)}`)}
+          {t(pausedMessageKey(b.channel, pausedReasonKey(b.pausedReason)))}
           {b.lastError ? <span title={b.lastError}> ({b.lastError.slice(0, 160)})</span> : null}
         </p>
       ) : null}
-      {microsoft ? (
-        <p className="text-sm text-muted-foreground">{t("report.noTrackingMicrosoft")}</p>
+      {mailbox ? (
+        <p className="text-sm text-muted-foreground">
+          {t(google ? "report.noTrackingGoogle" : "report.noTrackingMicrosoft")}
+        </p>
       ) : !deliveryTrackingConfigured() ? (
         <p className="text-sm text-muted-foreground">{t("report.noTracking")}</p>
       ) : null}
@@ -141,7 +145,7 @@ export default async function EmailReportPage({
           ))}
         </div>
         <div
-          className={cn("grid grid-cols-2 gap-3 sm:grid-cols-3", microsoft ? "lg:grid-cols-4" : "lg:grid-cols-6")}
+          className={cn("grid grid-cols-2 gap-3 sm:grid-cols-3", mailbox ? "lg:grid-cols-4" : "lg:grid-cols-6")}
         >
           {COUNTERS.map((s) => (
             <div key={s} className="flex flex-col gap-1 rounded-lg bg-muted/60 px-3 py-2">
