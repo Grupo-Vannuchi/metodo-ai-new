@@ -30,7 +30,8 @@ Esta fase deixa a empresa conectar a conta Google e enviar por ela, do mesmo jei
 | Pasta Enviados | Todo e-mail fica em Enviados do Gmail | usuário |
 | Motivo de falha | Em vermelho na lista e no relatório, em português, técnico ao passar o mouse | usuário |
 | Cota da plataforma | Envios pelo Google não contam | usuário |
-| Permissão pedida | Só "enviar e-mails em seu nome" (`gmail.send`) + identidade (`openid`, `email`). Nunca ler a caixa | usuário (aceitou "sem ler a caixa") |
+| Permissão pedida | Só "enviar e-mails em seu nome" (`gmail.send`) + identidade (`openid`, `email`, `profile`). Nunca ler a caixa | usuário (aceitou "sem ler a caixa"); `profile` é minha decisão, para o remetente sair com o nome da conta, como na Microsoft |
+| Conta Google sem Gmail | Recusada na conexão com mensagem própria; se o Gmail estiver desligado só no envio, o envio pausa inteiro com o motivo certo | minha decisão (seções 5 e 6.4) |
 | Lançamento | Construir já. Testar com as contas do usuário no **modo de teste** do Google. Pedir a aprovação em paralelo. Só liberar para os clientes depois da aprovação | usuário |
 | Limites estimados | Gmail pessoal **500**/24 h; Workspace **2.000**/24 h (um destinatário por mensagem, então o limite de mensagens é o que pesa) | minha decisão, pelos números oficiais (seção 6.3) |
 | Ritmo | O mesmo da Microsoft: 1 e-mail a cada 2,1 s por caixa (~28/min); a cota da API permite até ~60/min | minha decisão |
@@ -45,9 +46,9 @@ Esta fase deixa a empresa conectar a conta Google e enviar por ela, do mesmo jei
   - Até 100 usuários de teste cadastrados no projeto; para o piloto, as contas do usuário.
   - A autorização expira em **7 dias**.
   - **Não publicar em produção antes de aprovar.** Sem aprovação aparece a tela de "app não verificado" e há um teto **vitalício** de 100 contas novas no projeto, que não pode ser zerado.
-- **Escopos:** `openid`, `https://www.googleapis.com/auth/userinfo.email`, `https://www.googleapis.com/auth/gmail.send`.
+- **Escopos:** `openid`, `https://www.googleapis.com/auth/userinfo.email`, `https://www.googleapis.com/auth/userinfo.profile`, `https://www.googleapis.com/auth/gmail.send`.
   - `gmail.send` é escopo **sensível**, não restrito: exige a verificação padrão, sem auditoria de segurança paga.
-  - Os outros dois não são sensíveis.
+  - Os outros três não são sensíveis. O `profile` traz o nome da conta para o remetente.
 - **URIs de redirecionamento:** `https://metodotia.com/api/email/google/callback` e `http://localhost:3000/api/email/google/callback`. Montadas com `joinSiteUrl`, sem barra dupla.
 - **Variáveis novas, opcionais, declaradas em `src/lib/env.ts`:**
   - `GOOGLE_MAIL_CLIENT_ID` e `GOOGLE_MAIL_CLIENT_SECRET`. Sem as duas, a opção Google não aparece em lugar nenhum.
@@ -90,11 +91,13 @@ Teste de isolamento novo: empresa A com conta Google e Microsoft; empresa B não
   - `access_type=offline`, para receber o refresh token;
   - `prompt=consent select_account`: o Google só devolve o refresh token na primeira autorização, e o `consent` garante um novo a cada conexão; o `select_account` deixa escolher a conta.
 - **Permissão parcial.** O Google deixa a pessoa desmarcar permissões. Se o token voltar sem `gmail.send` no campo `scope`, a conexão é recusada com a mensagem "Marque a permissão de enviar e-mails para conectar" (código `missing_send`), e nada é gravado.
-- **Endereço e tipo de conta.** Vêm do ID token:
+- **Endereço, nome e tipo de conta.** Vêm do ID token:
   - `email`, que precisa ter `email_verified = true`;
+  - `name`: vira o `displayName` da conta e, como na Microsoft, o nome do remetente (`fromName`) congelado ao iniciar o envio;
   - `hd` (domínio hospedado): presente = Workspace (`work`); ausente = Gmail pessoal (`personal`).
 
   Nenhuma chamada extra à API do Gmail; o `users.getProfile` exigiria escopos maiores.
+- **Conta Google sem Gmail.** Sem `hd` e com endereço que não seja `@gmail.com` nem `@googlemail.com`, a conta é um login Google com e-mail de fora (por exemplo, `contato@empresa.com.br` hospedado na Hostinger) e não tem caixa Gmail. A conexão é recusada com o código `no_gmail` e a mensagem "Esta conta Google não tem Gmail. Conecte um Gmail ou uma conta do Google Workspace". Nada é gravado.
 - **Gravar e trocar a conta.** Igual à Microsoft, só que por provedor:
   - mesmo endereço = atualiza a linha;
   - endereço diferente = apaga a conta Google antiga da empresa e cria outra. Os envios ligados à antiga ficam sem conta e pausam até alguém retomar.
@@ -114,6 +117,7 @@ Teste de isolamento novo: empresa A com conta Google e Microsoft; empresa B não
   | `cancelled` | `access_denied` |
   | `admin_required` | `admin_policy_enforced`, ou o administrador do Workspace precisa liberar o app como confiável |
   | `missing_send` | permissão de envio desmarcada |
+  | `no_gmail` | conta Google sem caixa Gmail |
   | `not_configured` | variáveis faltando |
   | `failed` | qualquer outro |
 
@@ -163,6 +167,7 @@ O ramo `MICROSOFT` do despachante passa a usar o adaptador Microsoft; o ramo `GO
 | 429 "Too many concurrent requests" ou 403 `userRateLimitExceeded` / `rateLimitExceeded` | repete com espera (respeita `Retry-After` até 60 s) |
 | 403 `domainPolicy` | o administrador desligou apps do Gmail: pausa com `account_blocked` (texto Google) |
 | 403 `dailyLimitExceeded` | cota do **projeto** MétodoAI, não da caixa: pausa com `provider_error` |
+| 400 `failedPrecondition` ("Mail service not enabled") | a caixa não tem o Gmail ativo (por exemplo, Workspace com o Gmail desligado para o usuário): o destinatário volta para a fila, sem falha, e o envio inteiro pausa com `account_blocked` (texto Google que cita "Gmail não está ativo nesta conta") |
 | 400 `badRequest` / `invalidArgument` | falha só esse destinatário (endereço recusado) e segue |
 | 0 / timeout / 500 / 502 / 504 na chamada de entrega | `UNCERTAIN`, sem reenvio (mesma regra da Microsoft) |
 | 503 | repete como o 429 |
@@ -229,6 +234,7 @@ O escopo é o menor possível: só envio, sem leitura.
   - classificação das falhas do Gmail;
   - escolha do caminho do envio (≤ 5 MB direto, acima retomável);
   - permissão parcial (`missing_send`);
+  - conta sem Gmail (`no_gmail`) e `failedPrecondition` pausando o envio sem marcar falha;
   - lista por canal com `google`.
 - **`check:isolation`:** duas contas por empresa (seção 4).
 - **As cinco validações de sempre.**
