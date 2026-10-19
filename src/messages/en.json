@@ -1895,7 +1895,6 @@
   },
   "emailBroadcast": {
     "channel": {
-      "title": "Where should this e-mail go out from?",
       "platformTitle": "Through the platform",
       "platformBody": "Goes out through MétodoAI from an address on a domain enabled for your company. The usual way.",
       "platformPoint1": "You type the sender name and address",

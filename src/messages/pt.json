@@ -1895,7 +1895,6 @@
   },
   "emailBroadcast": {
     "channel": {
-      "title": "Por onde este e-mail vai sair?",
       "platformTitle": "Pela plataforma",
       "platformBody": "Sai pelo MétodoAI com um endereço de um domínio liberado para a empresa. É o envio de sempre.",
       "platformPoint1": "Você digita o nome e o endereço de envio",
