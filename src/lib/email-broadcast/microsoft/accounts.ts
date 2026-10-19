@@ -1,7 +1,7 @@
 import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
+import { sealSenderCredentials, type SenderCredentials } from "../mailbox/token";
 import type { MicrosoftAccountKind } from "./core";
-import { sealMicrosoftCredentials, type MicrosoftCredentials } from "./token";
 
 /**
  * Save the mailbox a company just connected. The same mailbox again keeps the
@@ -12,21 +12,21 @@ import { sealMicrosoftCredentials, type MicrosoftCredentials } from "./token";
 export async function saveMicrosoftAccount(
   organizationId: string,
   userId: string,
-  input: { email: string; displayName: string | null; accountKind: MicrosoftAccountKind; credentials: MicrosoftCredentials },
+  input: { email: string; displayName: string | null; accountKind: MicrosoftAccountKind; credentials: SenderCredentials },
 ): Promise<{ id: string; replaced: boolean }> {
   const email = input.email.trim().toLowerCase();
   const data = {
     email,
     displayName: input.displayName,
     accountKind: input.accountKind,
-    credentials: sealMicrosoftCredentials(input.credentials),
+    credentials: sealSenderCredentials(input.credentials),
     status: "ACTIVE" as const,
     lastError: null,
     connectedById: userId,
   };
   return tenantDb(organizationId).$transaction(
     async (tx) => {
-      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${`email_sender:${organizationId}`}))`;
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${`email_sender:${organizationId}:MICROSOFT`}))`;
       const current = await tx.emailSenderAccount.findFirst({
         where: { organizationId, provider: "MICROSOFT" },
         select: { id: true, email: true },

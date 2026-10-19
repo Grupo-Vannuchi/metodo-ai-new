@@ -5,7 +5,7 @@ import { MAILBOX_PACE_MS, remainingToday, sentLast24hWhere } from "../mailbox/co
 import { graphFailureAction, microsoftDailyLimit } from "./core";
 import type { MimeFile, MimeMail } from "./mime";
 import { sendMicrosoftMail } from "./send";
-import { getMicrosoftAccessToken, markNeedsReconnect } from "./token";
+import { getSenderAccessToken, markNeedsReconnect } from "../mailbox/token";
 
 export type MicrosoftPauseReason = "daily_limit" | "reconnect" | "no_sender_account" | "account_blocked" | "provider_error";
 type Recipient = { id: string; email: string; name: string | null; companyName: string | null };
@@ -104,7 +104,7 @@ export async function runMicrosoftBroadcast(run: MicrosoftRun): Promise<{ done: 
       return { done: true };
     }
 
-    let token = await getMicrosoftAccessToken(org, account.id);
+    let token = await getSenderAccessToken(org, account.id, "MICROSOFT");
     if (!token.ok) {
       if (token.reason === "reconnect") {
         await run.pause("reconnect", token.message);
@@ -157,7 +157,7 @@ export async function runMicrosoftBroadcast(run: MicrosoftRun): Promise<{ done: 
       const action = graphFailureAction(res.status, res.code, attempt, res.stage);
       if ((action === "refresh" || res.status === 401) && !refreshed) {
         refreshed = true;
-        const again = await getMicrosoftAccessToken(org, account.id, { force: true });
+        const again = await getSenderAccessToken(org, account.id, "MICROSOFT", { force: true });
         if (again.ok) {
           token = again;
           attempt++;
