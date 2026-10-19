@@ -25,7 +25,9 @@ de minutos depois, na fila do CI.
 
 **Checagem de módulo (fora das cinco):** `npm run check:email` roda as asserções das funções puras do
 submenu E-mail (normalização, deduplicação, renderização, assinatura Svix, transições de status, domínio do remetente,
-espera da nova tentativa do e-mail transacional). Não usa banco nem rede. Rode sempre que mexer em `src/lib/email-broadcast/`.
+espera da nova tentativa do e-mail transacional, as regras do envio pela conta Microsoft (tipo de conta, limite diário,
+caminho direto ou rascunho, faixas do upload, decisão sobre falhas do Graph), a montagem do MIME e os motivos de
+falha em português). Não usa banco nem rede. Rode sempre que mexer em `src/lib/email-broadcast/`.
 
 `npm run check:tasks` faz o mesmo para as regras puras do kanban de Tarefas
 ([src/lib/tasks/board-core.ts](../../src/lib/tasks/board-core.ts): distribuição inicial por data no
@@ -83,6 +85,9 @@ qualquer um dos dois grupos declarar `engines.node` incompatível com o major do
 
 Quando falhar: troque a dependência por uma que suporte Node 20, ou fixe uma versão anterior dela
 no `package.json`. Não há como "ignorar e seguir" — quebraria só no deploy, sem sintoma local.
+
+Exemplo: `nodemailer` (só usado como montador de MIME para o envio pela conta Microsoft, nunca por SMTP) exige
+Node >= 20; por isso cabe na árvore de produção.
 
 ## `lint`: os avisos conhecidos
 

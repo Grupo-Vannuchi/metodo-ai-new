@@ -6,6 +6,7 @@ import {
   getEmailBroadcastReport,
   type ReportFilter,
 } from "@/lib/queries/email-broadcasts";
+import { pausedReasonKey, recipientFailure } from "@/lib/email-broadcast/failure-reason";
 import { readStats } from "@/lib/validations/email-broadcast";
 import { attachmentSizeParts, readAttachments } from "@/lib/email-broadcast/attachments";
 import { composeEmail } from "@/lib/email-broadcast/compose";
@@ -19,15 +20,19 @@ import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-const FILTERS: ReportFilter[] = ["all", "queued", "sent", "delivered", "problems"];
-const COUNTER_ORDER = ["QUEUED", "SENT", "DELIVERED", "BOUNCED", "COMPLAINED", "FAILED"] as const;
-const BAR_COLORS: Record<(typeof COUNTER_ORDER)[number], string> = {
+const PLATFORM_FILTERS: ReportFilter[] = ["all", "queued", "sent", "delivered", "problems"];
+const MICROSOFT_FILTERS: ReportFilter[] = ["all", "queued", "sent", "problems", "uncertain"];
+const PLATFORM_COUNTERS = ["QUEUED", "SENT", "DELIVERED", "BOUNCED", "COMPLAINED", "FAILED"] as const;
+const MICROSOFT_COUNTERS = ["QUEUED", "SENT", "FAILED", "UNCERTAIN"] as const;
+type Counter = (typeof PLATFORM_COUNTERS)[number] | (typeof MICROSOFT_COUNTERS)[number];
+const BAR_COLORS: Record<Counter, string> = {
   QUEUED: "bg-transparent",
   SENT: "bg-blue-500",
   DELIVERED: "bg-green-600",
   BOUNCED: "bg-red-600",
   COMPLAINED: "bg-amber-600",
   FAILED: "bg-red-400",
+  UNCERTAIN: "bg-amber-500",
 };
 
 export default async function EmailReportPage({
@@ -46,13 +51,18 @@ export default async function EmailReportPage({
   const b = await getEmailBroadcast(ctx.organizationId, id);
   if (!b) notFound();
   if (b.status === "DRAFT") redirect({ href: `/app/email/${id}/edit`, locale });
+  const microsoft = b.channel === "MICROSOFT";
+  const FILTERS = microsoft ? MICROSOFT_FILTERS : PLATFORM_FILTERS;
+  const COUNTERS: readonly Counter[] = microsoft ? MICROSOFT_COUNTERS : PLATFORM_COUNTERS;
 
   const requested = (await searchParams).status ?? "all";
   const filter: ReportFilter = (FILTERS as string[]).includes(requested) ? (requested as ReportFilter) : "all";
   const { counts, recipients, canResume } = await getEmailBroadcastReport(ctx.organizationId, id, filter);
 
-  const total = COUNTER_ORDER.reduce((n, s) => n + counts[s], 0);
-  const processed = total - counts.QUEUED;
+  // SENDING is a recipient in flight: shown inside "Na fila".
+  const shown = (s: Counter) => (s === "QUEUED" ? counts.QUEUED + counts.SENDING : counts[s]);
+  const total = Object.values(counts).reduce((n, c) => n + c, 0);
+  const processed = total - counts.QUEUED - counts.SENDING;
   const stats = readStats(b.stats);
   const attachments = readAttachments(b.attachments);
   const sizeLabel = (bytes: number) => {
@@ -61,10 +71,11 @@ export default async function EmailReportPage({
   };
   const filterCount: Record<ReportFilter, number> = {
     all: total,
-    queued: counts.QUEUED,
+    queued: counts.QUEUED + counts.SENDING,
     sent: counts.SENT,
     delivered: counts.DELIVERED,
     problems: counts.BOUNCED + counts.COMPLAINED + counts.FAILED,
+    uncertain: counts.UNCERTAIN,
   };
   // Preview of what went out, with the tokens left visible.
   const preview = composeEmail({
@@ -96,24 +107,31 @@ export default async function EmailReportPage({
               {t("report.started", { date: format.dateTime(b.startedAt, { dateStyle: "short", timeStyle: "short" }) })}
             </p>
           ) : null}
+          {microsoft && b.fromEmail ? (
+            <p className="mt-1 text-sm text-muted-foreground">{t("report.viaMicrosoft", { email: b.fromEmail })}</p>
+          ) : null}
         </div>
         <ReportActions id={b.id} canResume={canResume} />
       </div>
 
       {b.status === "PAUSED" && b.pausedReason ? (
-        <p className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-          {t(`paused.${b.pausedReason}`)}
-          {b.lastError ? ` (${b.lastError})` : ""}
+        <p className="rounded-xl border border-red-300 bg-red-50 px-5 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+          {microsoft && pausedReasonKey(b.pausedReason) === "provider_error"
+            ? t("paused.provider_error_microsoft")
+            : t(`paused.${pausedReasonKey(b.pausedReason)}`)}
+          {b.lastError ? <span title={b.lastError}> ({b.lastError.slice(0, 160)})</span> : null}
         </p>
       ) : null}
-      {!deliveryTrackingConfigured() ? (
+      {microsoft ? (
+        <p className="text-sm text-muted-foreground">{t("report.noTrackingMicrosoft")}</p>
+      ) : !deliveryTrackingConfigured() ? (
         <p className="text-sm text-muted-foreground">{t("report.noTracking")}</p>
       ) : null}
 
       <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-6">
         <p className="font-semibold tabular-nums">{t("report.processed", { done: processed, total })}</p>
         <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
-          {COUNTER_ORDER.filter((s) => s !== "QUEUED").map((s) => (
+          {COUNTERS.filter((s) => s !== "QUEUED").map((s) => (
             <div
               key={s}
               className={BAR_COLORS[s]}
@@ -121,11 +139,13 @@ export default async function EmailReportPage({
             />
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {COUNTER_ORDER.map((s) => (
+        <div
+          className={cn("grid grid-cols-2 gap-3 sm:grid-cols-3", microsoft ? "lg:grid-cols-4" : "lg:grid-cols-6")}
+        >
+          {COUNTERS.map((s) => (
             <div key={s} className="flex flex-col gap-1 rounded-lg bg-muted/60 px-3 py-2">
               <span className="text-xs text-muted-foreground">{t(`report.counters.${s}`)}</span>
-              <span className="text-xl font-bold tabular-nums">{format.number(counts[s])}</span>
+              <span className="text-xl font-bold tabular-nums">{format.number(shown(s))}</span>
             </div>
           ))}
         </div>
@@ -185,7 +205,14 @@ export default async function EmailReportPage({
                   </td>
                   <td className="px-5 py-3">
                     <StatusBadge status={r.status} label={t(`report.counters.${r.status}`)} />
-                    {r.error ? <div className="mt-1 max-w-sm text-xs text-red-600">{r.error}</div> : null}
+                    {(() => {
+                      const failure = recipientFailure(r.error);
+                      return failure ? (
+                        <div title={failure.technical} className="mt-1 max-w-sm text-xs text-red-600">
+                          {t(`failure.${failure.key}`)}
+                        </div>
+                      ) : null;
+                    })()}
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">
                     {format.dateTime(r.updatedAt, { dateStyle: "short", timeStyle: "short" })}

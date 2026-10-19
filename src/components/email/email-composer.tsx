@@ -15,13 +15,20 @@ import { AudienceSummary } from "@/components/email/audience-summary";
 import { EmailAttachments } from "@/components/email/email-attachments";
 import { SignaturePreview } from "@/components/email/signature-preview";
 import { estimateAttachmentSendMinutes } from "@/lib/email-broadcast/attachments";
+import { microsoftSendMinutes } from "@/lib/email-broadcast/microsoft/core";
 import {
   previewEmailAudience,
   saveEmailDraft,
   startEmailBroadcast,
   type EmailActionFail,
 } from "@/app/actions/email-broadcasts";
-import type { AudiencePreview, ComposerDraft, ComposerOptions, SignatureOption } from "@/lib/email-broadcast/types";
+import type {
+  AudiencePreview,
+  ComposerDraft,
+  ComposerOptions,
+  SenderAccountView,
+  SignatureOption,
+} from "@/lib/email-broadcast/types";
 
 /** New/edit screen of a mass e-mail: message on the left, recipients + summary on the right. */
 export function EmailComposer({
@@ -30,12 +37,14 @@ export function EmailComposer({
   allowedDomains,
   quota,
   signatures,
+  microsoft,
 }: {
   draft: ComposerDraft;
   options: ComposerOptions;
   allowedDomains: string[];
   quota: { used: number; limit: number };
   signatures: SignatureOption[];
+  microsoft: SenderAccountView | null;
 }) {
   const t = useTranslations("emailBroadcast");
   const router = useRouter();
@@ -61,9 +70,11 @@ export function EmailComposer({
   const [busy, startBusy] = useTransition();
 
   const imageSupport = useEmailImageSupport();
-  const noDomains = allowedDomains.length === 0;
-  const fromAllowed = isSenderAllowed(fromEmail, allowedDomains);
-  const fromProblem = fromEmail.trim() !== "" && !fromAllowed;
+  const isMicrosoft = draft.channel === "MICROSOFT";
+  const microsoftReady = isMicrosoft && microsoft?.status === "ACTIVE";
+  const noDomains = !isMicrosoft && allowedDomains.length === 0;
+  const fromAllowed = isMicrosoft || isSenderAllowed(fromEmail, allowedDomains);
+  const fromProblem = !isMicrosoft && fromEmail.trim() !== "" && !fromAllowed;
 
   // Live summary, debounced; state only changes inside the timeout.
   useEffect(() => {
@@ -99,6 +110,7 @@ export function EmailComposer({
     audience,
     attachments,
     signatureId: effectiveSignatureId,
+    channel: draft.channel,
   });
   const errorText = (r: EmailActionFail) =>
     r.error === "quota"
@@ -140,6 +152,10 @@ export function EmailComposer({
 
   function onSend() {
     startBusy(guarded(async () => {
+      if (isMicrosoft && !microsoftReady) {
+        toast(t("error.sender_account_reconnect"), { variant: "error" });
+        return;
+      }
       if (!fromAllowed) {
         toast(t(fromEmail.trim() ? "error.domain_not_allowed" : "error.from_required"), { variant: "error" });
         return;
@@ -158,9 +174,25 @@ export function EmailComposer({
       }
       const minutes = estimateAttachmentSendMinutes(s.total);
       const timing =
-        attachments.length === 0
+        isMicrosoft || attachments.length === 0
           ? ""
           : ` ${minutes === 0 ? t("confirmAttachmentsQuick") : t("confirmAttachments", { minutes })}`;
+      const nowCount = microsoft ? Math.min(s.total, microsoft.remaining) : s.total;
+      const microsoftText =
+        isMicrosoft && microsoft
+          ? ` ${[
+              s.total > microsoft.remaining
+                ? t("confirmMicrosoftPartial", {
+                    now: nowCount,
+                    total: s.total,
+                    limit: microsoft.dailyLimit,
+                    sent: microsoft.sentLast24h,
+                  })
+                : t("confirmMicrosoftAll", { total: s.total }),
+              t("confirmMicrosoftPace", { minutes: microsoftSendMinutes(nowCount) }),
+              t("confirmMicrosoftSentItems", { email: microsoft.email }),
+            ].join(" ")}`
+          : "";
       const ok = await confirm({
         title: t("confirmTitle", { count: s.total }),
         description:
@@ -169,7 +201,9 @@ export function EmailComposer({
             duplicates: s.duplicates,
             suppressed: s.suppressed,
             invalid: s.invalid,
-          }) + timing,
+          }) +
+          timing +
+          microsoftText,
         confirmLabel: t("confirmSend", { count: s.total }),
       });
       if (!ok) return;
@@ -192,30 +226,56 @@ export function EmailComposer({
             <span className="font-medium">{t("domains.noneTitle")}.</span> {t("domains.noneBody")}
           </p>
         ) : null}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="fromName">{t("fromName")}</Label>
-            <Input id="fromName" value={fromName} maxLength={100} onChange={(e) => setFromName(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="fromEmail">{t("fromEmail")}</Label>
-            <Input
-              id="fromEmail"
-              type="email"
-              value={fromEmail}
-              maxLength={254}
-              placeholder={t("fromEmailPlaceholder")}
-              aria-invalid={fromProblem}
-              onChange={(e) => setFromEmail(e.target.value)}
-            />
-            {fromProblem ? <p className="mt-1 text-xs text-red-600">{t("domains.notAllowed")}</p> : null}
-            {!noDomains ? (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t("domains.hint", { domains: allowedDomains.join(", ") })}
-              </p>
+        {isMicrosoft ? (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-sm font-medium">{t("fromMicrosoft")}</span>
+              <Link href="/app/email/new" className="text-sm font-medium text-brand hover:underline">
+                {t("switchChannel")}
+              </Link>
+            </div>
+            {microsoft ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-2.5 text-sm">
+                <span className="min-w-0 truncate">
+                  {microsoft.displayName ? `${microsoft.displayName} <${microsoft.email}>` : microsoft.email}
+                </span>
+                <span className="ml-auto rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-medium text-brand">
+                  {t("microsoftChip")}
+                </span>
+              </div>
             ) : null}
+            {microsoftReady ? (
+              <p className="text-xs text-muted-foreground">{t("fromMicrosoftHint")}</p>
+            ) : (
+              <p className="text-xs text-red-600">{t("microsoftMissing")}</p>
+            )}
           </div>
-        </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="fromName">{t("fromName")}</Label>
+              <Input id="fromName" value={fromName} maxLength={100} onChange={(e) => setFromName(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="fromEmail">{t("fromEmail")}</Label>
+              <Input
+                id="fromEmail"
+                type="email"
+                value={fromEmail}
+                maxLength={254}
+                placeholder={t("fromEmailPlaceholder")}
+                aria-invalid={fromProblem}
+                onChange={(e) => setFromEmail(e.target.value)}
+              />
+              {fromProblem ? <p className="mt-1 text-xs text-red-600">{t("domains.notAllowed")}</p> : null}
+              {!noDomains ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t("domains.hint", { domains: allowedDomains.join(", ") })}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        )}
         <div>
           <Label htmlFor="replyTo">
             {t("replyTo")} <span className="font-normal text-muted-foreground">{t("optional")}</span>
@@ -313,7 +373,7 @@ export function EmailComposer({
           onPickedChange={setPicked}
           onReadingChange={setReadingSheet}
         />
-        <AudienceSummary preview={preview} quota={quota}>
+        <AudienceSummary preview={preview} quota={isMicrosoft ? null : quota}>
           <div className="flex flex-wrap gap-3">
             <Button
               type="button"
@@ -328,7 +388,14 @@ export function EmailComposer({
               type="button"
               className="flex-1"
               onClick={onSend}
-              disabled={busy || uploading || readingSheet || fromProblem || preview?.stats.total === 0}
+              disabled={
+                busy ||
+                uploading ||
+                readingSheet ||
+                fromProblem ||
+                preview?.stats.total === 0 ||
+                (isMicrosoft && !microsoftReady)
+              }
             >
               {busy ? t("working") : t("reviewSend")}
             </Button>

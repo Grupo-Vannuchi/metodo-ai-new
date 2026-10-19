@@ -11,6 +11,7 @@ import ExcelJS from "exceljs";
 import { isValidEmail, normalizeEmail, parseEmailList } from "../src/lib/email-broadcast/normalize";
 import { mergeCandidates, type Candidate } from "../src/lib/email-broadcast/audience-core";
 import { transactionalRetryDelayMs } from "../src/lib/email/retry-after";
+import { buildMime } from "../src/lib/email-broadcast/microsoft/mime";
 import {
   buildEmailDocument,
   fillHtmlVars,
@@ -70,6 +71,28 @@ import {
   xlsxCellTexts,
 } from "../src/lib/email-broadcast/spreadsheet";
 import { EMPTY_AUDIENCE, audienceSelectionSchema } from "../src/lib/validations/email-broadcast";
+import {
+  INTERRUPTED_ERROR,
+  listReason,
+  microsoftRecipientError,
+  pausedReasonKey,
+  recipientFailure,
+} from "../src/lib/email-broadcast/failure-reason";
+import {
+  MICROSOFT_CONSUMER_TENANT_ID,
+  UPLOAD_CHUNK_BYTES,
+  accountKindFromTid,
+  attachmentUploadMode,
+  graphFailureAction,
+  joinSiteUrl,
+  microsoftConsentError,
+  microsoftDailyLimit,
+  microsoftSendMinutes,
+  microsoftSendPath,
+  remainingToday,
+  sentLast24hWhere,
+  uploadRanges,
+} from "../src/lib/email-broadcast/microsoft/core";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -746,6 +769,153 @@ check("audience schema keeps old drafts and caps typed + imported at 5,000", () 
   assert.ok(!audienceSelectionSchema.safeParse({ imports: files(MAX_IMPORTS + 1) }).success);
 });
 
+// --- Microsoft channel ---------------------------------------------------------
+check("accountKindFromTid tells a personal account from Microsoft 365", () => {
+  assert.equal(accountKindFromTid(MICROSOFT_CONSUMER_TENANT_ID), "personal");
+  assert.equal(accountKindFromTid(MICROSOFT_CONSUMER_TENANT_ID.toUpperCase()), "personal");
+  assert.equal(accountKindFromTid("3a6f5659-ec46-4740-b69c-8eb97d2dd677"), "work");
+  assert.equal(accountKindFromTid(undefined), "work");
+});
+
+check("microsoftDailyLimit and remainingToday", () => {
+  assert.equal(microsoftDailyLimit("personal"), 300);
+  assert.equal(microsoftDailyLimit("work"), 10_000);
+  assert.equal(microsoftDailyLimit("anything"), 10_000);
+  assert.equal(remainingToday(300, 120), 180);
+  assert.equal(remainingToday(300, 300), 0);
+  assert.equal(remainingToday(300, 450), 0);
+  assert.equal(remainingToday(300, -5), 300);
+});
+
+check("sentLast24hWhere counts SENT, SENDING and UNCERTAIN of one account since 24 h ago", () => {
+  const now = new Date("2026-10-15T12:00:00Z");
+  const w = sentLast24hWhere("acc1", now);
+  assert.deepEqual(w.status.in, ["SENT", "SENDING", "UNCERTAIN"]);
+  assert.equal(w.sentAt.gte.toISOString(), "2026-10-14T12:00:00.000Z");
+  assert.deepEqual(w.broadcast, { senderAccountId: "acc1" });
+});
+
+check("microsoftSendMinutes rounds up at ~28 per minute", () => {
+  assert.equal(microsoftSendMinutes(0), 1);
+  assert.equal(microsoftSendMinutes(28), 1);
+  assert.equal(microsoftSendMinutes(29), 2);
+  assert.equal(microsoftSendMinutes(300), 11);
+});
+
+check("microsoftSendPath goes direct only when the request fits", () => {
+  assert.equal(microsoftSendPath(0, null), "direct");
+  assert.equal(microsoftSendPath(0, 3_900_000), "direct");
+  assert.equal(microsoftSendPath(0, 3_900_001), "draft");
+  assert.equal(microsoftSendPath(2_200_000, 3_000_000), "direct");
+  assert.equal(microsoftSendPath(2_200_001, null), "draft");
+});
+
+check("attachmentUploadMode and uploadRanges follow Graph's 3 MB / 320 KiB rules", () => {
+  assert.equal(attachmentUploadMode(3 * 1024 * 1024 - 1), "inline");
+  assert.equal(attachmentUploadMode(3 * 1024 * 1024), "session");
+  assert.equal(UPLOAD_CHUNK_BYTES % (320 * 1024), 0);
+  assert.ok(UPLOAD_CHUNK_BYTES < 4 * 1024 * 1024);
+  assert.deepEqual(uploadRanges(10, 4), [
+    { start: 0, end: 3 },
+    { start: 4, end: 7 },
+    { start: 8, end: 9 },
+  ]);
+  assert.deepEqual(uploadRanges(8, 4), [
+    { start: 0, end: 3 },
+    { start: 4, end: 7 },
+  ]);
+  assert.deepEqual(uploadRanges(0, 4), []);
+});
+
+check("graphFailureAction maps Graph answers to dispatcher moves", () => {
+  assert.equal(graphFailureAction(401, "InvalidAuthenticationToken", 0, "send"), "refresh");
+  assert.equal(graphFailureAction(401, null, 1, "send"), "reconnect");
+  assert.equal(graphFailureAction(403, "ErrorAccessDenied", 0, "prepare"), "reconnect");
+  assert.equal(graphFailureAction(403, "ErrorMessageSubmissionBlocked", 0, "send"), "blocked");
+  assert.equal(graphFailureAction(403, "SomethingElse", 0, "send"), "pause");
+  assert.equal(graphFailureAction(400, "ErrorExceededMessageLimit", 0, "send"), "daily_limit");
+  assert.equal(graphFailureAction(429, null, 0, "send"), "retry");
+  assert.equal(graphFailureAction(429, null, 5, "send"), "pause");
+  assert.equal(graphFailureAction(503, null, 2, "send"), "retry");
+  assert.equal(graphFailureAction(503, null, 3, "send"), "pause");
+  assert.equal(graphFailureAction(0, null, 0, "send"), "uncertain");
+  assert.equal(graphFailureAction(504, null, 0, "send"), "uncertain");
+  assert.equal(graphFailureAction(500, null, 0, "send"), "uncertain");
+  assert.equal(graphFailureAction(502, null, 0, "send"), "uncertain");
+  assert.equal(graphFailureAction(503, null, 0, "send"), "retry");
+  assert.equal(graphFailureAction(500, null, 0, "prepare"), "retry");
+  assert.equal(graphFailureAction(0, null, 0, "prepare"), "retry");
+  assert.equal(graphFailureAction(0, null, 3, "prepare"), "pause");
+  assert.equal(graphFailureAction(413, null, 0, "prepare"), "pause");
+  assert.equal(graphFailureAction(400, "ErrorMessageSizeExceeded", 0, "send"), "pause");
+  assert.equal(graphFailureAction(400, "ErrorInvalidRecipients", 0, "send"), "recipient");
+});
+
+check("microsoftConsentError reads the provider's error", () => {
+  assert.equal(microsoftConsentError("access_denied", "AADSTS65004: User declined to consent"), "cancelled");
+  assert.equal(microsoftConsentError("access_denied", "AADSTS90094: admin approval required"), "admin_required");
+  assert.equal(microsoftConsentError("consent_required", "AADSTS65001: needs consent"), "admin_required");
+  assert.equal(microsoftConsentError("server_error", ""), "failed");
+});
+
+check("joinSiteUrl never doubles the slash", () => {
+  assert.equal(
+    joinSiteUrl("https://metodotia.com/", "/api/email/microsoft/callback"),
+    "https://metodotia.com/api/email/microsoft/callback",
+  );
+  assert.equal(joinSiteUrl("https://metodotia.com", "api/x"), "https://metodotia.com/api/x");
+  assert.equal(joinSiteUrl("http://localhost:3000//", "/api/x"), "http://localhost:3000/api/x");
+});
+
+// --- failure reasons -----------------------------------------------------------
+check("pausedReasonKey keeps known reasons and folds the rest into provider_error", () => {
+  assert.equal(pausedReasonKey("daily_limit"), "daily_limit");
+  assert.equal(pausedReasonKey("quota"), "quota");
+  assert.equal(pausedReasonKey("something_new"), "provider_error");
+  assert.equal(pausedReasonKey(null), "provider_error");
+});
+
+check("microsoftRecipientError stores code and message, capped at 500", () => {
+  assert.equal(microsoftRecipientError("ErrorInvalidRecipients", "bad"), "ms:ErrorInvalidRecipients|bad");
+  assert.equal(microsoftRecipientError(null, "x"), "ms:unknown|x");
+  assert.equal(microsoftRecipientError("C", "y".repeat(600)).length, 500);
+});
+
+check("recipientFailure translates stored errors and keeps the technical text", () => {
+  assert.equal(recipientFailure(null), null);
+  assert.equal(recipientFailure(""), null);
+  assert.deepEqual(recipientFailure(INTERRUPTED_ERROR), { key: "interrupted", technical: "interrupted" });
+  assert.deepEqual(recipientFailure("ms:ErrorInvalidRecipients|At least one recipient is not valid."), {
+    key: "invalid_address",
+    technical: "ErrorInvalidRecipients: At least one recipient is not valid.",
+  });
+  assert.deepEqual(recipientFailure("ms:ErrorMessageSizeExceeded|too big"), {
+    key: "message_too_large",
+    technical: "ErrorMessageSizeExceeded: too big",
+  });
+  assert.deepEqual(recipientFailure("ms:Weird|x"), { key: "generic", technical: "Weird: x" });
+  assert.equal(recipientFailure("Invalid `to` field. The email address needs to follow...")?.key, "invalid_address");
+  assert.deepEqual(recipientFailure("Resend 500"), { key: "generic", technical: "Resend 500" });
+});
+
+check("listReason picks the red line of the sends list", () => {
+  assert.deepEqual(listReason({ status: "PAUSED", pausedReason: "daily_limit", problems: 0, uncertain: 0 }), {
+    kind: "paused",
+    reason: "daily_limit",
+  });
+  assert.deepEqual(listReason({ status: "PAUSED", pausedReason: null, problems: 3, uncertain: 0 }), {
+    kind: "paused",
+    reason: "provider_error",
+  });
+  assert.deepEqual(listReason({ status: "DONE", pausedReason: null, problems: 12, uncertain: 1 }), {
+    kind: "problems",
+    failed: 12,
+    uncertain: 1,
+  });
+  assert.equal(listReason({ status: "DONE", pausedReason: null, problems: 0, uncertain: 0 }), null);
+  assert.equal(listReason({ status: "DRAFT", pausedReason: null, problems: 0, uncertain: 0 }), null);
+});
+
 async function checkAsync(name: string, fn: () => Promise<void>): Promise<void> {
   await fn();
   passed++;
@@ -773,6 +943,55 @@ async function main() {
 
   await checkAsync("xlsxCellTexts rejects a file that isn't an .xlsx", async () => {
     await assert.rejects(xlsxCellTexts(ExcelJS, new TextEncoder().encode("ana@x.com").buffer as ArrayBuffer));
+  });
+
+  await checkAsync("buildMime encodes accents and keeps the unsubscribe headers and both parts", async () => {
+    const acc = String.fromCharCode(0xe7, 0xe3); // the two accented letters of "çã"
+    const mime = (
+      await buildMime({
+        from: { name: `Loja Solu${acc}o`, address: "contato@loja.com" },
+        to: "ana@x.com",
+        replyTo: "resp@loja.com",
+        subject: `Promo${acc}o de outubro`,
+        html: "<p>Oi</p>",
+        text: "Oi",
+        headers: {
+          "List-Unsubscribe": "<https://metodotia.com/api/email/unsubscribe/r1/sig>",
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
+        attachments: [{ filename: `cat${acc}logo.pdf`, contentType: "application/pdf", data: Buffer.from("PDFDATA") }],
+      })
+    ).toString("utf8");
+    assert.match(mime, /^Subject: =\?UTF-8\?/m);
+    assert.match(mime, /^From: =\?UTF-8\?.+<contato@loja\.com>/m);
+    assert.match(mime, /^To: ana@x\.com/m);
+    assert.match(mime, /^Reply-To: resp@loja\.com/m);
+    assert.match(mime, /^List-Unsubscribe: <https:\/\/metodotia\.com\/api\/email\/unsubscribe\/r1\/sig>/m);
+    assert.match(mime, /^List-Unsubscribe-Post: List-Unsubscribe=One-Click/m);
+    assert.match(mime, /multipart\/alternative/);
+    assert.match(mime, /Content-Type: text\/html/);
+    assert.match(mime, /Content-Type: text\/plain/);
+    assert.match(mime, /Content-Disposition: attachment/);
+    assert.ok(mime.includes(Buffer.from("PDFDATA").toString("base64")));
+    assert.ok(!mime.includes(`cat${acc}logo.pdf`), "a non-ASCII file name is encoded");
+  });
+
+  await checkAsync("buildMime without attachments or reply-to has no mixed part", async () => {
+    const mime = (
+      await buildMime({
+        from: { name: null, address: "a@b.com" },
+        to: "c@d.com",
+        replyTo: null,
+        subject: "Oi",
+        html: "<p>Oi</p>",
+        text: "Oi",
+        headers: {},
+        attachments: [],
+      })
+    ).toString("utf8");
+    assert.match(mime, /^From: a@b\.com/m);
+    assert.ok(!/multipart\/mixed/.test(mime));
+    assert.ok(!/^Reply-To:/m.test(mime));
   });
 
   console.log(`\n✅ email-broadcast: ${passed} checks passed.`);

@@ -247,6 +247,22 @@ async function main() {
     });
     assert(signaturesB.length === 0, "e-mail signatures scoped to org B exclude org A's signature");
 
+    // 14) Microsoft sending accounts are per org.
+    await prisma.emailSenderAccount.create({
+      data: {
+        organizationId: orgA.id,
+        provider: "MICROSOFT",
+        email: "iso@a.test",
+        accountKind: "work",
+        credentials: "x",
+        connectedById: "iso",
+      },
+    });
+    const accountsB = await prisma.emailSenderAccount.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(accountsB.length === 0, "e-mail sender accounts scoped to org B exclude org A's account");
+
     console.log("\n✅ Tenant isolation: all checks passed.");
   } finally {
     // Cleanup. Companies/connections carry organizationId (no FK cascade from
@@ -261,6 +277,9 @@ async function main() {
       where: { organizationId: { in: created.orgs } },
     });
     await prisma.emailSuppression.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
+    await prisma.emailSenderAccount.deleteMany({
       where: { organizationId: { in: created.orgs } },
     });
     // Recipients go with their broadcast (onDelete: Cascade).

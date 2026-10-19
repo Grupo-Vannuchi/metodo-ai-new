@@ -2,6 +2,7 @@ import { getFormatter, getTranslations } from "next-intl/server";
 import { AlertTriangle, CheckCircle2, Plus } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { listEmailBroadcasts, countEmailsSentThisMonth } from "@/lib/queries/email-broadcasts";
+import { listReason } from "@/lib/email-broadcast/failure-reason";
 import { deliveryTrackingConfigured } from "@/lib/email-broadcast/platform";
 import { listSenderDomains } from "@/lib/queries/email-sender-domains";
 import { DeleteButton } from "@/components/crm/delete-button";
@@ -88,6 +89,7 @@ export default async function EmailPage({ params }: { params: Promise<{ locale: 
             <thead className="border-b border-border text-muted-foreground">
               <tr>
                 <th className="px-5 py-3 font-medium">{t("col.subject")}</th>
+                <th className="px-5 py-3 font-medium">{t("col.from")}</th>
                 <th className="px-5 py-3 font-medium">{t("col.status")}</th>
                 <th className="px-5 py-3 text-right font-medium">{t("col.recipients")}</th>
                 <th className="px-5 py-3 text-right font-medium">{t("col.delivered")}</th>
@@ -101,6 +103,13 @@ export default async function EmailPage({ params }: { params: Promise<{ locale: 
                 const isDraft = r.status === "DRAFT";
                 const href = isDraft ? `/app/email/${r.id}/edit` : `/app/email/${r.id}`;
                 const when = format.dateTime(r.startedAt ?? r.updatedAt, { dateStyle: "short", timeStyle: "short" });
+                const reason = listReason({
+                  status: r.status,
+                  pausedReason: r.pausedReason,
+                  problems: r.problems,
+                  uncertain: r.uncertain,
+                });
+                const microsoft = r.channel === "MICROSOFT";
                 return (
                   <tr key={r.id} className="border-b border-border last:border-0">
                     <td className="px-5 py-3 font-medium">
@@ -109,10 +118,29 @@ export default async function EmailPage({ params }: { params: Promise<{ locale: 
                       </Link>
                     </td>
                     <td className="px-5 py-3">
+                      <div className="max-w-56 truncate">{r.fromEmail ?? "—"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {microsoft ? t("col.channelMicrosoft") : t("col.channelPlatform")}
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
                       <StatusBadge status={r.status} label={t(`status.${r.status}`)} />
+                      {reason?.kind === "paused" ? (
+                        <div className="mt-1 max-w-xs text-xs text-red-600">{t(`listReason.paused.${reason.reason}`)}</div>
+                      ) : null}
+                      {reason?.kind === "problems" ? (
+                        <div className="mt-1 max-w-xs text-xs text-red-600">
+                          {[
+                            reason.failed ? t("listReason.failed", { count: reason.failed }) : null,
+                            reason.uncertain ? t("listReason.uncertain", { count: reason.uncertain }) : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-5 py-3 text-right">{isDraft ? "—" : format.number(r.total)}</td>
-                    <td className="px-5 py-3 text-right">{isDraft ? "—" : format.number(r.delivered)}</td>
+                    <td className="px-5 py-3 text-right">{isDraft || microsoft ? "—" : format.number(r.delivered)}</td>
                     <td className="px-5 py-3 text-right">{isDraft ? "—" : format.number(r.problems)}</td>
                     <td className="px-5 py-3 text-muted-foreground">
                       {isDraft ? t("editedAt", { date: when }) : when}

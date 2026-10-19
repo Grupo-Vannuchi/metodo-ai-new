@@ -93,6 +93,7 @@ const TENANT_MODELS = new Set<string>([
   "EmailSuppression",
   "EmailSenderDomain",
   "EmailSignature",
+  "EmailSenderAccount",
 ]);
 
 const WHERE_OPS = new Set<string>([

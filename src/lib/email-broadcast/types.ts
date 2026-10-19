@@ -33,6 +33,7 @@ export type ComposerDraft = {
   picked: PickedTarget[];
   attachments: EmailAttachment[];
   signatureId: string | null;
+  channel: "PLATFORM" | "MICROSOFT";
 };
 
 /** A signature as the composer and the Assinaturas tab show it; previewHtml
@@ -44,4 +45,16 @@ export type SignatureOption = {
   isDefault: boolean;
   updatedAt: string;
   previewHtml: string;
+};
+
+/** The org's Microsoft sending account as the screens show it (no credentials). */
+export type SenderAccountView = {
+  id: string;
+  email: string;
+  displayName: string | null;
+  accountKind: "personal" | "work";
+  status: "ACTIVE" | "NEEDS_RECONNECT";
+  dailyLimit: number;
+  sentLast24h: number;
+  remaining: number;
 };

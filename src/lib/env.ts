@@ -63,6 +63,12 @@ const serverSchema = z.object({
   // Entra tenant: "common" (work/school + personal), "organizations" (work only),
   // or a specific tenant id. Defaults to "common".
   MICROSOFT_TENANT_ID: z.string().optional(),
+  // Mass e-mail through the company's own Microsoft mailbox (spec 2026-10-15):
+  // the "MetodoIA" Entra app (any tenant + personal accounts), delegated
+  // Mail.Send + Mail.ReadWrite. Separate from the sign-in app above. Optional:
+  // without both, the "Pela conta Microsoft" option doesn't show up.
+  MICROSOFT_MAIL_CLIENT_ID: z.string().optional(),
+  MICROSOFT_MAIL_CLIENT_SECRET: z.string().optional(),
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   // Platform WhatsApp (Evolution API) — one shared server used by every tenant,

@@ -2495,6 +2495,24 @@ enum EmailRecipientStatus {
   BOUNCED
   COMPLAINED
   FAILED
+  /// Reserved by the Microsoft dispatcher right before calling Graph.
+  SENDING
+  /// The run stopped between the reservation and Graph's answer: never resent.
+  UNCERTAIN
+}
+
+enum EmailChannel {
+  PLATFORM
+  MICROSOFT
+}
+
+enum EmailSenderProvider {
+  MICROSOFT
+}
+
+enum EmailSenderAccountStatus {
+  ACTIVE
+  NEEDS_RECONNECT
 }
 
 enum EmailSuppressionReason {
@@ -2527,6 +2545,11 @@ model EmailBroadcast {
   /// dispatcher only ever reads these, never email_signatures.
   signatureHtml  String?              @db.Text
   signatureText  String?              @db.Text
+  /// PLATFORM = the platform's Resend account; MICROSOFT = the org's connected mailbox (spec 2026-10-15).
+  channel         EmailChannel         @default(PLATFORM)
+  /// The mailbox a MICROSOFT send goes out from (set when it starts or resumes).
+  senderAccountId String?
+  senderAccount   EmailSenderAccount?  @relation(fields: [senderAccountId], references: [id], onDelete: SetNull)
   /// { selected, invalid, duplicates, suppressed, total } frozen at send time.
   stats          Json                 @default("{}")
   status         EmailBroadcastStatus @default(DRAFT)
@@ -2546,6 +2569,7 @@ model EmailBroadcast {
 
   @@index([organizationId, createdAt])
   @@index([organizationId, status])
+  @@index([senderAccountId])
   @@map("email_broadcasts")
 }
 
@@ -2639,4 +2663,28 @@ model EmailSignature {
 
   @@index([organizationId])
   @@map("email_signatures")
+}
+
+/// The company's own mailbox for mass e-mail (spec 2026-10-15). One per org.
+model EmailSenderAccount {
+  id             String                   @id @default(cuid())
+  organizationId String                   @unique
+  provider       EmailSenderProvider
+  /// Mailbox address, lowercase.
+  email          String
+  displayName    String?
+  /// "personal" | "work" — sets the estimated daily limit (microsoft/core.ts).
+  accountKind    String
+  /// encryptCredentials({ accessToken, refreshToken, expiresAt }); never leaves the server.
+  credentials    String                   @db.Text
+  status         EmailSenderAccountStatus @default(ACTIVE)
+  /// Last technical error of a token renewal.
+  lastError      String?
+  connectedById  String
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  broadcasts EmailBroadcast[]
+
+  @@map("email_sender_accounts")
 }

@@ -53,6 +53,9 @@ sobrou.
 | Evolution (webhook) | token embutido no caminho | rota de webhook, ver abaixo |
 | Destinatário de e-mail em massa (link) | HMAC do id do destinatário no caminho → `verifyEmailUnsubscribeSig` | [src/lib/email-broadcast/unsubscribe.ts](../../src/lib/email-broadcast/unsubscribe.ts) |
 | Resend (webhook do e-mail em massa) | assinatura Svix com o segredo da plataforma (`RESEND_WEBHOOK_SECRET`) → `verifySvixSignature` | [src/app/api/email/webhook/route.ts](../../src/app/api/email/webhook/route.ts) |
+| Usuário logado conectando a caixa Microsoft do E-mail | sessão (`getOrgContext()`) + tela `email` + módulo `marketing`; o retorno confere `state`, verificador PKCE e empresa nos cookies `ms_mail_*` (10 min) | [src/app/api/email/microsoft/](../../src/app/api/email/microsoft/) |
+
+`/api/email/microsoft/connect` e `/callback` (spec 2026-10-15) só redirecionam. O endereço de retorno cadastrado no app do Azure é `${NEXT_PUBLIC_SITE_URL}/api/email/microsoft/callback`, montado por `joinSiteUrl` sem barra dupla. As credenciais vão criptografadas para `email_sender_accounts` e nunca para o navegador ou para o log.
 
 `/api/email/unsubscribe/[recipientId]/[sig]` é **pública de propósito** (RFC 8058); a assinatura é a primeira checagem, só aceita POST, e a server action `confirmEmailUnsubscribe` segue o mesmo padrão (server actions também são endpoints públicos).
 

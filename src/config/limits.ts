@@ -15,6 +15,10 @@ export const LIMITS: {
   dispatchQuotaPerMonth: number;
   /** Mass e-mails (submenu E-mail) per month — separate from Campaigns. */
   emailBroadcastQuotaPerMonth: number;
+  /** Estimated e-mails per 24 h through a personal Microsoft mailbox (Outlook.com). */
+  microsoftDailyPersonal: number;
+  /** Estimated recipients per 24 h through a Microsoft 365 mailbox. */
+  microsoftDailyWork: number;
   /** Prospecting leads per month. */
   prospectingQuotaPerMonth: number;
   /** Prospecting extraction jobs per month. */
@@ -33,6 +37,8 @@ export const LIMITS: {
   whatsappNumbersLimit: 10,
   dispatchQuotaPerMonth: 50_000,
   emailBroadcastQuotaPerMonth: 50_000,
+  microsoftDailyPersonal: 300,
+  microsoftDailyWork: 10_000,
   prospectingQuotaPerMonth: 10_000,
   extractionsPerMonth: 500,
   assistantDailyLimit: 750,

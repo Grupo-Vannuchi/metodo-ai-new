@@ -1894,6 +1894,52 @@
     }
   },
   "emailBroadcast": {
+    "channel": {
+      "title": "Por onde este e-mail vai sair?",
+      "platformTitle": "Pela plataforma",
+      "platformBody": "Sai pelo MétodoAI com um endereço de um domínio liberado para a empresa. É o envio de sempre.",
+      "platformPoint1": "Você digita o nome e o endereço de envio",
+      "platformPoint2": "Até {limit} e-mails por mês",
+      "platformPoint3": "Relatório com entregues e devolvidos",
+      "platformContinue": "Continuar pela plataforma",
+      "microsoftTitle": "Pela conta Microsoft",
+      "microsoftBody": "Sai da caixa Outlook ou Microsoft 365 da empresa. As respostas chegam nessa caixa e cada e-mail fica salvo em Itens enviados.",
+      "noneTitle": "Nenhuma conta conectada",
+      "noneBody": "Você entra na Microsoft e autoriza o envio em nome da caixa. Cada empresa tem uma conta de envio.",
+      "consentNote": "A Microsoft vai pedir permissão para ler e escrever e-mails: o MétodoAI só usa isso para montar e-mails com anexos grandes, nunca para ler a sua caixa.",
+      "connect": "Conectar conta Microsoft",
+      "connected": "Conectada",
+      "kindPersonal": "Outlook pessoal",
+      "kindWork": "Microsoft 365",
+      "dailyLimit": "Cerca de {count} e-mails por dia",
+      "sent24h": "{count} enviados nas últimas 24 h",
+      "use": "Usar esta conta",
+      "switch": "Trocar conta",
+      "switchConfirm": "Entrar na Microsoft com outra caixa? Ela substitui {email} nesta empresa, e envios pausados passam a sair por ela quando forem retomados.",
+      "switchConfirmLabel": "Entrar com outra conta",
+      "disconnect": "Desconectar",
+      "disconnectConfirm": "Desconectar {email}? O MétodoAI deixa de enviar por esta caixa, e envios em andamento por ela ficam pausados até uma conta ser conectada de novo. Para tirar o acesso também do lado da Microsoft, remova o app nas configurações de privacidade da sua conta Microsoft.",
+      "disconnected": "Conta Microsoft desconectada.",
+      "reconnectTitle": "A conta {email} precisa ser reconectada",
+      "reconnectBody": "A Microsoft recusou o acesso (senha trocada ou acesso revogado). Os envios por esta conta estão pausados até reconectar.",
+      "reconnect": "Reconectar",
+      "connectedToast": "Conta Microsoft conectada.",
+      "error": {
+        "cancelled": "A conexão com a Microsoft foi cancelada.",
+        "admin_required": "Esta empresa no Microsoft 365 exige que o administrador dela aprove o app antes. Peça ao responsável pela TI.",
+        "not_configured": "O envio pela conta Microsoft não está configurado. Fale com o suporte.",
+        "failed": "Não foi possível conectar a conta Microsoft. Tente de novo."
+      }
+    },
+    "fromMicrosoft": "De",
+    "microsoftChip": "conta Microsoft",
+    "fromMicrosoftHint": "O nome e o endereço vêm da conta conectada. As respostas chegam nessa caixa.",
+    "switchChannel": "Trocar canal",
+    "microsoftMissing": "Não há uma conta Microsoft ativa nesta empresa. Conecte ou reconecte em Novo e-mail antes de enviar.",
+    "confirmMicrosoftPartial": "{now} dos {total} destinatários recebem agora. Esta conta envia cerca de {limit} por dia, e {sent} já saíram nas últimas 24 h. Ao chegar no limite, o envio pausa e espera você clicar em “Retomar envio”.",
+    "confirmMicrosoftAll": "Todos os {total} destinatários recebem agora.",
+    "confirmMicrosoftPace": "Ritmo da Microsoft: cerca de 28 e-mails por minuto; esta parte leva cerca de {minutes, plural, one {# minuto} other {# minutos}}.",
+    "confirmMicrosoftSentItems": "Os e-mails ficam salvos em Itens enviados de {email}, e a Microsoft não informa entrega nem abertura.",
     "image": {
       "button": "Imagem",
       "title": "Inserir imagem",
@@ -2034,17 +2080,48 @@
       "recipients": "Destinatários",
       "delivered": "Entregues",
       "problems": "Problemas",
-      "date": "Data"
+      "date": "Data",
+      "from": "De",
+      "channelPlatform": "Plataforma",
+      "channelMicrosoft": "Conta Microsoft"
     },
     "status": { "DRAFT": "Rascunho", "SENDING": "Enviando", "PAUSED": "Pausado", "DONE": "Concluído" },
     "paused": {
       "no_connection": "Envio pausado: o envio de e-mail da plataforma não está configurado. Fale com o suporte.",
       "quota": "Envio pausado: a cota do mês acabou.",
       "provider_error": "Envio pausado: o Resend recusou o envio.",
+      "provider_error_microsoft": "Envio pausado: a Microsoft recusou ou não respondeu ao envio. Veja o detalhe técnico e clique em “Retomar envio” para tentar de novo.",
       "domain_not_allowed": "Envio pausado: o domínio do endereço de envio deixou de estar liberado para sua empresa.",
       "from_missing": "Envio pausado: este envio foi criado antes da troca para a conta de e-mail da plataforma e não tem endereço de envio, então não pode ser retomado. Para enviar de novo, duplique-o (o novo envio vai para toda a lista).",
       "attachment_unavailable": "Envio pausado: um anexo não pôde ser carregado. Tente retomar; se continuar, duplique o envio e anexe o arquivo de novo.",
-      "attachment_invalid": "Envio pausado: os anexos deste envio passam do limite ou estão inválidos. Duplique o envio e anexe os arquivos de novo."
+      "attachment_invalid": "Envio pausado: os anexos deste envio passam do limite ou estão inválidos. Duplique o envio e anexe os arquivos de novo.",
+      "daily_limit": "Envio pausado: o limite diário da conta Microsoft foi atingido. Clique em “Retomar envio” amanhã para continuar até o próximo limite.",
+      "reconnect": "Envio pausado: a conta Microsoft precisa ser reconectada (em Novo e-mail). Depois, clique em “Retomar envio”.",
+      "no_sender_account": "Envio pausado: a conta Microsoft foi desconectada ou trocada. Conecte uma conta e clique em “Retomar envio”.",
+      "account_blocked": "Envio pausado: a Microsoft não permite enviar por esta caixa (conta bloqueada, considerada spam ou sem caixa de correio do Outlook). Verifique a conta na Microsoft antes de retomar."
+    },
+    "listReason": {
+      "paused": {
+        "no_connection": "Pausado: o envio da plataforma não está configurado.",
+        "quota": "Pausado: cota mensal da plataforma atingida.",
+        "provider_error": "Pausado: o provedor recusou o envio.",
+        "domain_not_allowed": "Pausado: o domínio de envio não está mais liberado.",
+        "from_missing": "Pausado: envio antigo sem endereço de envio.",
+        "attachment_unavailable": "Pausado: um anexo não pôde ser carregado.",
+        "attachment_invalid": "Pausado: anexos inválidos.",
+        "daily_limit": "Pausado: limite diário da conta Microsoft atingido. Retome amanhã.",
+        "reconnect": "Pausado: a conta Microsoft precisa ser reconectada.",
+        "no_sender_account": "Pausado: a conta Microsoft foi desconectada.",
+        "account_blocked": "Pausado: a Microsoft não permite enviar por esta caixa."
+      },
+      "failed": "{count, plural, one {# falha} other {# falhas}}",
+      "uncertain": "{count, plural, one {# com situação incerta} other {# com situação incerta}}"
+    },
+    "failure": {
+      "invalid_address": "Endereço recusado: o e-mail do destinatário é inválido.",
+      "message_too_large": "O e-mail ficou grande demais para a Microsoft.",
+      "interrupted": "Situação incerta: o envio foi interrompido antes da confirmação. Não reenviamos, para não duplicar.",
+      "generic": "Falha ao enviar para este endereço."
     },
     "message": "Mensagem",
     "fromName": "Nome do remetente",
@@ -2131,7 +2208,9 @@
       "empty": "Nenhum destinatário selecionado.",
       "quota": "A cota do mês não comporta este envio.",
       "quotaDetail": "Este envio tem {total} endereços, mas restam {remaining} na cota do mês.",
-      "unknown": "Algo deu errado. Tente de novo."
+      "unknown": "Algo deu errado. Tente de novo.",
+      "sender_account_missing": "Conecte uma conta Microsoft para enviar por ela.",
+      "sender_account_reconnect": "A conta Microsoft precisa ser reconectada."
     },
     "report": {
       "started": "Iniciado em {date}",
@@ -2142,22 +2221,27 @@
       "processed": "{done} de {total} processados",
       "removed": "Ficaram fora deste envio: {duplicates} repetidos, {suppressed} bloqueados e {invalid} inválidos.",
       "noTracking": "Sem status de entrega: o aviso de entrega da plataforma ainda não está configurado. Os e-mails ficam como “Enviado”.",
+      "viaMicrosoft": "Enviado pela conta Microsoft {email}",
+      "noTrackingMicrosoft": "A Microsoft não avisa entrega nem abertura: aqui aparecem só os enviados e as falhas. Devoluções de endereço inexistente chegam na própria caixa, como resposta automática do Outlook.",
       "showing": "Mostrando os primeiros {count}.",
       "attachments": "Anexos",
       "counters": {
         "QUEUED": "Na fila",
+        "SENDING": "Enviando",
         "SENT": "Enviados",
         "DELIVERED": "Entregues",
         "BOUNCED": "Bounce",
         "COMPLAINED": "Marcou spam",
-        "FAILED": "Falhou"
+        "FAILED": "Falhou",
+        "UNCERTAIN": "Situação incerta"
       },
       "filter": {
         "all": "Todos",
         "queued": "Na fila",
         "sent": "Enviados",
         "delivered": "Entregues",
-        "problems": "Problemas"
+        "problems": "Problemas",
+        "uncertain": "Situação incerta"
       },
       "col": { "recipient": "Destinatário", "source": "Veio de", "status": "Status", "updated": "Atualizado" },
       "source": { "contact": "Contato", "company": "Empresa", "manual": "Avulso", "spreadsheet": "Planilha" }
@@ -2672,6 +2756,7 @@
         "started": "Disparou uma campanha"
       },
       "email_broadcast": { "started": "Iniciou um envio de e-mail em massa" },
+      "email_sender": { "connected": "Conectou a conta Microsoft de envio", "replaced": "Trocou a conta Microsoft de envio", "disconnected": "Desconectou a conta Microsoft de envio" },
       "task_board": { "entrance_changed": "Trocou a coluna de entrada do quadro de tarefas", "column_deleted": "Excluiu uma coluna do quadro de tarefas" },
       "connection": {
         "created": "Conectou uma integração",
@@ -2721,6 +2806,7 @@
       "AccessTemplate": "Template de acesso",
       "Campaign": "Campanha",
       "EmailBroadcast": "Envio de e-mail",
+      "EmailSenderAccount": "Conta de envio de e-mail",
       "ExtractionJob": "Prospecção",
       "FinanceEntry": "Financeiro",
       "IntegrationConnection": "Conexão",

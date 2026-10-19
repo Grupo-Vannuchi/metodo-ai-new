@@ -4,6 +4,8 @@ import { tenantDb } from "@/lib/tenant-db";
 import { LIMITS } from "@/config/limits";
 import { listSenderDomains } from "@/lib/queries/email-sender-domains";
 import { listSignatureOptions } from "@/lib/queries/email-signatures";
+import { getSenderAccountView } from "@/lib/queries/email-sender-accounts";
+import { microsoftMailConfigured } from "@/lib/email-broadcast/microsoft/oauth";
 import type { ComposerOptions, PickedTarget } from "@/lib/email-broadcast/types";
 
 const PROBLEM_STATUSES: EmailRecipientStatus[] = ["BOUNCED", "COMPLAINED", "FAILED"];
@@ -15,10 +17,10 @@ export function monthStart(now = new Date()): Date {
   return new Date(now.getFullYear(), now.getMonth(), 1);
 }
 
-/** Addresses accepted by Resend this month (the E-mail quota; Campaigns has its own). */
+/** Addresses accepted by Resend this month (platform channel only; Campaigns has its own quota). */
 export function countEmailsSentThisMonth(organizationId: string): Promise<number> {
   return tenantDb(organizationId).emailBroadcastRecipient.count({
-    where: { sentAt: { gte: monthStart() } },
+    where: { sentAt: { gte: monthStart() }, broadcast: { channel: "PLATFORM" } },
   });
 }
 
@@ -27,7 +29,7 @@ export async function listEmailBroadcasts(organizationId: string) {
   const rows = await db.emailBroadcast.findMany({
     orderBy: { createdAt: "desc" },
     take: 200,
-    select: { id: true, subject: true, status: true, pausedReason: true, startedAt: true, updatedAt: true },
+    select: { id: true, subject: true, status: true, pausedReason: true, startedAt: true, updatedAt: true, channel: true, fromEmail: true },
   });
   if (rows.length === 0) return [];
 
@@ -36,15 +38,16 @@ export async function listEmailBroadcasts(organizationId: string) {
     where: { broadcastId: { in: rows.map((r) => r.id) } },
     _count: { _all: true },
   });
-  const tally = new Map<string, { total: number; delivered: number; problems: number }>();
+  const tally = new Map<string, { total: number; delivered: number; problems: number; uncertain: number }>();
   for (const g of grouped) {
-    const t = tally.get(g.broadcastId) ?? { total: 0, delivered: 0, problems: 0 };
+    const t = tally.get(g.broadcastId) ?? { total: 0, delivered: 0, problems: 0, uncertain: 0 };
     t.total += g._count._all;
     if (g.status === "DELIVERED") t.delivered += g._count._all;
     if (PROBLEM_STATUSES.includes(g.status)) t.problems += g._count._all;
+    if (g.status === "UNCERTAIN") t.uncertain += g._count._all;
     tally.set(g.broadcastId, t);
   }
-  return rows.map((r) => ({ ...r, ...(tally.get(r.id) ?? { total: 0, delivered: 0, problems: 0 }) }));
+  return rows.map((r) => ({ ...r, ...(tally.get(r.id) ?? { total: 0, delivered: 0, problems: 0, uncertain: 0 }) }));
 }
 
 export function getEmailBroadcast(organizationId: string, id: string) {
@@ -60,6 +63,8 @@ export function getEmailBroadcast(organizationId: string, id: string) {
       audience: true,
       attachments: true,
       signatureId: true,
+      channel: true,
+      senderAccountId: true,
       signatureHtml: true,
       signatureText: true,
       stats: true,
@@ -73,13 +78,14 @@ export function getEmailBroadcast(organizationId: string, id: string) {
   });
 }
 
-export type ReportFilter = "all" | "queued" | "sent" | "delivered" | "problems";
+export type ReportFilter = "all" | "queued" | "sent" | "delivered" | "problems" | "uncertain";
 
 const FILTER_STATUSES: Record<Exclude<ReportFilter, "all">, EmailRecipientStatus[]> = {
-  queued: ["QUEUED"],
+  queued: ["QUEUED", "SENDING"],
   sent: ["SENT"],
   delivered: ["DELIVERED"],
   problems: PROBLEM_STATUSES,
+  uncertain: ["UNCERTAIN"],
 };
 
 /** Status counts, the first 200 recipients for the filter, and whether a
@@ -99,11 +105,13 @@ export async function getEmailBroadcastReport(organizationId: string, id: string
 
   const counts: Record<EmailRecipientStatus, number> = {
     QUEUED: 0,
+    SENDING: 0,
     SENT: 0,
     DELIVERED: 0,
     BOUNCED: 0,
     COMPLAINED: 0,
     FAILED: 0,
+    UNCERTAIN: 0,
   };
   for (const g of grouped) counts[g.status] = g._count._all;
 
@@ -147,17 +155,20 @@ export async function emailComposerOptions(organizationId: string): Promise<Comp
 
 /** Everything the composer page needs besides the draft itself. */
 export async function emailComposerData(organizationId: string) {
-  const [options, allowedDomains, used, signatures] = await Promise.all([
+  const [options, allowedDomains, used, signatures, microsoft] = await Promise.all([
     emailComposerOptions(organizationId),
     listSenderDomains(organizationId),
     countEmailsSentThisMonth(organizationId),
     listSignatureOptions(organizationId),
+    getSenderAccountView(organizationId),
   ]);
   return {
     options,
     allowedDomains,
     quota: { used, limit: LIMITS.emailBroadcastQuotaPerMonth },
     signatures,
+    microsoft,
+    microsoftConfigured: microsoftMailConfigured(),
   };
 }
 
