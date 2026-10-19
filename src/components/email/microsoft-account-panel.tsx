@@ -6,7 +6,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm";
 import { useToast } from "@/components/ui/toast";
 import { useRouter } from "@/i18n/navigation";
-import { disconnectMicrosoftAccount } from "@/app/actions/email-sender-accounts";
+import { disconnectSenderAccount } from "@/app/actions/email-sender-accounts";
 import type { SenderAccountView } from "@/lib/email-broadcast/types";
 
 /** Full navigation (not a client route): the API redirects to Microsoft. */
@@ -43,7 +43,7 @@ export function MicrosoftAccountPanel({ account, action }: { account: SenderAcco
     });
     if (!ok) return;
     start(async () => {
-      const r = await disconnectMicrosoftAccount();
+      const r = await disconnectSenderAccount("MICROSOFT");
       if (r.ok) toast(t("channel.disconnected"));
       else toast(t("error.unknown"), { variant: "error" });
       router.refresh();

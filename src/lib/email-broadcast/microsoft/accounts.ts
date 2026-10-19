@@ -28,7 +28,7 @@ export async function saveMicrosoftAccount(
     async (tx) => {
       await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${`email_sender:${organizationId}`}))`;
       const current = await tx.emailSenderAccount.findFirst({
-        where: { organizationId },
+        where: { organizationId, provider: "MICROSOFT" },
         select: { id: true, email: true },
       });
       if (current && current.email === email) {

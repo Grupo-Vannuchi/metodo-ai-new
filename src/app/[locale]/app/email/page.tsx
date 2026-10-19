@@ -52,7 +52,7 @@ export default async function EmailPage({
   );
 
   if (view === null) {
-    const account = await getSenderAccountView(ctx.organizationId);
+    const account = await getSenderAccountView(ctx.organizationId, "MICROSOFT");
     return (
       <div className="flex flex-col gap-6">
         {header("/app/email/new")}
@@ -68,7 +68,7 @@ export default async function EmailPage({
     listEmailBroadcasts(ctx.organizationId, broadcastChannelOf(view) as "PLATFORM" | "MICROSOFT"),
     microsoft ? Promise.resolve([] as string[]) : listSenderDomains(ctx.organizationId),
     microsoft ? Promise.resolve(0) : countEmailsSentThisMonth(ctx.organizationId),
-    microsoft ? getSenderAccountView(ctx.organizationId) : Promise.resolve(null),
+    microsoft ? getSenderAccountView(ctx.organizationId, "MICROSOFT") : Promise.resolve(null),
   ]);
   const tracking = deliveryTrackingConfigured();
   const pct = Math.min(100, (used / limit) * 100);

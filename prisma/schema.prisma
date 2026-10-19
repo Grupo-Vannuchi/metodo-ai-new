@@ -2504,10 +2504,12 @@ enum EmailRecipientStatus {
 enum EmailChannel {
   PLATFORM
   MICROSOFT
+  GOOGLE
 }
 
 enum EmailSenderProvider {
   MICROSOFT
+  GOOGLE
 }
 
 enum EmailSenderAccountStatus {
@@ -2665,15 +2667,15 @@ model EmailSignature {
   @@map("email_signatures")
 }
 
-/// The company's own mailbox for mass e-mail (spec 2026-10-15). One per org.
+/// The company's own mailbox for mass e-mail (spec 2026-10-15). One per org per provider.
 model EmailSenderAccount {
   id             String                   @id @default(cuid())
-  organizationId String                   @unique
+  organizationId String
   provider       EmailSenderProvider
   /// Mailbox address, lowercase.
   email          String
   displayName    String?
-  /// "personal" | "work" — sets the estimated daily limit (microsoft/core.ts).
+  /// "personal" | "work" — sets the estimated daily limit (microsoft/core.ts, google/core.ts).
   accountKind    String
   /// encryptCredentials({ accessToken, refreshToken, expiresAt }); never leaves the server.
   credentials    String                   @db.Text
@@ -2686,5 +2688,6 @@ model EmailSenderAccount {
 
   broadcasts EmailBroadcast[]
 
+  @@unique([organizationId, provider])
   @@map("email_sender_accounts")
 }

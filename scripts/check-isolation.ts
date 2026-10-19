@@ -263,6 +263,59 @@ async function main() {
     });
     assert(accountsB.length === 0, "e-mail sender accounts scoped to org B exclude org A's account");
 
+    // 15) One sending account per provider per org: A has a Microsoft (from 14)
+    // and a Google account side by side, a second Google one is refused, and
+    // B still sees neither.
+    const googleAccountA = await prisma.emailSenderAccount.create({
+      data: {
+        organizationId: orgA.id,
+        provider: "GOOGLE",
+        email: "iso@a.test",
+        accountKind: "work",
+        credentials: "x",
+        connectedById: "iso",
+      },
+    });
+    const providersA = await prisma.emailSenderAccount.findMany({
+      where: { organizationId: orgA.id },
+      select: { provider: true },
+    });
+    assert(
+      providersA.map((a) => a.provider).sort().join(",") === "GOOGLE,MICROSOFT",
+      "org A holds one Microsoft and one Google sending account at once",
+    );
+    const accountsBAfterGoogle = await prisma.emailSenderAccount.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(
+      accountsBAfterGoogle.length === 0,
+      "e-mail sender accounts scoped to org B stay empty with Microsoft and Google in org A",
+    );
+    const googleLookup = await prisma.emailSenderAccount.findFirst({
+      where: { organizationId: orgA.id, provider: "GOOGLE" },
+      select: { id: true, provider: true },
+    });
+    assert(
+      googleLookup?.id === googleAccountA.id && googleLookup.provider === "GOOGLE",
+      "the sender account lookup by provider GOOGLE returns the Google account",
+    );
+    let secondGoogleCode: string | undefined;
+    try {
+      await prisma.emailSenderAccount.create({
+        data: {
+          organizationId: orgA.id,
+          provider: "GOOGLE",
+          email: "iso2@a.test",
+          accountKind: "work",
+          credentials: "x",
+          connectedById: "iso",
+        },
+      });
+    } catch (error) {
+      secondGoogleCode = (error as { code?: string }).code;
+    }
+    assert(secondGoogleCode === "P2002", "a second Google sending account in the same org is refused (P2002)");
+
     console.log("\n✅ Tenant isolation: all checks passed.");
   } finally {
     // Cleanup. Companies/connections carry organizationId (no FK cascade from

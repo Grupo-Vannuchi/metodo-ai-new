@@ -162,7 +162,7 @@ export async function emailComposerData(organizationId: string) {
     listSenderDomains(organizationId),
     countEmailsSentThisMonth(organizationId),
     listSignatureOptions(organizationId),
-    getSenderAccountView(organizationId),
+    getSenderAccountView(organizationId, "MICROSOFT"),
   ]);
   return {
     options,

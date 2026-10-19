@@ -226,7 +226,10 @@ export async function startEmailBroadcast(
   const microsoft = b.channel === "MICROSOFT";
   let account: { id: string; email: string; displayName: string | null } | null = null;
   if (microsoft) {
-    const row = await db.emailSenderAccount.findFirst({ select: { id: true, email: true, displayName: true, status: true } });
+    const row = await db.emailSenderAccount.findFirst({
+      where: { provider: "MICROSOFT" },
+      select: { id: true, email: true, displayName: true, status: true },
+    });
     if (!row) return { ok: false, error: "sender_account_missing" };
     if (row.status !== "ACTIVE") return { ok: false, error: "sender_account_reconnect" };
     account = row;
@@ -349,7 +352,10 @@ export async function resumeEmailBroadcast(id: string): Promise<{ ok: true } | E
   if (b.status === "PAUSED") {
     let repoint = {};
     if (b.channel === "MICROSOFT") {
-      const account = await db.emailSenderAccount.findFirst({ select: { id: true, email: true, displayName: true, status: true } });
+      const account = await db.emailSenderAccount.findFirst({
+        where: { provider: "MICROSOFT" },
+        select: { id: true, email: true, displayName: true, status: true },
+      });
       if (!account) return { ok: false, error: "sender_account_missing" };
       if (account.status !== "ACTIVE") return { ok: false, error: "sender_account_reconnect" };
       // Resumes through the account connected now (it may have been switched).

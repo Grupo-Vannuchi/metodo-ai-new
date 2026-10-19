@@ -55,7 +55,9 @@ export default async function EditEmailPage({
           picked,
           attachments: readAttachments(b.attachments),
           signatureId: b.signatureId,
-          channel: b.channel,
+          // No Google draft exists yet (the composer does not offer it); the cast goes away when
+          // ComposerDraft accepts the Google channel.
+          channel: b.channel as "PLATFORM" | "MICROSOFT",
         }}
         options={data.options}
         allowedDomains={data.allowedDomains}
