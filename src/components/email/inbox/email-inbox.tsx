@@ -1,5 +1,5 @@
 import { getFormatter, getTranslations } from "next-intl/server";
-import { ArrowLeft, Download, Paperclip, Reply, UserRound } from "lucide-react";
+import { ArrowLeft, Download, MailOpen, Paperclip, Reply, UserRound } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { loadInboxView } from "@/lib/email-broadcast/microsoft/inbox";
 import {
@@ -120,7 +120,7 @@ export async function EmailInbox({
         )}
       >
         <div className="flex flex-col gap-3 border-b border-border p-4">
-          <InboxSearch key={search} search={search} filter={filter} />
+          <InboxSearch search={search} filter={filter} messageId={messageId} />
           <nav aria-label={t("filtersLabel")} className="flex flex-wrap gap-1.5">
             {FILTERS.map((f) => (
               <Link
@@ -208,7 +208,7 @@ export async function EmailInbox({
 
       <section
         aria-label={t("readerLabel")}
-        className={cn("min-w-0 flex-1 flex-col gap-5 p-5 md:flex md:p-6", messageId ? "flex" : "hidden")}
+        className={cn("min-w-0 flex-1 flex-col gap-5 p-5 md:flex md:p-6", messageId ? "flex" : "hidden bg-muted/40")}
       >
         {messageId ? (
           <Link
@@ -221,7 +221,13 @@ export async function EmailInbox({
         ) : null}
 
         {!messageId ? (
-          <p className="m-auto text-sm text-muted-foreground">{t("pick")}</p>
+          <div className="mx-auto mt-[12vh] flex max-w-xs flex-col items-center gap-3 text-center">
+            <span aria-hidden="true" className="flex size-14 items-center justify-center rounded-full bg-brand/10 text-brand">
+              <MailOpen className="size-6" />
+            </span>
+            <p className="font-medium">{t("pickTitle")}</p>
+            <p className="text-sm text-muted-foreground">{t("pick")}</p>
+          </div>
         ) : !detail ? (
           <p className="m-auto max-w-sm text-center text-sm text-muted-foreground">
             {opened && !opened.ok && opened.reason === "not_found" ? t("messageGone") : t("messageFailed")}

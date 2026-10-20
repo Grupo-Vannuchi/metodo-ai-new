@@ -1987,6 +1987,7 @@
       "hasAttachment": "attachment",
       "pageNote": "Showing the {count} most recent e-mails. Use search to find older ones.",
       "backToList": "Back to the list",
+      "pickTitle": "No e-mail open",
       "pick": "Pick an e-mail from the list to read it.",
       "messageGone": "This e-mail is no longer in the inbox. It may have been deleted or moved.",
       "messageFailed": "This e-mail couldn't be opened right now. Try again in a moment.",
