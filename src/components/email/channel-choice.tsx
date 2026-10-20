@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useFormatter, useTranslations } from "next-intl";
+import { Inbox } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { Link, useRouter } from "@/i18n/navigation";
@@ -9,6 +10,7 @@ import { emailListHref } from "@/lib/email-broadcast/list-channel";
 import type { SenderAccountView } from "@/lib/email-broadcast/types";
 import { MicrosoftAccountPanel } from "@/components/email/microsoft-account-panel";
 import { ChannelIcon } from "@/components/email/channel-icon";
+import { UnreadBadge } from "@/components/email/inbox/unread-badge";
 
 type ConnectError = "cancelled" | "admin_required" | "not_configured" | "failed";
 
@@ -23,12 +25,15 @@ export function ChannelChoice({
   connected = false,
   error = null,
   mode = "compose",
+  inbox = null,
 }: {
   account: SenderAccountView | null;
   quotaLimit: number;
   connected?: boolean;
   error?: ConnectError | null;
   mode?: "compose" | "browse";
+  /** Browse mode, when the member may read the connected mailbox's Inbox. */
+  inbox?: { href: string; unread: Promise<number | null> | null } | null;
 }) {
   const t = useTranslations("emailBroadcast");
   const format = useFormatter();
@@ -89,7 +94,18 @@ export function ChannelChoice({
             }
           />
           {browse ? (
-            <div className="mt-auto">
+            <div className="mt-auto flex flex-wrap gap-2">
+              {inbox ? (
+                <Link href={inbox.href} className={buttonVariants()}>
+                  <Inbox aria-hidden="true" className="size-4" />
+                  {t("inbox.open")}
+                  {inbox.unread ? (
+                    <Suspense fallback={null}>
+                      <UnreadBadge count={inbox.unread} className="bg-brand-foreground text-brand" />
+                    </Suspense>
+                  ) : null}
+                </Link>
+              ) : null}
               <Link href={emailListHref("microsoft")} className={buttonVariants({ variant: "outline" })}>
                 {t("channel.microsoftBrowse")}
               </Link>

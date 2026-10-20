@@ -72,17 +72,23 @@ Não existe um terceiro lugar gateando alguma coisa. É sempre um destes três a
   exportadas — `hasModule`, `hasFeatureByModules`, `assertFeatureByModules`, `availableScreens`
   — são a única forma correta de perguntar "esta empresa tem X".
 - **[src/config/screens.ts](../../src/config/screens.ts)** — as telas *gateáveis por template de
-  acesso*: `GATEABLE_SCREENS`, **15** hoje (`feed`, `crm`, `proposals`, `tasks`, `prospecting`,
-  `campaigns`, `email`, `inbox`, `companies`, `contacts`, `connections`, `finance`, `hr`, `supplies`,
-  `downloader`). `dashboard` e `settings` não estão nessa lista porque são `ALWAYS_ALLOWED` —
+  acesso*: `GATEABLE_SCREENS`, **16** hoje (`feed`, `crm`, `proposals`, `tasks`, `prospecting`,
+  `campaigns`, `email`, `emailInbox`, `inbox`, `companies`, `contacts`, `connections`, `finance`, `hr`,
+  `supplies`, `downloader`). `dashboard` e `settings` não estão nessa lista porque são `ALWAYS_ALLOWED` —
   nenhum template restringe o *acesso à tela*, todo membro autenticado chega lá. Isso não é o
   mesmo que "sem restrição nenhuma": o comentário-fonte em
   [src/config/screens.ts:5-7](../../src/config/screens.ts#L5-L7) registra que `settings` é
   **gateada por papel** (ADMIN+) dentro dela mesma — partes da tela mudam ou somem conforme o
   `role` do membro, só não por template de acesso.
-  O módulo `marketing` libera as telas `campaigns`, `email` e `prospecting`. A tela `email` (submenu
+  O módulo `marketing` libera as telas `campaigns`, `email`, `emailInbox` e `prospecting`. A tela `email` (submenu
   E-mail, envio em massa via Resend) precisa ser marcada nos modelos de acesso para que membros a
-  vejam; owner e admin veem direto.
+  vejam; owner e admin veem direto. `emailInbox` ("Caixa de entrada do e-mail") não tem item de menu:
+  é a aba "Caixa de entrada" dentro de E-mail › Pela conta Microsoft, e libera ler e responder a caixa
+  Microsoft conectada da empresa. É separada de `email` para que um modelo de acesso possa liberar o
+  envio sem liberar a leitura da caixa; quem tem modelo de acesso só vê a aba se o modelo marcar as
+  duas telas. `emailInbox` também está em `OPT_IN_SCREENS` (mesmo arquivo): ler a caixa expõe
+  redefinição de senha, código de 2FA e e-mail pessoal do dono da caixa, então MEMBER **sem**
+  modelo de acesso **não** a recebe — só OWNER/ADMIN e membros cujo modelo marque a tela.
 - **[src/config/limits.ts](../../src/config/limits.ts)** — limites globais de uso, os mesmos para
   toda organização: `seatLimit` (25), `whatsappNumbersLimit` (10),
   `dispatchQuotaPerMonth` (50.000), `emailBroadcastQuotaPerMonth` (50.000), `prospectingQuotaPerMonth` (10.000),
@@ -103,9 +109,10 @@ Duas perguntas diferentes, duas fontes diferentes:
    `CORE_SCREENS` (`dashboard`, `settings`, `feed` — ninguém é dono, sempre disponíveis
    *independente de módulo*) com as `screens` de cada módulo instalado.
 2. **"O template de acesso deste membro permite esta tela?"** → `ctx.allowedScreens`, resolvido
-   por `resolveAllowedScreens` em [src/lib/access.ts](../../src/lib/access.ts): OWNER/ADMIN e
-   MEMBER sem template ganham `GATEABLE_SCREENS` inteiro; MEMBER com template fica restrito ao que
-   o template listar.
+   por `resolveAllowedScreens` em [src/lib/access.ts](../../src/lib/access.ts): OWNER/ADMIN ganham
+   `GATEABLE_SCREENS` inteiro; MEMBER sem template ganha `GATEABLE_SCREENS` **menos**
+   `OPT_IN_SCREENS` (hoje só `emailInbox`), que só chega por template; MEMBER com template fica
+   restrito ao que o template listar.
 
 O menu real é a interseção das duas, ao vivo em
 [src/components/app/app-shell.tsx:37-38](../../src/components/app/app-shell.tsx#L37-L38):
@@ -151,7 +158,7 @@ para o tipo mas sem dono ainda — não gatear nada por elas por engano.
 
 ## Paridade de i18n
 
-`src/messages/pt.json` e `src/messages/en.json` têm **2991 chaves-folha cada um** (contagem
+`src/messages/pt.json` e `src/messages/en.json` têm **3058 chaves-folha cada um** (contagem
 própria, recursiva sobre os dois arquivos — batem exatamente). Não existe script no repositório
 que verifique isso automaticamente: nenhum arquivo em `scripts/` nem entrada em `package.json`
 menciona `pt.json`/`en.json`. Adicionar uma chave de um lado sem adicionar do outro não quebra

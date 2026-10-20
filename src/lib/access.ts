@@ -2,24 +2,38 @@ import "server-only";
 import { redirect } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 import type { SessionRole } from "@/lib/session";
-import { GATEABLE_SCREENS, ALWAYS_ALLOWED, type Screen } from "@/config/screens";
+import {
+  GATEABLE_SCREENS,
+  ALWAYS_ALLOWED,
+  OPT_IN_SCREENS,
+  type Screen,
+} from "@/config/screens";
 import { hasModule, type ModuleId } from "@/config/modules";
 
 /**
  * Screen-level access control via templates.
  *
  * - OWNER / ADMIN always have full access (they manage the org).
- * - A MEMBER with NO template assigned has full access (default-open).
+ * - A MEMBER with NO template assigned gets every gateable screen EXCEPT the
+ *   `OPT_IN_SCREENS` (default-open, minus what must be granted explicitly —
+ *   e.g. reading the company mailbox).
  * - A MEMBER WITH a template is restricted to that template's screens (plus the
- *   always-allowed ones). Persisted on the membership, so it stays until an
- *   admin changes or removes it, and applies on the member's next request.
+ *   always-allowed ones); an opt-in screen is reachable only if the template
+ *   lists it. Persisted on the membership, so it stays until an admin changes
+ *   or removes it, and applies on the member's next request.
  */
 export function resolveAllowedScreens(
   role: SessionRole,
   templateScreens: string[] | null,
 ): string[] {
-  if (role !== "MEMBER" || templateScreens === null) {
+  if (role !== "MEMBER") {
     return [...ALWAYS_ALLOWED, ...GATEABLE_SCREENS];
+  }
+  if (templateScreens === null) {
+    return [
+      ...ALWAYS_ALLOWED,
+      ...GATEABLE_SCREENS.filter((s) => !OPT_IN_SCREENS.includes(s)),
+    ];
   }
   return [...ALWAYS_ALLOWED, ...templateScreens];
 }
