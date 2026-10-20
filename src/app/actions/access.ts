@@ -74,7 +74,7 @@ export async function updateAccessTemplate(
   }
 }
 
-/** Delete a template. Members assigned to it revert to full access (FK SET NULL). */
+/** Delete a template. Members assigned to it revert to the default set, without opt-in screens (FK SET NULL). */
 export async function deleteAccessTemplate(id: string): Promise<AccessResult> {
   const ctx = await getOrgContext();
   if (!ensureAdmin(ctx)) return { ok: false, error: "forbidden" };

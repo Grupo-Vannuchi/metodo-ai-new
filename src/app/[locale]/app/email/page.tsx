@@ -1,6 +1,9 @@
+import { Suspense } from "react";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { AlertTriangle, CheckCircle2, Plus } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
+import { canAccessScreen } from "@/lib/access";
+import { hasModule } from "@/config/modules";
 import { listEmailBroadcasts, countEmailsSentThisMonth } from "@/lib/queries/email-broadcasts";
 import { getSenderAccountView } from "@/lib/queries/email-sender-accounts";
 import { listPausedMessageKey, listReason } from "@/lib/email-broadcast/failure-reason";
@@ -8,6 +11,14 @@ import { broadcastChannelOf, emailListHref, listChannelFromParam } from "@/lib/e
 import { googleMailEnabledFor } from "@/lib/email-broadcast/google/oauth";
 import { microsoftMailConfigured } from "@/lib/email-broadcast/microsoft/oauth";
 import { deliveryTrackingConfigured } from "@/lib/email-broadcast/platform";
+import { inboxUnreadCount } from "@/lib/email-broadcast/microsoft/inbox";
+import {
+  inboxFilterFromParam,
+  inboxHref,
+  inboxSearchFromParam,
+  isGraphId,
+  microsoftTabFromParam,
+} from "@/lib/email-broadcast/microsoft/inbox-core";
 import { listSenderDomains } from "@/lib/queries/email-sender-domains";
 import { BackButton } from "@/components/app/back-bar";
 import { DeleteButton } from "@/components/crm/delete-button";
@@ -16,6 +27,9 @@ import { ChannelChoice } from "@/components/email/channel-choice";
 import { ChannelIcon } from "@/components/email/channel-icon";
 import { SenderAccountPanel } from "@/components/email/sender-account-panel";
 import { StatusBadge } from "@/components/email/status-badge";
+import { EmailInbox } from "@/components/email/inbox/email-inbox";
+import { MicrosoftTabs } from "@/components/email/inbox/microsoft-tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { buttonVariants } from "@/components/ui/button";
 import { LIMITS } from "@/config/limits";
 import { Link } from "@/i18n/navigation";
@@ -28,7 +42,13 @@ export default async function EmailPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ canal?: string | string[] }>;
+  searchParams: Promise<{
+    canal?: string | string[];
+    aba?: string | string[];
+    filtro?: string | string[];
+    q?: string | string[];
+    msg?: string | string[];
+  }>;
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
@@ -38,8 +58,14 @@ export default async function EmailPage({
   // Google is a pilot channel: only the companies that may use it see it.
   const googleEnabled = googleMailEnabledFor(ctx.organizationId);
   const hasMailboxChannel = microsoftEnabled || googleEnabled;
+  const sp = await searchParams;
   // Entering E-mail always asks the channel first (no remembered choice).
-  const view = listChannelFromParam((await searchParams).canal, { microsoft: microsoftEnabled, google: googleEnabled });
+  const view = listChannelFromParam(sp.canal, { microsoft: microsoftEnabled, google: googleEnabled });
+  // The Microsoft Inbox has its own screen key: a template can grant sending without reading.
+  const inboxAllowed = microsoftEnabled && canAccessScreen(ctx, "emailInbox");
+  /** Unread count for the badges (channel card, "Envios" tab), streamed so a slow Microsoft never holds the page. */
+  const unreadFor = (account: { status: string } | null) =>
+    inboxAllowed && account?.status === "ACTIVE" ? inboxUnreadCount(ctx.organizationId).catch(() => null) : null;
   const limit = LIMITS.emailBroadcastQuotaPerMonth;
 
   const header = (newHref: string) => (
@@ -70,6 +96,11 @@ export default async function EmailPage({
           google={googleAccount}
           googleEnabled={googleEnabled}
           quotaLimit={limit}
+          inbox={
+            inboxAllowed && microsoftAccount?.status === "ACTIVE"
+              ? { href: inboxHref(), unread: unreadFor(microsoftAccount) }
+              : null
+          }
         />
       </div>
     );
@@ -78,6 +109,56 @@ export default async function EmailPage({
   // The two mailbox channels (Microsoft and Google) share the layout; the platform has domains and a monthly quota.
   const provider = view === "microsoft" ? "MICROSOFT" : view === "google" ? "GOOGLE" : null;
   const mailbox = provider !== null;
+  const microsoft = view === "microsoft";
+  const tab = microsoft && inboxAllowed ? microsoftTabFromParam(sp.aba) : "envios";
+
+  const channelTitle = (
+    <div className="flex flex-wrap items-center gap-3">
+      <h2 className="flex items-center gap-2 text-lg font-semibold">
+        <ChannelIcon channel={view} />
+        {microsoft && inboxAllowed ? t("channel.microsoftTitle") : t(`listChannel.${view}`)}
+      </h2>
+      {hasMailboxChannel ? (
+        <Link href={emailListHref(null)} className="text-sm font-medium text-brand hover:underline">
+          {t("switchChannel")}
+        </Link>
+      ) : null}
+    </div>
+  );
+
+  if (microsoft && tab === "caixa") {
+    const account = await getSenderAccountView(ctx.organizationId, "MICROSOFT");
+    const msg = Array.isArray(sp.msg) ? sp.msg[0] : sp.msg;
+    return (
+      <>
+        <BackButton fallback={emailListHref(null)} />
+        <div className="flex flex-col gap-6">
+          {header("/app/email/new?via=microsoft")}
+          {channelTitle}
+          {/* No badge here: the list header shows the unread count, and one Graph call less keeps
+              the mailbox under Outlook's concurrency limit (and out of a race with the "read" mark). */}
+          <MicrosoftTabs active="caixa" unread={null} />
+          {account?.status === "ACTIVE" ? (
+            <Suspense fallback={<InboxSkeleton label={t("inbox.loading")} />}>
+              <EmailInbox
+                organizationId={ctx.organizationId}
+                account={account}
+                filter={inboxFilterFromParam(sp.filtro)}
+                search={inboxSearchFromParam(sp.q)}
+                messageId={isGraphId(msg) ? msg : null}
+                showCrm={hasModule(ctx.modules, "crm") && canAccessScreen(ctx, "contacts")}
+              />
+            </Suspense>
+          ) : (
+            <div className="max-w-2xl">
+              <SenderAccountPanel provider="MICROSOFT" account={account} />
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
+
   const [rows, domains, used, account] = await Promise.all([
     listEmailBroadcasts(ctx.organizationId, broadcastChannelOf(view)),
     mailbox ? Promise.resolve([] as string[]) : listSenderDomains(ctx.organizationId),
@@ -95,17 +176,8 @@ export default async function EmailPage({
       <div className="flex flex-col gap-6">
         {header(`/app/email/new?via=${view === "plataforma" ? "platform" : view}`)}
 
-        <div className="flex flex-wrap items-center gap-3">
-          <h2 className="flex items-center gap-2 text-lg font-semibold">
-            <ChannelIcon channel={view} />
-            {t(`listChannel.${view}`)}
-          </h2>
-          {hasMailboxChannel ? (
-            <Link href={emailListHref(null)} className="text-sm font-medium text-brand hover:underline">
-              {t("switchChannel")}
-            </Link>
-          ) : null}
-        </div>
+        {channelTitle}
+        {microsoft && inboxAllowed ? <MicrosoftTabs active="envios" unread={unreadFor(account)} /> : null}
 
         {provider ? (
           <div className="max-w-2xl">
@@ -223,5 +295,26 @@ export default async function EmailPage({
         )}
       </div>
     </>
+  );
+}
+
+/** Placeholder while the Inbox loads from Microsoft. */
+function InboxSkeleton({ label }: { label: string }) {
+  return (
+    <div className="flex min-h-[640px] overflow-hidden rounded-xl border border-border bg-card" aria-busy="true">
+      <span className="sr-only">{label}</span>
+      <div className="flex w-full flex-col gap-3 p-4 md:w-[380px] md:shrink-0 md:border-r md:border-border">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-8 w-2/3" />
+        {Array.from({ length: 6 }, (_, i) => (
+          <Skeleton key={i} className="h-16 w-full" />
+        ))}
+      </div>
+      <div className="hidden flex-1 flex-col gap-4 p-6 md:flex">
+        <Skeleton className="h-7 w-1/2" />
+        <Skeleton className="h-10 w-2/3" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    </div>
   );
 }

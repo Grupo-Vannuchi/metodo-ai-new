@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ArrowLeft, ArrowRight, CircleCheck, MoreHorizontal, Pencil, Star, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,8 +15,8 @@ type Props = {
   isFirst: boolean;
   isLast: boolean;
   dragId: string | null;
-  /** Drop indicator in this column: undefined = none, null = at the end, id = above that card. */
-  dropBeforeId: string | null | undefined;
+  /** A dragged card is over this column (where it would go if dropped now). */
+  dropTarget: boolean;
   onDragStartCard: (id: string) => void;
   onDragEndCard: () => void;
   onDragOverBody: (e: React.DragEvent<HTMLDivElement>) => void;
@@ -30,12 +30,10 @@ type Props = {
   onMoveCardTo: (taskId: string, columnId: string) => void;
 };
 
-const DropLine = () => <div className="h-0.5 shrink-0 rounded-full bg-brand" />;
-
 /** One kanban column: title (click to rename), entrance star, card count, the
- * "⋯" menu, and the drop zone with its cards. */
+ * "⋯" menu, and the drop zone with its cards (already in display order). */
 export function BoardColumnView(props: Props) {
-  const { column, cards, columns, isFirst, isLast, dragId, dropBeforeId } = props;
+  const { column, cards, columns, isFirst, isLast, dragId, dropTarget } = props;
   const t = useTranslations("tasks");
   const [editing, setEditing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -207,27 +205,24 @@ export function BoardColumnView(props: Props) {
         }}
         className={cn(
           "flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded-xl border bg-muted/30 p-2 transition-colors",
-          dropBeforeId !== undefined ? "border-brand bg-brand/5" : "border-border",
+          dropTarget ? "border-brand bg-brand/5" : "border-border",
         )}
       >
         {cards.map((task) => (
-          <Fragment key={task.id}>
-            {dropBeforeId === task.id ? <DropLine /> : null}
-            <BoardCard
-              task={task}
-              columnId={column.id}
-              columns={columns}
-              dragging={dragId === task.id}
-              onDragStart={props.onDragStartCard}
-              onDragEnd={props.onDragEndCard}
-              onToggleDone={props.onToggleDone}
-              onDelete={props.onDeleteCard}
-              onMoveTo={props.onMoveCardTo}
-            />
-          </Fragment>
+          <BoardCard
+            key={task.id}
+            task={task}
+            columnId={column.id}
+            columns={columns}
+            dragging={dragId === task.id}
+            onDragStart={props.onDragStartCard}
+            onDragEnd={props.onDragEndCard}
+            onToggleDone={props.onToggleDone}
+            onDelete={props.onDeleteCard}
+            onMoveTo={props.onMoveCardTo}
+          />
         ))}
-        {dropBeforeId === null ? <DropLine /> : null}
-        {cards.length === 0 && dropBeforeId === undefined ? (
+        {cards.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
             {t("board.empty")}
           </p>

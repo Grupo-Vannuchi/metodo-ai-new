@@ -115,6 +115,24 @@ import {
   googleHasGmail,
   pilotAllows,
 } from "../src/lib/email-broadcast/google/core";
+import {
+  attachmentDisposition,
+  attachmentsFromGraph,
+  graphSearchValue,
+  inboxBodyDocument,
+  inboxFilterFromParam,
+  inboxHref,
+  inboxSearchFromParam,
+  isGraphId,
+  matchReplyToSend,
+  microsoftTabFromParam,
+  neutralizeOpeners,
+  normalizeSubject,
+  replaceCidImages,
+  replyHtmlFromText,
+  subjectAnswers,
+  summaryFromGraph,
+} from "../src/lib/email-broadcast/microsoft/inbox-core";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -1058,6 +1076,193 @@ check("list channel links and the broadcast channel they map to", () => {
   assert.equal(listChannelOf("MICROSOFT"), "microsoft");
   assert.equal(broadcastChannelOf("plataforma"), "PLATFORM");
   assert.equal(broadcastChannelOf("microsoft"), "MICROSOFT");
+});
+
+// --- Microsoft inbox ---------------------------------------------------------
+check("inbox tab, filter and search come from the URL with safe defaults", () => {
+  assert.equal(microsoftTabFromParam("caixa"), "caixa");
+  assert.equal(microsoftTabFromParam(undefined), "envios");
+  assert.equal(microsoftTabFromParam("x"), "envios");
+  assert.equal(inboxFilterFromParam(["nao-lidas"]), "nao-lidas");
+  assert.equal(inboxFilterFromParam("respostas"), "respostas");
+  assert.equal(inboxFilterFromParam("tudo"), "todas");
+  assert.equal(inboxSearchFromParam("  preço  "), "preço");
+  assert.equal(inboxSearchFromParam("x".repeat(300)).length, 100);
+});
+
+check("inboxHref keeps only what differs from the defaults", () => {
+  assert.equal(inboxHref(), "/app/email?canal=microsoft&aba=caixa");
+  assert.equal(inboxHref({ filtro: "todas", q: "", msg: "" }), "/app/email?canal=microsoft&aba=caixa");
+  assert.equal(
+    inboxHref({ filtro: "nao-lidas", q: "tabela de preço", msg: "AAMk=" }),
+    "/app/email?canal=microsoft&aba=caixa&filtro=nao-lidas&q=tabela+de+pre%C3%A7o&msg=AAMk%3D",
+  );
+});
+
+check("isGraphId accepts Graph ids and refuses anything that could bend a URL", () => {
+  assert.ok(isGraphId("AAMkAGI2TG93AAA="));
+  assert.ok(isGraphId("AQMkADAwATM0MDAAMS1i_ZDA-AAA/+"));
+  assert.ok(!isGraphId(""));
+  assert.ok(!isGraphId("../me/messages"));
+  assert.ok(!isGraphId("abc?$select=body"));
+  assert.ok(!isGraphId("a b"));
+  assert.ok(!isGraphId(undefined));
+  assert.ok(!isGraphId("x".repeat(513)));
+});
+
+check("graphSearchValue quotes the text and drops quotes and backslashes", () => {
+  assert.equal(graphSearchValue("  tabela  de preços "), '"tabela de preços"');
+  assert.equal(graphSearchValue('a"b\\c'), '"a b c"');
+  assert.equal(graphSearchValue('  "" '), null);
+});
+
+check("normalizeSubject strips reply, forward and auto-reply markers", () => {
+  assert.equal(normalizeSubject("RE: RES: Tabela de Preços"), "tabela de preços");
+  assert.equal(normalizeSubject("Fwd:  Re[2]: Convite"), "convite");
+  assert.equal(normalizeSubject("Resposta automática: Tabela"), "tabela");
+  assert.equal(normalizeSubject("Automatic reply: Tabela"), "tabela");
+  assert.equal(normalizeSubject("Recibo de março"), "recibo de março");
+  assert.equal(normalizeSubject("RE: [EXTERNAL] Proposta"), "proposta");
+  assert.equal(normalizeSubject("*EXTERNAL* RE: Proposta"), "proposta");
+  assert.equal(normalizeSubject("[EXT] Re: Tabela"), "tabela");
+});
+
+check("subjectAnswers matches literal pieces around {{nome}}/{{empresa}} in order", () => {
+  assert.ok(subjectAnswers("Re: Tabela de preços — outubro", "Tabela de preços — outubro"));
+  assert.ok(subjectAnswers("RES: Oi Ana, novidades da Loja X", "Oi {{nome}}, novidades da {{empresa}}"));
+  assert.ok(!subjectAnswers("Re: novidades da Loja X, oi Ana", "Oi {{nome}}, novidades da {{empresa}}"));
+  assert.ok(!subjectAnswers("Re: Outro assunto", "Tabela de preços"));
+  assert.ok(!subjectAnswers("Re: Ana", "{{nome}}"), "a subject made only of variables matches nothing");
+});
+
+check("subjectAnswers anchors the first and last pieces unless a variable sits there", () => {
+  assert.ok(!subjectAnswers("Nova proposta de parceria", "Proposta"), "no variables: subjects must be equal");
+  assert.ok(!subjectAnswers("Re: Proposta revisada", "Proposta"));
+  assert.ok(subjectAnswers("RES: Proposta", "Proposta"));
+  assert.ok(subjectAnswers("Resposta automática: Proposta", "Proposta"));
+  assert.ok(subjectAnswers("Re: Ana, sua proposta", "{{nome}}, sua proposta"));
+  assert.ok(subjectAnswers("Re: joi oi", "{{nome}} oi"), "the last piece is found at the end, not at its first copy");
+  assert.ok(!subjectAnswers("Re: Ana, sua proposta nova", "{{nome}}, sua proposta"));
+  assert.ok(subjectAnswers("Re: Proposta para Loja X", "Proposta para {{empresa}}"));
+  assert.ok(!subjectAnswers("Re: Nova proposta para Loja X", "Proposta para {{empresa}}"));
+  assert.ok(!subjectAnswers("Re: Oi Ana, novidades da Loja X e mais", "Oi {{nome}}, novidades da Loja X"));
+});
+
+check("matchReplyToSend picks the latest earlier send to that sender with a matching subject", () => {
+  const sends = [
+    { email: "ana@x.com", broadcastId: "b1", subject: "Tabela de preços", sentAt: new Date("2026-10-01T10:00:00Z") },
+    { email: "ana@x.com", broadcastId: "b2", subject: "Tabela de preços", sentAt: new Date("2026-10-12T10:00:00Z") },
+    { email: "ana@x.com", broadcastId: "b3", subject: "Tabela de preços", sentAt: new Date("2026-10-20T10:00:00Z") },
+    { email: "bia@x.com", broadcastId: "b4", subject: "Convite", sentAt: new Date("2026-10-08T10:00:00Z") },
+  ];
+  const at = new Date("2026-10-15T12:00:00Z");
+  assert.equal(matchReplyToSend({ fromEmail: "Ana@X.com", subject: "RE: Tabela de preços", receivedAt: at }, sends)?.broadcastId, "b2");
+  assert.equal(matchReplyToSend({ fromEmail: "ana@x.com", subject: "Outro", receivedAt: at }, sends), null);
+  assert.equal(matchReplyToSend({ fromEmail: "caio@x.com", subject: "Re: Convite", receivedAt: at }, sends), null);
+  assert.equal(matchReplyToSend({ fromEmail: null, subject: "Re: Convite", receivedAt: at }, sends), null);
+});
+
+check("summaryFromGraph and attachmentsFromGraph read Graph defensively", () => {
+  const m = summaryFromGraph({
+    id: "AAMk1",
+    subject: " Oi ",
+    from: { emailAddress: { name: "Ana", address: "Ana@X.com" } },
+    receivedDateTime: "2026-10-20T10:00:00Z",
+    isRead: false,
+    hasAttachments: true,
+    bodyPreview: "linha 1\r\n linha 2",
+  });
+  assert.deepEqual(m, {
+    id: "AAMk1",
+    subject: "Oi",
+    from: { name: "Ana", email: "ana@x.com" },
+    receivedAt: "2026-10-20T10:00:00Z",
+    isRead: false,
+    hasAttachments: true,
+    preview: "linha 1 linha 2",
+  });
+  assert.equal(summaryFromGraph({ id: "../x" }), null);
+  assert.equal(summaryFromGraph(null), null);
+  const raw = [
+    { "@odata.type": "#microsoft.graph.fileAttachment", id: "A1", name: "nota.pdf", contentType: "application/pdf", size: 10, isInline: false },
+    { "@odata.type": "#microsoft.graph.fileAttachment", id: "A2", name: "logo.png", isInline: true },
+    { "@odata.type": "#microsoft.graph.itemAttachment", id: "A3", name: "Convite", size: 5 },
+    { id: "../x", name: "bad id" },
+  ];
+  const ids = (atts: { id: string; downloadable: boolean }[]) => atts.map((a) => [a.id, a.downloadable]);
+  assert.deepEqual(ids(attachmentsFromGraph(raw)), [
+    ["A1", true],
+    ["A2", true],
+    ["A3", false],
+  ], "an inline part not shown in the body stays listed");
+  assert.deepEqual(ids(attachmentsFromGraph(raw, new Set(["A2"]))), [
+    ["A1", true],
+    ["A3", false],
+  ], "an inline image shown in the body is hidden");
+  assert.deepEqual(ids(attachmentsFromGraph(raw, new Set(["A1", "A3"]))).map(([id]) => id), ["A1", "A2", "A3"], "regular attachments are always listed");
+  assert.deepEqual(attachmentsFromGraph(null), []);
+});
+
+check("replyHtmlFromText escapes the typed text and keeps its line breaks", () => {
+  assert.equal(replyHtmlFromText(" Oi <b>Ana</b>\n\nAbraço "), "<div>Oi &lt;b&gt;Ana&lt;/b&gt;<br><br>Abraço</div>");
+});
+
+check("replaceCidImages swaps known content ids only", () => {
+  const html = '<img src="cid:logo@01"><img src="CID:other">';
+  assert.equal(
+    replaceCidImages(html, { "<logo@01>": "data:image/png;base64,AA" }),
+    '<img src="data:image/png;base64,AA"><img src="CID:other">',
+  );
+  assert.equal(replaceCidImages(html, {}), html);
+});
+
+check("inboxBodyDocument locks the body down and escapes plain text", () => {
+  const doc = inboxBodyDocument({ contentType: "html", content: "<p>Oi</p>" });
+  assert.match(doc, /Content-Security-Policy" content="default-src 'none'/);
+  assert.match(doc, /<base target="_blank">/);
+  assert.ok(doc.indexOf("Content-Security-Policy") < doc.indexOf("<p>Oi</p>"), "the policy comes before the sender's HTML");
+  const text = inboxBodyDocument({ contentType: "text", content: "<script>x</script>" });
+  assert.ok(!text.includes("<script>"));
+  assert.ok(text.includes("&lt;script&gt;"));
+  const linked = inboxBodyDocument({ contentType: "html", content: '<a rel="opener" href="https://x.com">x</a>' });
+  assert.ok(linked.includes('<a rel=noopener  rel="opener" href="https://x.com">x</a>'), "HTML links can't get the opener");
+  const plainLink = inboxBodyDocument({ contentType: "text", content: "<a href=x>" });
+  assert.ok(!plainLink.includes("noopener"), "plain text is escaped, not rewritten");
+});
+
+check("neutralizeOpeners puts rel=noopener first on <a> and <area> only", () => {
+  assert.equal(neutralizeOpeners('<a rel="opener" href="x">'), '<a rel=noopener  rel="opener" href="x">');
+  assert.equal(neutralizeOpeners("<A HREF=x>y</A>"), "<A rel=noopener  HREF=x>y</A>");
+  assert.equal(neutralizeOpeners("<area shape=rect>"), "<area rel=noopener  shape=rect>");
+  assert.equal(neutralizeOpeners("<a>"), "<a rel=noopener >");
+  assert.equal(neutralizeOpeners('<a\nhref="x">'), '<a rel=noopener \nhref="x">');
+  // The trailing space ends the unquoted value: a "/" can't glue the sender's rel onto ours.
+  assert.equal(neutralizeOpeners('<a/rel="opener">'), '<a rel=noopener /rel="opener">');
+  // No quotes are added, so an "<a" inside a quoted attribute can't break out of it.
+  assert.equal(neutralizeOpeners('<p data-x="<a href=y>">z</p>'), '<p data-x="<a rel=noopener  href=y>">z</p>');
+  const untouched = "<abbr>x</abbr><address>y</address><article>z</article><b>a</b>";
+  assert.equal(neutralizeOpeners(untouched), untouched);
+});
+
+check("attachmentDisposition always downloads and encodes the name", () => {
+  assert.equal(attachmentDisposition("nota.pdf"), "attachment; filename=\"nota.pdf\"; filename*=UTF-8''nota.pdf");
+  assert.equal(
+    attachmentDisposition('relatório "final".pdf'),
+    "attachment; filename=\"relat_rio _final_.pdf\"; filename*=UTF-8''relat%C3%B3rio%20%22final%22.pdf",
+  );
+  assert.equal(attachmentDisposition("a\r\nb"), "attachment; filename=\"a  b\"; filename*=UTF-8''a%20%20b");
+  assert.equal(attachmentDisposition("   "), "attachment; filename=\"anexo\"; filename*=UTF-8''anexo");
+});
+
+check("attachmentDisposition survives lone surrogates and escapes ' ( ) * (RFC 5987)", () => {
+  assert.doesNotThrow(() => attachmentDisposition("a\uD800b.pdf"));
+  assert.ok(attachmentDisposition("a\uD800b.pdf").endsWith("filename*=UTF-8''a%EF%BF%BDb.pdf"));
+  assert.ok(attachmentDisposition("a\uDC00.pdf").endsWith("filename*=UTF-8''a%EF%BF%BD.pdf"));
+  assert.ok(attachmentDisposition("😀.pdf").endsWith("filename*=UTF-8''%F0%9F%98%80.pdf"), "a real pair is kept");
+  assert.equal(
+    attachmentDisposition("it's (1)*.pdf"),
+    "attachment; filename=\"it's (1)*.pdf\"; filename*=UTF-8''it%27s%20%281%29%2A.pdf",
+  );
 });
 
 async function checkAsync(name: string, fn: () => Promise<void>): Promise<void> {

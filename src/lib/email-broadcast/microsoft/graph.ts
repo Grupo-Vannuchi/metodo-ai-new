@@ -15,7 +15,7 @@ export type GraphResult<T> = { ok: true; status: number; data: T; location: stri
 export async function graphCall<T>(
   url: string,
   init: {
-    method: "GET" | "POST" | "PUT" | "DELETE";
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     token?: string;
     body?: string | Uint8Array;
     contentType?: string;
@@ -58,6 +58,79 @@ export async function graphCall<T>(
     return { ok: true, status: res.status, data: json as T, location: res.headers.get("location") };
   } catch (e) {
     return { ok: false, status: 0, code: null, message: e instanceof Error ? e.message : "network error", retryAfter: null };
+  }
+}
+
+export type GraphStream = { ok: true; status: number; body: ReadableStream<Uint8Array>; contentLength: number | null };
+
+/** A download that stops sending for this long is aborted, so a stalled Graph never holds a worker. */
+const STREAM_IDLE_MS = 60_000;
+
+/** Pass the body through, aborting the fetch when no chunk arrives within idleMs. */
+function withIdleTimeout(body: ReadableStream<Uint8Array>, abort: AbortController, idleMs: number): ReadableStream<Uint8Array> {
+  let timer = setTimeout(() => abort.abort(), idleMs);
+  return body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        clearTimeout(timer);
+        timer = setTimeout(() => abort.abort(), idleMs);
+        controller.enqueue(chunk);
+      },
+      flush() {
+        clearTimeout(timer);
+      },
+    }),
+  );
+}
+
+/**
+ * GET a binary resource (an attachment's `/$value`) as a stream that is never
+ * held in memory: the caller pipes `body` on (or cancels it). The timeout
+ * covers the response headers only, so a large file isn't cut mid-download.
+ * Failures come back as in graphCall (status 0 for network errors/timeouts).
+ */
+export async function graphGetStream(url: string, token: string, timeoutMs = 30_000): Promise<GraphStream | GraphFailure> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      // identity: a compressed answer would be unzipped by fetch and stop matching its Content-Length.
+      headers: { Authorization: `Bearer ${token}`, "Accept-Encoding": "identity" },
+      cache: "no-store",
+      signal: abort.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      let err: Record<string, unknown> = {};
+      try {
+        const json = (text ? JSON.parse(text) : {}) as Record<string, unknown>;
+        if (json.error && typeof json.error === "object") err = json.error as Record<string, unknown>;
+      } catch {
+        err = {};
+      }
+      const retryAfter = Number(res.headers.get("retry-after"));
+      return {
+        ok: false,
+        status: res.status,
+        code: typeof err.code === "string" ? err.code : null,
+        message: typeof err.message === "string" ? err.message : `Graph ${res.status}`,
+        retryAfter: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
+      };
+    }
+    const lengthHeader = res.headers.get("content-length");
+    const length = lengthHeader === null ? Number.NaN : Number(lengthHeader);
+    const encoding = (res.headers.get("content-encoding") ?? "identity").trim().toLowerCase();
+    return {
+      ok: true,
+      status: res.status,
+      body: res.body ? withIdleTimeout(res.body, abort, STREAM_IDLE_MS) : new ReadableStream<Uint8Array>({ start: (c) => c.close() }),
+      contentLength: encoding === "identity" && Number.isSafeInteger(length) && length >= 0 ? length : null,
+    };
+  } catch (e) {
+    return { ok: false, status: 0, code: null, message: e instanceof Error ? e.message : "network error", retryAfter: null };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

@@ -4,7 +4,9 @@
  */
 import assert from "node:assert/strict";
 import {
+  cardOrderFor,
   COLUMN_NAME_MAX,
+  columnForDeadline,
   columnForDoneChange,
   columnForNewTask,
   compareBoardCards,
@@ -97,22 +99,81 @@ check("effectiveColumnId: the card's own column, else the entrance", () => {
   assert.equal(effectiveColumnId("deleted", ids, "col-entrance"), "col-entrance");
 });
 
-check("tasksOfColumn: a column's cards in board order; the entrance also takes unplaced ones", () => {
+check("cardOrderFor: by due date, soonest first; same day by the time; undated last", () => {
+  const card = (id: string, dueDate: string | null, createdAt = "2026-01-01T00:00:00Z") => ({
+    id,
+    dueDate: dueDate ? at(dueDate) : null,
+    doneAt: null,
+    createdAt: at(createdAt),
+  });
+  const cards = [
+    card("21 Oct", "2026-10-21T13:00:00Z"),
+    card("no date", null),
+    card("20 Oct 14h", "2026-10-20T17:00:00Z"),
+    card("20 Oct 09h", "2026-10-20T12:00:00Z"),
+  ];
+  assert.deepEqual(
+    [...cards].sort(cardOrderFor({ isDone: false })).map((x) => x.id),
+    ["20 Oct 09h", "20 Oct 14h", "21 Oct", "no date"],
+  );
+  // Same due date (or none): the oldest card first, then the id.
+  const ties = [
+    card("b", "2026-10-20T12:00:00Z", "2026-01-02T00:00:00Z"),
+    card("z", null, "2026-01-01T00:00:00Z"),
+    card("c", "2026-10-20T12:00:00Z", "2026-01-01T00:00:00Z"),
+    card("a", "2026-10-20T12:00:00Z", "2026-01-01T00:00:00Z"),
+    card("y", null, "2026-01-03T00:00:00Z"),
+  ];
+  assert.deepEqual([...ties].sort(cardOrderFor({ isDone: false })).map((x) => x.id), ["a", "c", "b", "z", "y"]);
+});
+
+check("cardOrderFor: the done column shows the most recently completed first", () => {
+  const card = (id: string, doneAt: string | null, dueDate: string | null) => ({
+    id,
+    dueDate: dueDate ? at(dueDate) : null,
+    doneAt: doneAt ? at(doneAt) : null,
+    createdAt: at("2026-01-01T00:00:00Z"),
+  });
+  const cards = [
+    card("done 18", "2026-10-18T12:00:00Z", "2026-10-01T12:00:00Z"),
+    card("open", null, "2026-09-01T12:00:00Z"),
+    card("done 20", "2026-10-20T12:00:00Z", "2026-12-01T12:00:00Z"),
+    card("done 19", "2026-10-19T12:00:00Z", null),
+  ];
+  assert.deepEqual(
+    [...cards].sort(cardOrderFor({ isDone: true })).map((x) => x.id),
+    ["done 20", "done 19", "done 18", "open"],
+  );
+});
+
+check("tasksOfColumn: a column's cards in display order; the entrance also takes unplaced ones", () => {
   const cols = [
     { id: "a", name: "A", order: 0, isEntrance: false, isDone: false, dateBucket: null },
     { id: "e", name: "E", order: 1, isEntrance: true, isDone: false, dateBucket: null },
+    { id: "d", name: "D", order: 2, isEntrance: false, isDone: true, dateBucket: null },
   ];
-  const task = (id: string, boardColumnId: string | null, boardOrder: number) => ({
+  const task = (id: string, boardColumnId: string | null, dueDate: string | null, doneAt: string | null = null) => ({
     id,
     boardColumnId,
-    boardOrder,
+    dueDate: dueDate ? at(dueDate) : null,
+    doneAt: doneAt ? at(doneAt) : null,
     createdAt: at("2026-01-01T00:00:00Z"),
   });
-  const tasks = [task("1", "a", 2), task("2", null, 5), task("3", "a", 1), task("4", "gone", 3), task("5", "e", 4)];
+  const tasks = [
+    task("1", "a", "2026-10-21T12:00:00Z"),
+    task("2", null, null),
+    task("3", "a", "2026-10-20T12:00:00Z"),
+    task("4", "gone", "2026-10-25T12:00:00Z"),
+    task("5", "e", "2026-10-22T12:00:00Z"),
+    task("6", "d", "2026-10-01T12:00:00Z", "2026-10-10T12:00:00Z"),
+    task("7", "d", "2026-10-30T12:00:00Z", "2026-10-15T12:00:00Z"),
+  ];
   assert.deepEqual(tasksOfColumn(tasks, "a", cols).map((x) => x.id), ["3", "1"]);
-  assert.deepEqual(tasksOfColumn(tasks, "e", cols).map((x) => x.id), ["4", "5", "2"]);
+  assert.deepEqual(tasksOfColumn(tasks, "e", cols).map((x) => x.id), ["5", "4", "2"]);
+  assert.deepEqual(tasksOfColumn(tasks, "d", cols).map((x) => x.id), ["7", "6"]);
   assert.deepEqual(tasksOfColumn(tasks, "a", []), []);
-  assert.deepEqual(tasks.map((x) => x.id), ["1", "2", "3", "4", "5"]); // input left untouched
+  assert.deepEqual(tasksOfColumn(tasks, "unknown", cols), []);
+  assert.deepEqual(tasks.map((x) => x.id), ["1", "2", "3", "4", "5", "6", "7"]); // input left untouched
 });
 
 const board = [
@@ -181,6 +242,53 @@ check("doneAfterMove: dropping in the done column completes, taking it out reope
   assert.equal(doneAfterMove(false, "late", "nodate", board), false);
   assert.equal(doneAfterMove(true, "late", "nodate", board), true); // done outside the done column stays done
   assert.equal(doneAfterMove(false, "late", "done", withoutDone), false);
+});
+
+const deadlineTask = (boardColumnId: string | null, dueDate: Date | null, doneAt: Date | null = null) => ({
+  boardColumnId,
+  dueDate,
+  doneAt,
+});
+
+check("columnForDeadline: an open task due before today goes to the overdue column from any column", () => {
+  const withCustom = [...board, { id: "mine", name: "Aguardando cliente", order: 5, isEntrance: false, isDone: false, dateBucket: null }];
+  assert.equal(columnForDeadline(deadlineTask("today", DUE.yesterday), board, now), "late");
+  assert.equal(columnForDeadline(deadlineTask("soon", DUE.yesterday), board, now), "late");
+  assert.equal(columnForDeadline(deadlineTask("nodate", DUE.yesterday), board, now), "late");
+  assert.equal(columnForDeadline(deadlineTask("mine", DUE.yesterday), withCustom, now), "late"); // a column the company created
+  assert.equal(columnForDeadline(deadlineTask(null, DUE.yesterday), board, now), "late"); // not placed yet
+  assert.equal(columnForDeadline(deadlineTask("gone", DUE.yesterday), board, now), "late"); // its column was deleted
+  assert.equal(columnForDeadline(deadlineTask("late", DUE.yesterday), board, now), null); // already there
+});
+
+check("columnForDeadline: overdue starts at São Paulo's midnight; a task due today stays", () => {
+  assert.equal(columnForDeadline(deadlineTask("today", at("2026-10-14T02:59:59Z")), board, now), "late"); // 23:59:59 of Oct 13 SP
+  assert.equal(columnForDeadline(deadlineTask("today", at("2026-10-14T03:00:00Z")), board, now), null); // 00:00 of Oct 14 SP
+  // 23:30 of Oct 14 in São Paulo, already Oct 15 in UTC: due 17:00 of Oct 14 isn't overdue yet.
+  assert.equal(columnForDeadline(deadlineTask("today", DUE.today), board, at("2026-10-15T02:30:00Z")), null);
+  assert.equal(columnForDeadline(deadlineTask("today", DUE.today), board, at("2026-10-15T03:00:00Z")), "late");
+});
+
+check("columnForDeadline: done tasks and the done column are left alone; no overdue column, nothing moves", () => {
+  assert.equal(columnForDeadline(deadlineTask("done", DUE.yesterday, now), board, now), null);
+  assert.equal(columnForDeadline(deadlineTask("today", DUE.yesterday, now), board, now), null); // done outside the done column
+  assert.equal(columnForDeadline(deadlineTask("late", DUE.later, now), board, now), null); // done, in the overdue column
+  assert.equal(columnForDeadline(deadlineTask("done", DUE.yesterday), board, now), null); // open card in the done column
+  const withoutLate = board.filter((c) => c.id !== "late");
+  assert.equal(columnForDeadline(deadlineTask("today", DUE.yesterday), withoutLate, now), null);
+  assert.equal(columnForDeadline(deadlineTask("today", DUE.yesterday), [], now), null);
+});
+
+check("columnForDeadline: a card in the overdue column that isn't overdue goes to its date's column", () => {
+  assert.equal(columnForDeadline(deadlineTask("late", DUE.today), board, now), "today");
+  assert.equal(columnForDeadline(deadlineTask("late", DUE.lateToday), board, now), "today");
+  assert.equal(columnForDeadline(deadlineTask("late", DUE.later), board, now), "soon");
+  assert.equal(columnForDeadline(deadlineTask("late", null), board, now), "nodate");
+  assert.equal(columnForDeadline(deadlineTask("late", DUE.today), withoutToday, now), "nodate"); // no such column: the entrance
+  // The overdue column is the entrance and there's no column for the date: it stays.
+  const lateEntrance = withoutToday.map((c) => ({ ...c, isEntrance: c.id === "late" }));
+  assert.equal(columnForDeadline(deadlineTask("late", DUE.today), lateEntrance, now), null);
+  assert.equal(columnForDeadline(deadlineTask(null, DUE.today), lateEntrance, now), null);
 });
 
 console.log(`\n✅ task-board: ${passed} checks passed.`);

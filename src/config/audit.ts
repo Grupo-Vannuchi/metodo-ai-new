@@ -22,6 +22,7 @@ export const AUDIT_ACTIONS = [
   "email_sender.connected",
   "email_sender.replaced",
   "email_sender.disconnected",
+  "email_sender.replied",
   "connection.created",
   "connection.updated",
   "connection.deleted",
