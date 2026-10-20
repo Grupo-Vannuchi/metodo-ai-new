@@ -193,9 +193,12 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
   só muda de coluna se alguém mover ou concluir — vencer não move. Assim nenhum caminho que cria tarefa
   (formulário, recorrência, Copiloto, automações, WhatsApp) precisa conhecer o quadro. A coluna de concluídas
   (`task_board_columns.isDone`, ✓) recebe toda tarefa concluída: concluir (check, status "Concluída" ou soltar
-  o card nela) leva o card para o topo dela, e reabrir (desmarcar ou arrastar para fora) leva para o fim da
-  coluna da data dela no dia da reabertura, ou da entrada (`columnForDoneChange`, `doneAfterMove`,
-  `placeTaskByDoneState`). Ela não pode ser excluída nem virar a entrada. A visão em lista (`/app/tasks`) usa as mesmas colunas como abas (`tasksOfColumn`); "Meus itens" e as listas do CRM seguem com as abas por prazo. Toda alteração que depende do estado do quadro (mover card, criar, reordenar, trocar a entrada, excluir coluna)
+  o card nela) leva o card para ela, e reabrir (desmarcar ou arrastar para fora) leva para a
+  coluna da data dela no dia da reabertura, ou para a entrada (`columnForDoneChange`, `doneAfterMove`,
+  `placeTaskByDoneState`). Ela não pode ser excluída nem virar a entrada. Dentro de cada coluna os cards vão
+  pelo prazo, do mais próximo ao mais distante (no mesmo dia, pelo horário), com as sem prazo no fim; a de
+  concluídas mostra a concluída mais recentemente primeiro (`cardOrderFor`, desde 20/10/2026). Arrastar só
+  troca a coluna; `tasks.boardOrder` continua gravado, mas nenhuma tela ordena por ele. A visão em lista (`/app/tasks`) usa as mesmas colunas como abas, na mesma ordem (`tasksOfColumn`); "Meus itens" e as listas do CRM seguem com as abas por prazo. Toda alteração que depende do estado do quadro (mover card, criar, reordenar, trocar a entrada, excluir coluna)
   passa pela mesma trava por empresa (`lockTaskBoard`); renomear é uma única escrita. Regras puras em
   `src/lib/tasks/board-core.ts` (`npm run check:tasks`).
 - **Prospecção:** Google Places com **chave do próprio cliente (BYO)**, assíncrona via QStash, descarte LGPD.
