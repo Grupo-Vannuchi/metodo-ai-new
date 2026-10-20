@@ -15,6 +15,7 @@ export const GATEABLE_SCREENS = [
   "prospecting",
   "campaigns",
   "email",
+  "emailInbox",
   "inbox",
   "companies",
   "contacts",
@@ -26,6 +27,15 @@ export const GATEABLE_SCREENS = [
 ] as const;
 
 export type Screen = (typeof GATEABLE_SCREENS)[number];
+
+/**
+ * Gateable screens left OUT of the default-open set. A MEMBER without a
+ * template gets every gateable screen except these; they must be granted
+ * explicitly by an access template. OWNER / ADMIN always have them.
+ * `emailInbox` reads the company's connected mailbox (password resets, 2FA
+ * codes, personal mail), so it is opt-in.
+ */
+export const OPT_IN_SCREENS: readonly Screen[] = ["emailInbox"];
 
 /** Screens every authenticated member can always reach (no template needed). */
 export const ALWAYS_ALLOWED: readonly string[] = ["dashboard", "settings"];

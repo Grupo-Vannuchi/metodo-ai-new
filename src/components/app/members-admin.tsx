@@ -215,7 +215,7 @@ export function MembersAdmin({
                         disabled={pending}
                         onChange={(e) => run(() => setMemberTemplate(m.membershipId, e.target.value || null))}
                       >
-                        <option value="">{t("fullAccess")}</option>
+                        <option value="">{t("noTemplate")}</option>
                         {templates.map((tpl) => (
                           <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
                         ))}
