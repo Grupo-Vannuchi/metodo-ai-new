@@ -189,8 +189,14 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
   aparecia (horário de Brasília). Tarefa nova nasce com `tasks.boardColumnId` nulo ("ainda não colocada")
   e `tasks.boardOrder` com padrão no banco (instante da criação). Ao abrir `/app/tasks`, `placeNewTasks` põe
   cada uma na coluna da data dela no dia em que foi criada (`task_board_columns.dateBucket`: "Atrasadas",
-  "Hoje", "Em breve", "Sem data"; `columnForNewTask`); sem essa coluna, vai para a entrada (★). Depois disso
-  só muda de coluna se alguém mover ou concluir — vencer não move. Assim nenhum caminho que cria tarefa
+  "Hoje", "Em breve", "Sem data"; `columnForNewTask`); sem essa coluna, vai para a entrada (★). Logo
+  depois, `placeTasksByDeadline` leva para "Atrasadas" (a coluna marcada `dateBucket = "overdue"`) toda
+  tarefa aberta com prazo antes de hoje (horário de Brasília), de qualquer coluna menos a de concluídas,
+  e tira de lá a que deixou de estar vencida (prazo mudou) para a coluna da data dela, ou para a entrada
+  (`columnForDeadline`, desde 20/10/2026). Não há cron: roda a cada abertura da tela, e é por isso que um
+  card vencido arrastado para fora de "Atrasadas" volta logo depois de solto (a tela recarrega). Sem a
+  coluna "Atrasadas", nada se move por prazo. Fora isso, só muda de coluna se alguém mover ou concluir.
+  Assim nenhum caminho que cria tarefa
   (formulário, recorrência, Copiloto, automações, WhatsApp) precisa conhecer o quadro. A coluna de concluídas
   (`task_board_columns.isDone`, ✓) recebe toda tarefa concluída: concluir (check, status "Concluída" ou soltar
   o card nela) leva o card para ela, e reabrir (desmarcar ou arrastar para fora) leva para a

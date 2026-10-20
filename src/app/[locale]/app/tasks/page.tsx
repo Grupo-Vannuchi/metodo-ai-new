@@ -8,7 +8,7 @@ import { listMembers } from "@/lib/queries/organizations";
 import { contactOptions } from "@/lib/queries/contacts";
 import { opportunityOptions } from "@/lib/queries/crm";
 import { listTaskBoardColumns } from "@/lib/queries/task-board";
-import { ensureTaskBoard, placeNewTasks } from "@/lib/tasks/board";
+import { ensureTaskBoard, placeNewTasks, placeTasksByDeadline } from "@/lib/tasks/board";
 import { TasksManager } from "@/components/tasks/tasks-manager";
 import { TasksBoard } from "@/components/tasks/tasks-board";
 import { Link } from "@/i18n/navigation";
@@ -46,8 +46,10 @@ export default async function TasksPage({
     nodate: t("board.nodate"),
     done: t("board.done"),
   });
-  // New tasks (no column yet, from any path) go to their date's column.
+  // New tasks (no column yet, from any path) go to their date's column; then
+  // the overdue ones go to the overdue column, wherever they are.
   await placeNewTasks(ctx.organizationId);
+  await placeTasksByDeadline(ctx.organizationId);
 
   const hasCrm = hasModule(ctx.modules, "crm");
   const [tasks, rawMembers, contacts, opportunities, columns] = await Promise.all([

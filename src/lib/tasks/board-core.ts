@@ -165,6 +165,29 @@ export function columnForNewTask(
   return columnForDate(task.dueDate, new Date(task.createdAt), columns);
 }
 
+/** Where an open card goes as its due date passes or changes, seen from `now`
+ * (São Paulo days): due before today, it goes to the overdue column from any
+ * column but the done one — even one it was dragged to; sitting in the overdue
+ * column while no longer overdue, it goes to its date's column (the entrance
+ * when there's none). null = it stays (done, no overdue column, or already
+ * where it belongs). */
+export function columnForDeadline(
+  task: { boardColumnId: string | null; dueDate: Date | null; doneAt: Date | null },
+  columns: readonly BoardColumn[],
+  now: Date,
+): string | null {
+  const overdueColumn = columns.find((c) => !c.isDone && c.dateBucket === "overdue");
+  const entrance = columns.find((c) => c.isEntrance) ?? columns[0];
+  if (task.doneAt || !overdueColumn || !entrance) return null;
+  const current = effectiveColumnId(task.boardColumnId, new Set(columns.map((c) => c.id)), entrance.id);
+  if (columns.find((c) => c.id === current)?.isDone) return null;
+  const overdue = task.dueDate != null && new Date(task.dueDate).getTime() < saoPauloDayStart(now).getTime();
+  if (overdue) return current === overdueColumn.id ? null : overdueColumn.id;
+  if (current !== overdueColumn.id) return null;
+  const target = columnForDate(task.dueDate, now, columns) ?? entrance.id;
+  return target !== current ? target : null;
+}
+
 /** Whether a task is done after its card moves from column `fromColumnId` to
  * `toColumnId` (both as shown on the board): dropping it in the done column
  * completes it, taking it out of there reopens it, any other move keeps it. */
