@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { tenantDb } from "@/lib/tenant-db";
 import {
+  columnForDeadline,
   columnForDoneChange,
   columnForNewTask,
   compareBoardCards,
@@ -10,11 +11,15 @@ import {
   initialBucket,
   ORDER_STEP,
   orderForInsert,
+  saoPauloDayStart,
   type BoardBucket,
+  type BoardColumn,
 } from "@/lib/tasks/board-core";
 
 /** The fields of a column the pure board rules need (BoardColumn). */
 const COLUMN_SELECT = { id: true, name: true, order: true, isEntrance: true, isDone: true, dateBucket: true } as const;
+/** The fields of a task columnForDeadline needs. */
+const DEADLINE_SELECT = { id: true, boardColumnId: true, dueDate: true, doneAt: true } as const;
 
 /**
  * Serializes every board mutation of an org: a per-org advisory lock held until
@@ -178,6 +183,80 @@ export async function placeNewTasks(organizationId: string): Promise<void> {
       for (const [columnId, ids] of idsByColumn) {
         await tx.task.updateMany({
           where: { organizationId, id: { in: ids }, boardColumnId: null },
+          data: { boardColumnId: columnId },
+        });
+      }
+    },
+    { timeout: 20_000 },
+  );
+}
+
+/** The open tasks columnForDeadline may move, by São Paulo days: overdue
+ * outside the overdue column, or in it while not overdue. */
+function deadlineCandidates(organizationId: string, overdueColumnId: string, now: Date): Prisma.TaskWhereInput {
+  const todayStart = saoPauloDayStart(now);
+  return {
+    organizationId,
+    doneAt: null,
+    OR: [
+      { dueDate: { lt: todayStart }, OR: [{ boardColumnId: null }, { boardColumnId: { not: overdueColumnId } }] },
+      { boardColumnId: overdueColumnId, OR: [{ dueDate: null }, { dueDate: { gte: todayStart } }] },
+    ],
+  };
+}
+
+/** The moves columnForDeadline asks for, as task ids by target column. */
+function deadlineMoves(
+  tasks: readonly { id: string; boardColumnId: string | null; dueDate: Date | null; doneAt: Date | null }[],
+  columns: readonly BoardColumn[],
+  now: Date,
+): Map<string, string[]> {
+  const idsByColumn = new Map<string, string[]>();
+  for (const task of tasks) {
+    const columnId = columnForDeadline(task, columns, now);
+    if (!columnId) continue;
+    const ids = idsByColumn.get(columnId);
+    if (ids) ids.push(task.id);
+    else idsByColumn.set(columnId, [task.id]);
+  }
+  return idsByColumn;
+}
+
+/**
+ * Keeps the overdue column in step with the calendar (columnForDeadline): open
+ * tasks due before today (São Paulo) go to it from any column but the done one,
+ * and cards in it that are no longer overdue (their date moved) go to their
+ * date's column. The tasks page calls it on every render, after placeNewTasks,
+ * so no cron is needed; a card dragged out while still overdue comes back right
+ * after the drop (the board refreshes the page). No-op without an overdue
+ * column. Only takes the board lock when
+ * something moves, then decides again on fresh state.
+ */
+export async function placeTasksByDeadline(organizationId: string): Promise<void> {
+  const db = tenantDb(organizationId);
+  const now = new Date();
+  const columns = await db.taskBoardColumn.findMany({ select: COLUMN_SELECT });
+  const overdueColumn = columns.find((c) => !c.isDone && c.dateBucket === "overdue");
+  if (!overdueColumn) return;
+  const tasks = await db.task.findMany({
+    where: deadlineCandidates(organizationId, overdueColumn.id, now),
+    select: DEADLINE_SELECT,
+  });
+  if (deadlineMoves(tasks, columns, now).size === 0) return;
+
+  await db.$transaction(
+    async (tx) => {
+      await lockTaskBoard(tx, organizationId);
+      const freshColumns = await tx.taskBoardColumn.findMany({ where: { organizationId }, select: COLUMN_SELECT });
+      const freshOverdue = freshColumns.find((c) => !c.isDone && c.dateBucket === "overdue");
+      if (!freshOverdue) return;
+      const freshTasks = await tx.task.findMany({
+        where: deadlineCandidates(organizationId, freshOverdue.id, now),
+        select: DEADLINE_SELECT,
+      });
+      for (const [columnId, ids] of deadlineMoves(freshTasks, freshColumns, now)) {
+        await tx.task.updateMany({
+          where: { organizationId, id: { in: ids }, doneAt: null },
           data: { boardColumnId: columnId },
         });
       }
