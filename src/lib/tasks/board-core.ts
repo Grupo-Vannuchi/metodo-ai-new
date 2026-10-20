@@ -80,8 +80,9 @@ export function orderForInsert(orders: readonly number[], index: number): number
   return (before + after) / 2;
 }
 
-/** Display order inside a column: boardOrder, then creation (oldest first),
- * then id so the order is deterministic. */
+/** Stored position inside a column: boardOrder, then creation (oldest first),
+ * then id so the order is deterministic. The screens show cards by date
+ * instead (`cardOrderFor`); this only keeps new boardOrder values consistent. */
 export function compareBoardCards(
   a: { boardOrder: number; createdAt: Date; id?: string },
   b: { boardOrder: number; createdAt: Date; id?: string },
@@ -91,6 +92,27 @@ export function compareBoardCards(
     new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() ||
     (a.id ?? "").localeCompare(b.id ?? "")
   );
+}
+
+/** Two dates in `direction` (1 = earliest first, -1 = latest first), with
+ * the missing ones always last. */
+function compareDates(a: Date | null, b: Date | null, direction: 1 | -1): number {
+  if (a == null || b == null) return (a == null ? 1 : 0) - (b == null ? 1 : 0);
+  return direction * (new Date(a).getTime() - new Date(b).getTime());
+}
+
+/** Display order inside `column`, the same in the list tabs and on the kanban:
+ * by due date, soonest first (the same day goes by the time), undated cards
+ * last; the done column shows the most recently completed first. Ties go to
+ * the oldest card, then to the id. Dragging a card only changes its column. */
+export function cardOrderFor(column: { isDone: boolean }) {
+  return (
+    a: { dueDate: Date | null; doneAt: Date | null; createdAt: Date; id?: string },
+    b: { dueDate: Date | null; doneAt: Date | null; createdAt: Date; id?: string },
+  ): number =>
+    (column.isDone ? compareDates(a.doneAt, b.doneAt, -1) : compareDates(a.dueDate, b.dueDate, 1)) ||
+    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() ||
+    (a.id ?? "").localeCompare(b.id ?? "");
 }
 
 /** The column a card shows in: its own, or the entrance when it has none (a
@@ -111,9 +133,10 @@ function columnForDate(dueDate: Date | null, now: Date, columns: readonly BoardC
 }
 
 /** Where a card goes when its task is completed (`done`) or reopened: completing
- * sends it to the top of the done column; reopening a card that sits in the done
- * column sends it to the end of its date's column as of `now` (the entrance
- * when there's none). null = it stays (no done column, already there, or
+ * sends it to the done column; reopening a card that sits in the done column
+ * sends it to its date's column as of `now` (the entrance when there's none).
+ * `at` is only the stored boardOrder slot: the screens order by date
+ * (`cardOrderFor`). null = it stays (no done column, already there, or
  * reopened outside the done column). */
 export function columnForDoneChange(
   done: boolean,
@@ -158,16 +181,17 @@ export function doneAfterMove(
   return wasDone;
 }
 
-/** The tasks a column shows, in board order: the ones placed in it, plus — for
- * the entrance — the ones with no column. Used by the task list's column tabs
- * so they match the kanban. Doesn't mutate `tasks`. */
+/** The tasks a column shows, in display order (`cardOrderFor`): the ones placed
+ * in it, plus — for the entrance — the ones with no column. Used by the task
+ * list's column tabs so they match the kanban. Doesn't mutate `tasks`. */
 export function tasksOfColumn<
-  T extends { boardColumnId: string | null; boardOrder: number; createdAt: Date; id?: string },
+  T extends { boardColumnId: string | null; dueDate: Date | null; doneAt: Date | null; createdAt: Date; id?: string },
 >(tasks: readonly T[], columnId: string, columns: readonly BoardColumn[]): T[] {
   const entrance = columns.find((c) => c.isEntrance) ?? columns[0];
-  if (!entrance) return [];
+  const column = columns.find((c) => c.id === columnId);
+  if (!entrance || !column) return [];
   const ids = new Set(columns.map((c) => c.id));
   return tasks
     .filter((task) => effectiveColumnId(task.boardColumnId, ids, entrance.id) === columnId)
-    .sort(compareBoardCards);
+    .sort(cardOrderFor(column));
 }

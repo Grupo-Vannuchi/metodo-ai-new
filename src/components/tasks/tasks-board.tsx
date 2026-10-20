@@ -20,12 +20,11 @@ import {
 } from "@/app/actions/task-board";
 import { LIMITS } from "@/config/limits";
 import {
+  cardOrderFor,
   columnForDoneChange,
-  compareBoardCards,
   doneAfterMove,
   effectiveColumnId,
   normalizeColumnName,
-  orderForInsert,
   type BoardColumn,
 } from "@/lib/tasks/board-core";
 import type { TaskRow } from "@/lib/queries/tasks";
@@ -37,9 +36,10 @@ const SCROLL_STEP = 24;
 
 /**
  * The org's task kanban: free columns (renamed/added/removed by members) and
- * cards dragged between and inside them. One column is the done column:
- * completing a task (check or drop there) puts its card in it, and reopening
- * (uncheck or drag out) takes it out. Cards open on click.
+ * cards dragged between them. Inside a column the cards go by due date (the
+ * done column: last completed first), so a drag only picks the column. One
+ * column is the done column: completing a task (check or drop there) puts its
+ * card in it, and reopening (uncheck or drag out) takes it out. Cards open on click.
  */
 export function TasksBoard({ tasks, columns }: { tasks: TaskRow[]; columns: BoardColumn[] }) {
   const t = useTranslations("tasks");
@@ -50,7 +50,8 @@ export function TasksBoard({ tasks, columns }: { tasks: TaskRow[]; columns: Boar
   const [items, setItems] = useState(tasks);
   const [cols, setCols] = useState(columns);
   const [dragId, setDragId] = useState<string | null>(null);
-  const [drop, setDrop] = useState<{ columnId: string; beforeId: string | null } | null>(null);
+  /** The column the dragged card is over (highlighted as the drop target). */
+  const [dropColumnId, setDropColumnId] = useState<string | null>(null);
   const [, start] = useTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -73,7 +74,7 @@ export function TasksBoard({ tasks, columns }: { tasks: TaskRow[]; columns: Boar
   if (entrance) {
     for (const task of items) grouped.get(effectiveColumnId(task.boardColumnId, columnIds, entrance.id))?.push(task);
   }
-  for (const list of grouped.values()) list.sort(compareBoardCards);
+  for (const column of cols) grouped.get(column.id)?.sort(cardOrderFor(column));
 
   function errorText(r: TaskBoardResult): string {
     if (r.ok) return "";
@@ -97,58 +98,28 @@ export function TasksBoard({ tasks, columns }: { tasks: TaskRow[]; columns: Boar
     return entrance ? effectiveColumnId(task.boardColumnId, columnIds, entrance.id) : "";
   }
 
-  function moveCard(taskId: string, columnId: string, beforeId: string | null) {
+  function moveCard(taskId: string, columnId: string) {
     const task = items.find((x) => x.id === taskId);
+    // Same column: the date decides the position, so there's nothing to save.
+    if (!task || columnOf(task) === columnId) return;
     // Dropping in / taking out of the done column completes / reopens (the
     // server does the same).
-    const done = task ? doneAfterMove(task.doneAt != null, columnOf(task), columnId, cols) : false;
-    const doneAt = task && done !== (task.doneAt != null) ? (done ? new Date() : null) : task?.doneAt ?? null;
-    const list = (grouped.get(columnId) ?? []).filter((c) => c.id !== taskId);
-    const found = beforeId ? list.findIndex((c) => c.id === beforeId) : -1;
-    const index = found === -1 ? list.length : found;
-    // Optimistic position; when the neighbours are too close the server
-    // renumbers, and the refresh brings the final order.
-    const order =
-      orderForInsert(
-        list.map((c) => c.boardOrder),
-        index,
-      ) ?? list[index]?.boardOrder ?? 0;
-    setItems((prevItems) =>
-      prevItems.map((x) => (x.id === taskId ? { ...x, boardColumnId: columnId, boardOrder: order, doneAt } : x)),
-    );
-    run(() => moveTaskOnBoard(taskId, columnId, beforeId));
+    const done = doneAfterMove(task.doneAt != null, columnOf(task), columnId, cols);
+    const doneAt = done !== (task.doneAt != null) ? (done ? new Date() : null) : task.doneAt;
+    setItems((prevItems) => prevItems.map((x) => (x.id === taskId ? { ...x, boardColumnId: columnId, doneAt } : x)));
+    run(() => moveTaskOnBoard(taskId, columnId, null));
   }
 
   function onDragOverColumn(e: React.DragEvent<HTMLDivElement>, columnId: string) {
     e.preventDefault();
-    if (!dragId) return;
-    // The drop slot: above the first card whose middle is below the pointer.
-    let beforeId: string | null = null;
-    for (const el of e.currentTarget.querySelectorAll<HTMLElement>("[data-task-id]")) {
-      if (el.dataset.taskId === dragId) continue;
-      const r = el.getBoundingClientRect();
-      if (e.clientY < r.top + r.height / 2) {
-        beforeId = el.dataset.taskId ?? null;
-        break;
-      }
-    }
-    if (drop?.columnId !== columnId || drop.beforeId !== beforeId) setDrop({ columnId, beforeId });
+    if (dragId && dropColumnId !== columnId) setDropColumnId(columnId);
   }
 
   function onDropColumn(columnId: string) {
     const id = dragId;
-    const target = drop;
     setDragId(null);
-    setDrop(null);
-    if (!id || !target || target.columnId !== columnId) return;
-    // Dropped back exactly where it was: nothing to save.
-    const list = grouped.get(columnId) ?? [];
-    const pos = list.findIndex((c) => c.id === id);
-    if (pos !== -1) {
-      const nextId = list.slice(pos + 1).find((c) => c.id !== id)?.id ?? null;
-      if (nextId === target.beforeId) return;
-    }
-    moveCard(id, columnId, target.beforeId);
+    setDropColumnId(null);
+    if (id) moveCard(id, columnId);
   }
 
   /** Scroll the board while a card is dragged near its left/right edge. */
@@ -158,32 +129,21 @@ export function TasksBoard({ tasks, columns }: { tasks: TaskRow[]; columns: Boar
     const r = el.getBoundingClientRect();
     if (e.clientX < r.left + EDGE_PX) el.scrollLeft -= SCROLL_STEP;
     else if (e.clientX > r.right - EDGE_PX) el.scrollLeft += SCROLL_STEP;
-    // Over a header or a gap (not a column's card area): no drop slot.
+    // Over a header or a gap (not a column's card area): no drop target.
     const overBody = (e.target as HTMLElement).closest("[data-column-body]");
-    if (!overBody && drop) setDrop(null);
+    if (!overBody && dropColumnId) setDropColumnId(null);
   }
 
   function setDone(id: string, done: boolean) {
-    // Optimistic: completing moves the card to the top of the done column,
-    // reopening it from there to the end of its date's column (as the server does).
+    // Optimistic: completing moves the card to the done column, reopening it
+    // from there to its date's column (as the server does).
     const task = items.find((x) => x.id === id);
     const target = task ? columnForDoneChange(done, task, cols, new Date()) : null;
-    const others = target ? (grouped.get(target.columnId) ?? []).filter((c) => c.id !== id) : [];
-    const order = target
-      ? orderForInsert(
-          others.map((c) => c.boardOrder),
-          target.at === "start" ? 0 : others.length,
-        ) ?? 0
-      : null;
     setItems((prevItems) =>
       prevItems.map((x) =>
         x.id !== id
           ? x
-          : {
-              ...x,
-              doneAt: done ? new Date() : null,
-              ...(target && order !== null ? { boardColumnId: target.columnId, boardOrder: order } : {}),
-            },
+          : { ...x, doneAt: done ? new Date() : null, ...(target ? { boardColumnId: target.columnId } : {}) },
       ),
     );
     start(async () => {
@@ -278,11 +238,11 @@ export function TasksBoard({ tasks, columns }: { tasks: TaskRow[]; columns: Boar
             isFirst={i === 0}
             isLast={i === cols.length - 1}
             dragId={dragId}
-            dropBeforeId={drop?.columnId === column.id ? drop.beforeId : undefined}
+            dropTarget={dropColumnId === column.id}
             onDragStartCard={setDragId}
             onDragEndCard={() => {
               setDragId(null);
-              setDrop(null);
+              setDropColumnId(null);
             }}
             onDragOverBody={(e) => onDragOverColumn(e, column.id)}
             onDropBody={() => onDropColumn(column.id)}
@@ -292,7 +252,7 @@ export function TasksBoard({ tasks, columns }: { tasks: TaskRow[]; columns: Boar
             onDelete={() => removeColumn(column)}
             onToggleDone={setDone}
             onDeleteCard={removeCard}
-            onMoveCardTo={(taskId, columnId) => moveCard(taskId, columnId, null)}
+            onMoveCardTo={moveCard}
           />
         ))}
         <button
