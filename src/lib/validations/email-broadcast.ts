@@ -70,7 +70,7 @@ export const broadcastDraftSchema = z.object({
   audience: audienceSelectionSchema,
   attachments: z.array(emailAttachmentSchema).max(MAX_ATTACHMENTS).default([]),
   signatureId: z.string().min(1).max(64).nullable().default(null),
-  channel: z.enum(["PLATFORM", "MICROSOFT"]).default("PLATFORM"),
+  channel: z.enum(["PLATFORM", "MICROSOFT", "GOOGLE"]).default("PLATFORM"),
 });
 
 export type BroadcastDraftInput = z.input<typeof broadcastDraftSchema>;

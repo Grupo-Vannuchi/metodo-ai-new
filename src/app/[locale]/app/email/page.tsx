@@ -6,8 +6,9 @@ import { canAccessScreen } from "@/lib/access";
 import { hasModule } from "@/config/modules";
 import { listEmailBroadcasts, countEmailsSentThisMonth } from "@/lib/queries/email-broadcasts";
 import { getSenderAccountView } from "@/lib/queries/email-sender-accounts";
-import { listReason } from "@/lib/email-broadcast/failure-reason";
+import { listPausedMessageKey, listReason } from "@/lib/email-broadcast/failure-reason";
 import { broadcastChannelOf, emailListHref, listChannelFromParam } from "@/lib/email-broadcast/list-channel";
+import { googleMailEnabledFor } from "@/lib/email-broadcast/google/oauth";
 import { microsoftMailConfigured } from "@/lib/email-broadcast/microsoft/oauth";
 import { deliveryTrackingConfigured } from "@/lib/email-broadcast/platform";
 import { inboxUnreadCount } from "@/lib/email-broadcast/microsoft/inbox";
@@ -24,7 +25,7 @@ import { DeleteButton } from "@/components/crm/delete-button";
 import { deleteEmailDraft } from "@/app/actions/email-broadcasts";
 import { ChannelChoice } from "@/components/email/channel-choice";
 import { ChannelIcon } from "@/components/email/channel-icon";
-import { MicrosoftAccountPanel } from "@/components/email/microsoft-account-panel";
+import { SenderAccountPanel } from "@/components/email/sender-account-panel";
 import { StatusBadge } from "@/components/email/status-badge";
 import { EmailInbox } from "@/components/email/inbox/email-inbox";
 import { MicrosoftTabs } from "@/components/email/inbox/microsoft-tabs";
@@ -53,12 +54,15 @@ export default async function EmailPage({
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("emailBroadcast");
   const format = await getFormatter();
-  const configured = microsoftMailConfigured();
+  const microsoftEnabled = microsoftMailConfigured();
+  // Google is a pilot channel: only the companies that may use it see it.
+  const googleEnabled = googleMailEnabledFor(ctx.organizationId);
+  const hasMailboxChannel = microsoftEnabled || googleEnabled;
   const sp = await searchParams;
   // Entering E-mail always asks the channel first (no remembered choice).
-  const view = listChannelFromParam(sp.canal, configured);
+  const view = listChannelFromParam(sp.canal, { microsoft: microsoftEnabled, google: googleEnabled });
   // The Microsoft Inbox has its own screen key: a template can grant sending without reading.
-  const inboxAllowed = configured && canAccessScreen(ctx, "emailInbox");
+  const inboxAllowed = microsoftEnabled && canAccessScreen(ctx, "emailInbox");
   /** Unread count for the badges (channel card, "Envios" tab), streamed so a slow Microsoft never holds the page. */
   const unreadFor = (account: { status: string } | null) =>
     inboxAllowed && account?.status === "ACTIVE" ? inboxUnreadCount(ctx.organizationId).catch(() => null) : null;
@@ -78,20 +82,33 @@ export default async function EmailPage({
   );
 
   if (view === null) {
-    const account = await getSenderAccountView(ctx.organizationId);
+    const [microsoftAccount, googleAccount] = await Promise.all([
+      microsoftEnabled ? getSenderAccountView(ctx.organizationId, "MICROSOFT") : Promise.resolve(null),
+      googleEnabled ? getSenderAccountView(ctx.organizationId, "GOOGLE") : Promise.resolve(null),
+    ]);
     return (
       <div className="flex flex-col gap-6">
         {header("/app/email/new")}
         <ChannelChoice
           mode="browse"
-          account={account}
+          microsoft={microsoftAccount}
+          microsoftEnabled={microsoftEnabled}
+          google={googleAccount}
+          googleEnabled={googleEnabled}
           quotaLimit={limit}
-          inbox={inboxAllowed && account?.status === "ACTIVE" ? { href: inboxHref(), unread: unreadFor(account) } : null}
+          inbox={
+            inboxAllowed && microsoftAccount?.status === "ACTIVE"
+              ? { href: inboxHref(), unread: unreadFor(microsoftAccount) }
+              : null
+          }
         />
       </div>
     );
   }
 
+  // The two mailbox channels (Microsoft and Google) share the layout; the platform has domains and a monthly quota.
+  const provider = view === "microsoft" ? "MICROSOFT" : view === "google" ? "GOOGLE" : null;
+  const mailbox = provider !== null;
   const microsoft = view === "microsoft";
   const tab = microsoft && inboxAllowed ? microsoftTabFromParam(sp.aba) : "envios";
 
@@ -101,7 +118,7 @@ export default async function EmailPage({
         <ChannelIcon channel={view} />
         {microsoft && inboxAllowed ? t("channel.microsoftTitle") : t(`listChannel.${view}`)}
       </h2>
-      {configured ? (
+      {hasMailboxChannel ? (
         <Link href={emailListHref(null)} className="text-sm font-medium text-brand hover:underline">
           {t("switchChannel")}
         </Link>
@@ -110,7 +127,7 @@ export default async function EmailPage({
   );
 
   if (microsoft && tab === "caixa") {
-    const account = await getSenderAccountView(ctx.organizationId);
+    const account = await getSenderAccountView(ctx.organizationId, "MICROSOFT");
     const msg = Array.isArray(sp.msg) ? sp.msg[0] : sp.msg;
     return (
       <>
@@ -134,7 +151,7 @@ export default async function EmailPage({
             </Suspense>
           ) : (
             <div className="max-w-2xl">
-              <MicrosoftAccountPanel account={account} />
+              <SenderAccountPanel provider="MICROSOFT" account={account} />
             </div>
           )}
         </div>
@@ -144,9 +161,9 @@ export default async function EmailPage({
 
   const [rows, domains, used, account] = await Promise.all([
     listEmailBroadcasts(ctx.organizationId, broadcastChannelOf(view)),
-    microsoft ? Promise.resolve([] as string[]) : listSenderDomains(ctx.organizationId),
-    microsoft ? Promise.resolve(0) : countEmailsSentThisMonth(ctx.organizationId),
-    microsoft ? getSenderAccountView(ctx.organizationId) : Promise.resolve(null),
+    mailbox ? Promise.resolve([] as string[]) : listSenderDomains(ctx.organizationId),
+    mailbox ? Promise.resolve(0) : countEmailsSentThisMonth(ctx.organizationId),
+    provider ? getSenderAccountView(ctx.organizationId, provider) : Promise.resolve(null),
   ]);
   const tracking = deliveryTrackingConfigured();
   const pct = Math.min(100, (used / limit) * 100);
@@ -155,16 +172,16 @@ export default async function EmailPage({
     <>
       {/* /app/email is a top-level path, so the shell's BackBar hides itself; a
           channel's list is a step past the choice, so it gets the same control. */}
-      {configured ? <BackButton fallback={emailListHref(null)} /> : null}
+      {hasMailboxChannel ? <BackButton fallback={emailListHref(null)} /> : null}
       <div className="flex flex-col gap-6">
-        {header(microsoft ? "/app/email/new?via=microsoft" : "/app/email/new?via=platform")}
+        {header(`/app/email/new?via=${view === "plataforma" ? "platform" : view}`)}
 
         {channelTitle}
         {microsoft && inboxAllowed ? <MicrosoftTabs active="envios" unread={unreadFor(account)} /> : null}
 
-        {microsoft ? (
+        {provider ? (
           <div className="max-w-2xl">
-            <MicrosoftAccountPanel account={account} />
+            <SenderAccountPanel provider={provider} account={account} />
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
@@ -214,8 +231,8 @@ export default async function EmailPage({
                   <th className="px-5 py-3 font-medium">{t("col.from")}</th>
                   <th className="px-5 py-3 font-medium">{t("col.status")}</th>
                   <th className="px-5 py-3 text-right font-medium">{t("col.recipients")}</th>
-                  {/* Microsoft doesn't report delivery: no "Entregues" column there. */}
-                  {microsoft ? null : <th className="px-5 py-3 text-right font-medium">{t("col.delivered")}</th>}
+                  {/* Microsoft and Google don't report delivery: no "Entregues" column there. */}
+                  {mailbox ? null : <th className="px-5 py-3 text-right font-medium">{t("col.delivered")}</th>}
                   <th className="px-5 py-3 text-right font-medium">{t("col.problems")}</th>
                   <th className="px-5 py-3 font-medium">{t("col.date")}</th>
                   <th className="px-5 py-3" />
@@ -245,7 +262,7 @@ export default async function EmailPage({
                       <td className="px-5 py-3">
                         <StatusBadge status={r.status} label={t(`status.${r.status}`)} />
                         {reason?.kind === "paused" ? (
-                          <div className="mt-1 max-w-xs text-xs text-red-600">{t(`listReason.paused.${reason.reason}`)}</div>
+                          <div className="mt-1 max-w-xs text-xs text-red-600">{t(listPausedMessageKey(r.channel, reason.reason))}</div>
                         ) : null}
                         {reason?.kind === "problems" ? (
                           <div className="mt-1 max-w-xs text-xs text-red-600">
@@ -259,7 +276,7 @@ export default async function EmailPage({
                         ) : null}
                       </td>
                       <td className="px-5 py-3 text-right">{isDraft ? "—" : format.number(r.total)}</td>
-                      {microsoft ? null : (
+                      {mailbox ? null : (
                         <td className="px-5 py-3 text-right">{isDraft ? "—" : format.number(r.delivered)}</td>
                       )}
                       <td className="px-5 py-3 text-right">{isDraft ? "—" : format.number(r.problems)}</td>

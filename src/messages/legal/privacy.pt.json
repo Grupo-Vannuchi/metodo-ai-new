@@ -32,7 +32,7 @@
             "**O Cliente é o controlador desses dados.** Cabe a ele ter base legal para usá-los, incluindo a autorização prévia (opt-in) dos contatos para receber mensagens pelo WhatsApp."
           ]
         },
-        { "p": "Se você conversou com uma empresa que usa o MétodoAI, é essa empresa que decide como seus dados são usados. A seção 12 explica como pedir a exclusão." }
+        { "p": "Se você conversou com uma empresa que usa o MétodoAI, é essa empresa que decide como seus dados são usados. A seção 13 explica como pedir a exclusão." }
       ]
     },
     {
@@ -64,9 +64,15 @@
             "**Do Cliente:** identificadores da conta WhatsApp Business e do número, token de acesso (guardado cifrado) e modelos de mensagem."
           ]
         },
-        { "h3": "3.4 Prospecção" },
+        { "h3": "3.4 Contas de e-mail conectadas" },
+        {
+          "ul": [
+            "Quando o Cliente conecta uma conta Google ou Microsoft para enviar e-mails em massa: o endereço de e-mail e o nome da conta, as credenciais de acesso (tokens) concedidas pelo próprio Cliente, guardadas cifradas, e o registro de cada envio (destinatário, data e situação). Não acessamos as mensagens, os contatos nem as pastas da caixa."
+          ]
+        },
+        { "h3": "3.5 Prospecção" },
         { "p": "Resultados de buscas em fontes públicas, como o Google Places e o site da própria empresa pesquisada: nome do estabelecimento, telefone, endereço e site." },
-        { "h3": "3.5 Dados técnicos" },
+        { "h3": "3.6 Dados técnicos" },
         { "p": "Endereço IP, data e hora de acesso, dados do navegador e do dispositivo, e registro das ações feitas na plataforma (auditoria)." }
       ]
     },
@@ -77,10 +83,10 @@
         { "p": "O MétodoAI se integra à Plataforma WhatsApp Business (API de Nuvem), da Meta, para que os Clientes atendam e enviem mensagens aos seus contatos. Sobre os dados recebidos por essa integração:" },
         {
           "ul": [
-            "**Usamos esses dados apenas para** exibir as conversas ao Cliente, enviar as mensagens que ele solicita, mostrar o status de entrega e leitura e, se o Cliente ativar esse recurso, gerar respostas com o agente de IA (seção 6).",
+            "**Usamos esses dados apenas para** exibir as conversas ao Cliente, enviar as mensagens que ele solicita, mostrar o status de entrega e leitura e, se o Cliente ativar esse recurso, gerar respostas com o agente de IA (seção 7).",
             "**Não vendemos nem alugamos esses dados.** Também não os usamos para publicidade, para criar perfis nem para qualquer finalidade própria.",
             "**Não usamos o conteúdo das conversas para treinar modelos de inteligência artificial.**",
-            "Não compartilhamos esses dados com terceiros, exceto os fornecedores necessários para operar o serviço (seção 7) ou quando a lei exigir.",
+            "Não compartilhamos esses dados com terceiros, exceto os fornecedores necessários para operar o serviço (seção 8) ou quando a lei exigir.",
             "O token de acesso de cada número é guardado cifrado. Dentro da empresa Cliente, só o usuário responsável pelo número tem acesso às conversas dele.",
             "O Cliente é responsável por obter o opt-in dos contatos antes de enviar mensagens, por cumprir a Política do WhatsApp Business e a Política de Mensagens Comerciais e pelo conteúdo que envia.",
             "Para parar de receber mensagens, o contato pode pedir à empresa, usar o descadastro quando ele for oferecido (contatos descadastrados deixam de entrar em campanhas) ou, no próprio WhatsApp, bloquear a empresa ou deixar de receber mensagens de marketing.",
@@ -91,8 +97,29 @@
       ]
     },
     {
+      "id": "connected-mailboxes",
+      "title": "5. Contas de e-mail conectadas (Google e Microsoft)",
+      "blocks": [
+        { "p": "O Cliente pode conectar ao MétodoAI a conta de e-mail da empresa (Google ou Microsoft) para enviar por ela os e-mails em massa que monta na plataforma, de modo que cheguem aos destinatários a partir do endereço do próprio Cliente. Sobre os dados recebidos por essa integração:" },
+        {
+          "ul": [
+            "**O que acessamos:** o endereço de e-mail e o nome da conta, e a permissão de enviar e-mails em nome do Cliente. As credenciais de acesso (tokens) da conta são guardadas cifradas.",
+            "**Usamos esses dados apenas para** enviar os e-mails que o Cliente monta no MétodoAI, pela conta que ele conectou, e mostrar na plataforma o andamento e o resultado de cada envio.",
+            "**Não lemos, não guardamos e não compartilhamos o conteúdo da caixa de e-mail.** Não lemos mensagens recebidas, contatos nem pastas. Os e-mails que o Cliente escreve no MétodoAI ficam registrados no envio, como qualquer outro dado do Cliente na plataforma.",
+            "Na Microsoft, a permissão concedida (Mail.ReadWrite) tecnicamente cobre ler e alterar mensagens; o MétodoAI a usa só para criar o rascunho de um e-mail com anexos grandes, anexar os arquivos, enviá-lo e apagar o rascunho.",
+            "**Não vendemos nem alugamos esses dados.** Também não os usamos para publicidade, para criar perfis nem para treinar modelos de inteligência artificial.",
+            "Não compartilhamos esses dados com terceiros, exceto com os provedores necessários para operar o serviço (seção 8) ou quando a lei exigir.",
+            "**Como revogar o acesso:** o Cliente desconecta a conta no MétodoAI (tela E-mail) e nós apagamos as credenciais guardadas. Para tirar o acesso também do lado do provedor, basta remover o app nas configurações da conta: no Google, em https://myaccount.google.com/permissions; na Microsoft, nas configurações de privacidade da conta.",
+            "O Cliente é responsável pelo conteúdo dos e-mails, por ter base legal para enviá-los aos destinatários e por cumprir as regras de uso do Google e da Microsoft, inclusive os limites diários de envio.",
+            "Os envios também são tratados pelo Google ou pela Microsoft, conforme a conta conectada, de acordo com os termos e a política de privacidade de cada um."
+          ]
+        },
+        { "p": "O uso e a transferência, para qualquer outro app, de informações recebidas das APIs do Google seguem a Google API Services User Data Policy, incluindo os requisitos de Limited Use (https://developers.google.com/terms/api-services-user-data-policy)." }
+      ]
+    },
+    {
       "id": "purposes",
-      "title": "5. Para que usamos os dados e com qual base legal",
+      "title": "6. Para que usamos os dados e com qual base legal",
       "blocks": [
         {
           "table": {
@@ -112,7 +139,7 @@
     },
     {
       "id": "ai",
-      "title": "6. Inteligência artificial",
+      "title": "7. Inteligência artificial",
       "blocks": [
         {
           "ul": [
@@ -126,7 +153,7 @@
     },
     {
       "id": "sharing",
-      "title": "7. Com quem compartilhamos",
+      "title": "8. Com quem compartilhamos",
       "blocks": [
         { "p": "Não vendemos dados pessoais. Compartilhamos dados só com os fornecedores que nos ajudam a operar a plataforma, e só na medida do necessário:" },
         {
@@ -140,8 +167,8 @@
               ["Resend", "Envio de e-mails de serviço"],
               ["Anthropic", "Copiloto e agente de IA"],
               ["OpenAI", "Geração de imagens e transcrição de áudio"],
-              ["Google", "Login com Google e buscas de prospecção (Google Places)"],
-              ["Microsoft e LinkedIn", "Login com essas contas"],
+              ["Google", "Login com Google e buscas de prospecção (Google Places); envio dos e-mails em massa pela conta Google que o Cliente conectar"],
+              ["Microsoft e LinkedIn", "Login com essas contas; e, para a Microsoft, envio dos e-mails em massa pela conta conectada"],
               ["Provedor de servidor dedicado", "Mensageria das conexões por QR code"]
             ]
           }
@@ -151,14 +178,14 @@
     },
     {
       "id": "international-transfers",
-      "title": "8. Transferência internacional",
+      "title": "9. Transferência internacional",
       "blocks": [
         { "p": "Alguns fornecedores armazenam ou processam dados fora do Brasil, principalmente nos Estados Unidos. Nesses casos, a transferência segue o art. 33 da LGPD e se apoia em cláusulas contratuais e nas garantias de proteção oferecidas por esses fornecedores." }
       ]
     },
     {
       "id": "retention",
-      "title": "9. Por quanto tempo guardamos",
+      "title": "10. Por quanto tempo guardamos",
       "blocks": [
         {
           "ul": [
@@ -167,6 +194,7 @@
             "**Dados fiscais e de cobrança:** pelo prazo da legislação, em geral 5 anos.",
             "**Resultados de prospecção:** excluídos automaticamente depois de 30 dias. Só permanece o que o Cliente importar para o CRM.",
             "**Conversas do WhatsApp:** enquanto o Cliente as mantiver. O Usuário pode apagar conversas. Ao remover um número conectado pela API oficial, as conversas, mensagens e arquivos desse número são apagados.",
+            "**Credenciais de contas de e-mail conectadas:** até o Cliente desconectar a conta ou excluir a conta do MétodoAI; ao desconectar, apagamos as credenciais na hora.",
             "**Cópias de segurança (backups):** eliminadas no ciclo automático de rotação."
           ]
         },
@@ -175,7 +203,7 @@
     },
     {
       "id": "security",
-      "title": "10. Segurança",
+      "title": "11. Segurança",
       "blocks": [
         {
           "ul": [
@@ -191,7 +219,7 @@
     },
     {
       "id": "your-rights",
-      "title": "11. Seus direitos",
+      "title": "12. Seus direitos",
       "blocks": [
         { "p": "Pela LGPD (art. 18), você pode pedir:" },
         {
@@ -215,14 +243,14 @@
     },
     {
       "id": "data-deletion",
-      "title": "12. Como pedir a exclusão dos seus dados",
+      "title": "13. Como pedir a exclusão dos seus dados",
       "blocks": [
         { "h3": "Se você é Usuário do MétodoAI" },
         {
           "ol": [
             "Dentro da plataforma, você pode apagar contatos, conversas e outros registros. Remover um número de WhatsApp conectado pela API oficial apaga as conversas e os arquivos desse número.",
             "Para excluir a conta e todos os dados, envie um e-mail para {email} com o assunto **\"Exclusão de dados\"**, a partir do e-mail cadastrado, informando o nome da empresa.",
-            "Confirmamos o pedido em até 15 dias e concluímos a exclusão em até 30 dias. Ficam de fora só os dados que a lei nos obriga a guardar (seção 9)."
+            "Confirmamos o pedido em até 15 dias e concluímos a exclusão em até 30 dias. Ficam de fora só os dados que a lei nos obriga a guardar (seção 10)."
           ]
         },
         { "h3": "Se você conversou com uma empresa pelo WhatsApp ou foi cadastrado por um Cliente" },
@@ -236,7 +264,7 @@
     },
     {
       "id": "cookies",
-      "title": "13. Cookies",
+      "title": "14. Cookies",
       "blocks": [
         { "p": "Usamos apenas cookies essenciais:" },
         {
@@ -250,21 +278,21 @@
     },
     {
       "id": "children",
-      "title": "14. Crianças e adolescentes",
+      "title": "15. Crianças e adolescentes",
       "blocks": [
         { "p": "A plataforma é destinada a empresas e a maiores de 18 anos. Não coletamos de propósito dados de crianças ou adolescentes como Usuários." }
       ]
     },
     {
       "id": "changes",
-      "title": "15. Alterações nesta Política",
+      "title": "16. Alterações nesta Política",
       "blocks": [
         { "p": "Podemos atualizar esta Política. A data de \"Última atualização\" no topo mostra a versão em vigor. Avisamos mudanças relevantes por e-mail ou por aviso na plataforma." }
       ]
     },
     {
       "id": "contact",
-      "title": "16. Contato",
+      "title": "17. Contato",
       "blocks": [
         {
           "ul": [

@@ -6,6 +6,7 @@ import { listSenderDomains } from "@/lib/queries/email-sender-domains";
 import { listSignatureOptions } from "@/lib/queries/email-signatures";
 import { getSenderAccountView } from "@/lib/queries/email-sender-accounts";
 import { microsoftMailConfigured } from "@/lib/email-broadcast/microsoft/oauth";
+import { googleMailEnabledFor } from "@/lib/email-broadcast/google/oauth";
 import type { ComposerOptions, PickedTarget } from "@/lib/email-broadcast/types";
 
 const PROBLEM_STATUSES: EmailRecipientStatus[] = ["BOUNCED", "COMPLAINED", "FAILED"];
@@ -25,7 +26,7 @@ export function countEmailsSentThisMonth(organizationId: string): Promise<number
 }
 
 /** The sends list, optionally only one channel's sends (the E-mail page shows one at a time). */
-export async function listEmailBroadcasts(organizationId: string, channel?: "PLATFORM" | "MICROSOFT") {
+export async function listEmailBroadcasts(organizationId: string, channel?: "PLATFORM" | "MICROSOFT" | "GOOGLE") {
   const db = tenantDb(organizationId);
   const rows = await db.emailBroadcast.findMany({
     ...(channel ? { where: { channel } } : {}),
@@ -157,12 +158,15 @@ export async function emailComposerOptions(organizationId: string): Promise<Comp
 
 /** Everything the composer page needs besides the draft itself. */
 export async function emailComposerData(organizationId: string) {
-  const [options, allowedDomains, used, signatures, microsoft] = await Promise.all([
+  // Google is a pilot channel: its account is only looked up for orgs that may use it.
+  const googleEnabled = googleMailEnabledFor(organizationId);
+  const [options, allowedDomains, used, signatures, microsoft, google] = await Promise.all([
     emailComposerOptions(organizationId),
     listSenderDomains(organizationId),
     countEmailsSentThisMonth(organizationId),
     listSignatureOptions(organizationId),
-    getSenderAccountView(organizationId),
+    getSenderAccountView(organizationId, "MICROSOFT"),
+    googleEnabled ? getSenderAccountView(organizationId, "GOOGLE") : Promise.resolve(null),
   ]);
   return {
     options,
@@ -171,6 +175,8 @@ export async function emailComposerData(organizationId: string) {
     signatures,
     microsoft,
     microsoftConfigured: microsoftMailConfigured(),
+    google,
+    googleEnabled,
   };
 }
 

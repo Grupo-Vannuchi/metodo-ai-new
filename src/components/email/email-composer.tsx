@@ -15,7 +15,7 @@ import { AudienceSummary } from "@/components/email/audience-summary";
 import { EmailAttachments } from "@/components/email/email-attachments";
 import { SignaturePreview } from "@/components/email/signature-preview";
 import { estimateAttachmentSendMinutes } from "@/lib/email-broadcast/attachments";
-import { microsoftSendMinutes } from "@/lib/email-broadcast/microsoft/core";
+import { mailboxSendMinutes } from "@/lib/email-broadcast/mailbox/core";
 import {
   previewEmailAudience,
   saveEmailDraft,
@@ -38,6 +38,7 @@ export function EmailComposer({
   quota,
   signatures,
   microsoft,
+  google,
 }: {
   draft: ComposerDraft;
   options: ComposerOptions;
@@ -45,6 +46,8 @@ export function EmailComposer({
   quota: { used: number; limit: number };
   signatures: SignatureOption[];
   microsoft: SenderAccountView | null;
+  /** Null when the company is outside the Google pilot (a GOOGLE draft then can't be sent). */
+  google: SenderAccountView | null;
 }) {
   const t = useTranslations("emailBroadcast");
   const router = useRouter();
@@ -70,11 +73,14 @@ export function EmailComposer({
   const [busy, startBusy] = useTransition();
 
   const imageSupport = useEmailImageSupport();
-  const isMicrosoft = draft.channel === "MICROSOFT";
-  const microsoftReady = isMicrosoft && microsoft?.status === "ACTIVE";
-  const noDomains = !isMicrosoft && allowedDomains.length === 0;
-  const fromAllowed = isMicrosoft || isSenderAllowed(fromEmail, allowedDomains);
-  const fromProblem = !isMicrosoft && fromEmail.trim() !== "" && !fromAllowed;
+  // "Mailbox" mode: the e-mail goes out from the company's own Microsoft or Google account.
+  const isGoogle = draft.channel === "GOOGLE";
+  const isMailbox = draft.channel === "MICROSOFT" || isGoogle;
+  const account = isGoogle ? google : microsoft;
+  const accountReady = isMailbox && account?.status === "ACTIVE";
+  const noDomains = !isMailbox && allowedDomains.length === 0;
+  const fromAllowed = isMailbox || isSenderAllowed(fromEmail, allowedDomains);
+  const fromProblem = !isMailbox && fromEmail.trim() !== "" && !fromAllowed;
 
   // Live summary, debounced; state only changes inside the timeout.
   useEffect(() => {
@@ -152,7 +158,7 @@ export function EmailComposer({
 
   function onSend() {
     startBusy(guarded(async () => {
-      if (isMicrosoft && !microsoftReady) {
+      if (isMailbox && !accountReady) {
         toast(t("error.sender_account_reconnect"), { variant: "error" });
         return;
       }
@@ -174,23 +180,24 @@ export function EmailComposer({
       }
       const minutes = estimateAttachmentSendMinutes(s.total);
       const timing =
-        isMicrosoft || attachments.length === 0
+        isMailbox || attachments.length === 0
           ? ""
           : ` ${minutes === 0 ? t("confirmAttachmentsQuick") : t("confirmAttachments", { minutes })}`;
-      const nowCount = microsoft ? Math.min(s.total, microsoft.remaining) : s.total;
-      const microsoftText =
-        isMicrosoft && microsoft
+      const nowCount = account ? Math.min(s.total, account.remaining) : s.total;
+      // The partial/all sentences are provider-neutral; pace and "Sent" name the provider.
+      const mailboxText =
+        isMailbox && account
           ? ` ${[
-              s.total > microsoft.remaining
+              s.total > account.remaining
                 ? t("confirmMicrosoftPartial", {
                     now: nowCount,
                     total: s.total,
-                    limit: microsoft.dailyLimit,
-                    sent: microsoft.sentLast24h,
+                    limit: account.dailyLimit,
+                    sent: account.sentLast24h,
                   })
                 : t("confirmMicrosoftAll", { total: s.total }),
-              t("confirmMicrosoftPace", { minutes: microsoftSendMinutes(nowCount) }),
-              t("confirmMicrosoftSentItems", { email: microsoft.email }),
+              t(isGoogle ? "confirmGooglePace" : "confirmMicrosoftPace", { minutes: mailboxSendMinutes(nowCount) }),
+              t(isGoogle ? "confirmGoogleSent" : "confirmMicrosoftSentItems", { email: account.email }),
             ].join(" ")}`
           : "";
       const ok = await confirm({
@@ -203,7 +210,7 @@ export function EmailComposer({
             invalid: s.invalid,
           }) +
           timing +
-          microsoftText,
+          mailboxText,
         confirmLabel: t("confirmSend", { count: s.total }),
       });
       if (!ok) return;
@@ -226,7 +233,7 @@ export function EmailComposer({
             <span className="font-medium">{t("domains.noneTitle")}.</span> {t("domains.noneBody")}
           </p>
         ) : null}
-        {isMicrosoft ? (
+        {isMailbox ? (
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-medium">{t("fromMicrosoft")}</span>
@@ -234,20 +241,20 @@ export function EmailComposer({
                 {t("switchChannel")}
               </Link>
             </div>
-            {microsoft ? (
+            {account ? (
               <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-2.5 text-sm">
                 <span className="min-w-0 truncate">
-                  {microsoft.displayName ? `${microsoft.displayName} <${microsoft.email}>` : microsoft.email}
+                  {account.displayName ? `${account.displayName} <${account.email}>` : account.email}
                 </span>
                 <span className="ml-auto rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-medium text-brand">
-                  {t("microsoftChip")}
+                  {t(isGoogle ? "googleChip" : "microsoftChip")}
                 </span>
               </div>
             ) : null}
-            {microsoftReady ? (
+            {accountReady ? (
               <p className="text-xs text-muted-foreground">{t("fromMicrosoftHint")}</p>
             ) : (
-              <p className="text-xs text-red-600">{t("microsoftMissing")}</p>
+              <p className="text-xs text-red-600">{t(isGoogle ? "googleMissing" : "microsoftMissing")}</p>
             )}
           </div>
         ) : (
@@ -373,7 +380,7 @@ export function EmailComposer({
           onPickedChange={setPicked}
           onReadingChange={setReadingSheet}
         />
-        <AudienceSummary preview={preview} quota={isMicrosoft ? null : quota}>
+        <AudienceSummary preview={preview} quota={isMailbox ? null : quota}>
           <div className="flex flex-wrap gap-3">
             <Button
               type="button"
@@ -394,7 +401,7 @@ export function EmailComposer({
                 readingSheet ||
                 fromProblem ||
                 preview?.stats.total === 0 ||
-                (isMicrosoft && !microsoftReady)
+                (isMailbox && !accountReady)
               }
             >
               {busy ? t("working") : t("reviewSend")}

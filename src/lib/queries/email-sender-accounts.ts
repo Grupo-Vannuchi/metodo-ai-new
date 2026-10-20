@@ -1,17 +1,23 @@
 import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
-import { microsoftDailyLimit, remainingToday, sentLast24hWhere } from "@/lib/email-broadcast/microsoft/core";
+import { remainingToday, sentLast24hWhere } from "@/lib/email-broadcast/mailbox/core";
+import { googleDailyLimit } from "@/lib/email-broadcast/google/core";
+import { microsoftDailyLimit } from "@/lib/email-broadcast/microsoft/core";
 import type { SenderAccountView } from "@/lib/email-broadcast/types";
 
-/** The org's connected Microsoft mailbox with today's estimate, or null. */
-export async function getSenderAccountView(organizationId: string): Promise<SenderAccountView | null> {
+/** The org's connected mailbox for a provider, with today's estimate, or null. */
+export async function getSenderAccountView(
+  organizationId: string,
+  provider: "MICROSOFT" | "GOOGLE",
+): Promise<SenderAccountView | null> {
   const db = tenantDb(organizationId);
   const row = await db.emailSenderAccount.findFirst({
+    where: { provider },
     select: { id: true, email: true, displayName: true, accountKind: true, status: true },
   });
   if (!row) return null;
   const sentLast24h = await db.emailBroadcastRecipient.count({ where: sentLast24hWhere(row.id, new Date()) });
-  const dailyLimit = microsoftDailyLimit(row.accountKind);
+  const dailyLimit = provider === "GOOGLE" ? googleDailyLimit(row.accountKind) : microsoftDailyLimit(row.accountKind);
   return {
     id: row.id,
     email: row.email,

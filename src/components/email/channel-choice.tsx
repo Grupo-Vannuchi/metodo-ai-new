@@ -8,29 +8,36 @@ import { useToast } from "@/components/ui/toast";
 import { Link, useRouter } from "@/i18n/navigation";
 import { emailListHref } from "@/lib/email-broadcast/list-channel";
 import type { SenderAccountView } from "@/lib/email-broadcast/types";
-import { MicrosoftAccountPanel } from "@/components/email/microsoft-account-panel";
+import { SenderAccountPanel } from "@/components/email/sender-account-panel";
 import { ChannelIcon } from "@/components/email/channel-icon";
+import { cn } from "@/lib/utils";
 import { UnreadBadge } from "@/components/email/inbox/unread-badge";
 
-type ConnectError = "cancelled" | "admin_required" | "not_configured" | "failed";
+/** What the OAuth callback left in the query string (already narrowed by the page). */
+export type ChannelNotice = { provider: "MICROSOFT" | "GOOGLE"; connected: boolean; error: string | null };
 
 /**
- * Platform or the company's Microsoft mailbox (spec 2026-10-15 §7). "compose"
- * is the first step of "Novo e-mail"; "browse" is the E-mail page, which
- * always asks before showing one channel's sends.
+ * Platform, the company's Microsoft mailbox or its Google mailbox (specs
+ * 2026-10-15 §7 and 2026-10-19). A mailbox card only shows when that channel is
+ * enabled for the company. "compose" is the first step of "Novo e-mail";
+ * "browse" is the E-mail page, which always asks before showing one channel's sends.
  */
 export function ChannelChoice({
-  account,
+  microsoft,
+  microsoftEnabled,
+  google,
+  googleEnabled,
   quotaLimit,
-  connected = false,
-  error = null,
+  notice = null,
   mode = "compose",
   inbox = null,
 }: {
-  account: SenderAccountView | null;
+  microsoft: SenderAccountView | null;
+  microsoftEnabled: boolean;
+  google: SenderAccountView | null;
+  googleEnabled: boolean;
   quotaLimit: number;
-  connected?: boolean;
-  error?: ConnectError | null;
+  notice?: ChannelNotice | null;
   mode?: "compose" | "browse";
   /** Browse mode, when the member may read the connected mailbox's Inbox. */
   inbox?: { href: string; unread: Promise<number | null> | null } | null;
@@ -40,18 +47,25 @@ export function ChannelChoice({
   const router = useRouter();
   const toast = useToast();
   const browse = mode === "browse";
+  const three = microsoftEnabled && googleEnabled;
+  const noticeProvider = notice?.provider ?? null;
+  const noticeConnected = notice?.connected ?? false;
+  const noticeError = notice?.error ?? null;
 
   // The callback's result arrives in the query string: say it once, then clean the URL.
   useEffect(() => {
-    if (!connected && !error) return;
-    if (connected) toast(t("channel.connectedToast"));
-    else if (error) toast(t(`channel.error.${error}`), { variant: "error" });
+    if (!noticeProvider || (!noticeConnected && !noticeError)) return;
+    const isGoogle = noticeProvider === "GOOGLE";
+    if (noticeConnected) toast(t(isGoogle ? "channel.googleConnectedToast" : "channel.connectedToast"));
+    else if (noticeError) {
+      toast(t(isGoogle ? `channel.googleError.${noticeError}` : `channel.error.${noticeError}`), { variant: "error" });
+    }
     router.replace("/app/email/new");
-  }, [connected, error, toast, t, router]);
+  }, [noticeProvider, noticeConnected, noticeError, toast, t, router]);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid max-w-5xl gap-6 md:grid-cols-2">
+      <div className={cn("grid gap-6 md:grid-cols-2", three ? "max-w-6xl xl:grid-cols-3" : "max-w-5xl")}>
         <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-6">
           <div className="flex items-center gap-3">
             <span className="flex size-11 items-center justify-center rounded-xl border border-border bg-card">
@@ -75,43 +89,76 @@ export function ChannelChoice({
           </div>
         </section>
 
-        <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-6">
-          <div className="flex items-center gap-3">
-            <span className="flex size-11 items-center justify-center rounded-xl border border-border bg-card">
-              <ChannelIcon channel="microsoft" className="size-6" />
-            </span>
-            <h2 className="text-lg font-semibold">{t("channel.microsoftTitle")}</h2>
-          </div>
-          <p className="text-sm text-muted-foreground">{t("channel.microsoftBody")}</p>
-          <MicrosoftAccountPanel
-            account={account}
-            action={
-              browse ? undefined : (
-                <Link href="/app/email/new?via=microsoft" className={buttonVariants()}>
-                  {t("channel.use")}
-                </Link>
-              )
-            }
-          />
-          {browse ? (
-            <div className="mt-auto flex flex-wrap gap-2">
-              {inbox ? (
-                <Link href={inbox.href} className={buttonVariants()}>
-                  <Inbox aria-hidden="true" className="size-4" />
-                  {t("inbox.open")}
-                  {inbox.unread ? (
-                    <Suspense fallback={null}>
-                      <UnreadBadge count={inbox.unread} className="bg-brand-foreground text-brand" />
-                    </Suspense>
-                  ) : null}
-                </Link>
-              ) : null}
-              <Link href={emailListHref("microsoft")} className={buttonVariants({ variant: "outline" })}>
-                {t("channel.microsoftBrowse")}
-              </Link>
+        {microsoftEnabled ? (
+          <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-6">
+            <div className="flex items-center gap-3">
+              <span className="flex size-11 items-center justify-center rounded-xl border border-border bg-card">
+                <ChannelIcon channel="microsoft" className="size-6" />
+              </span>
+              <h2 className="text-lg font-semibold">{t("channel.microsoftTitle")}</h2>
             </div>
-          ) : null}
-        </section>
+            <p className="text-sm text-muted-foreground">{t("channel.microsoftBody")}</p>
+            <SenderAccountPanel
+              provider="MICROSOFT"
+              account={microsoft}
+              action={
+                browse ? undefined : (
+                  <Link href="/app/email/new?via=microsoft" className={buttonVariants()}>
+                    {t("channel.use")}
+                  </Link>
+                )
+              }
+            />
+            {browse ? (
+              <div className="mt-auto flex flex-wrap gap-2">
+                {inbox ? (
+                  <Link href={inbox.href} className={buttonVariants()}>
+                    <Inbox aria-hidden="true" className="size-4" />
+                    {t("inbox.open")}
+                    {inbox.unread ? (
+                      <Suspense fallback={null}>
+                        <UnreadBadge count={inbox.unread} className="bg-brand-foreground text-brand" />
+                      </Suspense>
+                    ) : null}
+                  </Link>
+                ) : null}
+                <Link href={emailListHref("microsoft")} className={buttonVariants({ variant: "outline" })}>
+                  {t("channel.microsoftBrowse")}
+                </Link>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        {googleEnabled ? (
+          <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-6">
+            <div className="flex items-center gap-3">
+              <span className="flex size-11 items-center justify-center rounded-xl border border-border bg-card">
+                <ChannelIcon channel="google" className="size-6" />
+              </span>
+              <h2 className="text-lg font-semibold">{t("channel.googleTitle")}</h2>
+            </div>
+            <p className="text-sm text-muted-foreground">{t("channel.googleBody")}</p>
+            <SenderAccountPanel
+              provider="GOOGLE"
+              account={google}
+              action={
+                browse ? undefined : (
+                  <Link href="/app/email/new?via=google" className={buttonVariants()}>
+                    {t("channel.use")}
+                  </Link>
+                )
+              }
+            />
+            {browse ? (
+              <div className="mt-auto">
+                <Link href={emailListHref("google")} className={buttonVariants({ variant: "outline" })}>
+                  {t("channel.googleBrowse")}
+                </Link>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
       </div>
     </div>
   );

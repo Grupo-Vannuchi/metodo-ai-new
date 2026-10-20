@@ -1,16 +1,22 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { INTERRUPTED_ERROR, microsoftRecipientError } from "../failure-reason";
-import { MICROSOFT_PACE_MS, graphFailureAction, microsoftDailyLimit, remainingToday, sentLast24hWhere } from "./core";
-import type { MimeFile, MimeMail } from "./mime";
-import { sendMicrosoftMail } from "./send";
-import { getMicrosoftAccessToken, markNeedsReconnect } from "./token";
+import { INTERRUPTED_ERROR } from "../failure-reason";
+import type { MimeFile, MimeMail } from "../microsoft/mime";
+import {
+  MAILBOX_PACE_MS,
+  remainingToday,
+  sentLast24hWhere,
+  type MailboxFailureAction,
+  type MailboxSendFailure,
+  type MailboxSendOutcome,
+} from "./core";
+import { getSenderAccessToken, markNeedsReconnect } from "./token";
 
-export type MicrosoftPauseReason = "daily_limit" | "reconnect" | "no_sender_account" | "account_blocked" | "provider_error";
+export type MailboxPauseReason = "daily_limit" | "reconnect" | "no_sender_account" | "account_blocked" | "provider_error";
 type Recipient = { id: string; email: string; name: string | null; companyName: string | null };
 
 /** What the platform dispatcher hands over: identity, lease helpers and the per-recipient content. */
-export type MicrosoftRun = {
+export type MailboxRun = {
   broadcastId: string;
   organizationId: string;
   fromName: string | null;
@@ -21,10 +27,27 @@ export type MicrosoftRun = {
   compose: (r: Recipient) => Pick<MimeMail, "subject" | "html" | "text" | "headers">;
   beat: () => Promise<void>;
   wait: (seconds: number | null) => Promise<void>;
-  pause: (reason: MicrosoftPauseReason, message: string | null) => Promise<unknown>;
+  pause: (reason: MailboxPauseReason, message: string | null) => Promise<unknown>;
   finish: () => Promise<void>;
   /** Lease cutoff: sends with a heartbeat after it are running right now. */
   activeSince: () => Date;
+};
+
+/**
+ * The provider-specific points of the send loop (Microsoft Graph or Gmail):
+ * everything else, the reservation and the settling included, is shared, so
+ * both channels keep the same "nobody receives it twice" guarantees.
+ */
+export type MailboxAdapter = {
+  channel: "MICROSOFT" | "GOOGLE";
+  /** Estimated sends per 24 h for an account kind. */
+  dailyLimit(kind: string): number;
+  /** One e-mail out of the connected mailbox. Never throws. */
+  send(token: string, mail: Omit<MimeMail, "attachments">, files: MimeFile[]): Promise<MailboxSendOutcome>;
+  /** What to do with a failed call; `attempt` counts earlier retries of this same e-mail. */
+  failureAction(failure: MailboxSendFailure, attempt: number): MailboxFailureAction;
+  /** How a failure is stored on the recipient. */
+  recipientError(code: string | null, message: string): string;
 };
 
 const MAX_PACE_FACTOR = 20;
@@ -42,14 +65,17 @@ export async function markInterruptedUncertain(broadcastId: string, organization
 }
 
 /**
- * Microsoft channel of the mass e-mail dispatcher (spec §6). One recipient at
- * a time: re-read the account, check today's estimate, reserve the recipient
- * (QUEUED → SENDING, sentAt stamped), hand it to Graph, then SENT / FAILED /
- * UNCERTAIN. A recipient still SENDING from a dead run was cut mid-call
- * (markInterruptedUncertain, called by the dispatcher): it is never resent. System context: organizationId
- * explicit everywhere.
+ * "Send through the company's own mailbox" channels of the mass e-mail
+ * dispatcher (Microsoft spec §6, Google spec 2026-10-19): one loop, with the
+ * provider's points in `adapter`. One recipient at a time: re-read the
+ * account (it must belong to the adapter's provider), check today's estimate,
+ * reserve the recipient (QUEUED → SENDING, sentAt stamped), hand it to the
+ * provider, then SENT / FAILED / UNCERTAIN. A recipient still SENDING from a
+ * dead run was cut mid-call (markInterruptedUncertain, called by the
+ * dispatcher): it is never resent. System context: organizationId explicit
+ * everywhere.
  */
-export async function runMicrosoftBroadcast(run: MicrosoftRun): Promise<{ done: boolean }> {
+export async function runMailboxBroadcast(run: MailboxRun, adapter: MailboxAdapter): Promise<{ done: boolean }> {
   const org = run.organizationId;
 
   /** Honours Retry-After up to 60 s, in chunks of at most 10 s (each run.wait renews the lease). */
@@ -82,7 +108,7 @@ export async function runMicrosoftBroadcast(run: MicrosoftRun): Promise<{ done: 
 
     const account = current.senderAccountId
       ? await prisma.emailSenderAccount.findFirst({
-          where: { id: current.senderAccountId, organizationId: org },
+          where: { id: current.senderAccountId, organizationId: org, provider: adapter.channel },
           select: { id: true, status: true, accountKind: true },
         })
       : null;
@@ -98,12 +124,12 @@ export async function runMicrosoftBroadcast(run: MicrosoftRun): Promise<{ done: 
     const used = await prisma.emailBroadcastRecipient.count({
       where: { organizationId: org, ...sentLast24hWhere(account.id, new Date()) },
     });
-    if (remainingToday(microsoftDailyLimit(account.accountKind), used) <= 0) {
+    if (remainingToday(adapter.dailyLimit(account.accountKind), used) <= 0) {
       await run.pause("daily_limit", null);
       return { done: true };
     }
 
-    let token = await getMicrosoftAccessToken(org, account.id);
+    let token = await getSenderAccessToken(org, account.id, adapter.channel);
     if (!token.ok) {
       if (token.reason === "reconnect") {
         await run.pause("reconnect", token.message);
@@ -147,16 +173,16 @@ export async function runMicrosoftBroadcast(run: MicrosoftRun): Promise<{ done: 
     let attempt = 0;
     let refreshed = false;
     for (;;) {
-      const res = await sendMicrosoftMail(token.accessToken, mail, run.files);
+      const res = await adapter.send(token.accessToken, mail, run.files);
       if (res.ok) {
         await settle({ status: "SENT", error: null });
         streak = 0;
         break;
       }
-      const action = graphFailureAction(res.status, res.code, attempt, res.stage);
+      const action = adapter.failureAction(res, attempt);
       if ((action === "refresh" || res.status === 401) && !refreshed) {
         refreshed = true;
-        const again = await getMicrosoftAccessToken(org, account.id, { force: true });
+        const again = await getSenderAccessToken(org, account.id, adapter.channel, { force: true });
         if (again.ok) {
           token = again;
           attempt++;
@@ -176,7 +202,7 @@ export async function runMicrosoftBroadcast(run: MicrosoftRun): Promise<{ done: 
         break;
       }
       if (action === "recipient") {
-        await settle({ status: "FAILED", error: microsoftRecipientError(res.code, res.message), sentAt: null });
+        await settle({ status: "FAILED", error: adapter.recipientError(res.code, res.message), sentAt: null });
         streak++;
         if (streak >= 3) {
           await run.pause("provider_error", `3 consecutive failures (${res.status}): ${res.message}`);
@@ -199,12 +225,12 @@ export async function runMicrosoftBroadcast(run: MicrosoftRun): Promise<{ done: 
       where: {
         organizationId: org,
         status: "SENDING",
-        channel: "MICROSOFT",
+        channel: adapter.channel,
         senderAccountId: account.id,
         lastDispatchAt: { gte: run.activeSince() },
       },
     });
-    await sleep(MICROSOFT_PACE_MS * Math.min(Math.max(1, running), MAX_PACE_FACTOR));
+    await sleep(MAILBOX_PACE_MS * Math.min(Math.max(1, running), MAX_PACE_FACTOR));
   }
   return { done: false };
 }

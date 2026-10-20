@@ -16,6 +16,7 @@ import { normalizeEmail } from "@/lib/email-broadcast/normalize";
 import { resolveAudience } from "@/lib/email-broadcast/audience";
 import { hasEmailContent } from "@/lib/email-broadcast/render";
 import { platformResendKey } from "@/lib/email-broadcast/platform";
+import { googleMailEnabledFor } from "@/lib/email-broadcast/google/oauth";
 import { checkAttachments, parseAttachments } from "@/lib/email-broadcast/attachments";
 import { composeSignature } from "@/lib/email-broadcast/compose";
 import { signatureContentOf } from "@/lib/email-broadcast/signature";
@@ -84,14 +85,14 @@ export async function saveEmailDraft(
     return { ok: false, error: "signature_missing" };
   }
 
-  const microsoft = parsed.data.channel === "MICROSOFT";
+  const mailbox = parsed.data.channel === "MICROSOFT" || parsed.data.channel === "GOOGLE";
   const data = {
     subject: parsed.data.subject,
     html: parsed.data.html,
     channel: parsed.data.channel,
-    // The Microsoft sender comes from the connected account when the send starts.
-    fromName: microsoft ? null : parsed.data.fromName || null,
-    fromEmail: microsoft ? null : parsed.data.fromEmail ? normalizeEmail(parsed.data.fromEmail) : null,
+    // A mailbox sender (Microsoft or Google) comes from the connected account when the send starts.
+    fromName: mailbox ? null : parsed.data.fromName || null,
+    fromEmail: mailbox ? null : parsed.data.fromEmail ? normalizeEmail(parsed.data.fromEmail) : null,
     replyTo: parsed.data.replyTo ? normalizeEmail(parsed.data.replyTo) : null,
     audience: parsed.data.audience as Prisma.InputJsonValue,
     attachments: parsed.data.attachments as Prisma.InputJsonValue,
@@ -143,6 +144,7 @@ export async function duplicateEmailBroadcast(id: string): Promise<{ ok: true; i
       select: { subject: true, html: true, fromName: true, fromEmail: true, replyTo: true, audience: true, attachments: true, signatureId: true, channel: true },
     });
     if (!src) return { ok: false, error: "not_found" };
+    const mailbox = src.channel === "MICROSOFT" || src.channel === "GOOGLE";
     const created = await db.emailBroadcast.create({
       data: {
         organizationId: g.ctx.organizationId,
@@ -150,8 +152,8 @@ export async function duplicateEmailBroadcast(id: string): Promise<{ ok: true; i
         subject: src.subject,
         html: src.html,
         channel: src.channel,
-        fromName: src.channel === "MICROSOFT" ? null : src.fromName,
-        fromEmail: src.channel === "MICROSOFT" ? null : src.fromEmail,
+        fromName: mailbox ? null : src.fromName,
+        fromEmail: mailbox ? null : src.fromEmail,
         replyTo: src.replyTo,
         audience: (src.audience ?? {}) as Prisma.InputJsonValue,
         attachments: (src.attachments ?? []) as Prisma.InputJsonValue,
@@ -223,10 +225,18 @@ export async function startEmailBroadcast(
   if (b.status !== "DRAFT") return { ok: false, error: "not_found" };
   if (!b.subject.trim() || !hasEmailContent(b.html)) return { ok: false, error: "invalid" };
 
-  const microsoft = b.channel === "MICROSOFT";
+  // A mailbox send (Microsoft or Google) goes only through the org's own account of that
+  // provider; nothing that is not PLATFORM reaches the Resend branch below.
+  const channel = b.channel;
+  const mailbox = channel === "MICROSOFT" || channel === "GOOGLE";
   let account: { id: string; email: string; displayName: string | null } | null = null;
-  if (microsoft) {
-    const row = await db.emailSenderAccount.findFirst({ select: { id: true, email: true, displayName: true, status: true } });
+  if (mailbox) {
+    // Google is a pilot channel: outside the pilot a draft can't start, however it was saved.
+    if (channel === "GOOGLE" && !googleMailEnabledFor(orgId)) return { ok: false, error: "sender_account_missing" };
+    const row = await db.emailSenderAccount.findFirst({
+      where: { provider: channel },
+      select: { id: true, email: true, displayName: true, status: true },
+    });
     if (!row) return { ok: false, error: "sender_account_missing" };
     if (row.status !== "ACTIVE") return { ok: false, error: "sender_account_reconnect" };
     account = row;
@@ -260,8 +270,8 @@ export async function startEmailBroadcast(
   const { recipients, stats } = await resolveAudience(orgId, readAudience(b.audience));
   if (recipients.length === 0) return { ok: false, error: "empty" };
 
-  // The monthly quota is a platform (Resend) limit: Microsoft sends skip it.
-  if (!microsoft) {
+  // The monthly quota is a platform (Resend) limit: mailbox sends skip it.
+  if (!mailbox) {
     // Addresses still queued in other in-flight sends count as used: no partial start.
     const queued = await db.emailBroadcastRecipient.count({
       where: { status: "QUEUED", broadcast: { status: { in: ["SENDING", "PAUSED"] }, channel: "PLATFORM" } },
@@ -348,11 +358,19 @@ export async function resumeEmailBroadcast(id: string): Promise<{ ok: true } | E
 
   if (b.status === "PAUSED") {
     let repoint = {};
-    if (b.channel === "MICROSOFT") {
-      const account = await db.emailSenderAccount.findFirst({ select: { id: true, email: true, displayName: true, status: true } });
+    const channel = b.channel;
+    const mailbox = channel === "MICROSOFT" || channel === "GOOGLE";
+    if (mailbox) {
+      if (channel === "GOOGLE" && !googleMailEnabledFor(g.ctx.organizationId)) {
+        return { ok: false, error: "sender_account_missing" };
+      }
+      const account = await db.emailSenderAccount.findFirst({
+        where: { provider: channel },
+        select: { id: true, email: true, displayName: true, status: true },
+      });
       if (!account) return { ok: false, error: "sender_account_missing" };
       if (account.status !== "ACTIVE") return { ok: false, error: "sender_account_reconnect" };
-      // Resumes through the account connected now (it may have been switched).
+      // Resumes through the account of the same provider connected now (it may have been switched).
       repoint = { senderAccountId: account.id, fromEmail: account.email, fromName: account.displayName };
     } else {
       if (!platformResendKey()) return { ok: false, error: "no_connection" };

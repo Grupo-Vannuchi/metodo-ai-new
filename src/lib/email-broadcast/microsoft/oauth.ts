@@ -1,7 +1,7 @@
 import "server-only";
 import { MicrosoftEntraId } from "arctic";
 import { env } from "@/lib/env";
-import { joinSiteUrl } from "./core";
+import { joinSiteUrl } from "../mailbox/core";
 
 /** Delegated scopes asked when a company connects its mailbox (spec 2026-10-15 §5.1). */
 export const MICROSOFT_MAIL_SCOPES = [

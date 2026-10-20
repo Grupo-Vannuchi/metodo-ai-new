@@ -99,6 +99,7 @@ Não existe um terceiro lugar gateando alguma coisa. É sempre um destes três a
   `emailBroadcastQuotaPerMonth` (50.000): e-mails aceitos pelo Resend no mês no submenu E-mail. É
   **separada** de `dispatchQuotaPerMonth` (Campanhas), e as duas não se somam.
   `microsoftDailyPersonal` (300) e `microsoftDailyWork` (10.000): estimativa de saídas por 24 h de uma caixa Microsoft conectada (Outlook pessoal e Microsoft 365). A Microsoft não informa o restante; o envio pausa no estimado ou na recusa real.
+  `googleDailyPersonal` (500) e `googleDailyWork` (2.000): estimativa de saídas por 24 h de uma conta Google conectada (Gmail pessoal e Google Workspace). O Google não informa o restante; o envio pausa no estimado ou na recusa real.
 
 ## Como o gating se compõe
 
@@ -158,7 +159,7 @@ para o tipo mas sem dono ainda — não gatear nada por elas por engano.
 
 ## Paridade de i18n
 
-`src/messages/pt.json` e `src/messages/en.json` têm **3059 chaves-folha cada um** (contagem
+`src/messages/pt.json` e `src/messages/en.json` têm **3094 chaves-folha cada um** (contagem
 própria, recursiva sobre os dois arquivos — batem exatamente). Não existe script no repositório
 que verifique isso automaticamente: nenhum arquivo em `scripts/` nem entrada em `package.json`
 menciona `pt.json`/`en.json`. Adicionar uma chave de um lado sem adicionar do outro não quebra

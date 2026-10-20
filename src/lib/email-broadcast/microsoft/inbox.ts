@@ -1,7 +1,7 @@
 import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
 import { GRAPH, graphCall, graphGetStream, type GraphFailure, type GraphResult } from "./graph";
-import { getMicrosoftAccessToken, markNeedsReconnect } from "./token";
+import { getSenderAccessToken, markNeedsReconnect } from "../mailbox/token";
 import {
   INBOX_PAGE_SIZE,
   addressesFromGraph,
@@ -69,7 +69,7 @@ async function withMailbox<T>(
   if (!account) return { ok: false, reason: "no_account" };
   if (account.status !== "ACTIVE") return { ok: false, reason: "reconnect" };
 
-  let token = await getMicrosoftAccessToken(organizationId, account.id);
+  let token = await getSenderAccessToken(organizationId, account.id, "MICROSOFT");
   let refreshed = false;
   let throttled = false;
   // Each retry spends a flag, so this runs `run` at most 3 times.
@@ -80,7 +80,7 @@ async function withMailbox<T>(
     if ("reason" in res) return res;
     if (res.status === 401 && !refreshed) {
       refreshed = true;
-      token = await getMicrosoftAccessToken(organizationId, account.id, { force: true });
+      token = await getSenderAccessToken(organizationId, account.id, "MICROSOFT", { force: true });
       continue;
     }
     if (res.status === 401) {

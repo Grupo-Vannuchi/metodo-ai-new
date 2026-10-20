@@ -79,8 +79,11 @@ import {
 import { EMPTY_AUDIENCE, audienceSelectionSchema } from "../src/lib/validations/email-broadcast";
 import {
   INTERRUPTED_ERROR,
+  googleRecipientError,
+  listPausedMessageKey,
   listReason,
   microsoftRecipientError,
+  pausedMessageKey,
   pausedReasonKey,
   recipientFailure,
 } from "../src/lib/email-broadcast/failure-reason";
@@ -90,15 +93,28 @@ import {
   accountKindFromTid,
   attachmentUploadMode,
   graphFailureAction,
-  joinSiteUrl,
   microsoftConsentError,
   microsoftDailyLimit,
-  microsoftSendMinutes,
   microsoftSendPath,
-  remainingToday,
-  sentLast24hWhere,
   uploadRanges,
 } from "../src/lib/email-broadcast/microsoft/core";
+import {
+  isReconnectCode,
+  joinSiteUrl,
+  mailboxSendMinutes,
+  remainingToday,
+  sentLast24hWhere,
+} from "../src/lib/email-broadcast/mailbox/core";
+import {
+  gmailFailureAction,
+  gmailUploadMode,
+  googleAccountKind,
+  googleConsentError,
+  googleDailyLimit,
+  googleGrantedSend,
+  googleHasGmail,
+  pilotAllows,
+} from "../src/lib/email-broadcast/google/core";
 import {
   attachmentDisposition,
   attachmentsFromGraph,
@@ -820,11 +836,11 @@ check("sentLast24hWhere counts SENT, SENDING and UNCERTAIN of one account since 
   assert.deepEqual(w.broadcast, { senderAccountId: "acc1" });
 });
 
-check("microsoftSendMinutes rounds up at ~28 per minute", () => {
-  assert.equal(microsoftSendMinutes(0), 1);
-  assert.equal(microsoftSendMinutes(28), 1);
-  assert.equal(microsoftSendMinutes(29), 2);
-  assert.equal(microsoftSendMinutes(300), 11);
+check("mailboxSendMinutes rounds up at ~28 per minute", () => {
+  assert.equal(mailboxSendMinutes(0), 1);
+  assert.equal(mailboxSendMinutes(28), 1);
+  assert.equal(mailboxSendMinutes(29), 2);
+  assert.equal(mailboxSendMinutes(300), 11);
 });
 
 check("microsoftSendPath goes direct only when the request fits", () => {
@@ -892,6 +908,72 @@ check("joinSiteUrl never doubles the slash", () => {
   assert.equal(joinSiteUrl("http://localhost:3000//", "/api/x"), "http://localhost:3000/api/x");
 });
 
+check("isReconnectCode only for refusals a new consent fixes", () => {
+  for (const c of ["invalid_grant", "interaction_required", "consent_required", "admin_policy_enforced"]) assert.equal(isReconnectCode(c), true);
+  for (const c of ["invalid_client", "server_error", "temporarily_unavailable", ""]) assert.equal(isReconnectCode(c), false);
+});
+
+check("googleAccountKind and googleHasGmail read the hosted domain", () => {
+  assert.equal(googleAccountKind("nillow.com"), "work");
+  assert.equal(googleAccountKind(undefined), "personal");
+  assert.equal(googleAccountKind(""), "personal");
+  assert.equal(googleHasGmail("ana@gmail.com", undefined), true);
+  assert.equal(googleHasGmail("Ana@GoogleMail.com", undefined), true);
+  assert.equal(googleHasGmail("contato@nillow.com", "nillow.com"), true);
+  assert.equal(googleHasGmail("contato@empresa.com.br", undefined), false);
+});
+
+check("googleGrantedSend, googleDailyLimit, gmailUploadMode, pilotAllows", () => {
+  assert.equal(googleGrantedSend(["openid", "https://www.googleapis.com/auth/gmail.send"]), true);
+  assert.equal(googleGrantedSend(["openid", "https://www.googleapis.com/auth/userinfo.email"]), false);
+  assert.equal(googleDailyLimit("personal"), 500);
+  assert.equal(googleDailyLimit("work"), 2_000);
+  assert.equal(gmailUploadMode(5 * 1024 * 1024), "simple");
+  assert.equal(gmailUploadMode(5 * 1024 * 1024 + 1), "resumable");
+  assert.equal(pilotAllows("org1", undefined), true);
+  assert.equal(pilotAllows("org1", ""), true);
+  assert.equal(pilotAllows("org1", " org1 , org2"), true);
+  assert.equal(pilotAllows("org3", "org1,org2"), false);
+});
+
+check("gmailFailureAction maps Gmail answers to dispatcher moves", () => {
+  assert.equal(gmailFailureAction(401, "authError", "", 0, "send"), "refresh");
+  assert.equal(gmailFailureAction(401, null, "", 1, "send"), "reconnect");
+  assert.equal(gmailFailureAction(429, "rateLimitExceeded", "User-rate limit exceeded (Mail sending)", 0, "send"), "daily_limit");
+  assert.equal(gmailFailureAction(429, null, "Too many concurrent requests for user", 0, "send"), "retry");
+  assert.equal(gmailFailureAction(403, "userRateLimitExceeded", "", 0, "send"), "retry");
+  assert.equal(gmailFailureAction(403, "rateLimitExceeded", "", 5, "send"), "pause");
+  assert.equal(gmailFailureAction(403, "domainPolicy", "", 0, "send"), "blocked");
+  assert.equal(gmailFailureAction(400, "failedPrecondition", "Mail service not enabled", 0, "send"), "blocked");
+  assert.equal(gmailFailureAction(403, "dailyLimitExceeded", "", 0, "send"), "pause");
+  assert.equal(gmailFailureAction(403, "insufficientPermissions", "", 0, "send"), "reconnect");
+  assert.equal(gmailFailureAction(400, "badRequest", "Invalid To header", 0, "send"), "recipient");
+  assert.equal(gmailFailureAction(400, "invalidArgument", "", 0, "send"), "recipient");
+  assert.equal(gmailFailureAction(0, null, "", 0, "send"), "uncertain");
+  assert.equal(gmailFailureAction(500, null, "", 0, "send"), "uncertain");
+  assert.equal(gmailFailureAction(502, null, "", 0, "send"), "uncertain");
+  assert.equal(gmailFailureAction(503, null, "", 2, "send"), "retry");
+  assert.equal(gmailFailureAction(503, null, "", 3, "send"), "pause");
+  assert.equal(gmailFailureAction(0, null, "", 0, "prepare"), "retry");
+  assert.equal(gmailFailureAction(500, null, "", 3, "prepare"), "pause");
+  assert.equal(gmailFailureAction(403, "accessNotConfigured", "", 0, "send"), "pause");
+  assert.equal(gmailFailureAction(404, null, "", 0, "send"), "pause");
+  assert.equal(gmailFailureAction(400, null, "", 0, "send"), "recipient");
+  assert.equal(gmailFailureAction(500, "rateLimitExceeded", "", 0, "send"), "uncertain");
+  assert.equal(gmailFailureAction(429, null, "", 5, "send"), "pause");
+  assert.equal(gmailFailureAction(504, null, "", 0, "send"), "uncertain");
+  // An ambiguous 5xx at the hand-over call is uncertain whatever reason it carries; prepare is a plain retry.
+  assert.equal(gmailFailureAction(500, "failedPrecondition", "", 0, "send"), "uncertain");
+  assert.equal(gmailFailureAction(502, "dailyLimitExceeded", "", 0, "send"), "uncertain");
+  assert.equal(gmailFailureAction(500, "failedPrecondition", "", 0, "prepare"), "retry");
+});
+
+check("googleConsentError reads the provider's error", () => {
+  assert.equal(googleConsentError("access_denied"), "cancelled");
+  assert.equal(googleConsentError("admin_policy_enforced"), "admin_required");
+  assert.equal(googleConsentError("server_error"), "failed");
+});
+
 // --- failure reasons -----------------------------------------------------------
 check("pausedReasonKey keeps known reasons and folds the rest into provider_error", () => {
   assert.equal(pausedReasonKey("daily_limit"), "daily_limit");
@@ -923,6 +1005,26 @@ check("recipientFailure translates stored errors and keeps the technical text", 
   assert.deepEqual(recipientFailure("Resend 500"), { key: "generic", technical: "Resend 500" });
 });
 
+check("pausedMessageKey / listPausedMessageKey pick the provider's wording", () => {
+  assert.equal(pausedMessageKey("PLATFORM", "quota"), "paused.quota");
+  assert.equal(pausedMessageKey("MICROSOFT", "provider_error"), "paused.provider_error_microsoft");
+  assert.equal(pausedMessageKey("MICROSOFT", "daily_limit"), "paused.daily_limit");
+  for (const r of ["daily_limit", "reconnect", "no_sender_account", "account_blocked", "provider_error"] as const) {
+    assert.equal(pausedMessageKey("GOOGLE", r), `paused.google_${r}`);
+  }
+  assert.equal(pausedMessageKey("GOOGLE", "attachment_invalid"), "paused.attachment_invalid");
+  assert.equal(listPausedMessageKey("MICROSOFT", "daily_limit"), "listReason.paused.daily_limit");
+  assert.equal(listPausedMessageKey("GOOGLE", "daily_limit"), "listReason.paused.google_daily_limit");
+  assert.equal(listPausedMessageKey("GOOGLE", "provider_error"), "listReason.paused.provider_error");
+});
+
+check("googleRecipientError and recipientFailure for gg: errors", () => {
+  assert.equal(googleRecipientError("badRequest", "Invalid To header"), "gg:badRequest|Invalid To header");
+  assert.equal(googleRecipientError("x", "y".repeat(600)).length, 500);
+  assert.deepEqual(recipientFailure("gg:badRequest|Invalid To header"), { key: "invalid_address", technical: "badRequest: Invalid To header" });
+  assert.deepEqual(recipientFailure("gg:backendError|x"), { key: "generic", technical: "backendError: x" });
+});
+
 check("listReason picks the red line of the sends list", () => {
   assert.deepEqual(listReason({ status: "PAUSED", pausedReason: "daily_limit", problems: 0, uncertain: 0 }), {
     kind: "paused",
@@ -943,20 +1045,34 @@ check("listReason picks the red line of the sends list", () => {
 
 // --- sends list per channel ----------------------------------------------------
 check("listChannelFromParam: no ?canal= means asking, unless Microsoft isn't set up", () => {
-  assert.equal(listChannelFromParam(undefined, true), null);
-  assert.equal(listChannelFromParam("", true), null);
-  assert.equal(listChannelFromParam("outra", true), null);
-  assert.equal(listChannelFromParam("plataforma", true), "plataforma");
-  assert.equal(listChannelFromParam("microsoft", true), "microsoft");
-  assert.equal(listChannelFromParam(["microsoft", "plataforma"], true), "microsoft");
-  assert.equal(listChannelFromParam(undefined, false), "plataforma");
-  assert.equal(listChannelFromParam("microsoft", false), "plataforma");
+  const ms = { microsoft: true, google: false };
+  const none = { microsoft: false, google: false };
+  assert.equal(listChannelFromParam(undefined, ms), null);
+  assert.equal(listChannelFromParam("", ms), null);
+  assert.equal(listChannelFromParam("outra", ms), null);
+  assert.equal(listChannelFromParam("plataforma", ms), "plataforma");
+  assert.equal(listChannelFromParam("microsoft", ms), "microsoft");
+  assert.equal(listChannelFromParam(["microsoft", "plataforma"], ms), "microsoft");
+  assert.equal(listChannelFromParam(undefined, none), "plataforma");
+  assert.equal(listChannelFromParam("microsoft", none), "plataforma");
+});
+
+check("listChannelFromParam with three channels", () => {
+  const both = { microsoft: true, google: true };
+  assert.equal(listChannelFromParam("google", both), "google");
+  assert.equal(listChannelFromParam("google", { microsoft: true, google: false }), null);
+  assert.equal(listChannelFromParam("microsoft", { microsoft: false, google: true }), null);
+  assert.equal(listChannelFromParam(undefined, { microsoft: false, google: false }), "plataforma");
+  assert.equal(listChannelFromParam("google", { microsoft: false, google: false }), "plataforma");
+  assert.equal(listChannelOf("GOOGLE"), "google");
+  assert.equal(broadcastChannelOf("google"), "GOOGLE");
 });
 
 check("list channel links and the broadcast channel they map to", () => {
   assert.equal(emailListHref(null), "/app/email");
   assert.equal(emailListHref("plataforma"), "/app/email?canal=plataforma");
   assert.equal(emailListHref("microsoft"), "/app/email?canal=microsoft");
+  assert.equal(emailListHref("google"), "/app/email?canal=google");
   assert.equal(listChannelOf("PLATFORM"), "plataforma");
   assert.equal(listChannelOf("MICROSOFT"), "microsoft");
   assert.equal(broadcastChannelOf("plataforma"), "PLATFORM");

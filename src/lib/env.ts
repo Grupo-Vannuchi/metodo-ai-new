@@ -69,6 +69,13 @@ const serverSchema = z.object({
   // without both, the "Pela conta Microsoft" option doesn't show up.
   MICROSOFT_MAIL_CLIENT_ID: z.string().optional(),
   MICROSOFT_MAIL_CLIENT_SECRET: z.string().optional(),
+  // Mass e-mail through the company's own Google account (spec 2026-10-19):
+  // a Google Cloud project separate from the sign-in one above, with the
+  // gmail.send scope. PILOT_ORG_IDS (comma-separated organization ids) keeps the
+  // option to those companies until Google approves the app; empty = everyone.
+  GOOGLE_MAIL_CLIENT_ID: z.string().optional(),
+  GOOGLE_MAIL_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_MAIL_PILOT_ORG_IDS: z.string().optional(),
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   // Platform WhatsApp (Evolution API) — one shared server used by every tenant,

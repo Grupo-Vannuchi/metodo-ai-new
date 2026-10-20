@@ -13,7 +13,7 @@ import {
 } from "@/lib/email-broadcast/microsoft/inbox-core";
 import { crmContactsByEmail, microsoftSendsTo, type InboxCrmContact } from "@/lib/queries/email-inbox";
 import type { SenderAccountView } from "@/lib/email-broadcast/types";
-import { MicrosoftAccountPanel } from "@/components/email/microsoft-account-panel";
+import { SenderAccountPanel } from "@/components/email/sender-account-panel";
 import { InboxSearch } from "@/components/email/inbox/inbox-search";
 import { InboxReply } from "@/components/email/inbox/inbox-reply";
 import { LinkPending } from "@/components/email/inbox/link-pending";
@@ -66,7 +66,10 @@ export async function EmailInbox({
     if (view.reason === "reconnect" || view.reason === "no_account") {
       return (
         <div className="max-w-2xl">
-          <MicrosoftAccountPanel account={account.status === "ACTIVE" ? { ...account, status: "NEEDS_RECONNECT" } : account} />
+          <SenderAccountPanel
+            provider="MICROSOFT"
+            account={account.status === "ACTIVE" ? { ...account, status: "NEEDS_RECONNECT" } : account}
+          />
         </div>
       );
     }

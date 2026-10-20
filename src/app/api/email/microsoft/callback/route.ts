@@ -5,7 +5,8 @@ import { getOrgContext } from "@/lib/tenant";
 import { canAccessScreen } from "@/lib/access";
 import { hasModule } from "@/config/modules";
 import { audit } from "@/lib/audit";
-import { accountKindFromTid, joinSiteUrl, microsoftConsentError } from "@/lib/email-broadcast/microsoft/core";
+import { joinSiteUrl } from "@/lib/email-broadcast/mailbox/core";
+import { accountKindFromTid, microsoftConsentError } from "@/lib/email-broadcast/microsoft/core";
 import {
   MS_MAIL_ORG_COOKIE,
   MS_MAIL_STATE_COOKIE,
