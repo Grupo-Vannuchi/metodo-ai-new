@@ -1904,7 +1904,7 @@
       "platformBrowse": "Ver envios pela plataforma",
       "microsoftBrowse": "Ver envios pela conta Microsoft",
       "microsoftTitle": "Pela conta Microsoft",
-      "microsoftBody": "Sai da caixa Outlook ou Microsoft 365 da empresa. As respostas chegam nessa caixa e cada e-mail fica salvo em Itens enviados.",
+      "microsoftBody": "Utilize seu e-mail do Outlook, Hotmail ou Live para envio de e-mails.",
       "noneTitle": "Nenhuma conta conectada",
       "noneBody": "Você entra na Microsoft e autoriza o envio em nome da caixa. Cada empresa tem uma conta de envio.",
       "consentNote": "A Microsoft vai pedir permissão para ler e escrever e-mails: o MétodoAI só usa isso para montar e-mails com anexos grandes, nunca para ler a sua caixa.",

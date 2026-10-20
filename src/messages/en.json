@@ -1904,7 +1904,7 @@
       "platformBrowse": "See platform sends",
       "microsoftBrowse": "See Microsoft account sends",
       "microsoftTitle": "Through the Microsoft account",
-      "microsoftBody": "Goes out from the company's Outlook or Microsoft 365 mailbox. Replies land there and every e-mail is saved in Sent Items.",
+      "microsoftBody": "Use your Outlook, Hotmail or Live e-mail to send e-mails.",
       "noneTitle": "No account connected",
       "noneBody": "You sign in to Microsoft and allow sending on the mailbox's behalf. Each company has one sending account.",
       "consentNote": "Microsoft will ask for permission to read and write e-mail: MétodoAI only uses it to build e-mails with large attachments, never to read your mailbox.",
