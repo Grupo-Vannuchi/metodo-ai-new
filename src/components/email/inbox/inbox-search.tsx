@@ -1,25 +1,68 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useEffect, useState, useTransition, type FormEvent } from "react";
 import { useTranslations } from "next-intl";
 import { RefreshCw, Search } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { Spinner } from "@/components/ui/spinner";
-import { SEARCH_MAX_CHARS, inboxHref, type InboxFilter } from "@/lib/email-broadcast/microsoft/inbox-core";
+import {
+  SEARCH_MAX_CHARS,
+  SEARCH_MIN_CHARS,
+  inboxHref,
+  type InboxFilter,
+} from "@/lib/email-broadcast/microsoft/inbox-core";
 import { cn } from "@/lib/utils";
 
-/** Search box (Enter searches the whole mailbox at Microsoft) and the refresh button. */
-export function InboxSearch({ search, filter }: { search: string; filter: InboxFilter }) {
+/** Pause after the last keystroke before searching at Microsoft. */
+const TYPE_DEBOUNCE_MS = 400;
+
+/**
+ * Search box and refresh button. The search runs while typing, from
+ * SEARCH_MIN_CHARS letters on (Enter searches at once); clearing the box brings
+ * the whole list back. An open e-mail stays open.
+ */
+export function InboxSearch({
+  search,
+  filter,
+  messageId,
+}: {
+  search: string;
+  filter: InboxFilter;
+  messageId: string | null;
+}) {
   const t = useTranslations("emailBroadcast.inbox");
   const router = useRouter();
   const [value, setValue] = useState(search);
+  // The URL's search changed from outside (tab, "Tentar de novo"): show it, unless we asked for it.
+  const [seen, setSeen] = useState(search);
+  const [asked, setAsked] = useState(search);
+  if (search !== seen) {
+    setSeen(search);
+    if (search !== asked) setValue(search);
+  }
   const [searching, startSearch] = useTransition();
   const [refreshing, startRefresh] = useTransition();
 
   // The search runs at Microsoft (1–3 s): the transition keeps the spinner up until the page lands.
+  // replace, not push: each keystroke must not become a history entry.
+  function go(q: string) {
+    setAsked(q);
+    startSearch(() => router.replace(inboxHref({ filtro: filter, q, msg: messageId ?? undefined })));
+  }
+
+  useEffect(() => {
+    const q = value.trim().slice(0, SEARCH_MAX_CHARS);
+    if (q === search || (q.length > 0 && q.length < SEARCH_MIN_CHARS)) return;
+    const timer = setTimeout(() => go(q), TYPE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+    // go reads only props and setters; listing it would restart the pause on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, search]);
+
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    startSearch(() => router.push(inboxHref({ filtro: filter, q: value.trim().slice(0, SEARCH_MAX_CHARS) })));
+    const q = value.trim().slice(0, SEARCH_MAX_CHARS);
+    if (q !== search) go(q);
   }
 
   return (

@@ -11,6 +11,20 @@ export const INBOX_PAGE_SIZE = 50;
 export const REPLY_MAX_CHARS = 10_000;
 /** Longest search text sent to Microsoft. */
 export const SEARCH_MAX_CHARS = 100;
+/** Typing searches by itself from this many letters on (Enter searches at any length). */
+export const SEARCH_MIN_CHARS = 3;
+
+/**
+ * Invisible characters newsletters pad their preview text with (soft hyphen,
+ * combining grapheme joiner, zero-width and bidi marks, BOM, Hangul fillers).
+ * Left in, they fill the list row and push the ellipsis to its edge.
+ */
+const INVISIBLE_RE = /[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\u3164\ufeff\uffa0]/g;
+
+/** A preview as shown in the list: invisible padding dropped, spaces collapsed. */
+export function cleanPreview(text: string): string {
+  return text.replace(INVISIBLE_RE, "").replace(/\s+/g, " ").trim();
+}
 
 /** Which tab of the Microsoft channel page is open (`?aba=`). */
 export type MicrosoftTab = "envios" | "caixa";
@@ -120,7 +134,7 @@ export function summaryFromGraph(raw: unknown): InboxMessageSummary | null {
     receivedAt: str(m.receivedDateTime) || new Date(0).toISOString(),
     isRead: m.isRead === true,
     hasAttachments: m.hasAttachments === true,
-    preview: str(m.bodyPreview).replace(/\s+/g, " ").trim(),
+    preview: cleanPreview(str(m.bodyPreview)),
   };
 }
 

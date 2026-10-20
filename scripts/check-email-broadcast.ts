@@ -102,6 +102,7 @@ import {
 import {
   attachmentDisposition,
   attachmentsFromGraph,
+  cleanPreview,
   graphSearchValue,
   inboxBodyDocument,
   inboxFilterFromParam,
@@ -972,6 +973,12 @@ check("inbox tab, filter and search come from the URL with safe defaults", () =>
   assert.equal(inboxFilterFromParam("tudo"), "todas");
   assert.equal(inboxSearchFromParam("  preço  "), "preço");
   assert.equal(inboxSearchFromParam("x".repeat(300)).length, 100);
+});
+
+check("cleanPreview drops the invisible padding newsletters put in previews", () => {
+  assert.equal(cleanPreview("Existem centenas deles \u034f \u200c \u034f \u200c\u00ad \ufeff"), "Existem centenas deles");
+  assert.equal(cleanPreview("  linha 1\r\n\u00a0linha 2 "), "linha 1 linha 2");
+  assert.equal(cleanPreview("a\u200bb"), "ab");
 });
 
 check("inboxHref keeps only what differs from the defaults", () => {

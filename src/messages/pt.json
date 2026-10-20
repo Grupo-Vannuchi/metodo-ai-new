@@ -1966,6 +1966,7 @@
       "hasAttachment": "anexo",
       "pageNote": "Mostrando os {count} e-mails mais recentes. Use a busca para achar os mais antigos.",
       "backToList": "Voltar para a lista",
+      "pickTitle": "Nenhum e-mail aberto",
       "pick": "Escolha um e-mail na lista para ler.",
       "messageGone": "Este e-mail não está mais na caixa de entrada. Ele pode ter sido apagado ou movido.",
       "messageFailed": "Não foi possível abrir este e-mail agora. Tente de novo em instantes.",
