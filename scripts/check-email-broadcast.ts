@@ -76,7 +76,7 @@ import {
   spreadsheetKind,
   xlsxCellTexts,
 } from "../src/lib/email-broadcast/spreadsheet";
-import { EMPTY_AUDIENCE, audienceSelectionSchema } from "../src/lib/validations/email-broadcast";
+import { EMPTY_AUDIENCE, audienceSelectionSchema, broadcastDraftSchema } from "../src/lib/validations/email-broadcast";
 import {
   INTERRUPTED_ERROR,
   failureMessageKey,
@@ -103,10 +103,12 @@ import {
 import {
   isReconnectCode,
   joinSiteUrl,
+  mailboxPaceWaitMs,
   mailboxSendMinutes,
   remainingToday,
   sentLast24hWhere,
   sentLastHourWhere,
+  waitChunksMs,
 } from "../src/lib/email-broadcast/mailbox/core";
 import {
   gmailFailureAction,
@@ -829,6 +831,16 @@ check("audience schema keeps old drafts and caps typed + imported at 5,000", () 
   assert.ok(!audienceSelectionSchema.safeParse({ imports: files(MAX_IMPORTS + 1) }).success);
 });
 
+check("broadcastDraftSchema saves a draft for every channel, SMTP included", () => {
+  const draft = { subject: "s", html: "<p>x</p>", fromName: "", fromEmail: "", replyTo: "", audience: EMPTY_AUDIENCE };
+  for (const channel of ["PLATFORM", "MICROSOFT", "GOOGLE", "SMTP"] as const) {
+    const parsed = broadcastDraftSchema.safeParse({ ...draft, channel });
+    assert.ok(parsed.success && parsed.data.channel === channel, channel);
+  }
+  assert.equal(broadcastDraftSchema.parse(draft).channel, "PLATFORM");
+  assert.ok(!broadcastDraftSchema.safeParse({ ...draft, channel: "POP" }).success);
+});
+
 // --- Microsoft channel ---------------------------------------------------------
 check("accountKindFromTid tells a personal account from Microsoft 365", () => {
   assert.equal(accountKindFromTid(MICROSOFT_CONSUMER_TENANT_ID), "personal");
@@ -860,6 +872,26 @@ check("mailboxSendMinutes rounds up at ~28 per minute", () => {
   assert.equal(mailboxSendMinutes(28), 1);
   assert.equal(mailboxSendMinutes(29), 2);
   assert.equal(mailboxSendMinutes(300), 11);
+});
+
+check("waitChunksMs and mailboxPaceWaitMs split long waits under the lease", () => {
+  assert.deepEqual(waitChunksMs(36_000), [10_000, 10_000, 10_000, 6_000]);
+  assert.deepEqual(waitChunksMs(2_100), [2_100]);
+  assert.deepEqual(waitChunksMs(0), []);
+  assert.equal(mailboxPaceWaitMs(2_100, 0), 2_100);
+  assert.equal(mailboxPaceWaitMs(36_000, 2), 72_000); // two sends of one account: each waits twice as long
+  assert.equal(mailboxPaceWaitMs(2_100, 50), 42_000);
+});
+
+check("waitChunksMs fails closed: a pause that is not a number still waits one full piece", () => {
+  assert.deepEqual(waitChunksMs(Number.NaN), [10_000]);
+  assert.deepEqual(waitChunksMs(Number.POSITIVE_INFINITY), [10_000]);
+  assert.deepEqual(waitChunksMs(Number.NEGATIVE_INFINITY), [10_000]);
+  assert.deepEqual(waitChunksMs(Number.NaN, 4_000), [4_000]);
+  // A pace computed from a broken limit (NaN) lands here too: never "no pause at all".
+  assert.deepEqual(waitChunksMs(mailboxPaceWaitMs(Number.NaN, 3)), [10_000]);
+  // Finite totals keep their meaning: nothing to wait is no piece.
+  assert.deepEqual(waitChunksMs(-5), []);
 });
 
 check("microsoftSendPath goes direct only when the request fits", () => {
@@ -1057,6 +1089,14 @@ check("smtpFailureAction maps SMTP answers to dispatcher moves", () => {
   assert.equal(a(554, "data-554", "Transaction failed", 0), "pause");
   assert.equal(a(421, "mail-421", "Service not available, closing channel", 0), "retry");
   assert.equal(a(421, "mail-421", "Service not available, closing channel", 5), "pause");
+  // 421 is the server closing the channel: never one recipient's, at any command (retried, then a pause)
+  assert.equal(a(421, "rcpt-421", "4.3.2 Service not available, closing transmission channel", 0), "retry");
+  assert.equal(a(421, "rcpt-421", "4.3.2 Service not available, closing transmission channel", 5), "pause");
+  assert.equal(a(421, "rcpt-421", "Too many connections from your IP", 0), "daily_limit"); // not "Over quota"-like
+  assert.equal(a(421, "data-421", "Try again later", 5), "pause");
+  assert.equal(a(421, "message-421", "4.2.2 Mailbox full, closing connection", 5), "pause"); // even a mailbox code
+  for (const phase of ["mail", "rcpt", "data", "message"])
+    for (const attempt of [0, 4, 5, 9]) assert.notEqual(a(421, `${phase}-421`, "Over quota", attempt), "recipient", `${phase} ${attempt}`);
   assert.equal(a(0, null, "", 0), "pause");
 });
 
@@ -1094,6 +1134,28 @@ check("smtpSendPhase separates the preparation from the hand-over", () => {
   assert.equal(smtpPhaseOf("rcpt-550"), "rcpt");
   assert.equal(smtpPhaseOf("bogus"), null);
   assert.equal(smtpPhaseOf(null), null);
+});
+
+check("smtpSendPhase: a server that hangs up with a refusal said no, it is never uncertain", () => {
+  // With PIPELINING a RCPT TO answered "421" ends the session before DATA: nodemailer reports the reply on a dropped
+  // connection. The content never left (it goes only after DATA's 354), so it is the server refusing, not "transfer".
+  assert.equal(smtpSendPhase("send", { code: "ECONNECTION", responseCode: 421, command: "CONN" }), "data");
+  // The connection closing on an unfinished "554 ..." line, or a refusal nobody asked for, is a refusal too.
+  assert.equal(smtpSendPhase("send", { code: "ECONNECTION", responseCode: 554, command: "CONN" }), "data");
+  assert.equal(smtpSendPhase("send", { code: "EPROTOCOL", responseCode: 550, command: "CONN" }), "data");
+  // No server reply (a drop, a timeout) or no refusal in it: still uncertain.
+  assert.equal(smtpSendPhase("send", { code: "ECONNECTION" }), "transfer");
+  assert.equal(smtpSendPhase("send", { code: "ETIMEDOUT" }), "transfer");
+  assert.equal(smtpSendPhase("send", { code: "ECONNECTION", responseCode: 250 }), "transfer");
+  // The envelope and the final answer keep their own phases; the steps before the send don't change.
+  assert.equal(smtpSendPhase("send", { code: "EENVELOPE", command: "RCPT TO", responseCode: 421 }), "rcpt");
+  assert.equal(smtpSendPhase("send", { code: "EMESSAGE", command: "DATA", responseCode: 421 }), "message");
+  assert.equal(smtpSendPhase("connect", { code: "ECONNECTION", responseCode: 421 }), "connect");
+  // As a server-level refusal: a 4xx is retried, then pauses; a limit worded with an x.7.x code pauses as such.
+  const closing = "421 4.3.2 Service not available, closing transmission channel";
+  assert.equal(smtpFailureAction(421, smtpFailureCode("data", 421), closing, 0), "retry");
+  assert.equal(smtpFailureAction(421, smtpFailureCode("data", 421), closing, 5), "pause");
+  assert.equal(smtpFailureAction(421, "data-421", "421 4.7.0 Too many messages, closing connection", 0), "daily_limit");
 });
 
 check("smtpConnectError names the save-form failures", () => {
