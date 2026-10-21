@@ -10,8 +10,8 @@ import { BlockList, isIP } from "node:net";
 /**
  * IPv4 ranges that are not the public internet: "this" network, private,
  * shared (CGNAT), loopback, link-local (the cloud metadata address lives here),
- * protocol assignments, documentation, benchmarking, multicast and reserved
- * (which includes the broadcast address).
+ * protocol assignments, documentation, the deprecated 6to4 relay anycast,
+ * benchmarking, multicast and reserved (which includes the broadcast address).
  */
 const BLOCKED_IPV4: readonly (readonly [string, number])[] = [
   ["0.0.0.0", 8],
@@ -22,6 +22,7 @@ const BLOCKED_IPV4: readonly (readonly [string, number])[] = [
   ["172.16.0.0", 12],
   ["192.0.0.0", 24],
   ["192.0.2.0", 24],
+  ["192.88.99.0", 24],
   ["192.168.0.0", 16],
   ["198.18.0.0", 15],
   ["198.51.100.0", 24],
@@ -30,15 +31,24 @@ const BLOCKED_IPV4: readonly (readonly [string, number])[] = [
   ["240.0.0.0", 4],
 ];
 
-/** The IPv6 side: unspecified, loopback, NAT64, discard, documentation, unique-local, link-local and multicast. */
+/**
+ * The IPv6 side: unspecified, loopback, the transition ranges that embed an
+ * IPv4 address (the deprecated IPv4-compatible ::/96, NAT64, Teredo and 6to4),
+ * discard, documentation, unique-local, link-local, the deprecated site-local
+ * and multicast.
+ */
 const BLOCKED_IPV6: readonly (readonly [string, number])[] = [
   ["::", 128],
   ["::1", 128],
+  ["::", 96],
   ["64:ff9b::", 96],
   ["100::", 64],
+  ["2001::", 32],
   ["2001:db8::", 32],
+  ["2002::", 16],
   ["fc00::", 7],
   ["fe80::", 10],
+  ["fec0::", 10],
   ["ff00::", 8],
 ];
 

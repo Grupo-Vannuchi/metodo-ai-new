@@ -85,9 +85,14 @@ type SmtpErrorFacts = { code?: string | null; command?: string | null; message?:
 
 const TLS_TEXT = /certificate|self[- ]signed|altname|unable to verify|wrong version number|ssl routines/i;
 
-/** Certificate or handshake trouble: nodemailer's ETLS, Node's ERR_TLS_*, or OpenSSL's own wording. */
+/**
+ * Certificate or handshake trouble: nodemailer's ETLS, Node's ERR_TLS_*, or
+ * OpenSSL's own wording. EPROTOCOL (the server did not greet like SMTP) never
+ * is: its text is the server's, not a handshake's.
+ */
 function isTlsFailure(e: SmtpErrorFacts): boolean {
   const code = e.code ?? "";
+  if (code === "EPROTOCOL") return false;
   if (code === "ETLS" || code === "EPROTO" || code.startsWith("ERR_TLS")) return true;
   return TLS_TEXT.test(e.message ?? "");
 }
@@ -95,7 +100,8 @@ function isTlsFailure(e: SmtpErrorFacts): boolean {
 /**
  * The phase of a failed SMTP step ("connect" covers the greeting and the TLS,
  * "login" the AUTH, "send" the envelope and the content). Before the content
- * leaves, a failure is a preparation failure and the e-mail can try again. At
+ * leaves, a failure is a preparation failure and the e-mail can try again (a
+ * greeting that isn't SMTP's, EPROTOCOL, is a connection failure too). At
  * "send", the server *answering* no is a refusal and never uncertain (it did
  * not accept the e-mail); a network failure or a timeout may have come after
  * the final dot, so it is "transfer": uncertain, never sent again. An envelope
@@ -121,20 +127,71 @@ export function smtpSendPhase(step: "connect" | "login" | "send", e: SmtpErrorFa
   return isTlsFailure(e) ? "tls" : "connect";
 }
 
+/** An enhanced status code (RFC 3463) as its subject and detail: "5.1.8" is subject 1, detail 8. */
+type EnhancedCode = { subject: number; detail: number };
+
+const ENHANCED_CODE = /\b([245])\.(\d{1,3})\.(\d{1,3})\b/;
+
+/** The answer's first enhanced status code; null when it has none or the first is a 2.x.x (a success's). */
+function enhancedCode(message: string): EnhancedCode | null {
+  const match = ENHANCED_CODE.exec(message);
+  return match && match[1] !== "2" ? { subject: Number(match[2]), detail: Number(match[3]) } : null;
+}
+
+/** x.1.7 and x.1.8: the SENDER's address and system, the account's, not the recipient's. */
+function isSenderCode(code: EnhancedCode | null): boolean {
+  return code?.subject === 1 && (code.detail === 7 || code.detail === 8);
+}
+
+/** x.2.3: the message is longer than the server allows. */
+function isLengthCode(code: EnhancedCode | null): boolean {
+  return code?.subject === 2 && code.detail === 3;
+}
+
+/** x.1.x (a recipient's address) or x.2.x (its mailbox), except the sender's x.1.7/x.1.8 and the length x.2.3. */
+function isRecipientCode(code: EnhancedCode | null): boolean {
+  return (code?.subject === 1 || code?.subject === 2) && !isSenderCode(code) && !isLengthCode(code);
+}
+
+const SENDER_TEXT = /sender address rejected|not owned by user|relay access denied|relaying denied/i;
+
+/**
+ * The answer is about the sender or about relaying (x.1.7, x.1.8 or those
+ * words): the account's problem on whichever command it comes back. Postfix
+ * says it at RCPT TO, but it is not each recipient's fault.
+ */
+function isSenderAnswer(message: string): boolean {
+  return isSenderCode(enhancedCode(message)) || SENDER_TEXT.test(message);
+}
+
 const SIZE_TEXT = /\b5\.3\.4\b|message size|too large|too big|tamanho/i;
 
-/** The server says the message is too big for it: a limit of this e-mail, not of the account. */
+/**
+ * The server says the message is too big for it: a limit of this e-mail, not
+ * of the account. By 5.3.4, x.2.3 or the words; and by a bare 552 at the final
+ * answer, unless that answer carries an address or mailbox code (a "552 5.2.2"
+ * is a full mailbox).
+ */
 export function isSmtpSizeRefusal(code: string | null, message: string): boolean {
-  return code === "message-552" || SIZE_TEXT.test(message);
+  const enhanced = enhancedCode(message);
+  if (SIZE_TEXT.test(message) || isLengthCode(enhanced)) return true;
+  return code === "message-552" && enhanced?.subject !== 1 && enhanced?.subject !== 2;
 }
 
 const LIMIT_TEXT = /\b(rate|limit|quota|too many|limite|excedid)/i;
-const EXTENDED_CODE = /\b[245]\.\d{1,3}\.\d{1,3}\b/;
+// Words that make a limit the account's SENDING limit ("rate", "per hour", "daily", "envio"...).
+const SENDING_TEXT =
+  /\b(rate|send|sending|sender|sent|envio|envios|enviar|hour|hourly|day|daily|hora|horas|dia|diario|diário)\b/i;
 
-/** The answer's first enhanced status code points at the recipient's address (x.1.x) or mailbox (x.2.x). */
-function isRecipientSubject(message: string): boolean {
-  const extended = EXTENDED_CODE.exec(message)?.[0];
-  return extended !== undefined && /^[45]\.[12]\./.test(extended);
+/**
+ * The answer is one recipient's own: its address or mailbox (x.1.x, x.2.x), or
+ * limit words with no sign of being the account's sending limit (no sending
+ * word, no x.7.x policy code), like a bare "Over quota": that is the mailbox's.
+ */
+function isRecipientAnswer(message: string): boolean {
+  const enhanced = enhancedCode(message);
+  if (isRecipientCode(enhanced)) return true;
+  return LIMIT_TEXT.test(message) && !SENDING_TEXT.test(message) && enhanced?.subject !== 7;
 }
 
 /**
@@ -146,15 +203,19 @@ function isRecipientSubject(message: string): boolean {
  *  2. the address guard, TLS trouble, a server with no login: pause;
  *  3. a failed connection: 3 retries, then pause; a login refused with a 4xx
  *     the same; any other refused login: reconnect;
- *  4. the message is too big: this recipient fails;
- *  5. the recipient's address or mailbox (x.1.x or x.2.x, at RCPT TO, DATA or
- *     the final answer): 5 retries if temporary, then this recipient fails;
- *  6. the answer talks about a limit: pause with "daily_limit";
- *  7. RCPT TO refused for any other reason: same as 5;
- *  8. any other 5xx: MAIL FROM blocks the account, the final answer fails this
+ *  4. after the login, an answer about the sender or the relay: blocked (the
+ *     account's, whichever command it comes back on);
+ *  5. the message is too big: this recipient fails;
+ *  6. this recipient's own answer at RCPT TO, DATA or the final answer (an
+ *     address or mailbox code x.1.x/x.2.x, or limit words with no sending word
+ *     and no x.7.x code, like "Over quota"): 5 retries if temporary, then this
+ *     recipient fails;
+ *  7. the answer talks about a limit: pause with "daily_limit";
+ *  8. RCPT TO refused for any other reason: same as 6;
+ *  9. any other 5xx: MAIL FROM blocks the account, the final answer fails this
  *     recipient, DATA and the rest pause;
- *  9. any other 4xx: 5 retries, then pause; anything else: pause.
- * What belongs to one recipient (4, 5, 7) never pauses: a pause hands the
+ * 10. any other 4xx: 5 retries, then pause; anything else: pause.
+ * What belongs to one recipient (5, 6, 8) never pauses: a pause hands the
  * recipient back to the queue, the resume would pick it first and the send
  * would stall for good.
  */
@@ -176,13 +237,15 @@ export function smtpFailureAction(
     return attempt < 3 ? "retry" : "pause";
   }
   if (phase === "noauth") return "pause";
+  const afterLogin = phase === "mail" || phase === "rcpt" || phase === "data" || phase === "message";
+  // The sender or the relay refused: ahead of the size and recipient rules, whatever the command it came back on.
+  if (afterLogin && isSenderAnswer(message)) return "blocked";
   // Before the limit rule: "message size exceeds fixed limit" has the word "limit" in it.
   if (isSmtpSizeRefusal(code, message)) return "recipient";
-  // The recipient's address or mailbox (not at MAIL FROM, where x.1.x is the sender's) and the recipient's own
-  // "quota" or "rate", so this also comes before the limit rule. The retries run out into a recipient failure.
-  if ((phase === "rcpt" || phase === "data" || phase === "message") && isRecipientSubject(message)) {
-    return temporary && attempt < 5 ? "retry" : "recipient";
-  }
+  // This recipient's own refusal (not at MAIL FROM, where the same words are the sender's). It also comes before the
+  // limit rule, because "Over quota" is the mailbox's. The retries run out into a recipient failure.
+  const atRecipient = phase === "rcpt" || phase === "data" || phase === "message";
+  if (atRecipient && isRecipientAnswer(message)) return temporary && attempt < 5 ? "retry" : "recipient";
   if (LIMIT_TEXT.test(message)) return "daily_limit";
   // Any other RCPT TO refusal, even one with no reply code, is this recipient's: never a pause.
   if (phase === "rcpt") return temporary && attempt < 5 ? "retry" : "recipient";
@@ -233,6 +296,7 @@ const CONNECTION_CODES = new Set([
   "ECONNECTION",
   "ETIMEDOUT",
   "ESOCKET",
+  "EPROTOCOL",
   "ECONNREFUSED",
   "ECONNRESET",
   "EHOSTUNREACH",

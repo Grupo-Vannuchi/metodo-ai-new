@@ -125,7 +125,8 @@ Quem preenche o formulário decide em qual endereço e porta o servidor do Méto
   - loopback;
   - redes privadas: 10/8, 172.16/12 e 192.168/16;
   - link-local (169.254/16, fe80::/10) ou CGNAT (100.64/10);
-  - fc00::/7, 0.0.0.0/8, multicast ou reservados.
+  - fc00::/7, 0.0.0.0/8, multicast ou reservados;
+  - faixas de transição que embutem IPv4 (::/96, 2002::/16, 2001::/32), além de fec0::/10 e 192.88.99.0/24.
 
   IP digitado direto passa pela mesma regra.
 - **Conecta no IP conferido,** com o nome original para o SNI e para conferir o certificado. Assim, uma troca de DNS entre a checagem e a conexão não desvia para outro lugar.
@@ -184,9 +185,10 @@ A ordem importa: a primeira linha que bate decide. Tudo fica numa função pura 
 | Login recusado com 4xx (por exemplo, `454 4.7.0` temporário) | repete até 3 vezes; esgotado, pausa com `provider_error` |
 | `EAUTH` (login recusado: 535, 534, 530) | a conta vira `NEEDS_RECONNECT` e o envio pausa com `reconnect` |
 | `ENOAUTH` | pausa com `provider_error` |
-| Resposta com tamanho excedido (código `message-552`, `5.3.4`, "message size"/"too large"/"tamanho") | falha só esse destinatário (`message_too_large`) e segue |
-| No `RCPT TO`, no `DATA` ou na resposta final, código estendido `x.1.x` ou `x.2.x` (endereço ou caixa do destinatário: inexistente, cheia, desativada) | 5xx: falha só esse destinatário. 4xx: repete até 5 vezes e, esgotado, falha só esse destinatário. **Nunca pausa** |
-| Resposta que fala de limite (`/\b(rate\|limit\|quota\|too many\|limite\|excedid)/i`), fora do caso acima | pausa com `daily_limit`: o provedor recusou por limite de envio |
+| Depois do login, resposta sobre o **remetente** ou o relay (`x.1.7`, `x.1.8`, "sender address rejected", "not owned by user", "relay access denied", "relaying denied"), em qualquer estágio | pausa com `account_blocked`. O Postfix costuma dar essa recusa no `RCPT TO`, e ela não é culpa de cada destinatário |
+| Resposta com tamanho excedido (`5.3.4`, `x.2.3`, "message size"/"too large"/"tamanho", ou código `message-552` sem código estendido de endereço/caixa) | falha só esse destinatário (`message_too_large`) e segue |
+| No `RCPT TO`, no `DATA` ou na resposta final, resposta **do destinatário**: código estendido `x.1.x` ou `x.2.x` (endereço ou caixa inexistente, cheia ou desativada), ou palavras de limite sem nenhuma palavra de envio nem código `x.7.x` (por exemplo, "Over quota", "Quota excedida para o usuario") | 5xx: falha só esse destinatário. 4xx: repete até 5 vezes e, esgotado, falha só esse destinatário. **Nunca pausa** |
+| Resposta que fala de limite (`/\b(rate\|limit\|quota\|too many\|limite\|excedid)/i`), fora dos casos acima | pausa com `daily_limit`: o provedor recusou por limite de envio. No `RCPT TO`, no `DATA` e na resposta final, isso só vale com palavra de envio (`rate`, `send`, `sender`, `envio`, `hour`, `daily`, `hora`, `dia`...) ou código `x.7.x` |
 | `RCPT TO` recusado com 5xx | falha só esse destinatário e segue (`invalid_address` para 550, 551, 553, 501, 510 e 511; `generic` para o resto) |
 | `RCPT TO` recusado com 4xx | repete até 5 vezes; esgotado, falha só esse destinatário. **Nunca pausa** |
 | `MAIL FROM` recusado com 5xx (por exemplo, remetente diferente do login) | pausa com `account_blocked`, com o texto do servidor |
