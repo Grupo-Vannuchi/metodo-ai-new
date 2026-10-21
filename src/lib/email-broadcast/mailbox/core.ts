@@ -39,6 +39,30 @@ export function mailboxSendMinutes(count: number): number {
   return Math.max(1, Math.ceil((Math.max(0, count) * MAILBOX_PACE_MS) / 60_000));
 }
 
+/** The pause is stretched for at most this many sends of one account running at once. */
+const MAX_PACE_FACTOR = 20;
+
+/**
+ * The pause after an e-mail: the account's pace times the sends of that same
+ * account running right now (at least 1, at most 20), so all of them together
+ * keep the account's pace.
+ */
+export function mailboxPaceWaitMs(paceMs: number, running: number): number {
+  return paceMs * Math.min(Math.max(1, running), MAX_PACE_FACTOR);
+}
+
+/**
+ * A wait cut into pieces of at most `maxChunkMs` (the last one takes the rest),
+ * so the lease can be renewed before each piece: a long wait never outlives
+ * the dispatcher's 90 s lease.
+ */
+export function waitChunksMs(totalMs: number, maxChunkMs = 10_000): number[] {
+  const step = Math.max(1, maxChunkMs);
+  const chunks: number[] = [];
+  for (let left = Number.isFinite(totalMs) ? totalMs : 0; left > 0; left -= step) chunks.push(Math.min(left, step));
+  return chunks;
+}
+
 /** What the dispatcher does with a failed provider call (Graph, Gmail or SMTP). */
 export type MailboxFailureAction =
   | "refresh"

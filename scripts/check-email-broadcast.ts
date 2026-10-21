@@ -103,10 +103,12 @@ import {
 import {
   isReconnectCode,
   joinSiteUrl,
+  mailboxPaceWaitMs,
   mailboxSendMinutes,
   remainingToday,
   sentLast24hWhere,
   sentLastHourWhere,
+  waitChunksMs,
 } from "../src/lib/email-broadcast/mailbox/core";
 import {
   gmailFailureAction,
@@ -860,6 +862,15 @@ check("mailboxSendMinutes rounds up at ~28 per minute", () => {
   assert.equal(mailboxSendMinutes(28), 1);
   assert.equal(mailboxSendMinutes(29), 2);
   assert.equal(mailboxSendMinutes(300), 11);
+});
+
+check("waitChunksMs and mailboxPaceWaitMs split long waits under the lease", () => {
+  assert.deepEqual(waitChunksMs(36_000), [10_000, 10_000, 10_000, 6_000]);
+  assert.deepEqual(waitChunksMs(2_100), [2_100]);
+  assert.deepEqual(waitChunksMs(0), []);
+  assert.equal(mailboxPaceWaitMs(2_100, 0), 2_100);
+  assert.equal(mailboxPaceWaitMs(36_000, 2), 72_000); // two sends of one account: each waits twice as long
+  assert.equal(mailboxPaceWaitMs(2_100, 50), 42_000);
 });
 
 check("microsoftSendPath goes direct only when the request fits", () => {
