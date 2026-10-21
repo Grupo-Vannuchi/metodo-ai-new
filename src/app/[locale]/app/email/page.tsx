@@ -60,7 +60,7 @@ export default async function EmailPage({
   const hasMailboxChannel = microsoftEnabled || googleEnabled;
   const sp = await searchParams;
   // Entering E-mail always asks the channel first (no remembered choice).
-  const view = listChannelFromParam(sp.canal, { microsoft: microsoftEnabled, google: googleEnabled });
+  const view = listChannelFromParam(sp.canal, { microsoft: microsoftEnabled, google: googleEnabled, smtp: false });
   // The Microsoft Inbox has its own screen key: a template can grant sending without reading.
   const inboxAllowed = microsoftEnabled && canAccessScreen(ctx, "emailInbox");
   /** Unread count for the badges (channel card, "Envios" tab), streamed so a slow Microsoft never holds the page. */
@@ -160,7 +160,8 @@ export default async function EmailPage({
   }
 
   const [rows, domains, used, account] = await Promise.all([
-    listEmailBroadcasts(ctx.organizationId, broadcastChannelOf(view)),
+    // SMTP isn't offered here yet (smtp: false above), so the view is always one of the three stored channels.
+    listEmailBroadcasts(ctx.organizationId, broadcastChannelOf(view) as "PLATFORM" | "MICROSOFT" | "GOOGLE"),
     mailbox ? Promise.resolve([] as string[]) : listSenderDomains(ctx.organizationId),
     mailbox ? Promise.resolve(0) : countEmailsSentThisMonth(ctx.organizationId),
     provider ? getSenderAccountView(ctx.organizationId, provider) : Promise.resolve(null),

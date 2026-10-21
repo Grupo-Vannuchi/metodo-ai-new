@@ -1,8 +1,16 @@
 /**
  * Pure rules shared by the "send through the company's own mailbox" channels
- * (Microsoft, spec 2026-10-15; Google, spec 2026-10-19). No server imports, so
- * check:email and the composer can import it.
+ * (Microsoft, spec 2026-10-15; Google, spec 2026-10-19; SMTP, spec 2026-10-21).
+ * No server imports, so check:email and the composer can import it.
  */
+
+function sentSinceWhere(accountId: string, since: Date) {
+  return {
+    status: { in: ["SENT", "SENDING", "UNCERTAIN"] as ("SENT" | "SENDING" | "UNCERTAIN")[] },
+    sentAt: { gte: since },
+    broadcast: { senderAccountId: accountId },
+  };
+}
 
 /**
  * Prisma `where` (EmailBroadcastRecipient) for the e-mails that left, or may
@@ -10,11 +18,12 @@
  * a recipient is reserved, so SENDING and UNCERTAIN count too.
  */
 export function sentLast24hWhere(accountId: string, now: Date) {
-  return {
-    status: { in: ["SENT", "SENDING", "UNCERTAIN"] as ("SENT" | "SENDING" | "UNCERTAIN")[] },
-    sentAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
-    broadcast: { senderAccountId: accountId },
-  };
+  return sentSinceWhere(accountId, new Date(now.getTime() - 24 * 60 * 60 * 1000));
+}
+
+/** Same count over the last 60 min: what an SMTP account's hourly limit is checked against. */
+export function sentLastHourWhere(accountId: string, now: Date) {
+  return sentSinceWhere(accountId, new Date(now.getTime() - 60 * 60 * 1000));
 }
 
 /** What is left of the estimated daily limit (never negative). */
@@ -30,7 +39,7 @@ export function mailboxSendMinutes(count: number): number {
   return Math.max(1, Math.ceil((Math.max(0, count) * MAILBOX_PACE_MS) / 60_000));
 }
 
-/** What the dispatcher does with a failed provider call (Graph or Gmail). */
+/** What the dispatcher does with a failed provider call (Graph, Gmail or SMTP). */
 export type MailboxFailureAction =
   | "refresh"
   | "retry"

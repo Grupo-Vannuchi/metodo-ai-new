@@ -6,10 +6,10 @@
 
 import type { MailboxChannel } from "./failure-reason";
 
-export type ListChannel = "plataforma" | "microsoft" | "google";
+export type ListChannel = "plataforma" | "microsoft" | "google" | "smtp";
 
 /** Which mailbox channels this company may use right now (the platform is always there). */
-export type ListChannelAvailability = { microsoft: boolean; google: boolean };
+export type ListChannelAvailability = { microsoft: boolean; google: boolean; smtp: boolean };
 
 /**
  * The list's channel from `?canal=` (null = show the choice). With no mailbox
@@ -20,11 +20,12 @@ export function listChannelFromParam(
   param: string | string[] | undefined,
   available: ListChannelAvailability,
 ): ListChannel | null {
-  if (!available.microsoft && !available.google) return "plataforma";
+  if (!available.microsoft && !available.google && !available.smtp) return "plataforma";
   const value = Array.isArray(param) ? param[0] : param;
   if (value === "plataforma") return "plataforma";
   if (value === "microsoft" && available.microsoft) return "microsoft";
   if (value === "google" && available.google) return "google";
+  if (value === "smtp" && available.smtp) return "smtp";
   return null;
 }
 
@@ -37,6 +38,7 @@ export function emailListHref(channel: ListChannel | null): string {
 export function listChannelOf(channel: MailboxChannel): ListChannel {
   if (channel === "MICROSOFT") return "microsoft";
   if (channel === "GOOGLE") return "google";
+  if (channel === "SMTP") return "smtp";
   return "plataforma";
 }
 
@@ -44,5 +46,6 @@ export function listChannelOf(channel: MailboxChannel): ListChannel {
 export function broadcastChannelOf(channel: ListChannel): MailboxChannel {
   if (channel === "microsoft") return "MICROSOFT";
   if (channel === "google") return "GOOGLE";
+  if (channel === "smtp") return "SMTP";
   return "PLATFORM";
 }

@@ -23,6 +23,14 @@ export const LIMITS: {
   googleDailyPersonal: number;
   /** Estimated e-mails per 24 h through a connected Gmail / Google Workspace account: Google Workspace. */
   googleDailyWork: number;
+  /** E-mails per hour an SMTP account sends when the company didn't give its own figure. */
+  smtpHourlyDefault: number;
+  /** E-mails per 24 h an SMTP account sends when the company didn't give its own figure. */
+  smtpDailyDefault: number;
+  /** Highest hourly limit the SMTP form accepts (one e-mail every ~2.1 s, the mailbox pace). */
+  smtpHourlyMax: number;
+  /** Highest daily limit the SMTP form accepts. */
+  smtpDailyMax: number;
   /** Prospecting leads per month. */
   prospectingQuotaPerMonth: number;
   /** Prospecting extraction jobs per month. */
@@ -45,6 +53,10 @@ export const LIMITS: {
   microsoftDailyWork: 10_000,
   googleDailyPersonal: 500,
   googleDailyWork: 2_000,
+  smtpHourlyDefault: 100,
+  smtpDailyDefault: 500,
+  smtpHourlyMax: 1_700,
+  smtpDailyMax: 10_000,
   prospectingQuotaPerMonth: 10_000,
   extractionsPerMonth: 500,
   assistantDailyLimit: 750,
