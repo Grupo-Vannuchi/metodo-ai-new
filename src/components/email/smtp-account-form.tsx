@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm";
 import { FieldError, Input, Label } from "@/components/ui/field";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useToast } from "@/components/ui/toast";
@@ -41,6 +42,12 @@ export type SmtpFormMode = "new" | "edit" | "reconnect";
 /** The fields whose problems the form names next to them. */
 type FieldKey = "email" | "host" | "port" | "hourlyLimit";
 
+/** The same fields in the order they are on the page: the first one with a problem gets the focus. */
+const FIELD_ORDER: readonly FieldKey[] = ["email", "host", "port", "hourlyLimit"];
+
+/** A refusal shown above the button. `focus`: the alert takes the focus (nothing else on the page has a better claim to it). */
+type FormError = { message: string; technical?: string; focus: boolean };
+
 /** The account schema's stable issue messages (validations/email-smtp-account.ts) and the field each belongs to. */
 function fieldOfIssue(message: string): FieldKey | null {
   switch (message) {
@@ -68,13 +75,16 @@ const selectCls = cn(
  * is saved, so a wrong server, port or password is told here and nothing is
  * stored. The password is never filled in: in an edit it can stay blank only
  * while the server, port, security and user are the ones it was typed for (the
- * same rule the server applies, canKeepSmtpPassword).
+ * same rule the server applies, canKeepSmtpPassword). Changing the sender's
+ * address in an edit replaces the account (the server saves another row), so
+ * that asks first.
  */
 export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { initial: SmtpFormInitial; mode: SmtpFormMode }) {
   const t = useTranslations("emailBroadcast");
   const ta = useTranslations("auth");
   const format = useFormatter();
   const toast = useToast();
+  const confirm = useConfirm();
   const router = useRouter();
   // What the form opened with, for the whole visit: a save revalidates this page, so the props change under a form
   // that is about to leave, and the rules below compare against the account as the person found it.
@@ -92,9 +102,21 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
   const [hourly, setHourly] = useState(String(initial.hourlyLimit));
   const [daily, setDaily] = useState(String(initial.dailyLimit));
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
-  const [error, setError] = useState<{ message: string; technical?: string } | null>(null);
+  const [error, setError] = useState<FormError | null>(null);
   const [saved, setSaved] = useState(false);
   const [busy, start] = useTransition();
+  const emailRef = useRef<HTMLInputElement>(null);
+  const hostRef = useRef<HTMLInputElement>(null);
+  const portRef = useRef<HTMLSelectElement>(null);
+  const hourlyRef = useRef<HTMLInputElement>(null);
+  const alertRef = useRef<HTMLParagraphElement>(null);
+  // The "change the e-mail?" question is open: a second submit has to wait for the answer.
+  const asking = useRef(false);
+
+  // A refusal shows above the button, so the focus goes to it: a keyboard user would otherwise start over from the top.
+  useEffect(() => {
+    if (error?.focus) alertRef.current?.focus();
+  }, [error]);
 
   const emailNorm = email.trim().toLowerCase();
   const hostNorm = host.trim().toLowerCase();
@@ -102,6 +124,8 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
   const username = shownUsername.trim() || emailNorm;
   const maxHourly = format.number(LIMITS.smtpHourlyMax);
   const maxDaily = format.number(LIMITS.smtpDailyMax);
+  // Saving another address replaces the account: a new row, and the sends in progress through the old one pause.
+  const emailChanged = mode === "edit" && emailNorm !== "" && emailNorm !== initial.email;
   // Blank is "keep the saved password" only for an edit that still points where the password was typed.
   const keepPassword =
     mode === "edit" &&
@@ -120,6 +144,11 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
     setFieldErrors((current) => (current[key] ? { ...current, [key]: undefined } : current));
   }
 
+  function focusField(key: FieldKey) {
+    const ref = key === "email" ? emailRef : key === "host" ? hostRef : key === "port" ? portRef : hourlyRef;
+    ref.current?.focus();
+  }
+
   function onPort(value: string) {
     const next = SMTP_PORTS.find((p) => String(p) === value);
     if (next === undefined) return;
@@ -134,9 +163,9 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
     return t(`smtp.error.${code}`, { host: hostNorm, port });
   }
 
-  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || saved) return;
+    if (busy || saved || asking.current) return;
     setError(null);
     const input: SmtpAccountInput = {
       email,
@@ -161,16 +190,31 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
         else other = true;
       }
       setFieldErrors(next);
-      if (other) setError({ message: t("smtp.error.invalid") });
+      // The first field with a problem takes the focus; the generic message only when no field is to blame.
+      const first = FIELD_ORDER.find((key) => next[key]);
+      if (first) focusField(first);
+      if (other) setError({ message: t("smtp.error.invalid"), focus: !first });
       return;
     }
     setFieldErrors({});
+    if (emailChanged) {
+      asking.current = true;
+      const go = await confirm({
+        description: t("smtp.form.emailChangeConfirm", { from: initial.email, to: emailNorm }),
+        confirmLabel: t("smtp.form.emailChangeConfirmLabel"),
+      });
+      asking.current = false;
+      if (!go) {
+        emailRef.current?.focus();
+        return;
+      }
+    }
     start(async () => {
       try {
         const r = await saveSmtpAccount(input);
         if (!r.ok) {
           // Nothing typed is lost: the fields keep their values, only the reason is shown.
-          setError({ message: errorMessage(r.error), technical: r.technical });
+          setError({ message: errorMessage(r.error), technical: r.technical, focus: true });
           return;
         }
         setSaved(true);
@@ -178,7 +222,7 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
         router.push("/app/email/new");
         router.refresh();
       } catch {
-        setError({ message: t("error.unknown") });
+        setError({ message: t("error.unknown"), focus: true });
       }
     });
   }
@@ -188,20 +232,24 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
       <p className="text-sm text-muted-foreground">{t("smtp.intro")}</p>
       {mode === "reconnect" ? (
         <p className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
-          {t("smtp.reconnectNotice")}
+          {/* Stored data that can't be read (no server left) wasn't refused by the server: its own words. */}
+          {initial.host === "" ? t("smtp.reconnectNoticeUnreadable") : t("smtp.reconnectNotice")}
         </p>
       ) : null}
 
       <fieldset disabled={busy || saved} className="flex min-w-0 flex-col gap-8">
+        {/* The columns below only start where they have room: the sidebar takes 16rem from md, so a form at md is
+            ~400px wide (two columns of ~190px, and a server name in ~70px); from lg it has ~650px. */}
         <section aria-labelledby="smtpSenderTitle" className="flex flex-col gap-4">
           <h2 id="smtpSenderTitle" className="text-sm font-semibold">
             {t("smtp.form.senderSection")}
           </h2>
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
             <div>
               <Label htmlFor="smtpEmail">{t("smtp.form.email")}</Label>
               <Input
                 id="smtpEmail"
+                ref={emailRef}
                 value={email}
                 inputMode="email"
                 autoComplete="off"
@@ -211,12 +259,17 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
                 required
                 placeholder={t("smtp.form.emailPlaceholder")}
                 aria-invalid={Boolean(fieldErrors.email)}
-                aria-describedby="smtpEmailError"
+                aria-describedby="smtpEmailHint smtpEmailError"
                 onChange={(e) => {
                   setEmail(e.target.value);
                   clearField("email");
                 }}
               />
+              {emailChanged ? (
+                <p id="smtpEmailHint" className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                  {t("smtp.form.emailChangeHint", { email: initial.email })}
+                </p>
+              ) : null}
               <div id="smtpEmailError">
                 <FieldError>{fieldErrors.email}</FieldError>
               </div>
@@ -245,11 +298,13 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
           <h2 id="smtpServerTitle" className="text-sm font-semibold">
             {t("smtp.form.serverSection")}
           </h2>
-          <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_7rem_11rem]">
-            <div>
+          {/* The server's name gets a row of its own until lg, where it shares one with the port and the security. */}
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_7rem_11rem]">
+            <div className="sm:col-span-2 lg:col-span-1">
               <Label htmlFor="smtpHost">{t("smtp.form.host")}</Label>
               <Input
                 id="smtpHost"
+                ref={hostRef}
                 value={host}
                 autoComplete="off"
                 autoCapitalize="none"
@@ -275,6 +330,7 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
               <Label htmlFor="smtpPort">{t("smtp.form.port")}</Label>
               <select
                 id="smtpPort"
+                ref={portRef}
                 className={selectCls}
                 value={port}
                 aria-invalid={Boolean(fieldErrors.port)}
@@ -308,7 +364,7 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
           <p id="smtpSecurityHint" className="-mt-1 text-xs text-muted-foreground">
             {t("smtp.form.securityHint")}
           </p>
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
             <div>
               <Label htmlFor="smtpUser">{t("smtp.form.username")}</Label>
               <Input
@@ -360,11 +416,12 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
           <h2 id="smtpLimitsTitle" className="text-sm font-semibold">
             {t("smtp.form.limitsSection")}
           </h2>
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
             <div>
               <Label htmlFor="smtpHourly">{t("smtp.form.hourlyLimit")}</Label>
               <Input
                 id="smtpHourly"
+                ref={hourlyRef}
                 type="number"
                 inputMode="numeric"
                 min={1}
@@ -415,7 +472,9 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
       {error ? (
         // The server's own wording for a refusal is the hover text, as in the failure reasons of a send.
         <p
+          ref={alertRef}
           role="alert"
+          tabIndex={-1}
           title={error.technical}
           className={cn(
             "rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200",

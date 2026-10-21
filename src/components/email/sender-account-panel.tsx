@@ -64,7 +64,9 @@ const OAUTH_TEXT = {
   GOOGLE: { switchConfirm: "googleSwitchConfirm", kindPersonal: "googleKindPersonal", kindWork: "googleKindWork" },
 } as const;
 
-const CHIP = "max-w-full truncate rounded-full border border-border bg-card px-2.5 py-1";
+const CHIP = "rounded-full border border-border bg-card px-2.5 py-1";
+/** The SMTP server's name is typed by the company and can be long: that chip alone is cut short instead of wrapping. */
+const CHIP_CUT = `${CHIP} max-w-full truncate`;
 
 /**
  * The company's sending account at one provider: connect (none), reconnect
@@ -142,27 +144,35 @@ export function SenderAccountPanel({
   }
 
   if (account.status === "NEEDS_RECONNECT") {
+    // An SMTP account with no server to show (host null) is one whose stored data can't be read: it wasn't the server
+    // that refused the password, so its text doesn't say so.
+    const unreadable = !oauth && account.host === null;
     return (
       <div className="flex flex-col gap-3 rounded-lg border border-red-300 bg-red-50 p-4 text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
         <p className="text-sm font-medium">{t("channel.reconnectTitle", { email: account.email })}</p>
-        <p className="text-sm">{t(`channel.${text.reconnectBody}`)}</p>
+        <p className="text-sm">{t(`channel.${unreadable ? "smtpReconnectUnreadableBody" : text.reconnectBody}`)}</p>
         <div>{connectButton(t("channel.reconnect"))}</div>
       </div>
     );
   }
 
-  // What the chips say: the mailbox kind and an estimated day for Microsoft/Google; the server and the company's
-  // own limits for SMTP. The last one is the same for all.
-  const chips: string[] = [];
+  // What the chips say: the mailbox kind and an estimated day for Microsoft/Google; the server, the company's own
+  // limits and what is left of today's for SMTP. The sent count is the same for all.
+  const chips: { text: string; cut?: boolean }[] = [];
   if (oauth) {
-    chips.push(account.accountKind === "personal" ? t(`channel.${oauth.kindPersonal}`) : t(`channel.${oauth.kindWork}`));
-    chips.push(t("channel.dailyLimit", { count: format.number(account.dailyLimit) }));
+    chips.push({
+      text: account.accountKind === "personal" ? t(`channel.${oauth.kindPersonal}`) : t(`channel.${oauth.kindWork}`),
+    });
+    chips.push({ text: t("channel.dailyLimit", { count: format.number(account.dailyLimit) }) });
   } else {
-    if (account.host) chips.push(account.host);
-    if (account.hourlyLimit !== null) chips.push(t("channel.smtpHourly", { count: format.number(account.hourlyLimit) }));
-    chips.push(t("channel.smtpDaily", { count: format.number(account.dailyLimit) }));
+    if (account.host) chips.push({ text: account.host, cut: true });
+    if (account.hourlyLimit !== null) {
+      chips.push({ text: t("channel.smtpHourly", { count: format.number(account.hourlyLimit) }) });
+    }
+    chips.push({ text: t("channel.smtpDaily", { count: format.number(account.dailyLimit) }) });
   }
-  chips.push(t("channel.sent24h", { count: format.number(account.sentLast24h) }));
+  chips.push({ text: t("channel.sent24h", { count: format.number(account.sentLast24h) }) });
+  if (!oauth) chips.push({ text: t("channel.smtpRemaining", { count: account.remaining }) });
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/40 p-4">
@@ -177,8 +187,8 @@ export function SenderAccountPanel({
       </div>
       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
         {chips.map((chip) => (
-          <span key={chip} title={chip} className={CHIP}>
-            {chip}
+          <span key={chip.text} title={chip.cut ? chip.text : undefined} className={chip.cut ? CHIP_CUT : CHIP}>
+            {chip.text}
           </span>
         ))}
       </div>
