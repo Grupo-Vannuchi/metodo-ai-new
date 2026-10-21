@@ -1089,6 +1089,14 @@ check("smtpFailureAction maps SMTP answers to dispatcher moves", () => {
   assert.equal(a(554, "data-554", "Transaction failed", 0), "pause");
   assert.equal(a(421, "mail-421", "Service not available, closing channel", 0), "retry");
   assert.equal(a(421, "mail-421", "Service not available, closing channel", 5), "pause");
+  // 421 is the server closing the channel: never one recipient's, at any command (retried, then a pause)
+  assert.equal(a(421, "rcpt-421", "4.3.2 Service not available, closing transmission channel", 0), "retry");
+  assert.equal(a(421, "rcpt-421", "4.3.2 Service not available, closing transmission channel", 5), "pause");
+  assert.equal(a(421, "rcpt-421", "Too many connections from your IP", 0), "daily_limit"); // not "Over quota"-like
+  assert.equal(a(421, "data-421", "Try again later", 5), "pause");
+  assert.equal(a(421, "message-421", "4.2.2 Mailbox full, closing connection", 5), "pause"); // even a mailbox code
+  for (const phase of ["mail", "rcpt", "data", "message"])
+    for (const attempt of [0, 4, 5, 9]) assert.notEqual(a(421, `${phase}-421`, "Over quota", attempt), "recipient", `${phase} ${attempt}`);
   assert.equal(a(0, null, "", 0), "pause");
 });
 

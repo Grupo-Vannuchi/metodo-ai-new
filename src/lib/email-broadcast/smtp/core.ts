@@ -211,19 +211,22 @@ function isRecipientAnswer(message: string): boolean {
  *  2. the address guard, TLS trouble, a server with no login: pause;
  *  3. a failed connection: 3 retries, then pause; a login refused with a 4xx
  *     the same; any other refused login: reconnect;
- *  4. after the login, an answer about the sender or the relay: blocked (the
+ *  4. a 421 (the server closing the channel) on any command after that: the
+ *     server's, never one recipient's; with limit words "daily_limit",
+ *     otherwise 5 retries, then pause;
+ *  5. after the login, an answer about the sender or the relay: blocked (the
  *     account's, whichever command it comes back on);
- *  5. the message is too big: this recipient fails;
- *  6. this recipient's own answer at RCPT TO, DATA or the final answer (an
+ *  6. the message is too big: this recipient fails;
+ *  7. this recipient's own answer at RCPT TO, DATA or the final answer (an
  *     address or mailbox code x.1.x/x.2.x, or limit words with no sending word
  *     and no x.7.x code, like "Over quota"): 5 retries if temporary, then this
  *     recipient fails;
- *  7. the answer talks about a limit: pause with "daily_limit";
- *  8. RCPT TO refused for any other reason: same as 6;
- *  9. any other 5xx: MAIL FROM blocks the account, the final answer fails this
+ *  8. the answer talks about a limit: pause with "daily_limit";
+ *  9. RCPT TO refused for any other reason: same as 7;
+ * 10. any other 5xx: MAIL FROM blocks the account, the final answer fails this
  *     recipient, DATA and the rest pause;
- * 10. any other 4xx: 5 retries, then pause; anything else: pause.
- * What belongs to one recipient (5, 6, 8) never pauses: a pause hands the
+ * 11. any other 4xx: 5 retries, then pause; anything else: pause.
+ * What belongs to one recipient (6, 7, 9) never pauses: a pause hands the
  * recipient back to the queue, the resume would pick it first and the send
  * would stall for good.
  */
@@ -245,6 +248,12 @@ export function smtpFailureAction(
     return attempt < 3 ? "retry" : "pause";
   }
   if (phase === "noauth") return "pause";
+  // 421 is the server closing the channel ("service not available"): about the server, never one recipient, whatever
+  // command it answered. Ahead of the size and recipient rules, so "421 Too many connections" is not a recipient's.
+  if (status === 421) {
+    if (LIMIT_TEXT.test(message)) return "daily_limit";
+    return attempt < 5 ? "retry" : "pause";
+  }
   const afterLogin = phase === "mail" || phase === "rcpt" || phase === "data" || phase === "message";
   // The sender or the relay refused: ahead of the size and recipient rules, whatever the command it came back on.
   if (afterLogin && isSenderAnswer(message)) return "blocked";
