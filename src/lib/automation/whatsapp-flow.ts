@@ -9,7 +9,7 @@ import { isAgentOverDailyLimit } from "@/lib/whatsapp-agent/quota";
 import { insertBotOpportunity } from "@/lib/whatsapp-agent/tools";
 import { DEBOUNCE_MS, recordAgentReply, resolveOwnerId, scheduleAgentReply, sleep } from "@/lib/whatsapp-agent/pipeline";
 import { runActionsForOpportunity } from "@/lib/automation/engine";
-import { keywordMatches, samePhone } from "@/lib/automation/match";
+import { keywordMatches } from "@/lib/automation/match";
 import {
   parseActions,
   parseConfig,
@@ -19,7 +19,7 @@ import {
 } from "@/lib/automation/types";
 
 /**
- * "whatsapp_message" automations: a message from an allowed number carrying the
+ * "whatsapp_message" automations: a message from any number carrying the
  * rule's keyword opens a session on that conversation; the rule's questions are
  * then sent one at a time, exactly as written, and each customer reply is saved
  * as the answer to the pending question. When the last one is answered, the flow
@@ -62,12 +62,9 @@ export function scheduleInboundAutomation(organizationId: string, connectionId: 
 }
 
 /** Decide whether this message belongs to a flow: an open session on the
- *  conversation, or the keyword from an allowed number. Opens the session. */
+ *  conversation, or the keyword. Opens the session. */
 async function claimFlow(organizationId: string, connectionId: string, m: ParsedInbound): Promise<Claim | null> {
-  const sender = m.remoteJid.split("@")[0] ?? "";
-  const rules = (await flowRules(organizationId, connectionId)).filter((r) =>
-    r.wa.numbers.some((n) => samePhone(n, sender)),
-  );
+  const rules = await flowRules(organizationId, connectionId);
   if (rules.length === 0) return null;
 
   // WhatsApp numbers belong to the Atendimento module: without it the flow is off.
