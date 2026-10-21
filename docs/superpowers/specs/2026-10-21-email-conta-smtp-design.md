@@ -38,6 +38,8 @@ A ideia completa: disparar os e-mails pelo servidor do próprio cliente (SMTP) e
 | Portas aceitas | 465, 587 e 2525. A 25 é recusada | minha decisão (segurança, seção 4.2) |
 | Servidor | Recusa nome ou IP que aponte para rede interna | minha decisão (segurança, seção 4.2) |
 | Onde fica o formulário | Página própria `/app/email/smtp`, como as de assinatura | minha decisão |
+| Senha na edição | Deixar em branco mantém a senha guardada **só** se servidor, porta, segurança e usuário continuarem iguais. Mudou qualquer um, a senha é pedida de novo | minha decisão (segurança: senão, alguém com acesso ao E-mail apontaria o servidor para um seu e receberia a senha guardada no teste) |
+| Recusa de um destinatário | Nunca pausa o envio. Falha só aquele destinatário, mesmo depois de esgotar as repetições | minha decisão (ao pausar, o destinatário volta para a fila e seria o primeiro na retomada, travando o envio para sempre) |
 
 ## 3. Dados
 
@@ -88,7 +90,7 @@ Migration aditiva `20261021120000_email_sender_smtp` (aplicar no Supabase antes 
   - `port`: 465, 587 ou 2525;
   - `security`: `ssl` (TLS desde o início) ou `starttls`. O formulário sugere `ssl` para 465 e `starttls` para 587/2525, mas a pessoa pode trocar;
   - `username`: até 254 caracteres, padrão igual ao e-mail;
-  - `password`: até 512 caracteres. É obrigatória na conta nova e na reconexão. Na edição, vazia mantém a senha atual;
+  - `password`: até 512 caracteres. É obrigatória na conta nova e na reconexão. Na edição, vazia mantém a senha atual **só se servidor, porta, segurança e usuário forem os mesmos da conta guardada**. Se qualquer um mudar, a senha é obrigatória: a senha guardada nunca vai para um destino diferente daquele em que foi digitada;
   - `hourlyLimit`: de 1 a 1.700;
   - `dailyLimit`: de 1 a 10.000, e `hourlyLimit` ≤ `dailyLimit`.
 - **Teste antes de gravar, toda vez que salva** (inclusive na edição, com a senha mantida): conecta, faz o TLS ou o STARTTLS, manda EHLO e faz o login. Os tempos-limite são 15 s para conectar, 10 s para a saudação e 30 s no total.
@@ -179,16 +181,25 @@ A ordem importa: a primeira linha que bate decide. Tudo fica numa função pura 
 | Falha de rede ou tempo esgotado durante o `send` | `UNCERTAIN`, sem reenvio |
 | Falha de rede, DNS ou tempo esgotado antes do login (prepare) | repete até 3 vezes com espera; esgotado, pausa com `provider_error` |
 | Certificado/TLS (`ETLS`, erros de certificado) | pausa com `provider_error` (repetir não resolve), com o texto técnico |
+| Login recusado com 4xx (por exemplo, `454 4.7.0` temporário) | repete até 3 vezes; esgotado, pausa com `provider_error` |
 | `EAUTH` (login recusado: 535, 534, 530) | a conta vira `NEEDS_RECONNECT` e o envio pausa com `reconnect` |
 | `ENOAUTH` | pausa com `provider_error` |
-| Resposta com tamanho excedido (552, `5.3.4`, "size"/"too large"/"tamanho") | falha só esse destinatário (`message_too_large`) e segue |
-| Resposta que fala de limite (`limit`, `quota`, `too many`, `rate`, `limite`, `excedid`), em qualquer estágio | pausa com `daily_limit`: o provedor recusou por limite de envio |
+| Resposta com tamanho excedido (código `message-552`, `5.3.4`, "message size"/"too large"/"tamanho") | falha só esse destinatário (`message_too_large`) e segue |
+| No `RCPT TO`, no `DATA` ou na resposta final, código estendido `x.1.x` ou `x.2.x` (endereço ou caixa do destinatário: inexistente, cheia, desativada) | 5xx: falha só esse destinatário. 4xx: repete até 5 vezes e, esgotado, falha só esse destinatário. **Nunca pausa** |
+| Resposta que fala de limite (`/\b(rate\|limit\|quota\|too many\|limite\|excedid)/i`), fora do caso acima | pausa com `daily_limit`: o provedor recusou por limite de envio |
+| `RCPT TO` recusado com 5xx | falha só esse destinatário e segue (`invalid_address` para 550, 551, 553, 501, 510 e 511; `generic` para o resto) |
+| `RCPT TO` recusado com 4xx | repete até 5 vezes; esgotado, falha só esse destinatário. **Nunca pausa** |
 | `MAIL FROM` recusado com 5xx (por exemplo, remetente diferente do login) | pausa com `account_blocked`, com o texto do servidor |
-| `RCPT TO` recusado com 5xx (550, 551, 553, 501, 510, 511) | falha só esse destinatário (`invalid_address`) e segue |
 | Resposta final (depois do conteúdo) com 5xx | falha só esse destinatário (`generic`). A regra atual de 3 falhas seguidas pausa o envio |
 | `DATA` recusado com 5xx | pausa com `provider_error` |
-| Qualquer resposta 4xx (421, 450, 451, 452...) em qualquer estágio | repete com espera (até 5 vezes); esgotado, pausa com `provider_error` |
+| Qualquer outra resposta 4xx (421, 451...), fora do `RCPT TO` | repete com espera (até 5 vezes); esgotado, pausa com `provider_error` |
 | Qualquer outra | pausa com `provider_error` |
+
+**O que é de um destinatário nunca pausa o envio.** Quando o laço pausa, ele devolve o destinatário atual para a fila, e a retomada pega esse mesmo endereço primeiro. Uma recusa que só vale para aquele endereço pausaria o envio a cada "Retomar envio", para sempre.
+
+**Teto por e-mail:** uma tentativa (conectar + login + entrega) tem no máximo 75 s, para caber no lease de 90 s. Estourado o teto, a conexão é fechada:
+- antes do `send`, vale como falha de conexão (repete);
+- durante o `send`, vale como `transfer` (`UNCERTAIN`).
 
 - **Como o erro fica no destinatário:** `smtp:<estágio>-<código>|<resposta>`, até 500 caracteres. Exemplos: `smtp:rcpt-550|...` e `smtp:data-552|...`.
 - **Tradução do erro:** `recipientFailure` traduz `rcpt-5xx` como `invalid_address`, tamanho como `message_too_large`, e o resto como `generic`.
