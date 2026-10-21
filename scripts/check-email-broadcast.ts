@@ -873,6 +873,17 @@ check("waitChunksMs and mailboxPaceWaitMs split long waits under the lease", () 
   assert.equal(mailboxPaceWaitMs(2_100, 50), 42_000);
 });
 
+check("waitChunksMs fails closed: a pause that is not a number still waits one full piece", () => {
+  assert.deepEqual(waitChunksMs(Number.NaN), [10_000]);
+  assert.deepEqual(waitChunksMs(Number.POSITIVE_INFINITY), [10_000]);
+  assert.deepEqual(waitChunksMs(Number.NEGATIVE_INFINITY), [10_000]);
+  assert.deepEqual(waitChunksMs(Number.NaN, 4_000), [4_000]);
+  // A pace computed from a broken limit (NaN) lands here too: never "no pause at all".
+  assert.deepEqual(waitChunksMs(mailboxPaceWaitMs(Number.NaN, 3)), [10_000]);
+  // Finite totals keep their meaning: nothing to wait is no piece.
+  assert.deepEqual(waitChunksMs(-5), []);
+});
+
 check("microsoftSendPath goes direct only when the request fits", () => {
   assert.equal(microsoftSendPath(0, null), "direct");
   assert.equal(microsoftSendPath(0, 3_900_000), "direct");

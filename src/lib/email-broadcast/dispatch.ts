@@ -34,6 +34,7 @@ const PACE_MS = 500;
 // Longest wait is 10 s; with an attachment call (up to 60 s) the gap between
 // heartbeats is ~70 s of the 90 s LEASE_MS.
 const MAX_PACE_FACTOR = 20;
+/** The longest single sleep of `wait`. The mailbox loop's pieces (PACE_CHUNK_MS in mailbox/deliver.ts) must not be longer. */
 const MAX_RETRY_AFTER_S = 10;
 /** Per-job time budget in queue mode (the job re-enqueues itself after it). */
 export const QUEUE_BUDGET_MS = 50_000;

@@ -75,11 +75,22 @@ export type MailboxAdapter<A> = {
 
 /**
  * A pause between e-mails up to this long is slept in one go; a longer one in
- * pieces of this size, each renewing the 90 s lease first (run.wait).
+ * pieces of this size, each renewing the 90 s lease first (run.wait). Keep it
+ * at most the dispatcher's MAX_RETRY_AFTER_S (10 s): run.wait never sleeps
+ * longer than that, so a bigger piece would quietly shorten the pause.
  */
 const PACE_CHUNK_MS = 10_000;
 /** Seconds a send waits, renewing the lease, before checking a full hourly limit again. */
 const HOURLY_RECHECK_S = 10;
+/**
+ * Prisma's bounds for the hourly reservation (lock, the day's and the hour's
+ * counts, the claim): 2 s to start and 5 s to run. Past either it fails and
+ * nobody is reserved (the dispatcher pauses the send). A send only follows a
+ * reservation that kept both, so with the SMTP attempt's 75 s cap
+ * (SMTP_SEND_BUDGET_MS) the heartbeat before the reservation and the one after
+ * the send are at most 2 + 5 + 75 = 82 s apart, inside the 90 s lease.
+ */
+const HOURLY_CLAIM_TX = { maxWait: 2_000, timeout: 5_000 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
@@ -119,13 +130,25 @@ export async function runMailboxBroadcast<A>(run: MailboxRun, adapter: MailboxAd
     }
   };
 
-  let streak = 0;
-  let accessFailures = 0;
-  while (Date.now() < run.deadline) {
-    const current = await prisma.emailBroadcast.findFirst({
+  /** The send's status and account, read before every e-mail and before every piece of a long pause. */
+  const readBroadcast = () =>
+    prisma.emailBroadcast.findFirst({
       where: { id: run.broadcastId, organizationId: org },
       select: { status: true, senderAccountId: true },
     });
+  /** The send's account, only when it is this org's and of the adapter's provider. */
+  const readAccount = async (senderAccountId: string | null): Promise<MailboxAccount | null> =>
+    senderAccountId
+      ? prisma.emailSenderAccount.findFirst({
+          where: { id: senderAccountId, organizationId: org, provider: adapter.channel },
+          select: { id: true, status: true, accountKind: true, dailyLimit: true, hourlyLimit: true },
+        })
+      : null;
+
+  let streak = 0;
+  let accessFailures = 0;
+  while (Date.now() < run.deadline) {
+    const current = await readBroadcast();
     if (current?.status !== "SENDING") return { done: true };
     const r = await prisma.emailBroadcastRecipient.findFirst({
       where: { broadcastId: run.broadcastId, organizationId: org, status: "QUEUED" },
@@ -137,12 +160,7 @@ export async function runMailboxBroadcast<A>(run: MailboxRun, adapter: MailboxAd
       return { done: true };
     }
 
-    const account: MailboxAccount | null = current.senderAccountId
-      ? await prisma.emailSenderAccount.findFirst({
-          where: { id: current.senderAccountId, organizationId: org, provider: adapter.channel },
-          select: { id: true, status: true, accountKind: true, dailyLimit: true, hourlyLimit: true },
-        })
-      : null;
+    const account = await readAccount(current.senderAccountId);
     if (!account) {
       await run.pause("no_sender_account", null);
       return { done: true };
@@ -197,20 +215,30 @@ export async function runMailboxBroadcast<A>(run: MailboxRun, adapter: MailboxAd
         where: { id: r.id, organizationId: org, status: "QUEUED" },
         data: { status: "SENDING", sentAt: new Date(), error: null },
       });
-    // With an hourly limit, the hour's count and the reservation run under one
-    // lock per account, so two sends of the same account (each checked above
-    // with one e-mail to spare) never both take the hour's last one.
+    // With an hourly limit, the day's and the hour's counts and the reservation
+    // run under one lock per account, so two sends of the same account (each
+    // checked above with one e-mail to spare) never both take the last one:
+    // both limits hold exactly, whatever runs at the same time.
     const claimed =
       hourly === null
         ? await claim(prisma)
         : await prisma.$transaction(async (tx) => {
             await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${`email_sender_hour:${org}:${account.id}`}))`;
-            const lastHour = await tx.emailBroadcastRecipient.count({
-              where: { organizationId: org, ...sentLastHourWhere(account.id, new Date()) },
+            const now = new Date();
+            const lastDay = await tx.emailBroadcastRecipient.count({
+              where: { organizationId: org, ...sentLast24hWhere(account.id, now) },
             });
-            return lastHour >= hourly ? null : await claim(tx);
-          });
-    if (!claimed) {
+            if (remainingToday(adapter.dailyLimit(account), lastDay) <= 0) return "day_full" as const;
+            const lastHour = await tx.emailBroadcastRecipient.count({
+              where: { organizationId: org, ...sentLastHourWhere(account.id, now) },
+            });
+            return lastHour >= hourly ? ("hour_full" as const) : await claim(tx);
+          }, HOURLY_CLAIM_TX);
+    if (claimed === "day_full") {
+      await run.pause("daily_limit", null);
+      return { done: true };
+    }
+    if (claimed === "hour_full") {
       await run.wait(HOURLY_RECHECK_S);
       continue;
     }
@@ -297,8 +325,17 @@ export async function runMailboxBroadcast<A>(run: MailboxRun, adapter: MailboxAd
     else {
       // A long pause (an SMTP hourly limit, or many sends of one account) in
       // pieces that renew the lease; the run's budget still ends it midway.
+      // Before each piece the account is read again: when it is gone, no
+      // longer connected or not the one this pause started for, the pause
+      // ends and the next e-mail's checks decide (they pause the send); when
+      // its limits were edited, the pace they give counts at once.
+      const waitStart = Date.now();
       for (const chunk of waitChunksMs(pace, PACE_CHUNK_MS)) {
         if (Date.now() >= run.deadline) break;
+        const latest = await readBroadcast();
+        const fresh = latest?.status === "SENDING" ? await readAccount(latest.senderAccountId) : null;
+        if (!fresh || fresh.id !== account.id || fresh.status !== "ACTIVE") break;
+        if (Date.now() - waitStart >= mailboxPaceWaitMs(adapter.paceMs(fresh), running)) break;
         await run.wait(chunk / 1000);
       }
     }

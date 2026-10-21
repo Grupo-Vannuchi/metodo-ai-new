@@ -54,12 +54,14 @@ export function mailboxPaceWaitMs(paceMs: number, running: number): number {
 /**
  * A wait cut into pieces of at most `maxChunkMs` (the last one takes the rest),
  * so the lease can be renewed before each piece: a long wait never outlives
- * the dispatcher's 90 s lease.
+ * the dispatcher's 90 s lease. A total that isn't a number (NaN, Infinity)
+ * fails closed: one full piece, never no wait at all.
  */
 export function waitChunksMs(totalMs: number, maxChunkMs = 10_000): number[] {
   const step = Math.max(1, maxChunkMs);
+  if (!Number.isFinite(totalMs)) return [step];
   const chunks: number[] = [];
-  for (let left = Number.isFinite(totalMs) ? totalMs : 0; left > 0; left -= step) chunks.push(Math.min(left, step));
+  for (let left = totalMs; left > 0; left -= step) chunks.push(Math.min(left, step));
   return chunks;
 }
 
