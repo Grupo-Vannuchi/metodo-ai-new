@@ -71,8 +71,7 @@ export type KeywordMatch = "contains" | "exact";
 export type WhatsappTriggerConfig = {
   /** The Evolution connection (WhatsApp number) that receives the messages. */
   connectionId: string;
-  /** Senders allowed to start the flow, stored as digits. */
-  numbers: string[];
+  /** Any sender who writes it starts the flow. */
   keyword: string;
   match: KeywordMatch;
 };
@@ -93,16 +92,9 @@ export function isTrigger(v: string): v is TriggerType {
   return (TRIGGERS as readonly string[]).includes(v);
 }
 
-export const MAX_FLOW_NUMBERS = 50;
 export const MAX_FLOW_QUESTIONS = 15;
 
-/** Digits of a phone typed by the user, or "" when it can't be a phone. */
-export function cleanFlowNumber(raw: string): string {
-  const d = String(raw ?? "").replace(/\D/g, "");
-  return d.length >= 10 && d.length <= 13 ? d : "";
-}
-
-export type RuleProblem = "name" | "actions" | "stage" | "connection" | "numbers" | "keyword" | "questionsFirst" | "questions" | "whatsappOnly";
+export type RuleProblem = "name" | "actions" | "stage" | "connection" | "keyword" | "questionsFirst" | "questions" | "whatsappOnly";
 
 /** Why a rule can't be saved, or null. Shared by the editor and the server action. */
 export function ruleProblem(rule: {
@@ -120,7 +112,6 @@ export function ruleProblem(rule: {
   }
   const wa = rule.config.whatsapp;
   if (!wa?.connectionId) return "connection";
-  if (wa.numbers.length === 0) return "numbers";
   if (!wa.keyword.trim()) return "keyword";
   const [first, ...rest] = rule.actions;
   if (first.type !== "ask_questions" || rest.some((a) => a.type === "ask_questions")) return "questionsFirst";
@@ -246,12 +237,9 @@ export function parseConfig(raw: unknown): RuleConfig {
   }
   const wa = o.whatsapp as Record<string, unknown> | undefined;
   if (wa && typeof wa === "object") {
-    const numbers = [...new Set((Array.isArray(wa.numbers) ? wa.numbers : []).map((n) => cleanFlowNumber(String(n))))]
-      .filter(Boolean)
-      .slice(0, MAX_FLOW_NUMBERS);
+    // Rules saved before any number was accepted still carry `numbers`; it's dropped here.
     cfg.whatsapp = {
       connectionId: str(wa.connectionId, 64),
-      numbers,
       keyword: str(wa.keyword, 60).trim(),
       match: wa.match === "exact" ? "exact" : "contains",
     };

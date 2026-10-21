@@ -12,17 +12,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { useConfirm } from "@/components/ui/confirm";
 import { cn } from "@/lib/utils";
-import { formatBrPhone } from "@/lib/phone";
 import {
   TRIGGERS,
   ACTION_TYPES,
   WHATSAPP_ONLY_ACTIONS,
   QUESTION_FIELDS,
-  MAX_FLOW_NUMBERS,
   MAX_FLOW_QUESTIONS,
   triggerNeedsStage,
   isWhatsappTrigger,
-  cleanFlowNumber,
   ruleProblem,
   type RuleAction,
   type RuleConfig,
@@ -49,7 +46,6 @@ type Draft = {
   actions: RuleAction[];
   layout: Layout;
   wa: WhatsappTriggerConfig;
-  numberInput: string;
 };
 /** "trigger" or an action index. */
 type Selection = "trigger" | number | null;
@@ -74,10 +70,10 @@ function normalizeLayout(actionCount: number, layout: Layout): Layout {
     actions: actions.map((p) => ({ x: p.x + dx, y: p.y + dy })),
   };
 }
-const emptyWa = (connectionId = ""): WhatsappTriggerConfig => ({ connectionId, numbers: [], keyword: "", match: "contains" });
+const emptyWa = (connectionId = ""): WhatsappTriggerConfig => ({ connectionId, keyword: "", match: "contains" });
 const emptyDraft = (): Draft => ({
   id: null, name: "", trigger: "stage_entered", triggerStageId: "", minValue: "", maxValue: "", actions: [], layout: {},
-  wa: emptyWa(), numberInput: "",
+  wa: emptyWa(),
 });
 const parseMoney = (s: string) => (s ? Number(s.replace(/[^\d.,]/g, "").replace(/\./g, "").replace(",", ".")) : undefined);
 
@@ -139,7 +135,6 @@ export function AutomationsClient({
   const [selected, setSelected] = useState<Selection>("trigger");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [numberError, setNumberError] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -187,7 +182,6 @@ export function AutomationsClient({
         actions: rule.actions,
         layout: normalizeLayout(rule.actions.length, rule.config.layout ?? {}),
         wa: rule.config.whatsapp ?? emptyWa(),
-        numberInput: "",
       });
     } else {
       setDraft({ ...emptyDraft(), wa: emptyWa(connections.length === 1 ? connections[0].id : "") });
@@ -202,18 +196,6 @@ export function AutomationsClient({
       if (!isWhatsappTrigger(next) || d.actions.some((a) => a.type === "ask_questions")) return { ...d, trigger: next };
       return { ...d, trigger: next, actions: [newAction("ask_questions"), ...d.actions], layout: {} };
     });
-  }
-
-  function addNumber() {
-    if (!draft) return;
-    const n = cleanFlowNumber(draft.numberInput);
-    if (!n) return setNumberError(true);
-    setNumberError(false);
-    const numbers = draft.wa.numbers.includes(n) ? draft.wa.numbers : [...draft.wa.numbers, n].slice(0, MAX_FLOW_NUMBERS);
-    setDraft({ ...draft, numberInput: "", wa: { ...draft.wa, numbers } });
-  }
-  function removeNumber(n: string) {
-    setDraft((d) => (d ? { ...d, wa: { ...d.wa, numbers: d.wa.numbers.filter((x) => x !== n) } } : d));
   }
 
   const isWa = draft ? isWhatsappTrigger(draft.trigger) : false;
@@ -473,38 +455,6 @@ export function AutomationsClient({
                         />
                       </Field>
                       {connections.length === 0 ? <p className="text-xs text-muted-foreground">{t("waNoConnections")}</p> : null}
-                      <div className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-muted-foreground">{t("waNumbers")}</span>
-                        {draft.wa.numbers.length > 0 ? (
-                          <ul className="divide-y divide-border rounded-lg border border-border">
-                            {draft.wa.numbers.map((n) => (
-                              <li key={n} className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm font-medium tabular-nums">
-                                <span>{formatBrPhone(n)}</span>
-                                <button type="button" onClick={() => removeNumber(n)} aria-label={t("waRemoveNumber")} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"><X className="size-3.5" /></button>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
-                        <div className="flex gap-1.5">
-                          <Input
-                            value={draft.numberInput}
-                            onChange={(e) => setDraft({ ...draft, numberInput: formatBrPhone(e.target.value) })}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                addNumber();
-                              }
-                            }}
-                            placeholder={t("waNumberPlaceholder")}
-                            inputMode="tel"
-                            aria-label={t("waNumbers")}
-                            className="h-9 min-w-0 flex-1"
-                          />
-                          <Button type="button" variant="outline" size="sm" onClick={addNumber} disabled={draft.wa.numbers.length >= MAX_FLOW_NUMBERS}>{t("waAddNumber")}</Button>
-                        </div>
-                        {numberError ? <p className="text-xs text-red-500">{t("waNumberInvalid")}</p> : null}
-                        <p className="text-xs text-muted-foreground">{t("waNumbersHint")}</p>
-                      </div>
                       <Field label={t("waKeyword")}>
                         <Input value={draft.wa.keyword} onChange={(e) => setDraft({ ...draft, wa: { ...draft.wa, keyword: e.target.value.slice(0, 60) } })} placeholder={t("waKeywordPlaceholder")} className="h-9" />
                       </Field>
