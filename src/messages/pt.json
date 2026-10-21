@@ -1941,6 +1941,18 @@
         "not_configured": "O envio pela conta Google não está disponível para esta empresa. Fale com o suporte.",
         "failed": "Não foi possível conectar a conta Google. Tente de novo."
       },
+      "smtpTitle": "Por outro provedor (SMTP)",
+      "smtpBody": "Use o e-mail do seu domínio em qualquer provedor (KingHost, Locaweb, Hostinger...), com servidor, porta e senha.",
+      "smtpBrowse": "Ver envios por SMTP",
+      "smtpNoneBody": "Você informa o servidor, a porta, o usuário e a senha do e-mail, e o MétodoAI confere a conexão antes de salvar. Cada empresa tem uma conta SMTP de envio.",
+      "smtpConsentNote": "A senha fica guardada criptografada. Os e-mails não ficam salvos em Enviados na sua caixa, e o provedor não informa entrega nem abertura.",
+      "smtpConnect": "Configurar SMTP",
+      "smtpEdit": "Editar",
+      "smtpHourly": "{count} por hora",
+      "smtpDaily": "{count} por dia",
+      "smtpDisconnectConfirm": "Desconectar {email}? O MétodoAI deixa de enviar por este servidor e apaga a senha guardada. Envios em andamento por ele ficam pausados até uma conta ser conectada de novo. Se quiser, troque a senha também no seu provedor.",
+      "smtpDisconnected": "Conta SMTP desconectada.",
+      "smtpReconnectBody": "O servidor recusou a senha. Informe a senha nova. Os envios por esta conta estão pausados até reconectar.",
       "error": {
         "cancelled": "A conexão com a Microsoft foi cancelada.",
         "admin_required": "Esta empresa no Microsoft 365 exige que o administrador dela aprove o app antes. Peça ao responsável pela TI.",
@@ -2141,6 +2153,62 @@
         "unknown": "Algo deu errado. Tente de novo."
       }
     },
+    "smtp": {
+      "title": "Conta SMTP",
+      "newTitle": "Conectar conta SMTP",
+      "intro": "Use os dados de SMTP que seu provedor informa para programas de e-mail.",
+      "reconnectNotice": "O servidor recusou a senha desta conta, e os envios por ela estão pausados. Informe a senha nova (e confira o servidor) para voltar a enviar.",
+      "saved": "Conta SMTP conectada.",
+      "form": {
+        "senderSection": "Remetente",
+        "email": "E-mail remetente",
+        "emailPlaceholder": "contato@seudominio.com.br",
+        "displayName": "Nome do remetente",
+        "displayNameHint": "Aparece ao lado do endereço. Em branco, só o endereço aparece.",
+        "serverSection": "Servidor de envio",
+        "host": "Servidor SMTP",
+        "hostPlaceholder": "smtp.seudominio.com.br",
+        "hostHint": "Só o nome do servidor, sem “smtp://”, barra ou porta.",
+        "port": "Porta",
+        "security": "Segurança",
+        "securitySsl": "SSL/TLS",
+        "securityStarttls": "STARTTLS",
+        "securityHint": "Em geral: porta 465 com SSL/TLS; portas 587 e 2525 com STARTTLS.",
+        "username": "Usuário",
+        "usernameHint": "Em geral é o próprio e-mail. Só mude se o provedor pedir outro.",
+        "password": "Senha",
+        "passwordNew": "Fica guardada criptografada e nunca volta a aparecer nesta tela.",
+        "passwordKeep": "Deixe em branco para manter a senha atual.",
+        "passwordChanged": "Você mudou o servidor, a porta, a segurança ou o usuário: digite a senha de novo, porque a senha guardada só vale para os dados em que foi digitada.",
+        "limitsSection": "Limites de envio",
+        "hourlyLimit": "Limite por hora",
+        "hourlyHint": "O limite por hora deixa o envio mais lento, mas nunca acima do que o provedor permite: informe o número do seu provedor. De 1 a {max}.",
+        "dailyLimit": "Limite por dia",
+        "dailyHint": "Ao chegar nesse número de e-mails em 24 horas, o envio pausa até você clicar em “Retomar envio”. De 1 a {max}.",
+        "limitsNote": "Os e-mails mandados à mão pela mesma caixa também contam para o provedor.",
+        "submit": "Testar e salvar",
+        "testing": "Testando a conexão…",
+        "cancel": "Cancelar"
+      },
+      "fieldError": {
+        "invalid_email": "Informe um e-mail válido, como contato@seudominio.com.br.",
+        "invalid_host": "Informe só o nome do servidor, como smtp.seudominio.com.br: sem “smtp://”, barra, espaço ou porta (a porta vai no campo ao lado).",
+        "invalid_port": "Escolha uma das portas da lista.",
+        "hourly_over_daily": "O limite por hora não pode ser maior que o limite por dia."
+      },
+      "error": {
+        "auth_failed": "O servidor recusou o usuário ou a senha.",
+        "tls_failed": "O certificado do servidor não confere com o endereço informado. Use o servidor que o provedor indica para programas de e-mail.",
+        "connection_failed": "Não foi possível conectar em {host}:{port}. Confira o servidor e a porta; se estiver usando a 465, tente a 587 com STARTTLS.",
+        "host_not_found": "Servidor não encontrado.",
+        "host_not_allowed": "Este servidor não pode ser usado.",
+        "no_auth": "Este servidor não pede login; o MétodoAI só envia com usuário e senha.",
+        "failed": "Não foi possível testar a conexão com o servidor. Confira os dados e tente de novo.",
+        "password_required": "Digite a senha desta conta: não há senha guardada que possa ser usada com estes dados.",
+        "invalid": "Confira os campos e tente de novo.",
+        "busy": "Já existe um teste de conexão em andamento para esta empresa. Aguarde terminar."
+      }
+    },
     "title": "E-mail",
     "subtitle": "Envie e-mails em massa para contatos e empresas do CRM.",
     "new": "Novo e-mail",
@@ -2170,7 +2238,7 @@
       "date": "Data",
       "from": "De"
     },
-    "listChannel": { "plataforma": "Envios pela plataforma", "microsoft": "Envios pela conta Microsoft", "google": "Envios pela conta Google" },
+    "listChannel": { "plataforma": "Envios pela plataforma", "microsoft": "Envios pela conta Microsoft", "google": "Envios pela conta Google", "smtp": "Envios por SMTP" },
     "status": { "DRAFT": "Rascunho", "SENDING": "Enviando", "PAUSED": "Pausado", "DONE": "Concluído" },
     "paused": {
       "no_connection": "Envio pausado: o envio de e-mail da plataforma não está configurado. Fale com o suporte.",

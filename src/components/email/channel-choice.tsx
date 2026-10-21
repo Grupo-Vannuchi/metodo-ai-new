@@ -17,16 +17,19 @@ import { UnreadBadge } from "@/components/email/inbox/unread-badge";
 export type ChannelNotice = { provider: "MICROSOFT" | "GOOGLE"; connected: boolean; error: string | null };
 
 /**
- * Platform, the company's Microsoft mailbox or its Google mailbox (specs
- * 2026-10-15 §7 and 2026-10-19). A mailbox card only shows when that channel is
- * enabled for the company. "compose" is the first step of "Novo e-mail";
- * "browse" is the E-mail page, which always asks before showing one channel's sends.
+ * Platform, the company's Microsoft mailbox, its Google mailbox or its SMTP
+ * account (specs 2026-10-15 §7, 2026-10-19 and 2026-10-21 §6). The Microsoft and
+ * Google cards only show when that channel is enabled for the company; the
+ * platform and SMTP cards always do. "compose" is the first step of "Novo
+ * e-mail"; "browse" is the E-mail page, which always asks before showing one
+ * channel's sends.
  */
 export function ChannelChoice({
   microsoft,
   microsoftEnabled,
   google,
   googleEnabled,
+  smtp,
   quotaLimit,
   notice = null,
   mode = "compose",
@@ -36,6 +39,7 @@ export function ChannelChoice({
   microsoftEnabled: boolean;
   google: SenderAccountView | null;
   googleEnabled: boolean;
+  smtp: SenderAccountView | null;
   quotaLimit: number;
   notice?: ChannelNotice | null;
   mode?: "compose" | "browse";
@@ -47,7 +51,10 @@ export function ChannelChoice({
   const router = useRouter();
   const toast = useToast();
   const browse = mode === "browse";
-  const three = microsoftEnabled && googleEnabled;
+  // Platform and SMTP are always there. Three cards fit one row on a wide screen; two or four make
+  // two columns (so four are 2 x 2).
+  const cards = 2 + Number(microsoftEnabled) + Number(googleEnabled);
+  const three = cards === 3;
   const noticeProvider = notice?.provider ?? null;
   const noticeConnected = notice?.connected ?? false;
   const noticeError = notice?.error ?? null;
@@ -159,6 +166,34 @@ export function ChannelChoice({
             ) : null}
           </section>
         ) : null}
+
+        <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-6">
+          <div className="flex items-center gap-3">
+            <span className="flex size-11 items-center justify-center rounded-xl border border-border bg-card">
+              <ChannelIcon channel="smtp" className="size-6" />
+            </span>
+            <h2 className="text-lg font-semibold">{t("channel.smtpTitle")}</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">{t("channel.smtpBody")}</p>
+          <SenderAccountPanel
+            provider="SMTP"
+            account={smtp}
+            action={
+              browse ? undefined : (
+                <Link href="/app/email/new?via=smtp" className={buttonVariants()}>
+                  {t("channel.use")}
+                </Link>
+              )
+            }
+          />
+          {browse ? (
+            <div className="mt-auto">
+              <Link href={emailListHref("smtp")} className={buttonVariants({ variant: "outline" })}>
+                {t("channel.smtpBrowse")}
+              </Link>
+            </div>
+          ) : null}
+        </section>
       </div>
     </div>
   );

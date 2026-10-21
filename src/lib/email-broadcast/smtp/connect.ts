@@ -200,10 +200,35 @@ export function smtpClose(connection: SMTPConnection): void {
   }
 }
 
-/** The library's own words for a failure, on one line: "EAUTH: Invalid login: 535 5.7.8 ...". */
-function technicalText(err: SmtpError): string {
-  const text = err.message.replace(/\s+/g, " ").trim();
-  return err.code ? `${err.code}: ${text}` : text;
+/**
+ * The text with the password, and what the login sends of it, replaced by
+ * "***": the password as typed, and the base64 a server may echo back from
+ * AUTH (LOGIN sends the user and the password each in base64, PLAIN the blob
+ * "\0user\0password"), with or without its "=" padding. Run it on the text as
+ * it came, before any reformatting, so each secret is found as the server
+ * wrote it. With no password there is nothing to hide, and an empty form (an
+ * empty user's) is never searched for: it would match between every character.
+ */
+export function redactSmtpSecrets(text: string, s: { username: string; password: string }): string {
+  if (!s.password) return text;
+  const base64 = [s.password, s.username, `\0${s.username}\0${s.password}`].map((value) =>
+    Buffer.from(value, "utf8").toString("base64"),
+  );
+  const secrets = [...new Set([s.password, ...base64, ...base64.map((b) => b.replace(/=+$/, ""))])]
+    .filter((secret) => secret !== "")
+    // Longest first: a shorter secret inside a longer one must not cut it and leave the rest of it in the text.
+    .sort((a, b) => b.length - a.length);
+  return secrets.reduce((out, secret) => out.split(secret).join("***"), text);
+}
+
+/**
+ * The library's own words for a failure, on one line and with the secrets of
+ * `s` redacted: "EAUTH: Invalid login: 535 5.7.8 ...". Redacted before the
+ * whitespace is folded, so a password with spaces is still found as echoed.
+ */
+function technicalText(err: SmtpError, s: SmtpSettings): string {
+  const raw = err.code ? `${err.code}: ${err.message}` : err.message;
+  return redactSmtpSecrets(raw, s).replace(/\s+/g, " ").trim();
 }
 
 /**
@@ -213,7 +238,8 @@ function technicalText(err: SmtpError): string {
  * never more than 30 s in all: a server that goes quiet in the middle of the
  * login is cut off there. The guard's refusals come back as they are; any other
  * failure is named by smtpConnectError, with the library's text as `technical`.
- * The connection is always closed.
+ * Every `technical` goes through redactSmtpSecrets: a server may echo the login
+ * back, and the text reaches the browser. The connection is always closed.
  */
 export async function verifySmtpSettings(
   s: SmtpSettings,
@@ -222,7 +248,7 @@ export async function verifySmtpSettings(
   const target = await resolveSmtpHost(s.host);
   if (!target.ok) {
     const why = target.error === "host_not_found" ? "name not found" : "internal or reserved address";
-    return { ok: false, error: target.error, technical: `${s.host}: ${why}` };
+    return { ok: false, error: target.error, technical: redactSmtpSecrets(`${s.host}: ${why}`, s) };
   }
 
   const connection = openSmtpConnection(s, target.ip, SMTP_TEST_TIMEOUTS);
@@ -246,7 +272,7 @@ export async function verifySmtpSettings(
       : e instanceof Error
         ? e
         : new Error(String(e));
-    return { ok: false, error: smtpConnectError(err), technical: technicalText(err) };
+    return { ok: false, error: smtpConnectError(err), technical: technicalText(err, s) };
   } finally {
     clearTimeout(budget);
     smtpClose(connection);
