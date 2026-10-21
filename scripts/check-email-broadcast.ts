@@ -1128,6 +1128,28 @@ check("smtpSendPhase separates the preparation from the hand-over", () => {
   assert.equal(smtpPhaseOf(null), null);
 });
 
+check("smtpSendPhase: a server that hangs up with a refusal said no, it is never uncertain", () => {
+  // With PIPELINING a RCPT TO answered "421" ends the session before DATA: nodemailer reports the reply on a dropped
+  // connection. The content never left (it goes only after DATA's 354), so it is the server refusing, not "transfer".
+  assert.equal(smtpSendPhase("send", { code: "ECONNECTION", responseCode: 421, command: "CONN" }), "data");
+  // The connection closing on an unfinished "554 ..." line, or a refusal nobody asked for, is a refusal too.
+  assert.equal(smtpSendPhase("send", { code: "ECONNECTION", responseCode: 554, command: "CONN" }), "data");
+  assert.equal(smtpSendPhase("send", { code: "EPROTOCOL", responseCode: 550, command: "CONN" }), "data");
+  // No server reply (a drop, a timeout) or no refusal in it: still uncertain.
+  assert.equal(smtpSendPhase("send", { code: "ECONNECTION" }), "transfer");
+  assert.equal(smtpSendPhase("send", { code: "ETIMEDOUT" }), "transfer");
+  assert.equal(smtpSendPhase("send", { code: "ECONNECTION", responseCode: 250 }), "transfer");
+  // The envelope and the final answer keep their own phases; the steps before the send don't change.
+  assert.equal(smtpSendPhase("send", { code: "EENVELOPE", command: "RCPT TO", responseCode: 421 }), "rcpt");
+  assert.equal(smtpSendPhase("send", { code: "EMESSAGE", command: "DATA", responseCode: 421 }), "message");
+  assert.equal(smtpSendPhase("connect", { code: "ECONNECTION", responseCode: 421 }), "connect");
+  // As a server-level refusal: a 4xx is retried, then pauses; a limit worded with an x.7.x code pauses as such.
+  const closing = "421 4.3.2 Service not available, closing transmission channel";
+  assert.equal(smtpFailureAction(421, smtpFailureCode("data", 421), closing, 0), "retry");
+  assert.equal(smtpFailureAction(421, smtpFailureCode("data", 421), closing, 5), "pause");
+  assert.equal(smtpFailureAction(421, "data-421", "421 4.7.0 Too many messages, closing connection", 0), "daily_limit");
+});
+
 check("smtpConnectError names the save-form failures", () => {
   assert.equal(smtpConnectError({ code: "EAUTH", responseCode: 535 }), "auth_failed");
   assert.equal(smtpConnectError({ responseCode: 535 }), "auth_failed");

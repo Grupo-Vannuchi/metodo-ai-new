@@ -276,6 +276,9 @@ export async function runMailboxBroadcast<A>(run: MailboxRun, adapter: MailboxAd
         if (again.ok) {
           access = again;
           attempt++;
+          // The same e-mail goes again: a whole new attempt, so the lease is renewed first and two attempts
+          // (up to 75 s each over SMTP) never run on one heartbeat.
+          await run.beat();
           continue;
         }
         await release();
@@ -327,8 +330,11 @@ export async function runMailboxBroadcast<A>(run: MailboxRun, adapter: MailboxAd
       // pieces that renew the lease; the run's budget still ends it midway.
       // Before each piece the account is read again: when it is gone, no
       // longer connected or not the one this pause started for, the pause
-      // ends and the next e-mail's checks decide (they pause the send); when
-      // its limits were edited, the pace they give counts at once.
+      // ends and the next e-mail's checks decide (a missing or disconnected
+      // account pauses the send). An edited limit can only shorten the pause:
+      // it ends once the time waited covers the pace of the account as it is
+      // now. A lowered hourly limit (a longer pace) doesn't lengthen it; the
+      // hour's count before each e-mail still caps the sends.
       const waitStart = Date.now();
       for (const chunk of waitChunksMs(pace, PACE_CHUNK_MS)) {
         if (Date.now() >= run.deadline) break;

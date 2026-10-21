@@ -64,8 +64,9 @@ const SMTP_PHASES = [
  * Where an SMTP attempt failed. "guard" is the address check before any
  * connection; "connect" and "tls" the connection and its encryption; "auth" and
  * "noauth" the login; "mail", "rcpt" and "data" the server refusing that
- * command; "message" the server's final answer after the content; "transfer" a
- * network failure or timeout while the e-mail was being handed over.
+ * command ("data" also when it hangs up with a refusal mid-envelope);
+ * "message" the server's final answer after the content; "transfer" a network
+ * failure or timeout, with no refusal, while the e-mail was being handed over.
  */
 export type SmtpPhase = (typeof SMTP_PHASES)[number];
 
@@ -80,8 +81,8 @@ export function smtpPhaseOf(code: string | null): SmtpPhase | null {
   return (SMTP_PHASES as readonly string[]).includes(phase) ? (phase as SmtpPhase) : null;
 }
 
-/** What an SMTP library error tells (nodemailer's `code`, `command` and `message`). */
-type SmtpErrorFacts = { code?: string | null; command?: string | null; message?: string | null };
+/** What an SMTP library error tells (nodemailer's `code`, `command`, `message` and the server's `responseCode`). */
+type SmtpErrorFacts = { code?: string | null; command?: string | null; message?: string | null; responseCode?: number | null };
 
 const TLS_TEXT = /certificate|self[- ]signed|altname|unable to verify|wrong version number|ssl routines/i;
 
@@ -106,7 +107,12 @@ function isTlsFailure(e: SmtpErrorFacts): boolean {
  * not accept the e-mail); a network failure or a timeout may have come after
  * the final dot, so it is "transfer": uncertain, never sent again. An envelope
  * refusal that names no known command counts as DATA: the server said no
- * before any content left, and it is not about one sender or recipient.
+ * before any content left, and it is not about one sender or recipient. So
+ * does a server that hangs up with a refusal (a reply code of 400 or more on
+ * a dropped connection): with PIPELINING a RCPT TO answered "421" ends the
+ * session before DATA, and the content only ever leaves after DATA's 354. It
+ * is the server refusing at its own level, as DATA does (a 4xx is retried,
+ * then pauses): never uncertain.
  */
 export function smtpSendPhase(step: "connect" | "login" | "send", e: SmtpErrorFacts): SmtpPhase {
   const code = e.code ?? "";
@@ -118,6 +124,8 @@ export function smtpSendPhase(step: "connect" | "login" | "send", e: SmtpErrorFa
       if (/^rcpt/i.test(command)) return "rcpt";
       return "data";
     }
+    // nodemailer puts a reply on a dropped connection only when the server refused and closed: never uncertain.
+    if ((e.responseCode ?? 0) >= 400) return "data";
     return "transfer";
   }
   if (step === "login") {

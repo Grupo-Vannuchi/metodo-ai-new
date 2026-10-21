@@ -14,7 +14,8 @@ const SMTP_SEND_TIMEOUTS = { connection: 15_000, greeting: 10_000, socket: 60_00
  * lease with what the send loop does between its last heartbeat and the
  * attempt: before a first attempt, the hourly reservation (at most 2 + 5 s,
  * HOURLY_CLAIM_TX in mailbox/deliver.ts); before a retry, one piece of its
- * wait (at most 10 s). So heartbeats are at most 82 s or 85 s apart.
+ * wait (at most 10 s); a re-send after a renewed access has a heartbeat of its
+ * own. So heartbeats are at most 82 s or 85 s apart.
  */
 export const SMTP_SEND_BUDGET_MS = 75_000;
 
