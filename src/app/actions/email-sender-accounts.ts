@@ -20,9 +20,18 @@ export type SmtpSaveResult =
   | { ok: true; replaced: boolean }
   | {
       ok: false;
-      error: "unauthorized" | "forbidden" | "invalid" | "password_required" | SmtpConnectError | "unknown";
+      error: "unauthorized" | "forbidden" | "invalid" | "password_required" | "busy" | SmtpConnectError | "unknown";
       technical?: string;
     };
+
+/**
+ * Companies whose connection test is running right now (in this process). A test
+ * opens a connection from the site's address to a server the person typed and
+ * can take up to 30 s, so it runs one at a time per company: a second call
+ * answers "busy" without connecting, and the form can't be used to try
+ * password after password on someone else's server.
+ */
+const testingNow = new Set<string>();
 
 /**
  * Disconnect the org's mailbox for a provider (spec §5.3). The row goes away, so
@@ -66,8 +75,9 @@ export async function disconnectSenderAccount(
  * test runs on every save, a kept password included, and nothing is stored
  * when it fails. An empty password keeps the saved one only for the server,
  * port, security and user it was typed for (canKeepSmtpPassword), so a stored
- * password is never sent anywhere else. The password never leaves the server:
- * not in the result (`technical` comes redacted), the log or the audit.
+ * password is never sent anywhere else. One test at a time per company (see
+ * `testingNow`). The password never leaves the server: not in the result
+ * (`technical` comes redacted), the log or the audit.
  */
 export async function saveSmtpAccount(input: SmtpAccountInput): Promise<SmtpSaveResult> {
   const ctx = await getOrgContext();
@@ -77,6 +87,9 @@ export async function saveSmtpAccount(input: SmtpAccountInput): Promise<SmtpSave
   const parsed = smtpAccountSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   const { email, displayName, hourlyLimit, dailyLimit, password, ...destination } = parsed.data;
+  // Checked and taken in the same turn (no await between), so two calls can't both pass.
+  if (testingNow.has(ctx.organizationId)) return { ok: false, error: "busy" };
+  testingNow.add(ctx.organizationId);
   try {
     const settings = password ? { ...destination, password } : await withSavedPassword(ctx.organizationId, destination);
     if (!settings) return { ok: false, error: "password_required" };
@@ -102,6 +115,8 @@ export async function saveSmtpAccount(input: SmtpAccountInput): Promise<SmtpSave
     // The message only: nothing thrown here carries the password (the test's own failures come back as results).
     console.error("[email-smtp] save failed", error instanceof Error ? error.message : "unknown error");
     return { ok: false, error: "unknown" };
+  } finally {
+    testingNow.delete(ctx.organizationId);
   }
 }
 

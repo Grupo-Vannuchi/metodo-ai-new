@@ -1941,6 +1941,18 @@
         "not_configured": "Sending through a Google account isn't available for this company. Contact support.",
         "failed": "Couldn't connect the Google account. Try again."
       },
+      "smtpTitle": "Through another provider (SMTP)",
+      "smtpBody": "Use your own domain's e-mail on any provider (KingHost, Locaweb, Hostinger...), with server, port and password.",
+      "smtpBrowse": "See SMTP sends",
+      "smtpNoneBody": "You enter the e-mail's server, port, user and password, and MétodoAI checks the connection before saving. Each company has one SMTP sending account.",
+      "smtpConsentNote": "The password is stored encrypted. E-mails aren't saved in Sent on your mailbox, and the provider doesn't report delivery or opens.",
+      "smtpConnect": "Set up SMTP",
+      "smtpEdit": "Edit",
+      "smtpHourly": "{count} per hour",
+      "smtpDaily": "{count} per day",
+      "smtpDisconnectConfirm": "Disconnect {email}? MétodoAI stops sending through this server and deletes the stored password. Sends in progress through it pause until an account is connected again. If you want, change the password at your provider too.",
+      "smtpDisconnected": "SMTP account disconnected.",
+      "smtpReconnectBody": "The server refused the password. Enter the new password. Sends through this account are paused until you reconnect.",
       "error": {
         "cancelled": "Connecting to Microsoft was cancelled.",
         "admin_required": "This Microsoft 365 organization requires its administrator to approve the app first. Ask your IT admin.",
@@ -2141,6 +2153,62 @@
         "unknown": "Something went wrong. Try again."
       }
     },
+    "smtp": {
+      "title": "SMTP account",
+      "newTitle": "Connect an SMTP account",
+      "intro": "Use the SMTP details your provider gives for e-mail programs.",
+      "reconnectNotice": "The server refused this account's password, and sends through it are paused. Enter the new password (and check the server) to send again.",
+      "saved": "SMTP account connected.",
+      "form": {
+        "senderSection": "Sender",
+        "email": "Sender e-mail",
+        "emailPlaceholder": "contact@yourdomain.com",
+        "displayName": "Sender name",
+        "displayNameHint": "Shown next to the address. Left blank, only the address shows.",
+        "serverSection": "Sending server",
+        "host": "SMTP server",
+        "hostPlaceholder": "smtp.yourdomain.com",
+        "hostHint": "Just the server name, without “smtp://”, slash or port.",
+        "port": "Port",
+        "security": "Security",
+        "securitySsl": "SSL/TLS",
+        "securityStarttls": "STARTTLS",
+        "securityHint": "Usually: port 465 with SSL/TLS; ports 587 and 2525 with STARTTLS.",
+        "username": "User",
+        "usernameHint": "Usually the e-mail itself. Change it only if your provider asks for another.",
+        "password": "Password",
+        "passwordNew": "It's stored encrypted and never shown again on this screen.",
+        "passwordKeep": "Leave blank to keep the current password.",
+        "passwordChanged": "You changed the server, port, security or user: type the password again, because the stored password only works with the details it was typed for.",
+        "limitsSection": "Sending limits",
+        "hourlyLimit": "Hourly limit",
+        "hourlyHint": "The hourly limit slows sending down, but never above what your provider allows: enter your provider's number. From 1 to {max}.",
+        "dailyLimit": "Daily limit",
+        "dailyHint": "When this many e-mails go out in 24 hours, sending pauses until you click “Resume send”. From 1 to {max}.",
+        "limitsNote": "E-mails you send by hand from the same mailbox also count toward your provider's limits.",
+        "submit": "Test and save",
+        "testing": "Testing the connection…",
+        "cancel": "Cancel"
+      },
+      "fieldError": {
+        "invalid_email": "Enter a valid e-mail, like contact@yourdomain.com.",
+        "invalid_host": "Enter just the server name, like smtp.yourdomain.com: no “smtp://”, slash, space or port (the port goes in the next field).",
+        "invalid_port": "Choose one of the ports on the list.",
+        "hourly_over_daily": "The hourly limit can't be higher than the daily limit."
+      },
+      "error": {
+        "auth_failed": "The server refused the user or the password.",
+        "tls_failed": "The server's certificate doesn't match the address you entered. Use the server your provider gives for e-mail programs.",
+        "connection_failed": "Couldn't connect to {host}:{port}. Check the server and the port; if you're using 465, try 587 with STARTTLS.",
+        "host_not_found": "Server not found.",
+        "host_not_allowed": "This server can't be used.",
+        "no_auth": "This server doesn't ask for a login; MétodoAI only sends with a user and password.",
+        "failed": "Couldn't test the connection to the server. Check the details and try again.",
+        "password_required": "Type this account's password: there is no stored password that can be used with these details.",
+        "invalid": "Check the fields and try again.",
+        "busy": "A connection test is already running for this company. Wait for it to finish."
+      }
+    },
     "title": "Email",
     "subtitle": "Send bulk emails to your CRM contacts and companies.",
     "new": "New email",
@@ -2170,7 +2238,7 @@
       "date": "Date",
       "from": "From"
     },
-    "listChannel": { "plataforma": "Platform sends", "microsoft": "Microsoft account sends", "google": "Google account sends" },
+    "listChannel": { "plataforma": "Platform sends", "microsoft": "Microsoft account sends", "google": "Google account sends", "smtp": "SMTP sends" },
     "status": { "DRAFT": "Draft", "SENDING": "Sending", "PAUSED": "Paused", "DONE": "Done" },
     "paused": {
       "no_connection": "Send paused: the platform's e-mail sending isn't configured. Contact support.",

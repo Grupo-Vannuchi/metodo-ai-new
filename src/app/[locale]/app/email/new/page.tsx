@@ -93,6 +93,7 @@ export default async function NewEmailPage({
           microsoftEnabled={microsoftEnabled}
           google={data.google}
           googleEnabled={googleEnabled}
+          smtp={data.smtp}
           quotaLimit={LIMITS.emailBroadcastQuotaPerMonth}
           notice={notice}
         />

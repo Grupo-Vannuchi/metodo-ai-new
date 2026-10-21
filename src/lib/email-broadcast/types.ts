@@ -68,9 +68,11 @@ export type SenderAccountView = {
 export type SmtpAccountFormView = {
   email: string;
   displayName: string | null;
+  /** "" when the stored credentials can't be opened: the account then reads NEEDS_RECONNECT and the server is typed again. */
   host: string;
   port: SmtpPort;
   security: SmtpSecurity;
+  /** "" for the same reason as `host`. */
   username: string;
   hourlyLimit: number;
   dailyLimit: number;
