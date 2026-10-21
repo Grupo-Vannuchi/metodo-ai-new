@@ -6,6 +6,7 @@ import { tenantDb } from "@/lib/tenant-db";
 import { canAccessScreen } from "@/lib/access";
 import { hasModule } from "@/config/modules";
 import { audit } from "@/lib/audit";
+import { openSmtpSettings } from "@/lib/email-broadcast/smtp/credentials";
 
 export type SenderAccountActionResult =
   | { ok: true }
@@ -16,22 +17,29 @@ export type SenderAccountActionResult =
  * sends tied to it lose senderAccountId (FK SET NULL) and the dispatcher
  * pauses them at their next e-mail with "no_sender_account".
  */
-export async function disconnectSenderAccount(provider: "MICROSOFT" | "GOOGLE"): Promise<SenderAccountActionResult> {
+export async function disconnectSenderAccount(
+  provider: "MICROSOFT" | "GOOGLE" | "SMTP",
+): Promise<SenderAccountActionResult> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false, error: "unauthorized" };
   if (!canAccessScreen(ctx, "email") || !hasModule(ctx.modules, "marketing")) return { ok: false, error: "forbidden" };
   // Server actions are public endpoints: the TS union is not enforced at runtime.
-  if (provider !== "MICROSOFT" && provider !== "GOOGLE") return { ok: false, error: "not_found" };
+  if (provider !== "MICROSOFT" && provider !== "GOOGLE" && provider !== "SMTP") return { ok: false, error: "not_found" };
   try {
     const db = tenantDb(ctx.organizationId);
-    const row = await db.emailSenderAccount.findFirst({ where: { provider }, select: { id: true, email: true } });
+    const row = await db.emailSenderAccount.findFirst({
+      where: { provider },
+      select: { id: true, email: true, credentials: true },
+    });
     if (!row) return { ok: false, error: "not_found" };
     await db.emailSenderAccount.deleteMany({ where: { id: row.id } });
+    // The SMTP server's name is audited with the address, never the password (spec 2026-10-21 §4.1).
+    const host = provider === "SMTP" ? openSmtpSettings(row.credentials)?.host : undefined;
     await audit(ctx, {
       action: "email_sender.disconnected",
       entity: "EmailSenderAccount",
       entityId: row.id,
-      meta: { email: row.email, provider },
+      meta: { email: row.email, provider, ...(host ? { host } : {}) },
     });
     revalidatePath("/app/email");
     return { ok: true };

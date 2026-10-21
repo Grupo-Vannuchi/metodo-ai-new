@@ -145,7 +145,7 @@ mas verifica compatibilidade de versão do Node — não tem relação com isola
 **O que o script prova, com precisão — não mais que isso.** Ele importa só `PrismaClient` +
 `PrismaPg`, nunca `tenantDb` nem nada de [src/lib/queries/](../../src/lib/queries/): cria duas
 organizações reais no Postgres local, popula cada uma com dado próprio (membro, empresa, conexão
-de integração, campanha, job de extração, conversa, envio de e-mail, destinatário, bloqueio de e-mail, domínio de envio, coluna do quadro de tarefas, assinatura de e-mail e conta de envio de e-mail, com uma Microsoft e uma Google na mesma empresa) e roda **21 asserções**, todas com
+de integração, campanha, job de extração, conversa, envio de e-mail, destinatário, bloqueio de e-mail, domínio de envio, coluna do quadro de tarefas, assinatura de e-mail e conta de envio de e-mail, com uma Microsoft, uma Google e uma SMTP na mesma empresa) e roda **24 asserções**, todas com
 `where: { organizationId: ... }` escrito à mão contra o client **cru** — inclusive um
 `updateMany` com filtro de organização trocado, que precisa afetar zero linhas. Isso prova que o
 Postgres honra o filtro de organização quando a query o inclui. **Não prova que o código da
