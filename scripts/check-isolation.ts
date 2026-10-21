@@ -263,9 +263,9 @@ async function main() {
     });
     assert(accountsB.length === 0, "e-mail sender accounts scoped to org B exclude org A's account");
 
-    // 15) One sending account per provider per org: A has a Microsoft (from 14)
-    // and a Google account side by side, a second Google one is refused, and
-    // B still sees neither.
+    // 15) One sending account per provider per org: A has a Microsoft (from 14),
+    // a Google and an SMTP account side by side, a second Google or SMTP one is
+    // refused, and B still sees none of them.
     const googleAccountA = await prisma.emailSenderAccount.create({
       data: {
         organizationId: orgA.id,
@@ -276,20 +276,32 @@ async function main() {
         connectedById: "iso",
       },
     });
+    const smtpAccountA = await prisma.emailSenderAccount.create({
+      data: {
+        organizationId: orgA.id,
+        provider: "SMTP",
+        email: "iso@a.test",
+        accountKind: "smtp",
+        credentials: "x",
+        connectedById: "iso",
+        hourlyLimit: 100,
+        dailyLimit: 500,
+      },
+    });
     const providersA = await prisma.emailSenderAccount.findMany({
       where: { organizationId: orgA.id },
       select: { provider: true },
     });
     assert(
-      providersA.map((a) => a.provider).sort().join(",") === "GOOGLE,MICROSOFT",
-      "org A holds one Microsoft and one Google sending account at once",
+      providersA.map((a) => a.provider).sort().join(",") === "GOOGLE,MICROSOFT,SMTP",
+      "org A holds one Microsoft, one Google and one SMTP sending account at once",
     );
-    const accountsBAfterGoogle = await prisma.emailSenderAccount.findMany({
+    const accountsBAfterSmtp = await prisma.emailSenderAccount.findMany({
       where: { organizationId: orgB.id },
     });
     assert(
-      accountsBAfterGoogle.length === 0,
-      "e-mail sender accounts scoped to org B stay empty with Microsoft and Google in org A",
+      accountsBAfterSmtp.length === 0,
+      "e-mail sender accounts scoped to org B stay empty with Microsoft, Google and SMTP in org A",
     );
     const googleLookup = await prisma.emailSenderAccount.findFirst({
       where: { organizationId: orgA.id, provider: "GOOGLE" },
@@ -315,6 +327,41 @@ async function main() {
       secondGoogleCode = (error as { code?: string }).code;
     }
     assert(secondGoogleCode === "P2002", "a second Google sending account in the same org is refused (P2002)");
+    const smtpLookup = await prisma.emailSenderAccount.findFirst({
+      where: { organizationId: orgA.id, provider: "SMTP" },
+      select: { id: true, provider: true, hourlyLimit: true, dailyLimit: true },
+    });
+    assert(
+      smtpLookup?.id === smtpAccountA.id &&
+        smtpLookup.provider === "SMTP" &&
+        smtpLookup.hourlyLimit === 100 &&
+        smtpLookup.dailyLimit === 500,
+      "the sender account lookup by provider SMTP returns the SMTP account with both limits",
+    );
+    const limitsOfOthers = await prisma.emailSenderAccount.findMany({
+      where: { organizationId: orgA.id, provider: { in: ["MICROSOFT", "GOOGLE"] } },
+      select: { hourlyLimit: true, dailyLimit: true },
+    });
+    assert(
+      limitsOfOthers.length === 2 && limitsOfOthers.every((a) => a.hourlyLimit === null && a.dailyLimit === null),
+      "the Microsoft and Google accounts keep the SMTP-only limits empty",
+    );
+    let secondSmtpCode: string | undefined;
+    try {
+      await prisma.emailSenderAccount.create({
+        data: {
+          organizationId: orgA.id,
+          provider: "SMTP",
+          email: "iso2@a.test",
+          accountKind: "smtp",
+          credentials: "x",
+          connectedById: "iso",
+        },
+      });
+    } catch (error) {
+      secondSmtpCode = (error as { code?: string }).code;
+    }
+    assert(secondSmtpCode === "P2002", "a second SMTP sending account in the same org is refused (P2002)");
 
     console.log("\n✅ Tenant isolation: all checks passed.");
   } finally {

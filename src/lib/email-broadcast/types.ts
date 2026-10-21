@@ -47,14 +47,18 @@ export type SignatureOption = {
   previewHtml: string;
 };
 
-/** The org's sending account (Microsoft or Google) as the screens show it (no credentials). */
+/** The org's sending account (Microsoft, Google or SMTP) as the screens show it (no credentials). */
 export type SenderAccountView = {
   id: string;
   email: string;
   displayName: string | null;
-  accountKind: "personal" | "work";
+  accountKind: "personal" | "work" | "smtp";
   status: "ACTIVE" | "NEEDS_RECONNECT";
   dailyLimit: number;
+  /** Only the SMTP account has one (the company's own figure); null for Microsoft and Google. */
+  hourlyLimit: number | null;
+  /** The SMTP server's name, never its password; null for Microsoft and Google. */
+  host: string | null;
   sentLast24h: number;
   remaining: number;
 };

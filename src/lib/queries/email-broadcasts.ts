@@ -26,7 +26,10 @@ export function countEmailsSentThisMonth(organizationId: string): Promise<number
 }
 
 /** The sends list, optionally only one channel's sends (the E-mail page shows one at a time). */
-export async function listEmailBroadcasts(organizationId: string, channel?: "PLATFORM" | "MICROSOFT" | "GOOGLE") {
+export async function listEmailBroadcasts(
+  organizationId: string,
+  channel?: "PLATFORM" | "MICROSOFT" | "GOOGLE" | "SMTP",
+) {
   const db = tenantDb(organizationId);
   const rows = await db.emailBroadcast.findMany({
     ...(channel ? { where: { channel } } : {}),
@@ -159,14 +162,16 @@ export async function emailComposerOptions(organizationId: string): Promise<Comp
 /** Everything the composer page needs besides the draft itself. */
 export async function emailComposerData(organizationId: string) {
   // Google is a pilot channel: its account is only looked up for orgs that may use it.
+  // SMTP has no pilot: every company with E-mail may connect one.
   const googleEnabled = googleMailEnabledFor(organizationId);
-  const [options, allowedDomains, used, signatures, microsoft, google] = await Promise.all([
+  const [options, allowedDomains, used, signatures, microsoft, google, smtp] = await Promise.all([
     emailComposerOptions(organizationId),
     listSenderDomains(organizationId),
     countEmailsSentThisMonth(organizationId),
     listSignatureOptions(organizationId),
     getSenderAccountView(organizationId, "MICROSOFT"),
     googleEnabled ? getSenderAccountView(organizationId, "GOOGLE") : Promise.resolve(null),
+    getSenderAccountView(organizationId, "SMTP"),
   ]);
   return {
     options,
@@ -177,6 +182,7 @@ export async function emailComposerData(organizationId: string) {
     microsoftConfigured: microsoftMailConfigured(),
     google,
     googleEnabled,
+    smtp,
   };
 }
 

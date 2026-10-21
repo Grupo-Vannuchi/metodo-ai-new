@@ -160,8 +160,7 @@ export default async function EmailPage({
   }
 
   const [rows, domains, used, account] = await Promise.all([
-    // SMTP isn't offered here yet (smtp: false above), so the view is always one of the three stored channels.
-    listEmailBroadcasts(ctx.organizationId, broadcastChannelOf(view) as "PLATFORM" | "MICROSOFT" | "GOOGLE"),
+    listEmailBroadcasts(ctx.organizationId, broadcastChannelOf(view)),
     mailbox ? Promise.resolve([] as string[]) : listSenderDomains(ctx.organizationId),
     mailbox ? Promise.resolve(0) : countEmailsSentThisMonth(ctx.organizationId),
     provider ? getSenderAccountView(ctx.organizationId, provider) : Promise.resolve(null),
