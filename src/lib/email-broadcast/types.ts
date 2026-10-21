@@ -1,6 +1,7 @@
 import type { AudienceStats, CandidateSource } from "./audience-core";
 import type { AudienceSelection } from "@/lib/validations/email-broadcast";
 import type { EmailAttachment } from "./attachments";
+import type { SmtpPort, SmtpSecurity } from "./smtp/core";
 
 /** Shapes shared by the E-mail pages, actions and client components. Types only. */
 
@@ -61,4 +62,17 @@ export type SenderAccountView = {
   host: string | null;
   sentLast24h: number;
   remaining: number;
+};
+
+/** The SMTP account as its form is filled to edit or reconnect it: every field but the password, which never leaves the server. */
+export type SmtpAccountFormView = {
+  email: string;
+  displayName: string | null;
+  host: string;
+  port: SmtpPort;
+  security: SmtpSecurity;
+  username: string;
+  hourlyLimit: number;
+  dailyLimit: number;
+  status: "ACTIVE" | "NEEDS_RECONNECT";
 };
