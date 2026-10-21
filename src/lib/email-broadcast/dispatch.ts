@@ -14,9 +14,15 @@ import { sendBatch, sendOne, type ResendAttachment, type ResendEmail } from "./r
 import { batchFailureAction, singleFailureAction } from "./retry-policy";
 import { emailUnsubscribeOneClickUrl, emailUnsubscribePageUrl } from "./unsubscribe";
 import type { MimeFile } from "./microsoft/mime";
-import { markInterruptedUncertain, runMailboxBroadcast, type MailboxPauseReason } from "./mailbox/deliver";
+import {
+  markInterruptedUncertain,
+  runMailboxBroadcast,
+  type MailboxPauseReason,
+  type MailboxRun,
+} from "./mailbox/deliver";
 import { microsoftAdapter } from "./microsoft/adapter";
 import { googleAdapter } from "./google/adapter";
+import { smtpAdapter } from "./smtp/adapter";
 
 /**
  * Mass e-mail dispatcher. Runs as SYSTEM (raw Prisma, organizationId explicit
@@ -124,7 +130,7 @@ export async function runEmailBroadcast(
   if (!stamp) return { done: true }; // another runner is alive
   // Only the lease owner sweeps: a recipient left SENDING was cut mid-call and is never resent.
   // Done before any early pause so leftover rows never show as "queued".
-  const mailbox = b.channel === "MICROSOFT" || b.channel === "GOOGLE";
+  const mailbox = b.channel === "MICROSOFT" || b.channel === "GOOGLE" || b.channel === "SMTP";
   if (mailbox) await markInterruptedUncertain(b.id, org);
 
   /** Owner-checked heartbeat; throws LeaseLost when we are no longer the owner. */
@@ -248,29 +254,33 @@ export async function runEmailBroadcast(
     };
 
     if (mailbox) {
-      const outcome = await runMailboxBroadcast(
-        {
-          broadcastId: b.id,
-          organizationId: org,
-          fromName: b.fromName,
-          fromEmail: b.fromEmail,
-          replyTo: b.replyTo,
-          deadline,
-          files: raw,
-          compose: composeFor,
-          beat,
-          wait,
-          pause,
-          finish: async () => {
-            await prisma.emailBroadcast.updateMany({
-              where: { id: b.id, organizationId: org, status: "SENDING", lastDispatchAt: stamp },
-              data: { status: "DONE", finishedAt: new Date(), lastDispatchAt: null },
-            });
-          },
-          activeSince: () => new Date(Date.now() - LEASE_MS),
+      const run: MailboxRun = {
+        broadcastId: b.id,
+        organizationId: org,
+        fromName: b.fromName,
+        fromEmail: b.fromEmail,
+        replyTo: b.replyTo,
+        deadline,
+        files: raw,
+        compose: composeFor,
+        beat,
+        wait,
+        pause,
+        finish: async () => {
+          await prisma.emailBroadcast.updateMany({
+            where: { id: b.id, organizationId: org, status: "SENDING", lastDispatchAt: stamp },
+            data: { status: "DONE", finishedAt: new Date(), lastDispatchAt: null },
+          });
         },
-        b.channel === "GOOGLE" ? googleAdapter : microsoftAdapter,
-      );
+        activeSince: () => new Date(Date.now() - LEASE_MS),
+      };
+      // One call per provider: each adapter hands its own kind of access (a token, the SMTP settings) to its send.
+      const outcome =
+        b.channel === "SMTP"
+          ? await runMailboxBroadcast(run, smtpAdapter)
+          : b.channel === "GOOGLE"
+            ? await runMailboxBroadcast(run, googleAdapter)
+            : await runMailboxBroadcast(run, microsoftAdapter);
       if (outcome.done) return outcome;
     } else {
       const resendKey = apiKey as string;

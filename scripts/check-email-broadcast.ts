@@ -76,7 +76,7 @@ import {
   spreadsheetKind,
   xlsxCellTexts,
 } from "../src/lib/email-broadcast/spreadsheet";
-import { EMPTY_AUDIENCE, audienceSelectionSchema } from "../src/lib/validations/email-broadcast";
+import { EMPTY_AUDIENCE, audienceSelectionSchema, broadcastDraftSchema } from "../src/lib/validations/email-broadcast";
 import {
   INTERRUPTED_ERROR,
   failureMessageKey,
@@ -829,6 +829,16 @@ check("audience schema keeps old drafts and caps typed + imported at 5,000", () 
   assert.equal(MAX_IMPORTS, 20);
   assert.ok(audienceSelectionSchema.safeParse({ imports: files(MAX_IMPORTS) }).success);
   assert.ok(!audienceSelectionSchema.safeParse({ imports: files(MAX_IMPORTS + 1) }).success);
+});
+
+check("broadcastDraftSchema saves a draft for every channel, SMTP included", () => {
+  const draft = { subject: "s", html: "<p>x</p>", fromName: "", fromEmail: "", replyTo: "", audience: EMPTY_AUDIENCE };
+  for (const channel of ["PLATFORM", "MICROSOFT", "GOOGLE", "SMTP"] as const) {
+    const parsed = broadcastDraftSchema.safeParse({ ...draft, channel });
+    assert.ok(parsed.success && parsed.data.channel === channel, channel);
+  }
+  assert.equal(broadcastDraftSchema.parse(draft).channel, "PLATFORM");
+  assert.ok(!broadcastDraftSchema.safeParse({ ...draft, channel: "POP" }).success);
 });
 
 // --- Microsoft channel ---------------------------------------------------------

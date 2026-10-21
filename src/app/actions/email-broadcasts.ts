@@ -85,12 +85,13 @@ export async function saveEmailDraft(
     return { ok: false, error: "signature_missing" };
   }
 
-  const mailbox = parsed.data.channel === "MICROSOFT" || parsed.data.channel === "GOOGLE";
+  const mailbox =
+    parsed.data.channel === "MICROSOFT" || parsed.data.channel === "GOOGLE" || parsed.data.channel === "SMTP";
   const data = {
     subject: parsed.data.subject,
     html: parsed.data.html,
     channel: parsed.data.channel,
-    // A mailbox sender (Microsoft or Google) comes from the connected account when the send starts.
+    // A mailbox sender (Microsoft, Google or SMTP) comes from the connected account when the send starts.
     fromName: mailbox ? null : parsed.data.fromName || null,
     fromEmail: mailbox ? null : parsed.data.fromEmail ? normalizeEmail(parsed.data.fromEmail) : null,
     replyTo: parsed.data.replyTo ? normalizeEmail(parsed.data.replyTo) : null,
@@ -144,7 +145,7 @@ export async function duplicateEmailBroadcast(id: string): Promise<{ ok: true; i
       select: { subject: true, html: true, fromName: true, fromEmail: true, replyTo: true, audience: true, attachments: true, signatureId: true, channel: true },
     });
     if (!src) return { ok: false, error: "not_found" };
-    const mailbox = src.channel === "MICROSOFT" || src.channel === "GOOGLE";
+    const mailbox = src.channel === "MICROSOFT" || src.channel === "GOOGLE" || src.channel === "SMTP";
     const created = await db.emailBroadcast.create({
       data: {
         organizationId: g.ctx.organizationId,
@@ -225,10 +226,10 @@ export async function startEmailBroadcast(
   if (b.status !== "DRAFT") return { ok: false, error: "not_found" };
   if (!b.subject.trim() || !hasEmailContent(b.html)) return { ok: false, error: "invalid" };
 
-  // A mailbox send (Microsoft or Google) goes only through the org's own account of that
+  // A mailbox send (Microsoft, Google or SMTP) goes only through the org's own account of that
   // provider; nothing that is not PLATFORM reaches the Resend branch below.
   const channel = b.channel;
-  const mailbox = channel === "MICROSOFT" || channel === "GOOGLE";
+  const mailbox = channel === "MICROSOFT" || channel === "GOOGLE" || channel === "SMTP";
   let account: { id: string; email: string; displayName: string | null } | null = null;
   if (mailbox) {
     // Google is a pilot channel: outside the pilot a draft can't start, however it was saved.
@@ -359,7 +360,7 @@ export async function resumeEmailBroadcast(id: string): Promise<{ ok: true } | E
   if (b.status === "PAUSED") {
     let repoint = {};
     const channel = b.channel;
-    const mailbox = channel === "MICROSOFT" || channel === "GOOGLE";
+    const mailbox = channel === "MICROSOFT" || channel === "GOOGLE" || channel === "SMTP";
     if (mailbox) {
       if (channel === "GOOGLE" && !googleMailEnabledFor(g.ctx.organizationId)) {
         return { ok: false, error: "sender_account_missing" };

@@ -33,7 +33,7 @@ export type ComposerDraft = {
   picked: PickedTarget[];
   attachments: EmailAttachment[];
   signatureId: string | null;
-  channel: "PLATFORM" | "MICROSOFT" | "GOOGLE";
+  channel: "PLATFORM" | "MICROSOFT" | "GOOGLE" | "SMTP";
 };
 
 /** A signature as the composer and the Assinaturas tab show it; previewHtml

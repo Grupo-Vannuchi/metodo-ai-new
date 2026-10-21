@@ -4,7 +4,6 @@ import { requireOrgContext } from "@/lib/tenant";
 import { emailComposerData, getEmailBroadcast, pickedTargets } from "@/lib/queries/email-broadcasts";
 import { readAudience } from "@/lib/validations/email-broadcast";
 import { readAttachments } from "@/lib/email-broadcast/attachments";
-import type { ComposerDraft } from "@/lib/email-broadcast/types";
 import { EmailComposer } from "@/components/email/email-composer";
 import { emailListHref, listChannelOf } from "@/lib/email-broadcast/list-channel";
 import { Link, redirect } from "@/i18n/navigation";
@@ -56,9 +55,7 @@ export default async function EditEmailPage({
           picked,
           attachments: readAttachments(b.attachments),
           signatureId: b.signatureId,
-          // The stored channel now has SMTP, but nothing can save an SMTP draft until the send task adds it to
-          // ComposerDraft.channel; from then on this assertion changes nothing.
-          channel: b.channel as ComposerDraft["channel"],
+          channel: b.channel,
         }}
         options={data.options}
         allowedDomains={data.allowedDomains}
