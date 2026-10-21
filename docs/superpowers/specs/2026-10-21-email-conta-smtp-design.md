@@ -171,7 +171,8 @@ O contrato do adaptador ganha três pontos. Microsoft e Google **não mudam de c
 - **Separar "preparação" de "entrega"** é o que decide entre repetir e `UNCERTAIN`. Usar `nodemailer/lib/smtp-connection` diretamente (`connect` → `login` → `send`), ou outro jeito que dê a mesma garantia:
   - falha em `connect`/TLS/`login`: estágio **prepare**. O e-mail não saiu e pode repetir;
   - falha de rede ou tempo esgotado **durante o `send`** (`ECONNECTION`, `ETIMEDOUT`, `ESOCKET`, `ESTREAM`): estágio **send**. Pode ter sido depois do ponto final, então vira `UNCERTAIN` e nunca é reenviado;
-  - **resposta do servidor** recusando (`EENVELOPE` no `MAIL FROM`/`RCPT TO`/`DATA`, ou `EMESSAGE` na resposta final) **nunca** é incerta: o servidor disse não, então o e-mail não foi aceito.
+  - **resposta do servidor** recusando (`EENVELOPE` no `MAIL FROM`/`RCPT TO`/`DATA`, ou `EMESSAGE` na resposta final) **nunca** é incerta: o servidor disse não, então o e-mail não foi aceito;
+  - o mesmo vale quando o servidor responde um código ≥ 400 e fecha a conexão. Com PIPELINING, um `421` no `RCPT TO` chega como `ECONNECTION` com `responseCode`, e o conteúdo nunca chegou a ser enviado. Isso conta como recusa do servidor (fase `data`: 4xx repete e depois pausa; 5xx pausa). Só a falha **sem** resposta (rede caiu, tempo esgotado, teto estourado) é incerta.
 
 ### 5.3 Falhas do SMTP
 
