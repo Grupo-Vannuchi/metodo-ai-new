@@ -186,8 +186,8 @@ A ordem importa: a primeira linha que bate decide. Tudo fica numa função pura 
 | Login recusado com 4xx (por exemplo, `454 4.7.0` temporário) | repete até 3 vezes; esgotado, pausa com `provider_error` |
 | `EAUTH` (login recusado: 535, 534, 530) | a conta vira `NEEDS_RECONNECT` e o envio pausa com `reconnect` |
 | `ENOAUTH` | pausa com `provider_error` |
-| Depois do login, resposta sobre o **remetente** ou o relay (`x.1.7`, `x.1.8`, "sender address rejected", "not owned by user", "relay access denied", "relaying denied"), em qualquer estágio | pausa com `account_blocked`. O Postfix costuma dar essa recusa no `RCPT TO`, e ela não é culpa de cada destinatário |
 | `421` em qualquer estágio ("serviço indisponível, fechando o canal") | é do servidor, nunca de um destinatário: com palavras de limite, pausa com `daily_limit`; senão repete até 5 vezes e, esgotado, pausa com `provider_error` |
+| Depois do login, resposta sobre o **remetente** ou o relay (`x.1.7`, `x.1.8`, "sender address rejected", "not owned by user", "relay access denied", "relaying denied"), em qualquer estágio | pausa com `account_blocked`. O Postfix costuma dar essa recusa no `RCPT TO`, e ela não é culpa de cada destinatário |
 | Resposta com tamanho excedido (`5.3.4`, `x.2.3`, "message size"/"too large"/"tamanho", ou código `message-552` sem código estendido de endereço/caixa) | falha só esse destinatário (`message_too_large`) e segue |
 | No `RCPT TO`, no `DATA` ou na resposta final, resposta **do destinatário**: código estendido `x.1.x` ou `x.2.x` (endereço ou caixa inexistente, cheia ou desativada), ou palavras de limite sem nenhuma palavra de envio nem código `x.7.x` (por exemplo, "Over quota", "Quota excedida para o usuario") | 5xx: falha só esse destinatário. 4xx: repete até 5 vezes e, esgotado, falha só esse destinatário. **Nunca pausa** |
 | Resposta que fala de limite (`/\b(rate\|limit\|quota\|too many\|limite\|excedid)/i`), fora dos casos acima | pausa com `daily_limit`: o provedor recusou por limite de envio. No `RCPT TO`, no `DATA` e na resposta final, isso só vale com palavra de envio (`rate`, `send`, `sender`, `envio`, `hour`, `daily`, `hora`, `dia`...) ou código `x.7.x` |
@@ -196,7 +196,7 @@ A ordem importa: a primeira linha que bate decide. Tudo fica numa função pura 
 | `MAIL FROM` recusado com 5xx (por exemplo, remetente diferente do login) | pausa com `account_blocked`, com o texto do servidor |
 | Resposta final (depois do conteúdo) com 5xx | falha só esse destinatário (`generic`). A regra atual de 3 falhas seguidas pausa o envio |
 | `DATA` recusado com 5xx | pausa com `provider_error` |
-| Qualquer outra resposta 4xx (421, 451...), fora do `RCPT TO` | repete com espera (até 5 vezes); esgotado, pausa com `provider_error` |
+| Qualquer outra resposta 4xx (450, 451...), fora do `RCPT TO` | repete com espera (até 5 vezes); esgotado, pausa com `provider_error` |
 | Qualquer outra | pausa com `provider_error` |
 
 **O que é de um destinatário nunca pausa o envio.** Quando o laço pausa, ele devolve o destinatário atual para a fila, e a retomada pega esse mesmo endereço primeiro. Uma recusa que só vale para aquele endereço pausaria o envio a cada "Retomar envio", para sempre.
