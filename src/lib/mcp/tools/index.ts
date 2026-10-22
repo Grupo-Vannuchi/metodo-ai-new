@@ -8,6 +8,7 @@ import { marketingTools } from "@/lib/mcp/tools/marketing";
 import { plataformaTools } from "@/lib/mcp/tools/plataforma";
 import { rhTools } from "@/lib/mcp/tools/rh";
 import { suprimentosTools } from "@/lib/mcp/tools/suprimentos";
+import { tarefasTools } from "@/lib/mcp/tools/tarefas";
 
 /** Every tool the server exposes, in the order tools/list shows them. */
 export const ALL_TOOLS: McpToolDef[] = [
@@ -19,4 +20,5 @@ export const ALL_TOOLS: McpToolDef[] = [
   ...marketingTools,
   ...inboxTools,
   ...iaTools,
+  ...tarefasTools,
 ];

@@ -935,6 +935,64 @@ checks.push({
   },
 });
 
+// ── Tarefas ──────────────────────────────────────────────────────────────────
+
+EXPECTED_TOOLS.push("buscar_tarefas", "resumo_tarefas");
+
+fixtures.push(async (ctx) => {
+  const { prisma: db, secret, stamp, userA } = ctx;
+  const organizationId = ctx.orgA.id;
+  await db.task.createMany({
+    data: [
+      // Overdue for the Tasks screen: open and due before today in São Paulo.
+      {
+        organizationId,
+        title: `MCP-E2E-A-${stamp} Ligar`,
+        status: "TODO",
+        dueDate: new Date(Date.now() - 3 * 86_400_000),
+        assignedToId: userA.id,
+        companyId: ctx.ids.companyA,
+        description: secret,
+      },
+      { organizationId, title: `MCP-E2E-A-${stamp} Feita`, status: "DONE", doneAt: new Date(), assignedToId: userA.id },
+      { organizationId, title: `MCP-E2E-A-${stamp} Em andamento`, status: "IN_PROGRESS" },
+    ],
+  });
+});
+
+cleanups.push(async (ctx) => {
+  await ctx.prisma.task.deleteMany({ where: inTestOrgs(ctx) });
+});
+
+checks.push({
+  name: "buscar_tarefas filters overdue tasks and names the assignee and the company",
+  run: async (ctx) => {
+    const r = await ctx.call("buscar_tarefas", { organizationId: ctx.orgA.id, overdue: true });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.total, 1);
+    const t = r.json.items[0];
+    assert.equal(t.overdue, true);
+    assert.equal(t.assigneeName, ctx.userA.name);
+    assert.equal(t.companyName, `MCP-E2E-A-${ctx.stamp} Ltda`);
+    assert.equal("description" in t, false);
+  },
+});
+
+checks.push({
+  name: "resumo_tarefas counts open, overdue, created and done, per assignee",
+  run: async (ctx) => {
+    const r = await ctx.call("resumo_tarefas", { organizationId: ctx.orgA.id });
+    assert.equal(r.isError, false, r.text);
+    assert.deepEqual(r.json.open, { todo: 1, inProgress: 1 });
+    assert.equal(r.json.overdue, 1);
+    assert.equal(r.json.createdInPeriod, 3);
+    assert.equal(r.json.doneInPeriod, 1);
+    assert.deepEqual(r.json.byAssignee, [
+      { userId: ctx.userA.id, userName: ctx.userA.name, open: 1, overdue: 1, doneInPeriod: 1 },
+    ]);
+  },
+});
+
 // ── Runner ───────────────────────────────────────────────────────────────────
 
 async function callTool(client: Client, name: string, args: object): Promise<CallResult> {
