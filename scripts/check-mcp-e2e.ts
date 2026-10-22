@@ -17,7 +17,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { findSensitiveKeys } from "../src/lib/mcp/core";
+import { findSensitiveKeys, utcDayStart } from "../src/lib/mcp/core";
 
 // `engineType = "client"` (schema.prisma) drops the Rust engine, so every
 // PrismaClient needs an explicit driver adapter — same as src/lib/prisma.ts.
@@ -559,6 +559,105 @@ checks.push({
   run: async (ctx) => {
     for (const name of ["buscar_lancamentos", "resumo_financeiro"]) {
       const r = await ctx.call(name, { organizationId: ctx.orgA.id, from: "2026-09-01", to: "2026-09-30" });
+      assert.ok(!r.text.includes("98765.43"), `${name} carries the base salary`);
+    }
+  },
+});
+
+// ── RH ───────────────────────────────────────────────────────────────────────
+
+EXPECTED_TOOLS.push("buscar_funcionarios", "resumo_rh");
+
+fixtures.push(async (ctx) => {
+  const { prisma: db, secret, stamp } = ctx;
+  const organizationId = ctx.orgA.id;
+  // The active employee comes from the Financeiro fixtures; this one left in the period.
+  await db.employee.create({
+    data: {
+      organizationId,
+      name: `MCP-E2E-A-${stamp} Ex-funcionário`,
+      departmentId: ctx.ids.departmentA,
+      jobRoleId: ctx.ids.jobRoleA,
+      status: "TERMINATED",
+      hiredAt: new Date("2025-01-10T00:00:00Z"),
+      terminatedAt: new Date(),
+      terminationReason: secret,
+      baseSalary: 98765.43,
+    },
+  });
+  const today = utcDayStart(new Date());
+  // A sick day today (reason and decision note are health data: never out).
+  await db.timeOff.create({
+    data: {
+      organizationId,
+      employeeId: ctx.ids.employeeA,
+      type: "SICK",
+      status: "APPROVED",
+      startDate: today,
+      endDate: today,
+      days: 1,
+      reason: secret,
+      decisionNote: secret,
+    },
+  });
+  await db.timeOff.create({
+    data: {
+      organizationId,
+      employeeId: ctx.ids.employeeA,
+      type: "VACATION",
+      status: "PENDING",
+      startDate: new Date(today.getTime() + 30 * 86_400_000),
+      endDate: new Date(today.getTime() + 39 * 86_400_000),
+      days: 10,
+    },
+  });
+});
+
+cleanups.push(async (ctx) => {
+  // Employees go with the Financeiro cleanup, which runs after this one.
+  await ctx.prisma.timeOff.deleteMany({ where: inTestOrgs(ctx) });
+});
+
+checks.push({
+  name: "buscar_funcionarios returns only name, role, department, status and dates",
+  run: async (ctx) => {
+    const r = await ctx.call("buscar_funcionarios", { organizationId: ctx.orgA.id });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.total, 2);
+    for (const e of r.json.items) {
+      assert.deepEqual(Object.keys(e).sort(), [
+        "departmentName",
+        "hiredAt",
+        "id",
+        "jobRoleName",
+        "name",
+        "status",
+        "terminatedAt",
+      ]);
+    }
+  },
+});
+
+checks.push({
+  name: "resumo_rh counts headcount, exits, time off and who is away today — never a name",
+  run: async (ctx) => {
+    const r = await ctx.call("resumo_rh", { organizationId: ctx.orgA.id });
+    assert.equal(r.isError, false, r.text);
+    assert.deepEqual(r.json.headcount, { active: 1, onLeave: 0, terminated: 1 });
+    assert.deepEqual(r.json.byDepartment, [{ departmentName: "Comercial", active: 1 }]);
+    assert.equal(r.json.terminations, 1);
+    assert.equal(r.json.timeOff.pending, 1);
+    assert.deepEqual(r.json.timeOff.approvedInPeriod, [{ type: "SICK", count: 1, days: 1 }]);
+    assert.equal(r.json.awayToday, 1);
+    assert.ok(!r.text.includes(`MCP-E2E-A-${ctx.stamp} Funcionária`), "resumo_rh names an employee");
+  },
+});
+
+checks.push({
+  name: "no RH answer carries the base salary",
+  run: async (ctx) => {
+    for (const name of ["buscar_funcionarios", "resumo_rh"]) {
+      const r = await ctx.call(name, { organizationId: ctx.orgA.id });
       assert.ok(!r.text.includes("98765.43"), `${name} carries the base salary`);
     }
   },
