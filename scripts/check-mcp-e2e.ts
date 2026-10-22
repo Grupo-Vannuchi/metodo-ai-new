@@ -663,6 +663,130 @@ checks.push({
   },
 });
 
+// ── Suprimentos ──────────────────────────────────────────────────────────────
+
+EXPECTED_TOOLS.push(
+  "buscar_itens_estoque",
+  "buscar_movimentacoes",
+  "buscar_pedidos_compra",
+  "buscar_ativos",
+  "resumo_suprimentos",
+);
+
+fixtures.push(async (ctx) => {
+  const { prisma: db, secret, stamp } = ctx;
+  const organizationId = ctx.orgA.id;
+  const supplier = await db.supplier.create({
+    data: { organizationId, name: `MCP-E2E-A-${stamp} Fornecedor`, notes: secret, document: secret },
+  });
+  const warehouse = await db.warehouse.create({ data: { organizationId, name: `MCP-E2E-A-${stamp} Almoxarifado` } });
+  // Minimum 10, only 4 in stock → below the minimum.
+  const item = await db.supplyItem.create({
+    data: { organizationId, description: `MCP-E2E-A-${stamp} Parafuso`, unit: "un", minStock: 10, notes: secret },
+  });
+  await db.stockMovement.create({
+    data: { organizationId, itemId: item.id, warehouseId: warehouse.id, type: "IN", qty: 4, unitCost: 2.5, reason: "Compra", note: secret },
+  });
+  const order = await db.purchaseOrder.create({
+    data: {
+      organizationId,
+      supplierId: supplier.id,
+      warehouseId: warehouse.id,
+      status: "ORDERED",
+      total: 300,
+      orderedAt: new Date(),
+      notes: secret,
+    },
+  });
+  await db.purchaseOrderItem.create({
+    data: { organizationId, purchaseOrderId: order.id, itemId: item.id, description: "Parafuso", quantity: 120, unitPrice: 2.5, total: 300 },
+  });
+  const asset = await db.asset.create({
+    data: { organizationId, name: `MCP-E2E-A-${stamp} Furadeira`, code: "PAT-1", notes: secret },
+  });
+  await db.maintenanceEvent.create({
+    data: {
+      organizationId,
+      assetId: asset.id,
+      type: "MAINTENANCE",
+      status: "SCHEDULED",
+      dueDate: new Date(Date.now() + 7 * 86_400_000),
+      notes: secret,
+    },
+  });
+});
+
+cleanups.push(async (ctx) => {
+  const where = inTestOrgs(ctx);
+  await ctx.prisma.maintenanceEvent.deleteMany({ where });
+  await ctx.prisma.asset.deleteMany({ where });
+  await ctx.prisma.purchaseOrderItem.deleteMany({ where });
+  await ctx.prisma.purchaseOrder.deleteMany({ where });
+  await ctx.prisma.stockMovement.deleteMany({ where });
+  await ctx.prisma.supplyItem.deleteMany({ where });
+  await ctx.prisma.warehouse.deleteMany({ where });
+  await ctx.prisma.supplier.deleteMany({ where });
+});
+
+checks.push({
+  name: "buscar_itens_estoque finds the item below its minimum, with the Estoque screen's balance",
+  run: async (ctx) => {
+    const r = await ctx.call("buscar_itens_estoque", { organizationId: ctx.orgA.id, belowMin: true });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.total, 1);
+    assert.equal(r.json.items[0].balance, "4.000");
+    assert.equal(r.json.items[0].minStock, "10.000");
+    assert.equal(r.json.items[0].belowMin, true);
+  },
+});
+
+checks.push({
+  name: "buscar_movimentacoes names the item and the warehouse, without the free-text note",
+  run: async (ctx) => {
+    const r = await ctx.call("buscar_movimentacoes", { organizationId: ctx.orgA.id, type: "IN" });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.total, 1);
+    const m = r.json.items[0];
+    assert.equal(m.qty, "4.000");
+    assert.equal(m.itemDescription, `MCP-E2E-A-${ctx.stamp} Parafuso`);
+    assert.equal(m.warehouseName, `MCP-E2E-A-${ctx.stamp} Almoxarifado`);
+    assert.equal("note" in m, false);
+  },
+});
+
+checks.push({
+  name: "buscar_pedidos_compra names the supplier and counts the lines",
+  run: async (ctx) => {
+    const r = await ctx.call("buscar_pedidos_compra", { organizationId: ctx.orgA.id, status: "ORDERED" });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.total, 1);
+    assert.equal(r.json.items[0].supplierName, `MCP-E2E-A-${ctx.stamp} Fornecedor`);
+    assert.equal(r.json.items[0].itemCount, 1);
+    assert.equal(r.json.items[0].total, "300.00");
+  },
+});
+
+checks.push({
+  name: "buscar_ativos shows the next scheduled maintenance",
+  run: async (ctx) => {
+    const r = await ctx.call("buscar_ativos", { organizationId: ctx.orgA.id });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.total, 1);
+    assert.equal(r.json.items[0].nextMaintenance.type, "MAINTENANCE");
+  },
+});
+
+checks.push({
+  name: "resumo_suprimentos sums the period's purchases and movements",
+  run: async (ctx) => {
+    const r = await ctx.call("resumo_suprimentos", { organizationId: ctx.orgA.id });
+    assert.equal(r.isError, false, r.text);
+    assert.deepEqual(r.json.purchases, [{ status: "ORDERED", count: 1, total: "300.00" }]);
+    assert.deepEqual(r.json.movements, [{ type: "IN", count: 1 }]);
+    assert.equal(r.json.indicators.stock.belowMin, 1);
+  },
+});
+
 // ── Runner ───────────────────────────────────────────────────────────────────
 
 async function callTool(client: Client, name: string, args: object): Promise<CallResult> {

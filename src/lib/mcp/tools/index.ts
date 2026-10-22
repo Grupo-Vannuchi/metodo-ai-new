@@ -4,6 +4,13 @@ import { crmTools } from "@/lib/mcp/tools/crm";
 import { financeiroTools } from "@/lib/mcp/tools/financeiro";
 import { plataformaTools } from "@/lib/mcp/tools/plataforma";
 import { rhTools } from "@/lib/mcp/tools/rh";
+import { suprimentosTools } from "@/lib/mcp/tools/suprimentos";
 
 /** Every tool the server exposes, in the order tools/list shows them. */
-export const ALL_TOOLS: McpToolDef[] = [...plataformaTools, ...crmTools, ...financeiroTools, ...rhTools];
+export const ALL_TOOLS: McpToolDef[] = [
+  ...plataformaTools,
+  ...crmTools,
+  ...financeiroTools,
+  ...rhTools,
+  ...suprimentosTools,
+];
