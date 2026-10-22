@@ -787,6 +787,154 @@ checks.push({
   },
 });
 
+// ── Marketing, Inbox e IA (only metadata and counts) ─────────────────────────
+
+EXPECTED_TOOLS.push("buscar_campanhas", "buscar_disparos_email", "resumo_conversas", "listar_agentes_ia");
+
+fixtures.push(async (ctx) => {
+  const { prisma: db, secret, stamp, userA } = ctx;
+  const organizationId = ctx.orgA.id;
+  const template = await db.messageTemplate.create({
+    data: { organizationId, channel: "WHATSAPP_EVOLUTION", name: `MCP-E2E-A-${stamp} Modelo`, body: secret },
+  });
+  const campaign = await db.campaign.create({
+    data: {
+      organizationId,
+      name: `MCP-E2E-A-${stamp} Campanha`,
+      channel: "WHATSAPP_EVOLUTION",
+      templateId: template.id,
+      status: "DONE",
+      createdById: userA.id,
+    },
+  });
+  await db.campaignRecipient.create({
+    data: { organizationId, campaignId: campaign.id, contactId: ctx.ids.contactA, status: "SENT", sentAt: new Date() },
+  });
+  const broadcast = await db.emailBroadcast.create({
+    data: {
+      organizationId,
+      subject: `MCP-E2E-A-${stamp} Assunto`,
+      html: `<p>${secret}</p>`,
+      audience: { x: secret },
+      signatureHtml: secret,
+      signatureText: secret,
+      lastError: secret,
+      status: "DONE",
+      createdById: userA.id,
+    },
+  });
+  await db.emailBroadcastRecipient.create({
+    data: {
+      organizationId,
+      broadcastId: broadcast.id,
+      email: `dest-${stamp}@test.local`,
+      batchNo: 0,
+      status: "DELIVERED",
+      sentAt: new Date(),
+    },
+  });
+  const connection = await db.integrationConnection.create({
+    data: {
+      organizationId,
+      provider: "EVOLUTION",
+      label: `MCP-E2E-A-${stamp} WhatsApp`,
+      credentialsEnc: secret,
+      status: "ACTIVE",
+      meta: { webhookToken: secret },
+    },
+  });
+  const conversation = await db.conversation.create({
+    data: {
+      organizationId,
+      connectionId: connection.id,
+      remoteJid: `${secret}@s.whatsapp.net`,
+      name: `MCP-E2E-A-${stamp} Cliente`,
+      lastMessagePreview: secret,
+      lastMessageAt: new Date(),
+      unreadCount: 2,
+    },
+  });
+  await db.message.createMany({
+    data: [
+      { organizationId, conversationId: conversation.id, direction: "INBOUND", body: secret, timestamp: new Date() },
+      { organizationId, conversationId: conversation.id, direction: "OUTBOUND", body: secret, timestamp: new Date() },
+    ],
+  });
+  await db.whatsappAgent.create({
+    data: { organizationId, connectionId: connection.id, name: "Bia", enabled: true, prompt: secret },
+  });
+  const thread = await db.assistantThread.create({ data: { organizationId, userId: userA.id } });
+  await db.assistantMessage.create({
+    data: { organizationId, threadId: thread.id, role: "user", content: secret },
+  });
+});
+
+cleanups.push(async (ctx) => {
+  const where = inTestOrgs(ctx);
+  await ctx.prisma.assistantMessage.deleteMany({ where });
+  await ctx.prisma.assistantThread.deleteMany({ where });
+  await ctx.prisma.whatsappAgent.deleteMany({ where });
+  await ctx.prisma.message.deleteMany({ where });
+  await ctx.prisma.conversation.deleteMany({ where });
+  await ctx.prisma.integrationConnection.deleteMany({ where });
+  await ctx.prisma.emailBroadcastRecipient.deleteMany({ where });
+  await ctx.prisma.emailBroadcast.deleteMany({ where });
+  await ctx.prisma.campaignRecipient.deleteMany({ where });
+  await ctx.prisma.campaign.deleteMany({ where });
+  await ctx.prisma.messageTemplate.deleteMany({ where });
+});
+
+checks.push({
+  name: "buscar_campanhas counts recipients by status and names the template, never its body",
+  run: async (ctx) => {
+    const r = await ctx.call("buscar_campanhas", { organizationId: ctx.orgA.id });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.total, 1);
+    const c = r.json.items[0];
+    assert.equal(c.templateName, `MCP-E2E-A-${ctx.stamp} Modelo`);
+    assert.equal(c.recipients.total, 1);
+    assert.equal(c.recipients.SENT, 1);
+  },
+});
+
+checks.push({
+  name: "buscar_disparos_email counts recipients by status, without the e-mail content",
+  run: async (ctx) => {
+    const r = await ctx.call("buscar_disparos_email", { organizationId: ctx.orgA.id });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.total, 1);
+    assert.equal(r.json.items[0].subject, `MCP-E2E-A-${ctx.stamp} Assunto`);
+    assert.equal(r.json.items[0].recipients.DELIVERED, 1);
+  },
+});
+
+checks.push({
+  name: "resumo_conversas only counts conversations and messages",
+  run: async (ctx) => {
+    const r = await ctx.call("resumo_conversas", { organizationId: ctx.orgA.id });
+    assert.equal(r.isError, false, r.text);
+    assert.deepEqual(r.json.messages, { inbound: 1, outbound: 1 });
+    assert.equal(r.json.conversations.total, 1);
+    assert.equal(r.json.conversations.withUnread, 1);
+    assert.equal(r.json.connections.length, 1);
+    assert.equal(r.json.connections[0].conversations, 1);
+    assert.equal(r.json.connections[0].unread, 2);
+    assert.ok(!r.text.includes(`MCP-E2E-A-${ctx.stamp} Cliente`), "resumo_conversas names a conversation");
+  },
+});
+
+checks.push({
+  name: "listar_agentes_ia shows the agent's settings, never its prompt, and only counts the assistant",
+  run: async (ctx) => {
+    const r = await ctx.call("listar_agentes_ia", { organizationId: ctx.orgA.id });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.items.length, 1);
+    assert.equal(r.json.items[0].name, "Bia");
+    assert.equal(r.json.items[0].connectionLabel, `MCP-E2E-A-${ctx.stamp} WhatsApp`);
+    assert.deepEqual(r.json.assistant, { threads: 1, messages: 1 });
+  },
+});
+
 // ── Runner ───────────────────────────────────────────────────────────────────
 
 async function callTool(client: Client, name: string, args: object): Promise<CallResult> {

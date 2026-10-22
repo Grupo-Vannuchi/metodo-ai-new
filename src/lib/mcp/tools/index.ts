@@ -2,6 +2,9 @@ import "server-only";
 import type { McpToolDef } from "@/lib/mcp/tool";
 import { crmTools } from "@/lib/mcp/tools/crm";
 import { financeiroTools } from "@/lib/mcp/tools/financeiro";
+import { iaTools } from "@/lib/mcp/tools/ia";
+import { inboxTools } from "@/lib/mcp/tools/inbox";
+import { marketingTools } from "@/lib/mcp/tools/marketing";
 import { plataformaTools } from "@/lib/mcp/tools/plataforma";
 import { rhTools } from "@/lib/mcp/tools/rh";
 import { suprimentosTools } from "@/lib/mcp/tools/suprimentos";
@@ -13,4 +16,7 @@ export const ALL_TOOLS: McpToolDef[] = [
   ...financeiroTools,
   ...rhTools,
   ...suprimentosTools,
+  ...marketingTools,
+  ...inboxTools,
+  ...iaTools,
 ];
