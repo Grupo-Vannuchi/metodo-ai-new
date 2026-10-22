@@ -2046,6 +2046,11 @@
     "googleMissing": "Não há uma conta Google ativa nesta empresa. Conecte ou reconecte em Novo e-mail antes de enviar.",
     "confirmGooglePace": "Ritmo do Google: cerca de 28 e-mails por minuto; esta parte leva cerca de {minutes, plural, one {# minuto} other {# minutos}}.",
     "confirmGoogleSent": "Os e-mails ficam salvos em Enviados do Gmail de {email}, e o Google não informa entrega nem abertura.",
+    "smtpChip": "conta SMTP",
+    "smtpMissing": "Não há uma conta SMTP ativa nesta empresa. Configure ou reconecte em Novo e-mail antes de enviar.",
+    "confirmSmtpPace": "No limite de {perHour} por hora, esta parte leva cerca de {minutes, plural, one {# minuto} other {# minutos}}.",
+    "confirmSmtpPaceHours": "No limite de {perHour} por hora, esta parte leva cerca de {hours} h.",
+    "confirmSmtpSent": "Nenhuma cópia fica em Enviados de {email}, e o provedor não informa entrega nem abertura.",
     "image": {
       "button": "Imagem",
       "title": "Inserir imagem",
@@ -2256,6 +2261,11 @@
       "google_no_sender_account": "Envio pausado: a conta Google foi desconectada ou trocada. Conecte uma conta e clique em “Retomar envio”.",
       "google_account_blocked": "Envio pausado: o Google não permite enviar por esta conta (o Gmail não está ativo nela ou o administrador bloqueou apps de terceiros). Verifique a conta antes de retomar.",
       "google_provider_error": "Envio pausado: o Google recusou ou não respondeu ao envio. Veja o detalhe técnico e clique em “Retomar envio” para tentar de novo.",
+      "smtp_daily_limit": "Envio pausado: o limite do dia informado foi atingido ou o provedor recusou por limite de envio. Clique em “Retomar envio” mais tarde para continuar até o próximo limite.",
+      "smtp_reconnect": "Envio pausado: o servidor recusou a senha da conta SMTP, que precisa ser reconectada (em Novo e-mail). Depois, clique em “Retomar envio”.",
+      "smtp_no_sender_account": "Envio pausado: a conta SMTP foi desconectada ou trocada. Conecte uma conta e clique em “Retomar envio”.",
+      "smtp_account_blocked": "Envio pausado: o servidor recusou o remetente (o e-mail da conta não é aceito para este usuário, ou o servidor não libera o envio). Verifique a conta no seu provedor antes de retomar.",
+      "smtp_provider_error": "Envio pausado: o servidor SMTP recusou ou não respondeu ao envio. Veja o detalhe técnico e clique em “Retomar envio” para tentar de novo.",
       "domain_not_allowed": "Envio pausado: o domínio do endereço de envio deixou de estar liberado para sua empresa.",
       "from_missing": "Envio pausado: este envio foi criado antes da troca para a conta de e-mail da plataforma e não tem endereço de envio, então não pode ser retomado. Para enviar de novo, duplique-o (o novo envio vai para toda a lista).",
       "attachment_unavailable": "Envio pausado: um anexo não pôde ser carregado. Tente retomar; se continuar, duplique o envio e anexe o arquivo de novo.",
@@ -2278,6 +2288,10 @@
         "google_reconnect": "Pausado: a conta Google precisa ser reconectada.",
         "google_no_sender_account": "Pausado: a conta Google foi desconectada.",
         "google_account_blocked": "Pausado: o Google não permite enviar por esta conta.",
+        "smtp_daily_limit": "Pausado: o limite do dia foi atingido ou o provedor recusou por limite. Retome mais tarde.",
+        "smtp_reconnect": "Pausado: o servidor recusou a senha; a conta SMTP precisa ser reconectada.",
+        "smtp_no_sender_account": "Pausado: a conta SMTP foi desconectada.",
+        "smtp_account_blocked": "Pausado: o servidor recusou o remetente.",
         "daily_limit": "Pausado: limite diário da conta Microsoft atingido. Retome amanhã.",
         "reconnect": "Pausado: a conta Microsoft precisa ser reconectada.",
         "no_sender_account": "Pausado: a conta Microsoft foi desconectada.",
@@ -2289,6 +2303,7 @@
     "failure": {
       "invalid_address": "Endereço recusado: o e-mail do destinatário é inválido.",
       "message_too_large": "O e-mail ficou grande demais para a Microsoft.",
+      "smtp_message_too_large": "O e-mail ficou grande demais para o servidor SMTP.",
       "interrupted": "Situação incerta: o envio foi interrompido antes da confirmação. Não reenviamos, para não duplicar.",
       "generic": "Falha ao enviar para este endereço."
     },
@@ -2394,6 +2409,8 @@
       "noTrackingMicrosoft": "A Microsoft não avisa entrega nem abertura: aqui aparecem só os enviados e as falhas. Devoluções de endereço inexistente chegam na própria caixa, como resposta automática do Outlook.",
       "viaGoogle": "Enviado pela conta Google {email}",
       "noTrackingGoogle": "O Google não avisa entrega nem abertura: aqui aparecem só os enviados e as falhas. Devoluções de endereço inexistente chegam na própria caixa do Gmail.",
+      "viaSmtp": "Enviado pela conta SMTP {email}",
+      "noTrackingSmtp": "O provedor não avisa entrega nem abertura: aqui aparecem só os enviados e as falhas. Devoluções de endereço inexistente chegam na própria caixa do e-mail remetente.",
       "showing": "Mostrando os primeiros {count}.",
       "attachments": "Anexos",
       "counters": {
@@ -2927,7 +2944,7 @@
         "started": "Disparou uma campanha"
       },
       "email_broadcast": { "started": "Iniciou um envio de e-mail em massa" },
-      "email_sender": { "connected": "Conectou a conta Microsoft de envio", "replaced": "Trocou a conta Microsoft de envio", "disconnected": "Desconectou a conta Microsoft de envio", "replied": "Respondeu um e-mail pela conta Microsoft" },
+      "email_sender": { "connected": "Conectou uma conta de envio de e-mail", "replaced": "Trocou a conta de envio de e-mail", "disconnected": "Desconectou uma conta de envio de e-mail", "replied": "Respondeu um e-mail pela conta Microsoft" },
       "task_board": { "entrance_changed": "Trocou a coluna de entrada do quadro de tarefas", "column_deleted": "Excluiu uma coluna do quadro de tarefas" },
       "connection": {
         "created": "Conectou uma integração",

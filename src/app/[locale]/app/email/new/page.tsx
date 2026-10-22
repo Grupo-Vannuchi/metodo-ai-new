@@ -4,7 +4,7 @@ import { emailComposerData } from "@/lib/queries/email-broadcasts";
 import { EMPTY_AUDIENCE } from "@/lib/validations/email-broadcast";
 import { EmailComposer } from "@/components/email/email-composer";
 import { ChannelChoice, type ChannelNotice } from "@/components/email/channel-choice";
-import { emailListHref, type ListChannel } from "@/lib/email-broadcast/list-channel";
+import { broadcastChannelOf, emailListHref, type ListChannel } from "@/lib/email-broadcast/list-channel";
 import type { GoogleConnectError } from "@/lib/email-broadcast/google/core";
 import type { MicrosoftConnectError } from "@/lib/email-broadcast/microsoft/core";
 import { LIMITS } from "@/config/limits";
@@ -24,10 +24,11 @@ const GOOGLE_CONNECT_ERRORS: readonly GoogleConnectError[] = [
   "failed",
 ];
 
-const VIA_CHANNEL: Record<"platform" | "microsoft" | "google", ListChannel> = {
+const VIA_CHANNEL: Record<"platform" | "microsoft" | "google" | "smtp", ListChannel> = {
   platform: "plataforma",
   microsoft: "microsoft",
   google: "google",
+  smtp: "smtp",
 };
 
 export default async function NewEmailPage({
@@ -51,20 +52,22 @@ export default async function NewEmailPage({
   const microsoftEnabled = data.microsoftConfigured;
   const googleEnabled = data.googleEnabled;
 
-  // With no mailbox channel enabled there is nothing to choose: straight to the platform composer.
-  // A mailbox channel that isn't enabled (not configured, or outside the pilot) asks again.
-  const via: "platform" | "microsoft" | "google" | null =
-    !microsoftEnabled && !googleEnabled
+  // SMTP is open to every company, so there is always a channel to choose besides the platform: "Novo e-mail" asks
+  // first, unless ?via= names one that can be used. A mailbox channel that isn't enabled (Microsoft not configured,
+  // Google outside the pilot) asks again, and so does one whose account isn't connected and working.
+  const via: "platform" | "microsoft" | "google" | "smtp" | null =
+    sp.via === "platform"
       ? "platform"
-      : sp.via === "platform"
-        ? "platform"
-        : sp.via === "microsoft" && microsoftEnabled
-          ? "microsoft"
-          : sp.via === "google" && googleEnabled
-            ? "google"
+      : sp.via === "microsoft" && microsoftEnabled
+        ? "microsoft"
+        : sp.via === "google" && googleEnabled
+          ? "google"
+          : sp.via === "smtp"
+            ? "smtp"
             : null;
   if (via === "microsoft" && data.microsoft?.status !== "ACTIVE") redirect({ href: "/app/email/new", locale });
   if (via === "google" && data.google?.status !== "ACTIVE") redirect({ href: "/app/email/new", locale });
+  if (via === "smtp" && data.smtp?.status !== "ACTIVE") redirect({ href: "/app/email/new", locale });
 
   const microsoftError = MICROSOFT_CONNECT_ERRORS.find((e) => e === sp.microsoft_error) ?? null;
   const googleError = GOOGLE_CONNECT_ERRORS.find((e) => e === sp.google_error) ?? null;
@@ -110,7 +113,7 @@ export default async function NewEmailPage({
             picked: [],
             attachments: [],
             signatureId: data.signatures.find((s) => s.isDefault)?.id ?? null,
-            channel: via === "microsoft" ? "MICROSOFT" : via === "google" ? "GOOGLE" : "PLATFORM",
+            channel: broadcastChannelOf(VIA_CHANNEL[via]),
           }}
           options={data.options}
           allowedDomains={data.allowedDomains}
@@ -118,6 +121,7 @@ export default async function NewEmailPage({
           signatures={data.signatures}
           microsoft={data.microsoft}
           google={data.google}
+          smtp={data.smtp}
         />
       )}
     </div>

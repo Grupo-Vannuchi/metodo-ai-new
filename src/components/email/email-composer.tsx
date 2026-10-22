@@ -14,8 +14,10 @@ import { RecipientPicker } from "@/components/email/recipient-picker";
 import { AudienceSummary } from "@/components/email/audience-summary";
 import { EmailAttachments } from "@/components/email/email-attachments";
 import { SignaturePreview } from "@/components/email/signature-preview";
+import { LIMITS } from "@/config/limits";
 import { estimateAttachmentSendMinutes } from "@/lib/email-broadcast/attachments";
 import { mailboxSendMinutes } from "@/lib/email-broadcast/mailbox/core";
+import { smtpSendMinutes } from "@/lib/email-broadcast/smtp/core";
 import {
   previewEmailAudience,
   saveEmailDraft,
@@ -39,6 +41,7 @@ export function EmailComposer({
   signatures,
   microsoft,
   google,
+  smtp,
 }: {
   draft: ComposerDraft;
   options: ComposerOptions;
@@ -48,6 +51,8 @@ export function EmailComposer({
   microsoft: SenderAccountView | null;
   /** Null when the company is outside the Google pilot (a GOOGLE draft then can't be sent). */
   google: SenderAccountView | null;
+  /** The company's SMTP account; null while it has none (an SMTP draft then can't be sent). */
+  smtp: SenderAccountView | null;
 }) {
   const t = useTranslations("emailBroadcast");
   const router = useRouter();
@@ -73,10 +78,11 @@ export function EmailComposer({
   const [busy, startBusy] = useTransition();
 
   const imageSupport = useEmailImageSupport();
-  // "Mailbox" mode: the e-mail goes out from the company's own Microsoft or Google account.
+  // "Mailbox" mode: the e-mail goes out from the company's own Microsoft, Google or SMTP account.
   const isGoogle = draft.channel === "GOOGLE";
-  const isMailbox = draft.channel === "MICROSOFT" || isGoogle;
-  const account = isGoogle ? google : microsoft;
+  const isSmtp = draft.channel === "SMTP";
+  const isMailbox = draft.channel === "MICROSOFT" || isGoogle || isSmtp;
+  const account = isSmtp ? smtp : isGoogle ? google : microsoft;
   const accountReady = isMailbox && account?.status === "ACTIVE";
   const noDomains = !isMailbox && allowedDomains.length === 0;
   const fromAllowed = isMailbox || isSenderAllowed(fromEmail, allowedDomains);
@@ -156,6 +162,26 @@ export function EmailComposer({
     );
   }
 
+  // The pace and the "where it lands" sentences of the confirmation name the provider. Microsoft and Google go at the
+  // mailbox pace and keep a copy in Sent. SMTP goes at the company's own hourly limit and keeps no copy; a long
+  // wait reads better in hours from 90 minutes on.
+  function providerSentences(a: SenderAccountView, count: number): string[] {
+    if (isSmtp) {
+      const perHour = a.hourlyLimit ?? LIMITS.smtpHourlyDefault;
+      const minutes = smtpSendMinutes(count, perHour);
+      return [
+        minutes >= 90
+          ? t("confirmSmtpPaceHours", { perHour, hours: Math.round(minutes / 60) })
+          : t("confirmSmtpPace", { perHour, minutes }),
+        t("confirmSmtpSent", { email: a.email }),
+      ];
+    }
+    return [
+      t(isGoogle ? "confirmGooglePace" : "confirmMicrosoftPace", { minutes: mailboxSendMinutes(count) }),
+      t(isGoogle ? "confirmGoogleSent" : "confirmMicrosoftSentItems", { email: a.email }),
+    ];
+  }
+
   function onSend() {
     startBusy(guarded(async () => {
       if (isMailbox && !accountReady) {
@@ -196,8 +222,7 @@ export function EmailComposer({
                     sent: account.sentLast24h,
                   })
                 : t("confirmMicrosoftAll", { total: s.total }),
-              t(isGoogle ? "confirmGooglePace" : "confirmMicrosoftPace", { minutes: mailboxSendMinutes(nowCount) }),
-              t(isGoogle ? "confirmGoogleSent" : "confirmMicrosoftSentItems", { email: account.email }),
+              ...providerSentences(account, nowCount),
             ].join(" ")}`
           : "";
       const ok = await confirm({
@@ -247,14 +272,16 @@ export function EmailComposer({
                   {account.displayName ? `${account.displayName} <${account.email}>` : account.email}
                 </span>
                 <span className="ml-auto rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-medium text-brand">
-                  {t(isGoogle ? "googleChip" : "microsoftChip")}
+                  {t(isSmtp ? "smtpChip" : isGoogle ? "googleChip" : "microsoftChip")}
                 </span>
               </div>
             ) : null}
             {accountReady ? (
               <p className="text-xs text-muted-foreground">{t("fromMicrosoftHint")}</p>
             ) : (
-              <p className="text-xs text-red-600">{t(isGoogle ? "googleMissing" : "microsoftMissing")}</p>
+              <p className="text-xs text-red-600">
+                {t(isSmtp ? "smtpMissing" : isGoogle ? "googleMissing" : "microsoftMissing")}
+              </p>
             )}
           </div>
         ) : (
