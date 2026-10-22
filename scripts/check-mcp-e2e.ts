@@ -416,6 +416,154 @@ checks.push({
   },
 });
 
+// ── Financeiro ───────────────────────────────────────────────────────────────
+
+EXPECTED_TOOLS.push("buscar_lancamentos", "resumo_financeiro");
+
+/** A "YYYY-MM-DD" as the Finance screen stores it: that day's midnight in UTC. */
+const utcDay = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
+
+fixtures.push(async (ctx) => {
+  const { prisma: db, secret, stamp } = ctx;
+  const organizationId = ctx.orgA.id;
+  const department = await db.department.create({ data: { organizationId, name: "Comercial" } });
+  const jobRole = await db.jobRole.create({ data: { organizationId, name: "Vendedor" } });
+  // HR (below) reuses this employee and run; salary and bank data must never come back.
+  const employee = await db.employee.create({
+    data: {
+      organizationId,
+      name: `MCP-E2E-A-${stamp} Funcionária`,
+      departmentId: department.id,
+      jobRoleId: jobRole.id,
+      status: "ACTIVE",
+      hiredAt: new Date(),
+      baseSalary: 98765.43,
+      pixKey: secret,
+      bankAccount: secret,
+      document: secret,
+      terminationReason: secret,
+    },
+  });
+  const run = await db.payrollRun.create({
+    data: {
+      organizationId,
+      year: 2026,
+      month: 9,
+      status: "PAID",
+      payDate: utcDay("2026-09-05"),
+      totalEarnings: 98765.43,
+      totalNet: 98765.43,
+      notes: secret,
+    },
+  });
+  ctx.ids.employeeA = employee.id;
+  ctx.ids.payrollRunA = run.id;
+  ctx.ids.departmentA = department.id;
+  ctx.ids.jobRoleA = jobRole.id;
+  const aluguel = await db.financeCategory.create({ data: { organizationId, name: "Aluguel", type: "EXPENSE" } });
+  const salarios = await db.financeCategory.create({ data: { organizationId, name: "Salários", type: "EXPENSE" } });
+  const vendas = await db.financeCategory.create({ data: { organizationId, name: "Vendas", type: "INCOME" } });
+  await db.financeEntry.createMany({
+    data: [
+      // Due on `from` (boundary), received the same day.
+      {
+        organizationId,
+        type: "INCOME",
+        description: `MCP-E2E-A-${stamp} Venda`,
+        amount: 5000,
+        categoryId: vendas.id,
+        dueDate: utcDay("2026-09-01"),
+        status: "SETTLED",
+        settledAt: new Date("2026-09-01T12:00:00Z"),
+      },
+      // Due on `to` (boundary), still open → overdue.
+      {
+        organizationId,
+        type: "EXPENSE",
+        description: `MCP-E2E-A-${stamp} Aluguel`,
+        amount: 1000,
+        categoryId: aluguel.id,
+        dueDate: utcDay("2026-09-30"),
+        status: "PENDING",
+        notes: secret,
+      },
+      // Payroll flagged only by the employee, paid.
+      {
+        organizationId,
+        type: "EXPENSE",
+        description: `MCP-E2E-A-${stamp} Salário`,
+        amount: 4000,
+        categoryId: salarios.id,
+        dueDate: utcDay("2026-09-05"),
+        status: "SETTLED",
+        settledAt: new Date("2026-09-05T12:00:00Z"),
+        employeeId: employee.id,
+      },
+      // Payroll flagged only by the run, still open → overdue.
+      {
+        organizationId,
+        type: "EXPENSE",
+        description: `MCP-E2E-A-${stamp} Encargos`,
+        amount: 321.09,
+        categoryId: salarios.id,
+        dueDate: utcDay("2026-09-15"),
+        status: "PENDING",
+        payrollRunId: run.id,
+      },
+    ],
+  });
+});
+
+cleanups.push(async (ctx) => {
+  const where = inTestOrgs(ctx);
+  await ctx.prisma.financeEntry.deleteMany({ where });
+  await ctx.prisma.financeCategory.deleteMany({ where });
+  await ctx.prisma.payrollRun.deleteMany({ where });
+  await ctx.prisma.employee.deleteMany({ where });
+  await ctx.prisma.jobRole.deleteMany({ where });
+  await ctx.prisma.department.deleteMany({ where });
+});
+
+checks.push({
+  name: "buscar_lancamentos never lists payroll entries (flagged by the employee or by the run)",
+  run: async (ctx) => {
+    const r = await ctx.call("buscar_lancamentos", { organizationId: ctx.orgA.id });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.total, 2);
+    assert.deepEqual(r.json.items.map((e: { amount: string }) => e.amount).sort(), ["1000.00", "5000.00"]);
+  },
+});
+
+checks.push({
+  name: "resumo_financeiro folds payroll into one line, keeps both boundary days and the app's totals",
+  run: async (ctx) => {
+    const r = await ctx.call("resumo_financeiro", { organizationId: ctx.orgA.id, from: "2026-09-01", to: "2026-09-30" });
+    assert.equal(r.isError, false, r.text);
+    const f = r.json;
+    assert.deepEqual(f.competencia.expense, [
+      { categoryName: "Folha de pagamento", total: "4321.09" },
+      { categoryName: "Aluguel", total: "1000.00" },
+    ]);
+    assert.deepEqual(f.competencia.income, [{ categoryName: "Vendas", total: "5000.00" }]);
+    assert.equal(f.competencia.totalExpense, "5321.09");
+    assert.equal(f.competencia.totalIncome, "5000.00");
+    assert.deepEqual(f.caixa, { received: "5000.00", paid: "4000.00", result: "1000.00", payrollPaid: "4000.00" });
+    assert.deepEqual(f.pendente, { receivable: "0.00", payable: "1321.09", payrollPayable: "321.09" });
+    assert.deepEqual(f.vencidos.payable, { count: 2, total: "1321.09" });
+    assert.equal(f.saldoRealizado, "1000.00");
+  },
+});
+
+checks.push({
+  name: "no Financeiro answer carries the base salary",
+  run: async (ctx) => {
+    for (const name of ["buscar_lancamentos", "resumo_financeiro"]) {
+      const r = await ctx.call(name, { organizationId: ctx.orgA.id, from: "2026-09-01", to: "2026-09-30" });
+      assert.ok(!r.text.includes("98765.43"), `${name} carries the base salary`);
+    }
+  },
+});
+
 // ── Runner ───────────────────────────────────────────────────────────────────
 
 async function callTool(client: Client, name: string, args: object): Promise<CallResult> {
