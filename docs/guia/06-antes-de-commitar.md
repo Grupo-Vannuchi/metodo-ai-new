@@ -48,6 +48,14 @@ membro vem de `phoneNumber` quando o id é um LID; [src/lib/whatsapp/group-impor
 o 9 nos celulares antigos de 12 dígitos, o nome "Contato #N" continuando a numeração da pasta do grupo e os
 números que já estão no CRM sendo pulados). Rode sempre que mexer nesses dois arquivos.
 
+`npm run check:mcp` cobre as regras puras do servidor MCP de leitura
+([src/lib/mcp/core.ts](../../src/lib/mcp/core.ts): comparação da chave com espaço ou quebra de linha
+colados, datas `AAAA-MM-DD` como dias UTC com o fim inclusivo, período invertido ou longo demais,
+limite de 50 a 200 itens por página, a linha única "Folha de pagamento" do resumo financeiro e a
+varredura que acha campo sensível na resposta). Ele também falha se algum arquivo de `src/lib/mcp/` ou
+`src/lib/queries/mcp/` chamar escrita do Prisma ou SQL cru: o MCP é só leitura. Não usa banco nem rede.
+Rode sempre que mexer nessas duas pastas.
+
 ## `check:isolation`
 
 Isolamento multi-tenant é [a regra inviolável nº 1 do `CLAUDE.md`](../../CLAUDE.md) e o
