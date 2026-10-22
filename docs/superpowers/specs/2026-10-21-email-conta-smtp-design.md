@@ -100,14 +100,18 @@ Migration aditiva `20261021120000_email_sender_smtp` (aplicar no Supabase antes 
   | Código | Quando | Mensagem (tom) |
   |---|---|---|
   | `auth_failed` | o servidor recusou usuário/senha (EAUTH, 535) | "O servidor recusou o usuário ou a senha." |
-  | `tls_failed` | certificado que não confere, autoassinado, ou STARTTLS indisponível | "O certificado do servidor não confere com o endereço informado. Use o servidor que o provedor indica para programas de e-mail." |
+  | `tls_failed` | certificado que não confere, autoassinado, STARTTLS indisponível, ou porta e segurança trocadas (por exemplo, SSL na 587) | "Não foi possível abrir a conexão segura com `servidor:porta`. Confira a segurança: SSL/TLS na 465; STARTTLS na 587 e na 2525. Se estiver certa, use o servidor que o provedor indica para programas de e-mail: o certificado precisa conferir com esse nome." |
   | `connection_failed` | recusa, tempo esgotado ou conexão caída | "Não foi possível conectar em `servidor:porta`. Confira o servidor e a porta; se estiver usando a 465, tente a 587 com STARTTLS." |
   | `host_not_found` | o nome do servidor não existe | "Servidor não encontrado." |
   | `host_not_allowed` | endereço de rede interna, ou porta fora da lista | "Este servidor não pode ser usado." |
   | `no_auth` | o servidor não oferece login | "Este servidor não pede login; o MétodoAI só envia com usuário e senha." |
   | `failed` | qualquer outro | genérica |
+  | `busy` | já há um teste de conexão rodando para a empresa | "Já existe um teste de conexão em andamento para esta empresa. Aguarde terminar." |
+  | `too_many_tests` | mais de 10 testes em 10 minutos para a empresa | "Muitas tentativas de conexão para esta empresa. Aguarde alguns minutos e tente de novo." |
 
-  O texto técnico do erro aparece ao passar o mouse, como nos motivos de falha de hoje.
+  O texto técnico do erro aparece ao passar o mouse, como nos motivos de falha de hoje. Ele passa pela máscara da senha antes de sair do servidor.
+
+  **Limites do teste (decididos na execução):** um teste por vez e no máximo 10 testes a cada 10 minutos por empresa, contados em memória, por processo. Sem isso, o formulário serviria para tentar senhas em servidores de terceiros a partir do IP do MétodoAI.
 - **Gravar e trocar a conta:** igual à Google, por provedor e sob a trava `email_sender:<org>:SMTP`:
   - mesmo endereço = atualiza a linha, mantendo o id (os envios e a contagem das últimas 24 h continuam);
   - endereço diferente = apaga a conta SMTP antiga e cria outra. Os envios ligados à antiga pausam até alguém retomar.
@@ -190,7 +194,7 @@ A ordem importa: a primeira linha que bate decide. Tudo fica numa função pura 
 | Depois do login, resposta sobre o **remetente** ou o relay (`x.1.7`, `x.1.8`, "sender address rejected", "not owned by user", "relay access denied", "relaying denied"), em qualquer estágio | pausa com `account_blocked`. O Postfix costuma dar essa recusa no `RCPT TO`, e ela não é culpa de cada destinatário |
 | Resposta com tamanho excedido (`5.3.4`, `x.2.3`, "message size"/"too large"/"tamanho", ou código `message-552` sem código estendido de endereço/caixa) | falha só esse destinatário (`message_too_large`) e segue |
 | No `RCPT TO`, no `DATA` ou na resposta final, resposta **do destinatário**: código estendido `x.1.x` ou `x.2.x` (endereço ou caixa inexistente, cheia ou desativada), ou palavras de limite sem nenhuma palavra de envio nem código `x.7.x` (por exemplo, "Over quota", "Quota excedida para o usuario") | 5xx: falha só esse destinatário. 4xx: repete até 5 vezes e, esgotado, falha só esse destinatário. **Nunca pausa** |
-| Resposta que fala de limite (`/\b(rate\|limit\|quota\|too many\|limite\|excedid)/i`), fora dos casos acima | pausa com `daily_limit`: o provedor recusou por limite de envio. No `RCPT TO`, no `DATA` e na resposta final, isso só vale com palavra de envio (`rate`, `send`, `sender`, `envio`, `hour`, `daily`, `hora`, `dia`...) ou código `x.7.x` |
+| Resposta que fala de limite (`/\b(rate\|limit\|quota\|too many\|limite\|excedid\|cota)/i`), fora dos casos acima | pausa com `daily_limit`: o provedor recusou por limite de envio. No `RCPT TO`, no `DATA` e na resposta final, isso só vale com palavra de envio (`rate`, `send`, `sender`, `envio`, `hour`, `daily`, `hora`, `dia`, `diário`, `diária`...) ou código `x.7.x`. Endereços citados na resposta (`<...>`, `x@y`) não contam como palavra de envio |
 | `RCPT TO` recusado com 5xx | falha só esse destinatário e segue (`invalid_address` para 550, 551, 553, 501, 510 e 511; `generic` para o resto) |
 | `RCPT TO` recusado com 4xx | repete até 5 vezes; esgotado, falha só esse destinatário. **Nunca pausa** |
 | `MAIL FROM` recusado com 5xx (por exemplo, remetente diferente do login) | pausa com `account_blocked`, com o texto do servidor |
@@ -198,6 +202,7 @@ A ordem importa: a primeira linha que bate decide. Tudo fica numa função pura 
 | `DATA` recusado com 5xx | pausa com `provider_error` |
 | Qualquer outra resposta 4xx (450, 451...), fora do `RCPT TO` | repete com espera (até 5 vezes); esgotado, pausa com `provider_error` |
 | Qualquer outra | pausa com `provider_error` |
+| 3 `UNCERTAIN` seguidos na mesma conta SMTP (sem nenhum enviado nem recusa de destinatário entre eles) | pausa com `provider_error` ("3 envios seguidos sem confirmação do servidor"). Os destinatários incertos continuam incertos, e os outros ficam na fila. Decidido na execução: sem isso, uma conexão que cai sempre no meio da entrega marcaria a lista inteira como incerta, um por um |
 
 **O que é de um destinatário nunca pausa o envio.** Quando o laço pausa, ele devolve o destinatário atual para a fila, e a retomada pega esse mesmo endereço primeiro. Uma recusa que só vale para aquele endereço pausaria o envio a cada "Retomar envio", para sempre.
 
