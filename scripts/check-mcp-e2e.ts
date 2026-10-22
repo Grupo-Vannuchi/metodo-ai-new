@@ -17,6 +17,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { findSensitiveKeys } from "../src/lib/mcp/core";
 
 // `engineType = "client"` (schema.prisma) drops the Rust engine, so every
 // PrismaClient needs an explicit driver adapter — same as src/lib/prisma.ts.
@@ -34,6 +35,11 @@ const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) })
 type OrgRef = { id: string; name: string };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CallResult = { isError: boolean; text: string; json: any };
+type ListedTool = {
+  name: string;
+  annotations?: { readOnlyHint?: boolean };
+  inputSchema: { properties?: Record<string, unknown> };
+};
 type Ctx = {
   stamp: number;
   /** Planted in every sensitive field of org A; must never come back. */
@@ -45,7 +51,11 @@ type Ctx = {
   ids: Record<string, string>;
   prisma: PrismaClient;
   call(name: string, args: object): Promise<CallResult>;
+  tools(): Promise<ListedTool[]>;
 };
+
+/** Every tool the server must list — each module section appends its own. */
+const EXPECTED_TOOLS: string[] = [];
 
 /** Module sections below push into these; main() runs them in order. */
 const fixtures: ((ctx: Ctx) => Promise<void>)[] = [];
@@ -151,6 +161,92 @@ checks.push({
   },
 });
 
+// ── Plataforma ───────────────────────────────────────────────────────────────
+
+EXPECTED_TOOLS.push("listar_organizacoes", "listar_membros", "resumo_organizacao");
+
+checks.push({
+  name: "tools/list has exactly the expected tools, every one marked read-only",
+  run: async (ctx) => {
+    const tools = await ctx.tools();
+    assert.deepEqual(tools.map((t) => t.name).sort(), [...EXPECTED_TOOLS].sort());
+    for (const t of tools) assert.equal(t.annotations?.readOnlyHint, true, `${t.name} is not read-only`);
+  },
+});
+
+checks.push({
+  name: "listar_organizacoes finds org A with its owner, members and module states",
+  run: async (ctx) => {
+    const r = await ctx.call("listar_organizacoes", { search: ctx.orgA.name });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.total, 1);
+    const org = r.json.items[0];
+    assert.equal(org.id, ctx.orgA.id);
+    assert.equal(org.owner.email, ctx.userA.email);
+    assert.equal(org.memberCount, 1);
+    assert.deepEqual(
+      [...org.modules].sort((a: { moduleId: string }, b: { moduleId: string }) => a.moduleId.localeCompare(b.moduleId)),
+      [
+        { moduleId: "crm", status: "ACTIVE" },
+        { moduleId: "finance", status: "DORMANT" },
+      ],
+    );
+  },
+});
+
+checks.push({
+  name: "listar_organizacoes clamps limit 1000 down to 200",
+  run: async (ctx) => {
+    const r = await ctx.call("listar_organizacoes", { limit: 1000 });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.limit, 200);
+  },
+});
+
+checks.push({
+  name: "listar_membros lists org A's owner",
+  run: async (ctx) => {
+    const r = await ctx.call("listar_membros", { organizationId: ctx.orgA.id });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.items.length, 1);
+    assert.equal(r.json.items[0].role, "OWNER");
+    assert.equal(r.json.items[0].email, ctx.userA.email);
+  },
+});
+
+checks.push({
+  name: "an unknown organizationId is an error that points to listar_organizacoes",
+  run: async (ctx) => {
+    const r = await ctx.call("resumo_organizacao", { organizationId: "nao-existe" });
+    assert.equal(r.isError, true);
+    assert.match(r.text, /Organização não encontrada/);
+  },
+});
+
+/**
+ * Last check of every run: each org-scoped tool, called for org A (data with a
+ * sentinel in every sensitive field) and org B (empty), with only the
+ * organizationId. Nothing sensitive, nothing from the other organization, and
+ * no error on an empty organization.
+ */
+async function sweep(ctx: Ctx): Promise<number> {
+  const tools = (await ctx.tools()).filter((t) => "organizationId" in (t.inputSchema.properties ?? {}));
+  assert.ok(tools.length > 0, "no org-scoped tool to sweep");
+  for (const t of tools) {
+    for (const org of [ctx.orgA, ctx.orgB]) {
+      const r = await ctx.call(t.name, { organizationId: org.id });
+      assert.equal(r.isError, false, `${t.name} (${org.name}): ${r.text}`);
+      assert.ok(!r.text.includes(ctx.secret), `${t.name} leaked a sensitive field of ${org.name}`);
+      assert.deepEqual(findSensitiveKeys(r.json), [], `${t.name} returned a sensitive key`);
+      assert.equal(r.json.organization?.id, org.id, `${t.name} answered for another organization`);
+      if (org === ctx.orgB) {
+        assert.ok(!r.text.includes(`-A-${ctx.stamp}`), `${t.name} leaked org A data into org B`);
+      }
+    }
+  }
+  return tools.length;
+}
+
 // ── Runner ───────────────────────────────────────────────────────────────────
 
 async function callTool(client: Client, name: string, args: object): Promise<CallResult> {
@@ -189,12 +285,16 @@ async function main(): Promise<number> {
     await client.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/${KEY}`)));
     const connected = client;
     ctx.call = (name, args) => callTool(connected, name, args);
+    ctx.tools = async () => (await connected.listTools()).tools as ListedTool[];
 
     for (const check of checks) {
       await check.run(ctx);
       passed++;
       console.log(`  ✓ ${check.name}`);
     }
+    const swept = await sweep(ctx);
+    passed++;
+    console.log(`  ✓ sweep: ${swept} org-scoped tools × orgs A and B — no sensitive field, no cross-org data`);
     return passed;
   } finally {
     await client?.close().catch(() => {});

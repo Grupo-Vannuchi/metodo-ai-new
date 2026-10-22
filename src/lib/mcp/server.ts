@@ -1,5 +1,7 @@
 import "server-only";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerTools } from "@/lib/mcp/tool";
+import { ALL_TOOLS } from "@/lib/mcp/tools";
 
 /** What the model reads when it connects (shown before any tool is called). */
 const INSTRUCTIONS =
@@ -12,5 +14,7 @@ const INSTRUCTIONS =
  * so nothing carries over between calls.
  */
 export function buildMcpServer(): McpServer {
-  return new McpServer({ name: "metodoai", version: "1.0.0" }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "metodoai", version: "1.0.0" }, { instructions: INSTRUCTIONS });
+  registerTools(server, ALL_TOOLS);
+  return server;
 }

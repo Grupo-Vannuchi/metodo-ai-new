@@ -128,7 +128,14 @@ Para leitura por id vale o mesmo raciocínio: o par é `findFirst({ where: { id 
 ## Onde cada coisa vive
 
 - **Leitura:** DAL em [src/lib/queries/](../../src/lib/queries/) — 56 arquivos, um por
-  domínio.
+  domínio, mais a pasta `mcp/` (abaixo).
+- **Leitura do servidor MCP** ([src/lib/queries/mcp/](../../src/lib/queries/mcp/)): contexto de
+  sistema. Quem chama é o portador da chave `MCP_API_KEY` ([guia 05](05-rotas-e-jobs.md)), não um
+  usuário com sessão, então não existe organização ativa: ela chega como argumento de cada
+  ferramenta, é conferida (`getOrganizationRef`) e vai explícita para `tenantDb(organizationId)`.
+  Prisma cru só nos modelos globais (`Organization`, `OrganizationModule`, `Membership`, `User`),
+  sempre com o id filtrando. Só leitura e só com `select` explícito — o `check:mcp` falha se aparecer
+  escrita ou SQL cru nessa pasta ou em `src/lib/mcp/`.
 - **Escrita:** actions em [src/app/actions/](../../src/app/actions/).
 - **Prisma cru** ([src/lib/prisma.ts](../../src/lib/prisma.ts), sem `tenantDb`): só em
   contexto de sistema — webhook, job, cron — nunca no caminho de uma request de usuário.

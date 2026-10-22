@@ -58,7 +58,11 @@ Rode sempre que mexer nessas duas pastas.
 
 `npm run check:mcp:e2e` testa o servidor MCP de ponta a ponta contra o `next dev` em :3000
 ([scripts/check-mcp-e2e.ts](../../scripts/check-mcp-e2e.ts)): 404 sem chave ou com chave errada, 405
-no GET, e o cliente oficial do MCP conectando pela chave no caminho e no header. Precisa do Postgres
+no GET, o cliente oficial do MCP conectando pela chave no caminho e no header, a lista exata de
+ferramentas (todas marcadas como só leitura), as asserções de cada módulo e, por último, a varredura:
+toda ferramenta com `organizationId` é chamada para a organização de teste A, que tem um texto-sentinela
+plantado em cada campo sensível, e para a B, vazia — nada sensível, nada da outra organização e nenhum
+erro na organização vazia. Precisa do Postgres
 do Docker, do `next dev` no ar e de `MCP_API_KEY` no `.env` (a mesma que o servidor lê). Cria duas
 organizações de teste e apaga tudo o que criou, mesmo quando falha; erros nunca mostram a chave. Se o
 `next dev` com Turbopack responder 404 em todas as rotas de API, suba com `npx next dev --webpack`.
