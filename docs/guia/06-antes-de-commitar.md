@@ -26,7 +26,7 @@ de minutos depois, na fila do CI.
 **Checagem de módulo (fora das cinco):** `npm run check:email` roda as asserções das funções puras do
 submenu E-mail (normalização, deduplicação, renderização, assinatura Svix, transições de status, domínio do remetente,
 espera da nova tentativa do e-mail transacional, as regras do envio pela conta Microsoft (tipo de conta, limite diário,
-caminho direto ou rascunho, faixas do upload, decisão sobre falhas do Graph), as regras do envio pela conta Google (tipo de conta pelo `hd`, conta sem Gmail, permissão parcial, limite diário, upload simples ou retomável, decisão sobre falhas do Gmail, recusas que pedem reconexão e piloto por empresa), a montagem do MIME e os motivos de
+caminho direto ou rascunho, faixas do upload, decisão sobre falhas do Graph), as regras do envio pela conta Google (tipo de conta pelo `hd`, conta sem Gmail, permissão parcial, limite diário, upload simples ou retomável, decisão sobre falhas do Gmail, recusas que pedem reconexão e piloto por empresa), as regras do envio por SMTP (ritmo a partir do limite por hora, decisão sobre as respostas do servidor, preparação separada da entrega, regra de endereços internos e portas, validação do formulário da conta e reaproveitamento da senha guardada), a montagem do MIME e os motivos de
 falha em português). Não usa banco nem rede. Rode sempre que mexer em `src/lib/email-broadcast/`.
 
 `npm run check:tasks` faz o mesmo para as regras puras do kanban de Tarefas
@@ -86,8 +86,8 @@ qualquer um dos dois grupos declarar `engines.node` incompatível com o major do
 Quando falhar: troque a dependência por uma que suporte Node 20, ou fixe uma versão anterior dela
 no `package.json`. Não há como "ignorar e seguir" — quebraria só no deploy, sem sintoma local.
 
-Exemplo: `nodemailer` (só usado como montador de MIME para o envio pela conta Microsoft, nunca por SMTP) exige
-Node >= 20; por isso cabe na árvore de produção.
+Exemplo: `nodemailer` (monta o MIME do envio pelas contas Microsoft e Google e, no canal SMTP, também envia por
+SMTP, pelo `nodemailer/lib/smtp-connection`) exige Node >= 20; por isso cabe na árvore de produção.
 
 ## `lint`: os avisos conhecidos
 
