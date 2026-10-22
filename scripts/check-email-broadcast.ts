@@ -135,6 +135,7 @@ import {
   smtpSendPhase,
 } from "../src/lib/email-broadcast/smtp/core";
 import { isBlockedSmtpAddress, pickSmtpAddress } from "../src/lib/email-broadcast/smtp/address";
+import { redactSmtpSecrets } from "../src/lib/email-broadcast/smtp/redact";
 import { smtpAccountSchema } from "../src/lib/validations/email-smtp-account";
 import {
   attachmentDisposition,
@@ -1110,6 +1111,48 @@ check("canKeepSmtpPassword only reuses the saved password for the same server an
   assert.equal(canKeepSmtpPassword(saved, { ...same, port: 465 }), false);
   assert.equal(canKeepSmtpPassword(saved, { ...same, security: "ssl" }), false);
   assert.equal(canKeepSmtpPassword(saved, { ...same, username: "outro@b.com" }), false);
+});
+
+check("redactSmtpSecrets masks the password and what the login sends of it, and nothing else", () => {
+  const s = { username: "contato@cliente.com.br", password: "S3nh@ Secreta!" };
+  const b64 = (value: string) => Buffer.from(value, "utf8").toString("base64");
+  const bare = (value: string) => b64(value).replace(/=+$/, "");
+  const blob = `\0${s.username}\0${s.password}`; // AUTH PLAIN's "\0user\0password"
+  // the sample is chosen so that the user's base64 and the blob's end in "=" padding
+  assert.ok(b64(s.username).endsWith("=") && b64(blob).endsWith("="));
+  // the password as typed (spaces and all), every time it appears
+  assert.equal(
+    redactSmtpSecrets(`535 5.7.8 wrong password ${s.password} (again: ${s.password})`, s),
+    "535 5.7.8 wrong password *** (again: ***)",
+  );
+  // what a server may echo back from AUTH: the password, the user and PLAIN's blob in base64, padded or not
+  for (const secret of [s.password, s.username, blob]) {
+    for (const form of [b64(secret), bare(secret)]) {
+      assert.equal(
+        redactSmtpSecrets(`535 5.7.8 Authentication failed: ${form} (tried)`, s),
+        "535 5.7.8 Authentication failed: *** (tried)",
+        form,
+      );
+    }
+  }
+  // the padded form goes whole: no "=" is left behind
+  assert.equal(redactSmtpSecrets(`AUTH PLAIN ${b64(blob)}`, s), "AUTH PLAIN ***");
+  // all of them in one answer
+  assert.equal(redactSmtpSecrets(`${b64(s.username)} ${b64(s.password)} ${b64(blob)} ${s.password}`, s), "*** *** *** ***");
+  // a password with regex characters is found as written, and only as written
+  const odd = { username: "u@x.com", password: "a.b*c(d)[e]+?$^|\\" };
+  assert.equal(redactSmtpSecrets(`bad: ${odd.password}`, odd), "bad: ***");
+  assert.equal(redactSmtpSecrets("aXb", { username: "u", password: "a.b" }), "aXb");
+  // everything else stays: the server's words, the recipient, even the user name in clear
+  const other = "550 5.1.1 <ana@exemplo.com.br>: Recipient address rejected: User unknown";
+  assert.equal(redactSmtpSecrets(other, s), other);
+  assert.equal(redactSmtpSecrets(`535 login ${s.username} refused`, s), `535 login ${s.username} refused`);
+  assert.equal(redactSmtpSecrets("", s), "");
+  // no password, nothing to hide: the text comes back as it is, the user's base64 included
+  const echoed = `${b64("a")} ${bare("a")} a`;
+  assert.equal(redactSmtpSecrets(echoed, { username: "a", password: "" }), echoed);
+  // an empty user is never searched for: it would match between every character
+  assert.equal(redactSmtpSecrets("abc pw", { username: "", password: "pw" }), "abc ***");
 });
 
 check("smtpSendPhase separates the preparation from the hand-over", () => {

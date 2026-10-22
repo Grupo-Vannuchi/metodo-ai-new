@@ -4,6 +4,7 @@ import type { MailboxSendFailure, MailboxSendOutcome } from "../mailbox/core";
 import { buildMime, type MimeFile, type MimeMail } from "../microsoft/mime";
 import { openSmtpConnection, resolveSmtpHost, smtpClose, smtpConnect, smtpLogin, smtpSendRaw } from "./connect";
 import { smtpFailureCode, smtpSendPhase, type SmtpPhase, type SmtpSettings } from "./core";
+import { redactSmtpSecrets } from "./redact";
 
 /** Sending: 15 s to connect, 10 s for the greeting, 60 s of silence on the socket (a 10 MB file on a slow server). */
 const SMTP_SEND_TIMEOUTS = { connection: 15_000, greeting: 10_000, socket: 60_000 };
@@ -19,13 +20,23 @@ const SMTP_SEND_TIMEOUTS = { connection: 15_000, greeting: 10_000, socket: 60_00
  */
 export const SMTP_SEND_BUDGET_MS = 75_000;
 
-/** A failed attempt as the loop reads it: the reply code (0 when the server gave none), "rcpt-550", the server's words. */
-function smtpFailure(phase: SmtpPhase, responseCode: number | null, text: string): MailboxSendFailure {
+/**
+ * A failed attempt as the loop reads it: the reply code (0 when the server gave none), "rcpt-550", the server's words.
+ * The words are redacted of the account's secrets first, on the text as the server wrote it and before the cut to 400
+ * characters (a secret cut in half would no longer be found): a server may echo the login back, and this text is stored
+ * on the recipient and shown on the report.
+ */
+function smtpFailure(
+  settings: SmtpSettings,
+  phase: SmtpPhase,
+  responseCode: number | null,
+  text: string,
+): MailboxSendFailure {
   return {
     ok: false,
     status: responseCode ?? 0,
     code: smtpFailureCode(phase, responseCode),
-    message: text.slice(0, 400),
+    message: redactSmtpSecrets(text, settings).slice(0, 400),
     retryAfter: null,
     stage: phase === "transfer" || phase === "message" ? "send" : "prepare",
   };
@@ -44,7 +55,9 @@ function smtpFailure(phase: SmtpPhase, responseCode: number | null, text: string
  * after the final dot ("transfer": uncertain, never sent again). The whole
  * attempt has SMTP_SEND_BUDGET_MS: out of time, the connection is closed, and
  * that is a connection failure before the hand-over and "transfer" during it.
- * The connection is always closed. Never throws.
+ * The connection is always closed. Whatever the server wrote back, a failure's
+ * `message` has the account's password (and what the login sent of it) masked.
+ * Never throws.
  */
 export async function sendSmtpMail(
   settings: SmtpSettings,
@@ -60,7 +73,7 @@ export async function sendSmtpMail(
       ok: false,
       status: 0,
       code: null,
-      message: e instanceof Error ? e.message : "could not build the e-mail",
+      message: redactSmtpSecrets(e instanceof Error ? e.message : "could not build the e-mail", settings),
       retryAfter: null,
       stage: "prepare",
     };
@@ -69,8 +82,8 @@ export async function sendSmtpMail(
   const target = await resolveSmtpHost(settings.host);
   if (!target.ok) {
     return target.error === "host_not_allowed"
-      ? smtpFailure("guard", null, `${settings.host}: internal or reserved address`)
-      : smtpFailure("connect", null, `${settings.host}: name not found`);
+      ? smtpFailure(settings, "guard", null, `${settings.host}: internal or reserved address`)
+      : smtpFailure(settings, "connect", null, `${settings.host}: name not found`);
   }
 
   let step: "connect" | "login" | "send" = "connect";
@@ -100,6 +113,7 @@ export async function sendSmtpMail(
     // Out of time, the step only failed because the budget closed the connection: the timeout is the real cause.
     if (expired) {
       return smtpFailure(
+        settings,
         step === "send" ? "transfer" : "connect",
         null,
         `The attempt did not finish in ${SMTP_SEND_BUDGET_MS / 1000} s`,
@@ -107,7 +121,7 @@ export async function sendSmtpMail(
     }
     const err: SMTPConnection.SMTPError = e instanceof Error ? e : new Error(String(e));
     const phase = smtpSendPhase(step, err);
-    return smtpFailure(phase, err.responseCode ?? null, err.response || err.message);
+    return smtpFailure(settings, phase, err.responseCode ?? null, err.response || err.message);
   } finally {
     clearTimeout(budget);
     if (connection) smtpClose(connection);

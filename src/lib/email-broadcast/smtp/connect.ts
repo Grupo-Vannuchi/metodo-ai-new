@@ -11,6 +11,7 @@ import SMTPConnection from "nodemailer/lib/smtp-connection";
 import { env } from "@/lib/env";
 import { isBlockedSmtpAddress, pickSmtpAddress } from "./address";
 import { smtpConnectError, type SmtpConnectError, type SmtpSettings } from "./core";
+import { redactSmtpSecrets } from "./redact";
 
 /** The save form's test: 15 s to connect, 10 s for the greeting, 30 s of silence on the socket. */
 const SMTP_TEST_TIMEOUTS = { connection: 15_000, greeting: 10_000, socket: 30_000 };
@@ -200,26 +201,8 @@ export function smtpClose(connection: SMTPConnection): void {
   }
 }
 
-/**
- * The text with the password, and what the login sends of it, replaced by
- * "***": the password as typed, and the base64 a server may echo back from
- * AUTH (LOGIN sends the user and the password each in base64, PLAIN the blob
- * "\0user\0password"), with or without its "=" padding. Run it on the text as
- * it came, before any reformatting, so each secret is found as the server
- * wrote it. With no password there is nothing to hide, and an empty form (an
- * empty user's) is never searched for: it would match between every character.
- */
-export function redactSmtpSecrets(text: string, s: { username: string; password: string }): string {
-  if (!s.password) return text;
-  const base64 = [s.password, s.username, `\0${s.username}\0${s.password}`].map((value) =>
-    Buffer.from(value, "utf8").toString("base64"),
-  );
-  const secrets = [...new Set([s.password, ...base64, ...base64.map((b) => b.replace(/=+$/, ""))])]
-    .filter((secret) => secret !== "")
-    // Longest first: a shorter secret inside a longer one must not cut it and leave the rest of it in the text.
-    .sort((a, b) => b.length - a.length);
-  return secrets.reduce((out, secret) => out.split(secret).join("***"), text);
-}
+// The redaction itself is pure and lives in ./redact (check:email pins it); it stays reachable from here.
+export { redactSmtpSecrets };
 
 /**
  * The library's own words for a failure, on one line and with the secrets of
