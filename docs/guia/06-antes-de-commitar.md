@@ -56,6 +56,15 @@ varredura que acha campo sensível na resposta). Ele também falha se algum arqu
 `src/lib/queries/mcp/` chamar escrita do Prisma ou SQL cru: o MCP é só leitura. Não usa banco nem rede.
 Rode sempre que mexer nessas duas pastas.
 
+`npm run check:mcp:e2e` testa o servidor MCP de ponta a ponta contra o `next dev` em :3000
+([scripts/check-mcp-e2e.ts](../../scripts/check-mcp-e2e.ts)): 404 sem chave ou com chave errada, 405
+no GET, e o cliente oficial do MCP conectando pela chave no caminho e no header. Precisa do Postgres
+do Docker, do `next dev` no ar e de `MCP_API_KEY` no `.env` (a mesma que o servidor lê). Cria duas
+organizações de teste e apaga tudo o que criou, mesmo quando falha; erros nunca mostram a chave. Se o
+`next dev` com Turbopack responder 404 em todas as rotas de API, suba com `npx next dev --webpack`.
+Com o Redis configurado, duas rodadas seguidas podem bater no limite de 120 chamadas por minuto —
+espere um minuto.
+
 ## `check:isolation`
 
 Isolamento multi-tenant é [a regra inviolável nº 1 do `CLAUDE.md`](../../CLAUDE.md) e o

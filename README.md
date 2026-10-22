@@ -174,6 +174,7 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | não | rate-limit |
 | `GOOGLE_CLIENT_ID/SECRET`, `MICROSOFT_*`, `LINKEDIN_*` | não | login OAuth |
 | `CRON_SECRET` | p/ cron | autentica os endpoints `/api/cron/*` |
+| `MCP_API_KEY` | não | chave do servidor MCP de leitura (`/api/mcp`); sem ela o endpoint responde 404 |
 | `SEED_OWNER_EMAIL`, `SEED_OWNER_PASSWORD`, `SEED_ORG_NAME` | não | usadas pelo seed |
 
 > **Nunca commite segredos.** `.env` está no `.gitignore`.
