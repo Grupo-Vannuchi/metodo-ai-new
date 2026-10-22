@@ -40,11 +40,12 @@ export const financeiroTools: McpToolDef[] = [
   orgTool({
     name: "resumo_financeiro",
     description:
-      "Resumo financeiro de um período (padrão: mês corrente até hoje), com os mesmos números da tela " +
-      "Financeiro: competencia (DRE — vencimento no período, receitas e despesas por categoria), caixa " +
-      "(recebido e pago no período), pendente (a receber e a pagar com vencimento no período), vencidos " +
-      "(em aberto com vencimento antes de hoje, de qualquer período) e saldoRealizado (todo o histórico). " +
-      "A folha de pagamento aparece somada numa única linha \"Folha de pagamento\", sem valor por pessoa.",
+      "Resumo financeiro de um período (padrão: mês corrente até hoje). Onde cada número bate com a tela " +
+      "Financeiro: competencia = DRE (vencimento no período, receitas e despesas por categoria); caixa = " +
+      "Fluxo de Caixa (recebido e pago no período); emAberto = cards A receber / A pagar (tudo em aberto, " +
+      "de qualquer vencimento); saldoRealizado = card Saldo (todo o histórico). Também: pendente (em aberto " +
+      "com vencimento no período) e vencidos (em aberto com vencimento antes de hoje). A folha de pagamento " +
+      "aparece somada numa única linha \"Folha de pagamento\", sem valor por pessoa.",
     input: { ...periodShape },
     run: async ({ from, to }, org, now) => financeSummary(org.id, resolvePeriod(from, to, now), now),
   }),

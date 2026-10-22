@@ -113,8 +113,9 @@ const centsOf = (groups: TypeSums, type: FinanceType) =>
 
 /**
  * The Finance screen's numbers for a period: accrual (DRE: due in the period,
- * any status), cash (settled in the period), what is still open in the period,
- * what is overdue today (any period) and the all-time realized balance.
+ * any status), cash (settled in the period), what is open overall (the
+ * "A receber / A pagar" cards) and within the period, what is overdue today
+ * (any period) and the all-time realized balance.
  */
 export async function financeSummary(organizationId: string, period: Period, now: Date) {
   const db = tenantDb(organizationId);
@@ -125,8 +126,17 @@ export async function financeSummary(organizationId: string, period: Period, now
   const overdue: Prisma.FinanceEntryWhereInput = { status: "PENDING", dueDate: { lt: utcDayStart(now) } };
   const payrollExpense: Prisma.FinanceEntryWhereInput = { ...PAYROLL, type: "EXPENSE" };
 
-  const [byCategory, payrollByType, settledByType, payrollPaid, pendingByType, payrollPending, overdueByType, realized] =
-    await Promise.all([
+  const [
+    byCategory,
+    payrollByType,
+    settledByType,
+    payrollPaid,
+    pendingByType,
+    payrollPending,
+    overdueByType,
+    realized,
+    openByType,
+  ] = await Promise.all([
       db.financeEntry.groupBy({ by: ["type", "categoryId"], where: { ...due, ...NOT_PAYROLL }, _sum: { amount: true } }),
       db.financeEntry.groupBy({ by: ["type"], where: { ...due, ...PAYROLL }, _sum: { amount: true } }),
       db.financeEntry.groupBy({ by: ["type"], where: settled, _sum: { amount: true } }),
@@ -135,6 +145,8 @@ export async function financeSummary(organizationId: string, period: Period, now
       db.financeEntry.aggregate({ where: { ...pending, ...payrollExpense }, _sum: { amount: true } }),
       db.financeEntry.groupBy({ by: ["type"], where: overdue, _sum: { amount: true }, _count: { _all: true } }),
       db.financeEntry.groupBy({ by: ["type"], where: { status: "SETTLED" }, _sum: { amount: true } }),
+      // Every open entry, whatever its due date — same as getFinanceSummary's receivable/payable.
+      db.financeEntry.groupBy({ by: ["type"], where: { status: "PENDING" }, _sum: { amount: true } }),
     ]);
 
   const categoryIds = [...new Set(byCategory.map((g) => g.categoryId).filter((id): id is string => Boolean(id)))];
@@ -168,6 +180,10 @@ export async function financeSummary(organizationId: string, period: Period, now
       paid: fromCents(paid),
       result: fromCents(received - paid),
       payrollPaid: fromCents(toCents(payrollPaid._sum.amount)),
+    },
+    emAberto: {
+      receivable: fromCents(centsOf(openByType, "INCOME")),
+      payable: fromCents(centsOf(openByType, "EXPENSE")),
     },
     pendente: {
       receivable: fromCents(centsOf(pendingByType, "INCOME")),

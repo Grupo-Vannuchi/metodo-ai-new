@@ -54,6 +54,12 @@ check("keysMatch rejects a cut, different-case, missing or empty key", () => {
   assert.equal(keysMatch("  ", "  "), false);
 });
 
+check("keysMatch refuses a configured key under 32 characters, so a cut key fails closed", () => {
+  assert.equal(keysMatch("abc", "abc"), false);
+  assert.equal(keysMatch("x".repeat(31), "x".repeat(31)), false);
+  assert.equal(keysMatch("x".repeat(32), "x".repeat(32)), true);
+});
+
 check("parseDay reads YYYY-MM-DD as UTC midnight and rejects impossible dates and other formats", () => {
   assert.equal(parseDay("2026-10-01").toISOString(), "2026-10-01T00:00:00.000Z");
   assert.throws(() => parseDay("2026-02-30"), McpInputError);

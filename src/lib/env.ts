@@ -45,10 +45,9 @@ const serverSchema = z.object({
     .min(32, "CRON_SECRET must be at least 32 characters")
     .optional(),
   // Key of the read-only MCP server (/api/mcp): `Authorization: Bearer` or the last path segment.
-  MCP_API_KEY: z
-    .string()
-    .min(32, "MCP_API_KEY must be at least 32 characters")
-    .optional(),
+  // No min length here on purpose: a key under 32 chars just closes the MCP (keysMatch in
+  // src/lib/mcp/core.ts), instead of failing validation and taking the whole site down.
+  MCP_API_KEY: z.string().optional(),
   // Transactional email (Resend, platform key) — verification, invites, reset.
   // Optional so the app boots without it; `sendEmail` no-ops with a warning.
   RESEND_API_KEY: z.string().optional(),

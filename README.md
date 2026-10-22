@@ -350,7 +350,8 @@ dados de todas as empresas: 23 ferramentas de busca e resumo por módulo. Para l
 1. **Antes do merge**, gere uma chave
    (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`), cadastre como `MCP_API_KEY`
    nas variáveis de ambiente do app no hPanel e reinicie o app — as variáveis são lidas na subida. Sem ela,
-   `/api/mcp` responde 404 a tudo. Use uma chave diferente da do `.env` local.
+   ou com menos de 32 caracteres, `/api/mcp` responde 404 a tudo (o resto do site não é afetado). Use uma
+   chave diferente da do `.env` local.
 2. Depois do deploy, no claude.ai, edite (ou remova e adicione de novo) o conector personalizado
    "METODO AI" com a URL `https://metodotia.com/api/mcp/<chave>`. Teste pedindo "liste as organizações".
 3. No Claude Code, o mesmo servidor entra com a chave no header:

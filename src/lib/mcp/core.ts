@@ -19,9 +19,15 @@ export function extractBearer(header: string | null): string | null {
 }
 
 /**
+ * Shortest accepted MCP_API_KEY. Enforced here, not in env.ts: a key cut short
+ * when pasted into hPanel must close the MCP (404), not fail the whole app's boot.
+ */
+const MIN_KEY_LENGTH = 32;
+
+/**
  * Constant-time key comparison, same shape as src/lib/cron-auth.ts. Both sides
  * are trimmed: a key pasted into hPanel or into the connector URL often carries
- * a trailing newline or space. Empty never matches.
+ * a trailing newline or space. Empty or too-short keys never match.
  */
 export function keysMatch(
   provided: string | null | undefined,
@@ -29,7 +35,7 @@ export function keysMatch(
 ): boolean {
   const p = provided?.trim();
   const s = secret?.trim();
-  if (!p || !s) return false;
+  if (!p || !s || s.length < MIN_KEY_LENGTH) return false;
   // timingSafeEqual throws when the buffers differ in length, so guard on that
   // first — length alone leaks nothing useful about a fixed-length random key.
   const a = Buffer.from(p);

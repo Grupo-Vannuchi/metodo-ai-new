@@ -156,7 +156,8 @@ a única barreira, e cada ferramenta recebe o `organizationId` como argumento ([
 
 - **Chave:** no `Authorization: Bearer <chave>` (Claude Code) ou como último segmento do caminho
   (`/api/mcp/<chave>`), porque o conector do claude.ai só aceita uma URL. Comparação em tempo
-  constante, como no cron; sem `MCP_API_KEY` no ambiente, tudo responde 404.
+  constante, como no cron; sem `MCP_API_KEY` no ambiente, ou com menos de 32 caracteres, tudo responde
+  404 — e só o MCP: a chave não tem tamanho mínimo no `env.ts`, para uma chave cortada não derrubar o site.
 - **404, nunca 401:** o claude.ai trata 401 como "comece o OAuth", e este servidor não tem OAuth.
   Chave errada recebe o mesmo 404 de uma rota que não existe.
 - **Só POST:** GET (o fluxo SSE opcional do MCP) e DELETE (fim de sessão) respondem 405. O

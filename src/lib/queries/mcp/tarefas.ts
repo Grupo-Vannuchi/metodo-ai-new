@@ -36,7 +36,11 @@ export async function searchTasks(
   // The overdue rule and the period both filter dueDate, so they go in AND, not side by side.
   const and: Prisma.TaskWhereInput[] = [];
   if (a.overdue === true) and.push(overdueWhere(dayStart));
-  if (a.overdue === false) and.push({ NOT: overdueWhere(dayStart) });
+  // Spelled out instead of NOT(overdue): in SQL, NOT(open AND dueDate < x) is NULL —
+  // not true — for a task without a due date, which would silently drop it.
+  if (a.overdue === false) {
+    and.push({ OR: [{ doneAt: { not: null } }, { dueDate: null }, { dueDate: { gte: dayStart } }] });
+  }
   if (a.range) and.push({ dueDate: a.range });
   const where: Prisma.TaskWhereInput = {
     status: a.status,

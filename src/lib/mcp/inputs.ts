@@ -5,14 +5,21 @@
  */
 import { z } from "zod";
 
-export const dayParam = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD.")
-  .describe("Data no formato AAAA-MM-DD");
+/**
+ * A fresh schema per field, on purpose: the SDK's JSON Schema conversion turns
+ * a zod instance used twice in one tool into a `$ref` to the first use, which
+ * some MCP clients don't resolve.
+ */
+export function dayParam(description: string) {
+  return z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD.")
+    .describe(description);
+}
 
 export const periodShape = {
-  from: dayParam.optional().describe("Início do período, AAAA-MM-DD (inclusivo)"),
-  to: dayParam.optional().describe("Fim do período, AAAA-MM-DD (inclusivo)"),
+  from: dayParam("Início do período, AAAA-MM-DD (inclusivo)").optional(),
+  to: dayParam("Fim do período, AAAA-MM-DD (inclusivo)").optional(),
 };
 
 export const pageShape = {

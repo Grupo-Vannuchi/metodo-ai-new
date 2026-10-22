@@ -180,6 +180,15 @@ checks.push({
 });
 
 checks.push({
+  name: "no tool publishes a $ref in its input schema (some MCP clients don't resolve it)",
+  run: async (ctx) => {
+    for (const t of await ctx.tools()) {
+      assert.ok(!JSON.stringify(t.inputSchema).includes("$ref"), `${t.name} publishes a $ref in its input schema`);
+    }
+  },
+});
+
+checks.push({
   name: "listar_organizacoes finds org A with its owner, members and module states",
   run: async (ctx) => {
     const r = await ctx.call("listar_organizacoes", { search: ctx.orgA.name });
@@ -510,6 +519,16 @@ fixtures.push(async (ctx) => {
         status: "PENDING",
         payrollRunId: run.id,
       },
+      // Open and due far ahead: in the all-time "A receber / A pagar" cards, not in the period.
+      {
+        organizationId,
+        type: "EXPENSE",
+        description: `MCP-E2E-A-${stamp} Seguro`,
+        amount: 50,
+        categoryId: aluguel.id,
+        dueDate: utcDay("2099-12-10"),
+        status: "PENDING",
+      },
     ],
   });
 });
@@ -529,8 +548,8 @@ checks.push({
   run: async (ctx) => {
     const r = await ctx.call("buscar_lancamentos", { organizationId: ctx.orgA.id });
     assert.equal(r.isError, false, r.text);
-    assert.equal(r.json.total, 2);
-    assert.deepEqual(r.json.items.map((e: { amount: string }) => e.amount).sort(), ["1000.00", "5000.00"]);
+    assert.equal(r.json.total, 3);
+    assert.deepEqual(r.json.items.map((e: { amount: string }) => e.amount).sort(), ["1000.00", "50.00", "5000.00"]);
   },
 });
 
@@ -550,6 +569,8 @@ checks.push({
     assert.deepEqual(f.caixa, { received: "5000.00", paid: "4000.00", result: "1000.00", payrollPaid: "4000.00" });
     assert.deepEqual(f.pendente, { receivable: "0.00", payable: "1321.09", payrollPayable: "321.09" });
     assert.deepEqual(f.vencidos.payable, { count: 2, total: "1321.09" });
+    // The screen's "A receber / A pagar" cards: every open entry, whatever its due date.
+    assert.deepEqual(f.emAberto, { receivable: "0.00", payable: "1371.09" });
     assert.equal(f.saldoRealizado, "1000.00");
   },
 });
@@ -975,6 +996,20 @@ checks.push({
     assert.equal(t.assigneeName, ctx.userA.name);
     assert.equal(t.companyName, `MCP-E2E-A-${ctx.stamp} Ltda`);
     assert.equal("description" in t, false);
+  },
+});
+
+checks.push({
+  name: "buscar_tarefas with overdue: false keeps the open tasks that have no due date",
+  run: async (ctx) => {
+    const r = await ctx.call("buscar_tarefas", { organizationId: ctx.orgA.id, overdue: false });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.total, 2);
+    assert.deepEqual(r.json.items.map((t: { title: string }) => t.title).sort(), [
+      `MCP-E2E-A-${ctx.stamp} Em andamento`,
+      `MCP-E2E-A-${ctx.stamp} Feita`,
+    ]);
+    for (const t of r.json.items) assert.equal(t.overdue, false);
   },
 });
 
