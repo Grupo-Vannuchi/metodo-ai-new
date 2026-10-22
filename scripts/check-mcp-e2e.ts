@@ -87,6 +87,11 @@ async function baseFixtures(ctx: Ctx): Promise<void> {
   });
 }
 
+/** Where-clause matching both test organizations — what every module cleanup deletes. */
+function inTestOrgs(ctx: Ctx): { organizationId: { in: string[] } } {
+  return { organizationId: { in: [ctx.orgA?.id, ctx.orgB?.id].filter((id): id is string => Boolean(id)) } };
+}
+
 async function baseCleanup(ctx: Ctx): Promise<void> {
   const orgIds = [ctx.orgA?.id, ctx.orgB?.id].filter(Boolean) as string[];
   // Memberships and modules cascade from the organization.
@@ -246,6 +251,170 @@ async function sweep(ctx: Ctx): Promise<number> {
   }
   return tools.length;
 }
+
+// ── CRM ──────────────────────────────────────────────────────────────────────
+
+EXPECTED_TOOLS.push(
+  "buscar_empresas",
+  "buscar_contatos",
+  "buscar_oportunidades",
+  "buscar_propostas",
+  "resumo_vendas",
+);
+
+fixtures.push(async (ctx) => {
+  const { prisma: db, secret, stamp, userA } = ctx;
+  const organizationId = ctx.orgA.id;
+  const company = await db.company.create({
+    data: {
+      organizationId,
+      name: `MCP-E2E-A-${stamp} Ltda`,
+      notes: secret,
+      address: { street: secret, city: "Campinas", uf: "SP" },
+    },
+  });
+  const contact = await db.contact.create({
+    data: { organizationId, companyId: company.id, name: `MCP-E2E-A-${stamp} Contato`, email: `contato-${stamp}@test.local` },
+  });
+  ctx.ids.companyA = company.id;
+  ctx.ids.contactA = contact.id;
+  const pipeline = await db.pipeline.create({
+    data: { organizationId, name: `MCP-E2E-A-${stamp} Funil`, isDefault: true },
+  });
+  const prospect = await db.stage.create({
+    data: { organizationId, pipelineId: pipeline.id, name: "Prospecção", order: 0 },
+  });
+  const deal = await db.stage.create({
+    data: { organizationId, pipelineId: pipeline.id, name: "Negociação", order: 1 },
+  });
+  const base = {
+    organizationId,
+    pipelineId: pipeline.id,
+    companyId: company.id,
+    contactId: contact.id,
+    ownerId: userA.id,
+    notes: secret,
+  };
+  await db.opportunity.create({
+    data: { ...base, stageId: prospect.id, title: `MCP-E2E-A-${stamp} Aberta`, value: 1000, status: "OPEN" },
+  });
+  await db.opportunity.create({
+    data: { ...base, stageId: deal.id, title: `MCP-E2E-A-${stamp} Ganha`, value: 2500, status: "WON", closedAt: new Date() },
+  });
+  // Legacy win: no closedAt, so only updatedAt places it in the period.
+  await db.opportunity.create({
+    data: { ...base, stageId: deal.id, title: `MCP-E2E-A-${stamp} Ganha antiga`, value: 500, status: "WON" },
+  });
+  await db.opportunity.create({
+    data: { ...base, stageId: deal.id, title: `MCP-E2E-A-${stamp} Perdida`, value: 800, status: "LOST", outcomeReason: "Preço" },
+  });
+  await db.goal.create({
+    data: { organizationId, userId: userA.id, month: new Date().toISOString().slice(0, 7), targetValue: 3000 },
+  });
+  await db.proposal.create({
+    data: {
+      organizationId,
+      title: `MCP-E2E-A-${stamp} Proposta`,
+      status: "ACCEPTED",
+      subtotal: 2500,
+      total: 2500,
+      notes: secret,
+      intro: secret,
+      ownerId: userA.id,
+      companyId: company.id,
+    },
+  });
+});
+
+cleanups.push(async (ctx) => {
+  const where = inTestOrgs(ctx);
+  await ctx.prisma.proposal.deleteMany({ where });
+  await ctx.prisma.goal.deleteMany({ where });
+  await ctx.prisma.opportunity.deleteMany({ where });
+  await ctx.prisma.stage.deleteMany({ where });
+  await ctx.prisma.pipeline.deleteMany({ where });
+  await ctx.prisma.contact.deleteMany({ where });
+  await ctx.prisma.company.deleteMany({ where });
+});
+
+checks.push({
+  name: "buscar_empresas gives city/uf out of the address (never the address) and contact/open-deal counts",
+  run: async (ctx) => {
+    const r = await ctx.call("buscar_empresas", { organizationId: ctx.orgA.id, search: "Ltda" });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.total, 1);
+    const company = r.json.items[0];
+    assert.equal(company.city, "Campinas");
+    assert.equal(company.uf, "SP");
+    assert.equal(company.contactCount, 1);
+    assert.equal(company.openOpportunityCount, 1);
+    assert.equal("address" in company, false);
+  },
+});
+
+checks.push({
+  name: "buscar_contatos filters by company and names it",
+  run: async (ctx) => {
+    const r = await ctx.call("buscar_contatos", { organizationId: ctx.orgA.id, companyId: ctx.ids.companyA });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.total, 1);
+    assert.equal(r.json.items[0].companyName, `MCP-E2E-A-${ctx.stamp} Ltda`);
+  },
+});
+
+checks.push({
+  name: "buscar_oportunidades filters by status and names the owner",
+  run: async (ctx) => {
+    const r = await ctx.call("buscar_oportunidades", { organizationId: ctx.orgA.id, status: "WON" });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.total, 2);
+    for (const o of r.json.items) assert.equal(o.ownerName, ctx.userA.name);
+  },
+});
+
+checks.push({
+  name: "buscar_propostas shows the total as text and the owner's name",
+  run: async (ctx) => {
+    const r = await ctx.call("buscar_propostas", { organizationId: ctx.orgA.id, status: "ACCEPTED" });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.total, 1);
+    assert.equal(r.json.items[0].total, "2500.00");
+    assert.equal(r.json.items[0].ownerName, ctx.userA.name);
+  },
+});
+
+checks.push({
+  name: "resumo_vendas counts a legacy win without closedAt, the win rate, the goal, losses and the open funnel",
+  run: async (ctx) => {
+    const r = await ctx.call("resumo_vendas", { organizationId: ctx.orgA.id });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.created.count, 4);
+    assert.equal(r.json.won.count, 2);
+    assert.equal(r.json.won.value, "3000.00");
+    assert.equal(r.json.lost.count, 1);
+    assert.equal(r.json.winRate, 0.6667);
+    assert.deepEqual(r.json.lossReasons, [{ reason: "Preço", count: 1 }]);
+    assert.equal(r.json.byOwner.length, 1);
+    assert.equal(r.json.byOwner[0].wonCount, 2);
+    assert.equal(r.json.byOwner[0].goal, "3000.00");
+    assert.deepEqual(
+      r.json.openFunnel.map((s: { stageName: string; count: number; value: string }) => [s.stageName, s.count, s.value]),
+      [
+        ["Prospecção", 1, "1000.00"],
+        ["Negociação", 0, "0.00"],
+      ],
+    );
+  },
+});
+
+checks.push({
+  name: "resumo_vendas refuses an inverted period, in Portuguese",
+  run: async (ctx) => {
+    const r = await ctx.call("resumo_vendas", { organizationId: ctx.orgA.id, from: "2026-10-10", to: "2026-10-01" });
+    assert.equal(r.isError, true);
+    assert.match(r.text, /não pode ser anterior/);
+  },
+});
 
 // ── Runner ───────────────────────────────────────────────────────────────────
 
