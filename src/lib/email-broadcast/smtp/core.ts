@@ -205,15 +205,26 @@ function hasSendingWord(message: string): boolean {
 }
 
 /**
+ * A limit word in the server's own words, with the echoed addresses left out
+ * the same way: "cota" opens "<cotacao@fornecedor.com.br>" and "@cotabest.com.br",
+ * and a recipient with such a name must not turn its own refusal into the
+ * account's limit.
+ */
+function hasLimitWord(message: string): boolean {
+  return LIMIT_TEXT.test(message.replace(ECHOED_ADDRESS, " "));
+}
+
+/**
  * The answer is one recipient's own: its address or mailbox (x.1.x, x.2.x), or
  * limit words with no sign of being the account's sending limit (no sending
- * word outside an echoed address, no x.7.x policy code), like a bare "Over
- * quota" or "Cota excedida para o usuario": that is the mailbox's.
+ * word, no x.7.x policy code), like a bare "Over quota" or "Cota excedida para
+ * o usuario": that is the mailbox's. Limit and sending words are both read
+ * outside the addresses the server echoes back.
  */
 function isRecipientAnswer(message: string): boolean {
   const enhanced = enhancedCode(message);
   if (isRecipientCode(enhanced)) return true;
-  return LIMIT_TEXT.test(message) && !hasSendingWord(message) && enhanced?.subject !== 7;
+  return hasLimitWord(message) && !hasSendingWord(message) && enhanced?.subject !== 7;
 }
 
 /**
@@ -233,13 +244,15 @@ function isRecipientAnswer(message: string): boolean {
  *  6. the message is too big: this recipient fails;
  *  7. this recipient's own answer at RCPT TO, DATA or the final answer (an
  *     address or mailbox code x.1.x/x.2.x, or limit words with no sending word
- *     outside an echoed address and no x.7.x code, like "Over quota"): 5
- *     retries if temporary, then this recipient fails;
+ *     and no x.7.x code, like "Over quota"): 5 retries if temporary, then this
+ *     recipient fails;
  *  8. the answer talks about a limit: pause with "daily_limit";
  *  9. RCPT TO refused for any other reason: same as 7;
  * 10. any other 5xx: MAIL FROM blocks the account, the final answer fails this
  *     recipient, DATA and the rest pause;
  * 11. any other 4xx: 5 retries, then pause; anything else: pause.
+ * Limit words (4, 7, 8) and sending words (7) are read outside the addresses
+ * the server echoes back: they are names, not words.
  * What belongs to one recipient (6, 7, 9) never pauses: a pause hands the
  * recipient back to the queue, the resume would pick it first and the send
  * would stall for good.
@@ -265,7 +278,7 @@ export function smtpFailureAction(
   // 421 is the server closing the channel ("service not available"): about the server, never one recipient, whatever
   // command it answered. Ahead of the size and recipient rules, so "421 Too many connections" is not a recipient's.
   if (status === 421) {
-    if (LIMIT_TEXT.test(message)) return "daily_limit";
+    if (hasLimitWord(message)) return "daily_limit";
     return attempt < 5 ? "retry" : "pause";
   }
   const afterLogin = phase === "mail" || phase === "rcpt" || phase === "data" || phase === "message";
@@ -277,7 +290,7 @@ export function smtpFailureAction(
   // limit rule, because "Over quota" is the mailbox's. The retries run out into a recipient failure.
   const atRecipient = phase === "rcpt" || phase === "data" || phase === "message";
   if (atRecipient && isRecipientAnswer(message)) return temporary && attempt < 5 ? "retry" : "recipient";
-  if (LIMIT_TEXT.test(message)) return "daily_limit";
+  if (hasLimitWord(message)) return "daily_limit";
   // Any other RCPT TO refusal, even one with no reply code, is this recipient's: never a pause.
   if (phase === "rcpt") return temporary && attempt < 5 ? "retry" : "recipient";
   if (permanent) {

@@ -1457,6 +1457,28 @@ check("smtpFailureAction reads 'cota' and 'diária', ignores echoed addresses an
   // the words around the address still count
   assert.equal(a(550, "rcpt-550", "<dia@empresa.com.br>: daily sending quota exceeded", 0), "daily_limit");
   assert.equal(a(550, "rcpt-550", "Limite de envio excedido para <contato@cliente.com.br>", 0), "daily_limit");
+  // nor is "cota" at the start of one ("<cotacao@...>", "<cotacoes@...>", "@cotabest..."): it is no limit word, on any rule.
+  // A recipient's refusal that also has an x.7.x code or a sending word stays the recipient's (a 4xx retries, then fails it),
+  // never "daily_limit": that pause hands the recipient back first in the queue and the resume stalls on it for good
+  assert.equal(a(550, "rcpt-550", "5.7.1 <cotacao@fornecedor.com.br>: Recipient address rejected: Access denied", 0), "recipient");
+  assert.equal(a(554, "rcpt-554", "5.7.1 <cotacoes@fornecedor.com.br>: Recipient address rejected: Access denied", 0), "recipient");
+  assert.equal(a(550, "rcpt-550", "5.7.1 <compras@cotabest.com.br>: Recipient address rejected: Access denied", 0), "recipient");
+  assert.equal(a(550, "rcpt-550", "5.7.1 compras@cotabest.com.br: Recipient address rejected: Access denied", 0), "recipient");
+  assert.equal(a(550, "rcpt-550", "<cotacao@fornecedor.com.br>: Recipient rejected by sender policy", 0), "recipient");
+  assert.equal(a(450, "rcpt-450", "4.7.1 <cotacao@fornecedor.com.br>: Recipient address rejected: Greylisted", 0), "retry");
+  assert.equal(a(450, "rcpt-450", "4.7.1 <cotacao@fornecedor.com.br>: Recipient address rejected: Greylisted", 5), "recipient");
+  assert.equal(a(554, "message-554", "5.7.1 <cotacao@fornecedor.com.br>: Message rejected", 0), "recipient");
+  // at DATA an unknown 5xx pauses with or without such an address; at MAIL FROM it blocks (5xx) or retries (4xx)
+  assert.equal(a(554, "data-554", "<cotacao@fornecedor.com.br>: transaction failed", 0), "pause");
+  assert.equal(a(550, "mail-550", "<cotacao@empresa.com.br>: Access denied", 0), "blocked");
+  assert.equal(a(451, "mail-451", "4.3.0 <cotacao@empresa.com.br>: Temporary lookup failure", 0), "retry");
+  // a 421 is the server's whatever address it echoes: it retries, it is not a limit
+  assert.equal(a(421, "rcpt-421", "<cotacao@x.com>: Service not available", 0), "retry");
+  // the words around such an address still count
+  assert.equal(a(550, "rcpt-550", "<cotacao@fornecedor.com.br>: Cota diária de envio excedida", 0), "daily_limit");
+  assert.equal(a(552, "rcpt-552", "<cotacao@fornecedor.com.br>: Cota excedida para o usuario", 0), "recipient");
+  assert.equal(a(550, "mail-550", "<cotacao@empresa.com.br>: Cota atingida", 0), "daily_limit");
+  assert.equal(a(421, "rcpt-421", "<cotacao@x.com>: Too many connections", 0), "daily_limit");
   // Office 365's send-as refusals are the account's, on whichever command they come back
   assert.equal(a(554, "message-554", "5.2.252 SendAsDenied; user@x not allowed to send as y@z", 0), "blocked");
   assert.equal(a(550, "message-550", "5.7.60 SMTP; Client does not have permissions to send as this sender", 0), "blocked");
