@@ -63,6 +63,7 @@ export default async function EditEmailPage({
         signatures={data.signatures}
         microsoft={data.microsoft}
         google={data.google}
+        smtp={data.smtp}
       />
     </div>
   );

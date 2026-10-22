@@ -2505,11 +2505,13 @@ enum EmailChannel {
   PLATFORM
   MICROSOFT
   GOOGLE
+  SMTP
 }
 
 enum EmailSenderProvider {
   MICROSOFT
   GOOGLE
+  SMTP
 }
 
 enum EmailSenderAccountStatus {
@@ -2675,10 +2677,14 @@ model EmailSenderAccount {
   /// Mailbox address, lowercase.
   email          String
   displayName    String?
-  /// "personal" | "work" — sets the estimated daily limit (microsoft/core.ts, google/core.ts).
+  /// "personal" | "work" (Microsoft, Google: sets the estimated daily limit, microsoft/core.ts, google/core.ts) or "smtp".
   accountKind    String
-  /// encryptCredentials({ accessToken, refreshToken, expiresAt }); never leaves the server.
+  /// encryptCredentials(...); never leaves the server. Microsoft, Google: { accessToken, refreshToken, expiresAt }.
+  /// SMTP: { host, port, security, username, password } (smtp/credentials.ts).
   credentials    String                   @db.Text
+  /// Só SMTP: limites informados pela empresa.
+  hourlyLimit    Int?
+  dailyLimit     Int?
   status         EmailSenderAccountStatus @default(ACTIVE)
   /// Last technical error of a token renewal.
   lastError      String?

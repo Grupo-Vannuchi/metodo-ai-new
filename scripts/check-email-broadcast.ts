@@ -76,9 +76,11 @@ import {
   spreadsheetKind,
   xlsxCellTexts,
 } from "../src/lib/email-broadcast/spreadsheet";
-import { EMPTY_AUDIENCE, audienceSelectionSchema } from "../src/lib/validations/email-broadcast";
+import { EMPTY_AUDIENCE, audienceSelectionSchema, broadcastDraftSchema } from "../src/lib/validations/email-broadcast";
 import {
   INTERRUPTED_ERROR,
+  PAUSED_REASONS,
+  failureMessageKey,
   googleRecipientError,
   listPausedMessageKey,
   listReason,
@@ -86,7 +88,12 @@ import {
   pausedMessageKey,
   pausedReasonKey,
   recipientFailure,
+  smtpRecipientError,
+  type MailboxChannel,
+  type RecipientFailureKey,
 } from "../src/lib/email-broadcast/failure-reason";
+import ptMessages from "../src/messages/pt.json";
+import enMessages from "../src/messages/en.json";
 import {
   MICROSOFT_CONSUMER_TENANT_ID,
   UPLOAD_CHUNK_BYTES,
@@ -101,9 +108,12 @@ import {
 import {
   isReconnectCode,
   joinSiteUrl,
+  mailboxPaceWaitMs,
   mailboxSendMinutes,
   remainingToday,
   sentLast24hWhere,
+  sentLastHourWhere,
+  waitChunksMs,
 } from "../src/lib/email-broadcast/mailbox/core";
 import {
   gmailFailureAction,
@@ -115,6 +125,23 @@ import {
   googleHasGmail,
   pilotAllows,
 } from "../src/lib/email-broadcast/google/core";
+import {
+  canKeepSmtpPassword,
+  defaultSmtpSecurity,
+  isSmtpSizeRefusal,
+  smtpConnectError,
+  smtpDailyLimit,
+  smtpFailureAction,
+  smtpFailureCode,
+  smtpHourlyLimit,
+  smtpPaceMs,
+  smtpPhaseOf,
+  smtpSendMinutes,
+  smtpSendPhase,
+} from "../src/lib/email-broadcast/smtp/core";
+import { isBlockedSmtpAddress, pickSmtpAddress } from "../src/lib/email-broadcast/smtp/address";
+import { redactAndCut, redactSmtpSecrets } from "../src/lib/email-broadcast/smtp/redact";
+import { smtpAccountSchema } from "../src/lib/validations/email-smtp-account";
 import {
   attachmentDisposition,
   attachmentsFromGraph,
@@ -810,6 +837,16 @@ check("audience schema keeps old drafts and caps typed + imported at 5,000", () 
   assert.ok(!audienceSelectionSchema.safeParse({ imports: files(MAX_IMPORTS + 1) }).success);
 });
 
+check("broadcastDraftSchema saves a draft for every channel, SMTP included", () => {
+  const draft = { subject: "s", html: "<p>x</p>", fromName: "", fromEmail: "", replyTo: "", audience: EMPTY_AUDIENCE };
+  for (const channel of ["PLATFORM", "MICROSOFT", "GOOGLE", "SMTP"] as const) {
+    const parsed = broadcastDraftSchema.safeParse({ ...draft, channel });
+    assert.ok(parsed.success && parsed.data.channel === channel, channel);
+  }
+  assert.equal(broadcastDraftSchema.parse(draft).channel, "PLATFORM");
+  assert.ok(!broadcastDraftSchema.safeParse({ ...draft, channel: "POP" }).success);
+});
+
 // --- Microsoft channel ---------------------------------------------------------
 check("accountKindFromTid tells a personal account from Microsoft 365", () => {
   assert.equal(accountKindFromTid(MICROSOFT_CONSUMER_TENANT_ID), "personal");
@@ -841,6 +878,26 @@ check("mailboxSendMinutes rounds up at ~28 per minute", () => {
   assert.equal(mailboxSendMinutes(28), 1);
   assert.equal(mailboxSendMinutes(29), 2);
   assert.equal(mailboxSendMinutes(300), 11);
+});
+
+check("waitChunksMs and mailboxPaceWaitMs split long waits under the lease", () => {
+  assert.deepEqual(waitChunksMs(36_000), [10_000, 10_000, 10_000, 6_000]);
+  assert.deepEqual(waitChunksMs(2_100), [2_100]);
+  assert.deepEqual(waitChunksMs(0), []);
+  assert.equal(mailboxPaceWaitMs(2_100, 0), 2_100);
+  assert.equal(mailboxPaceWaitMs(36_000, 2), 72_000); // two sends of one account: each waits twice as long
+  assert.equal(mailboxPaceWaitMs(2_100, 50), 42_000);
+});
+
+check("waitChunksMs fails closed: a pause that is not a number still waits one full piece", () => {
+  assert.deepEqual(waitChunksMs(Number.NaN), [10_000]);
+  assert.deepEqual(waitChunksMs(Number.POSITIVE_INFINITY), [10_000]);
+  assert.deepEqual(waitChunksMs(Number.NEGATIVE_INFINITY), [10_000]);
+  assert.deepEqual(waitChunksMs(Number.NaN, 4_000), [4_000]);
+  // A pace computed from a broken limit (NaN) lands here too: never "no pause at all".
+  assert.deepEqual(waitChunksMs(mailboxPaceWaitMs(Number.NaN, 3)), [10_000]);
+  // Finite totals keep their meaning: nothing to wait is no piece.
+  assert.deepEqual(waitChunksMs(-5), []);
 });
 
 check("microsoftSendPath goes direct only when the request fits", () => {
@@ -974,6 +1031,462 @@ check("googleConsentError reads the provider's error", () => {
   assert.equal(googleConsentError("server_error"), "failed");
 });
 
+// --- SMTP channel --------------------------------------------------------------
+check("smtpPaceMs and smtpSendMinutes follow the hourly limit", () => {
+  assert.equal(smtpPaceMs(100), 36_000);
+  assert.equal(smtpPaceMs(1_700), 2_118);
+  assert.equal(smtpPaceMs(5_000), 2_100);
+  assert.equal(smtpPaceMs(1), 3_600_000);
+  assert.equal(smtpSendMinutes(500, 100), 300);
+  assert.equal(smtpSendMinutes(0, 100), 1);
+  assert.equal(smtpSendMinutes(10, 1_700), 1);
+  assert.equal(smtpDailyLimit({ dailyLimit: null }), 500);
+  assert.equal(smtpDailyLimit({ dailyLimit: 800 }), 800);
+  assert.equal(smtpHourlyLimit({ hourlyLimit: null }), 100);
+  assert.equal(defaultSmtpSecurity(465), "ssl");
+  assert.equal(defaultSmtpSecurity(587), "starttls");
+  assert.equal(defaultSmtpSecurity(2525), "starttls");
+});
+
+check("smtpFailureAction maps SMTP answers to dispatcher moves", () => {
+  const a = smtpFailureAction;
+  assert.equal(a(0, "transfer", "Connection closed", 0), "uncertain");
+  assert.equal(a(0, "connect", "ETIMEDOUT", 0), "retry");
+  assert.equal(a(0, "connect", "ETIMEDOUT", 3), "pause");
+  assert.equal(a(0, "guard", "", 0), "pause");
+  assert.equal(a(0, "tls", "Hostname/IP does not match certificate's altnames", 0), "pause");
+  assert.equal(a(535, "auth-535", "5.7.8 Authentication credentials invalid", 0), "reconnect");
+  assert.equal(a(454, "auth-454", "4.7.0 Temporary authentication failure", 0), "retry");
+  assert.equal(a(454, "auth-454", "4.7.0 Temporary authentication failure", 3), "pause");
+  assert.equal(a(0, "noauth", "", 0), "pause");
+  assert.equal(a(552, "message-552", "5.3.4 Message size exceeds fixed limit", 0), "recipient");
+  assert.equal(a(0, "message", "Message size larger than allowed 10240000", 0), "recipient");
+  // one recipient's address or mailbox: never a pause, even after the retries
+  assert.equal(a(552, "rcpt-552", "5.2.2 Mailbox full", 0), "recipient");
+  assert.equal(a(452, "rcpt-452", "4.2.2 Mailbox over quota", 0), "retry");
+  assert.equal(a(452, "rcpt-452", "4.2.2 Mailbox over quota", 5), "recipient");
+  assert.equal(a(550, "message-550", "5.1.1 Recipient rejected", 0), "recipient");
+  assert.equal(a(450, "rcpt-450", "Mailbox unavailable", 4), "retry");
+  assert.equal(a(450, "rcpt-450", "Mailbox unavailable", 5), "recipient");
+  assert.equal(a(550, "rcpt-550", "5.1.1 User unknown", 0), "recipient");
+  // a quota refusal with no enhanced code is still the mailbox's, unless its words say it is the sending limit
+  assert.equal(a(552, "rcpt-552", "Sorry, the user's maildir has overdrawn his diskspace quota", 0), "recipient");
+  assert.equal(a(452, "rcpt-452", "Over quota", 0), "retry");
+  assert.equal(a(452, "rcpt-452", "Over quota", 5), "recipient");
+  assert.equal(a(550, "rcpt-550", "Mailbox quota exceeded", 0), "recipient");
+  assert.equal(a(552, "rcpt-552", "Quota excedida para o usuario", 0), "recipient");
+  assert.equal(a(452, "message-452", "Mailbox over quota", 5), "recipient");
+  assert.equal(a(450, "rcpt-450", "4.7.1 Too many recipients per hour", 0), "daily_limit");
+  // a bare 552 at the final answer is a size, but with an address or mailbox code it is the recipient's
+  assert.equal(a(552, "message-552", "5.2.3 Message length exceeds administrative limit", 0), "recipient");
+  assert.equal(a(552, "message-552", "5.2.2 Mailbox full", 0), "recipient");
+  // the account's own limit or sender
+  assert.equal(a(550, "mail-550", "5.7.1 Sending rate limit exceeded", 0), "daily_limit");
+  assert.equal(a(451, "rcpt-451", "Limite de envio excedido", 0), "daily_limit");
+  assert.equal(a(550, "rcpt-550", "5.7.1 Daily sending quota exceeded", 0), "daily_limit");
+  assert.equal(a(553, "mail-553", "5.7.1 Sender address rejected: not owned by user", 0), "blocked");
+  assert.equal(a(553, "mail-553", "5.1.8 Sender address domain does not exist", 0), "blocked");
+  // the sender or the relay refused on any command (Postfix says it at RCPT TO): the account's, not each recipient's
+  assert.equal(a(553, "rcpt-553", "5.7.1 <a@b.com>: Sender address rejected: not owned by user", 0), "blocked");
+  assert.equal(a(554, "rcpt-554", "5.7.1 Relay access denied", 0), "blocked");
+  assert.equal(a(450, "rcpt-450", "4.1.8 <a@b.com>: Sender address rejected: Domain not found", 0), "blocked");
+  assert.equal(a(550, "message-550", "5.7.1 generated content blocked", 0), "recipient"); // "generated" is not "rate"
+  assert.equal(a(554, "message-554", "5.7.1 Message rejected as spam", 0), "recipient");
+  assert.equal(a(554, "data-554", "Transaction failed", 0), "pause");
+  assert.equal(a(421, "mail-421", "Service not available, closing channel", 0), "retry");
+  assert.equal(a(421, "mail-421", "Service not available, closing channel", 5), "pause");
+  // 421 is the server closing the channel: never one recipient's, at any command (retried, then a pause)
+  assert.equal(a(421, "rcpt-421", "4.3.2 Service not available, closing transmission channel", 0), "retry");
+  assert.equal(a(421, "rcpt-421", "4.3.2 Service not available, closing transmission channel", 5), "pause");
+  assert.equal(a(421, "rcpt-421", "Too many connections from your IP", 0), "daily_limit"); // not "Over quota"-like
+  assert.equal(a(421, "data-421", "Try again later", 5), "pause");
+  assert.equal(a(421, "message-421", "4.2.2 Mailbox full, closing connection", 5), "pause"); // even a mailbox code
+  for (const phase of ["mail", "rcpt", "data", "message"])
+    for (const attempt of [0, 4, 5, 9]) assert.notEqual(a(421, `${phase}-421`, "Over quota", attempt), "recipient", `${phase} ${attempt}`);
+  assert.equal(a(0, null, "", 0), "pause");
+});
+
+check("canKeepSmtpPassword only reuses the saved password for the same server and user", () => {
+  const saved = { host: "smtpi.kinghost.net", port: 587, security: "starttls" as const, username: "a@b.com", status: "ACTIVE" as const };
+  const same = { host: "smtpi.kinghost.net", port: 587, security: "starttls" as const, username: "a@b.com" };
+  assert.equal(canKeepSmtpPassword(saved, same), true);
+  assert.equal(canKeepSmtpPassword(null, same), false);
+  assert.equal(canKeepSmtpPassword({ ...saved, status: "NEEDS_RECONNECT" }, same), false);
+  assert.equal(canKeepSmtpPassword(saved, { ...same, host: "smtp.atacante.com" }), false);
+  assert.equal(canKeepSmtpPassword(saved, { ...same, port: 465 }), false);
+  assert.equal(canKeepSmtpPassword(saved, { ...same, security: "ssl" }), false);
+  assert.equal(canKeepSmtpPassword(saved, { ...same, username: "outro@b.com" }), false);
+});
+
+check("redactSmtpSecrets masks the password and what the login sends of it, and nothing else", () => {
+  const s = { username: "contato@cliente.com.br", password: "S3nh@ Secreta!" };
+  const b64 = (value: string) => Buffer.from(value, "utf8").toString("base64");
+  const bare = (value: string) => b64(value).replace(/=+$/, "");
+  const blob = `\0${s.username}\0${s.password}`; // AUTH PLAIN's "\0user\0password"
+  // the sample is chosen so that the user's base64 and the blob's end in "=" padding
+  assert.ok(b64(s.username).endsWith("=") && b64(blob).endsWith("="));
+  // the password as typed (spaces and all), every time it appears
+  assert.equal(
+    redactSmtpSecrets(`535 5.7.8 wrong password ${s.password} (again: ${s.password})`, s),
+    "535 5.7.8 wrong password *** (again: ***)",
+  );
+  // what a server may echo back from AUTH: the password, the user and PLAIN's blob in base64, padded or not
+  for (const secret of [s.password, s.username, blob]) {
+    for (const form of [b64(secret), bare(secret)]) {
+      assert.equal(
+        redactSmtpSecrets(`535 5.7.8 Authentication failed: ${form} (tried)`, s),
+        "535 5.7.8 Authentication failed: *** (tried)",
+        form,
+      );
+    }
+  }
+  // the padded form goes whole: no "=" is left behind
+  assert.equal(redactSmtpSecrets(`AUTH PLAIN ${b64(blob)}`, s), "AUTH PLAIN ***");
+  // all of them in one answer
+  assert.equal(redactSmtpSecrets(`${b64(s.username)} ${b64(s.password)} ${b64(blob)} ${s.password}`, s), "*** *** *** ***");
+  // a password with regex characters is found as written, and only as written
+  const odd = { username: "u@x.com", password: "a.b*c(d)[e]+?$^|\\" };
+  assert.equal(redactSmtpSecrets(`bad: ${odd.password}`, odd), "bad: ***");
+  assert.equal(redactSmtpSecrets("aXb", { username: "u", password: "a.b" }), "aXb");
+  // everything else stays: the server's words, the recipient, even the user name in clear
+  const other = "550 5.1.1 <ana@exemplo.com.br>: Recipient address rejected: User unknown";
+  assert.equal(redactSmtpSecrets(other, s), other);
+  assert.equal(redactSmtpSecrets(`535 login ${s.username} refused`, s), `535 login ${s.username} refused`);
+  assert.equal(redactSmtpSecrets("", s), "");
+  // no password, nothing to hide: the text comes back as it is, the user's base64 included
+  const echoed = `${b64("a")} ${bare("a")} a`;
+  assert.equal(redactSmtpSecrets(echoed, { username: "a", password: "" }), echoed);
+  // an empty user is never searched for: it would match between every character
+  assert.equal(redactSmtpSecrets("abc pw", { username: "", password: "pw" }), "abc ***");
+});
+
+check("redactAndCut masks a secret that straddles the cut: it redacts first, then cuts", () => {
+  const s = { username: "contato@cliente.com.br", password: "S3nh@ Secreta!" };
+  const b64 = (value: string) => Buffer.from(value, "utf8").toString("base64");
+  // the password starts 5 characters before the cut at 400
+  const text = `${"x".repeat(395)}${s.password} (tried)`;
+  // cutting first would leave its first 5 characters behind, where no search finds them any more
+  assert.ok(redactSmtpSecrets(text.slice(0, 400), s).includes(s.password.slice(0, 5)));
+  assert.equal(redactAndCut(text, s, 400), `${"x".repeat(395)}*** (`);
+  // the same for what the login sends of it, in base64
+  const echoed = `${"y".repeat(390)}${b64(s.password)} end`;
+  const cut = redactAndCut(echoed, s, 400);
+  assert.equal(cut, `${"y".repeat(390)}*** end`);
+  assert.ok(!cut.includes(b64(s.password).slice(0, 6)));
+  // never longer than the cut, and a short text comes back whole (redacted)
+  assert.equal(redactAndCut("z".repeat(900), s, 400).length, 400);
+  assert.equal(redactAndCut(`535 ${s.password}`, s, 400), "535 ***");
+  assert.equal(redactAndCut("", s, 400), "");
+});
+
+check("smtpSendPhase separates the preparation from the hand-over", () => {
+  assert.equal(smtpSendPhase("connect", { code: "ETIMEDOUT" }), "connect");
+  assert.equal(smtpSendPhase("connect", { code: "ESOCKET", message: "Hostname/IP does not match certificate's altnames" }), "tls");
+  assert.equal(smtpSendPhase("connect", { code: "ESOCKET", message: "ssl3_get_record:wrong version number" }), "tls");
+  assert.equal(smtpSendPhase("login", { code: "EAUTH" }), "auth");
+  assert.equal(smtpSendPhase("login", { code: "ENOAUTH" }), "noauth");
+  assert.equal(smtpSendPhase("login", { code: "ECONNECTION" }), "connect");
+  assert.equal(smtpSendPhase("connect", { code: "EPROTOCOL" }), "connect");
+  assert.equal(smtpSendPhase("login", { code: "EPROTOCOL" }), "connect");
+  assert.equal(smtpSendPhase("send", { code: "EENVELOPE", command: "MAIL FROM" }), "mail");
+  assert.equal(smtpSendPhase("send", { code: "EENVELOPE", command: "RCPT TO" }), "rcpt");
+  assert.equal(smtpSendPhase("send", { code: "EENVELOPE", command: "DATA" }), "data");
+  assert.equal(smtpSendPhase("send", { code: "EMESSAGE", command: "DATA" }), "message");
+  assert.equal(smtpSendPhase("send", { code: "EMESSAGE", command: "MAIL FROM" }), "message");
+  assert.equal(smtpSendPhase("send", { code: "ETIMEDOUT" }), "transfer");
+  assert.equal(smtpSendPhase("send", { code: "ECONNECTION" }), "transfer");
+  assert.equal(smtpSendPhase("send", {}), "transfer");
+  assert.equal(smtpFailureCode("rcpt", 550), "rcpt-550");
+  assert.equal(smtpFailureCode("transfer", null), "transfer");
+  assert.equal(smtpPhaseOf("rcpt-550"), "rcpt");
+  assert.equal(smtpPhaseOf("bogus"), null);
+  assert.equal(smtpPhaseOf(null), null);
+});
+
+check("smtpSendPhase: a server that hangs up with a refusal said no, it is never uncertain", () => {
+  // With PIPELINING a RCPT TO answered "421" ends the session before DATA: nodemailer reports the reply on a dropped
+  // connection. The content never left (it goes only after DATA's 354), so it is the server refusing, not "transfer".
+  assert.equal(smtpSendPhase("send", { code: "ECONNECTION", responseCode: 421, command: "CONN" }), "data");
+  // The connection closing on an unfinished "554 ..." line, or a refusal nobody asked for, is a refusal too.
+  assert.equal(smtpSendPhase("send", { code: "ECONNECTION", responseCode: 554, command: "CONN" }), "data");
+  assert.equal(smtpSendPhase("send", { code: "EPROTOCOL", responseCode: 550, command: "CONN" }), "data");
+  // No server reply (a drop, a timeout) or no refusal in it: still uncertain.
+  assert.equal(smtpSendPhase("send", { code: "ECONNECTION" }), "transfer");
+  assert.equal(smtpSendPhase("send", { code: "ETIMEDOUT" }), "transfer");
+  assert.equal(smtpSendPhase("send", { code: "ECONNECTION", responseCode: 250 }), "transfer");
+  // The envelope and the final answer keep their own phases; the steps before the send don't change.
+  assert.equal(smtpSendPhase("send", { code: "EENVELOPE", command: "RCPT TO", responseCode: 421 }), "rcpt");
+  assert.equal(smtpSendPhase("send", { code: "EMESSAGE", command: "DATA", responseCode: 421 }), "message");
+  assert.equal(smtpSendPhase("connect", { code: "ECONNECTION", responseCode: 421 }), "connect");
+  // As a server-level refusal: a 4xx is retried, then pauses; a limit worded with an x.7.x code pauses as such.
+  const closing = "421 4.3.2 Service not available, closing transmission channel";
+  assert.equal(smtpFailureAction(421, smtpFailureCode("data", 421), closing, 0), "retry");
+  assert.equal(smtpFailureAction(421, smtpFailureCode("data", 421), closing, 5), "pause");
+  assert.equal(smtpFailureAction(421, "data-421", "421 4.7.0 Too many messages, closing connection", 0), "daily_limit");
+});
+
+check("smtpConnectError names the save-form failures", () => {
+  assert.equal(smtpConnectError({ code: "EAUTH", responseCode: 535 }), "auth_failed");
+  assert.equal(smtpConnectError({ responseCode: 535 }), "auth_failed");
+  assert.equal(smtpConnectError({ code: "ENOAUTH" }), "no_auth");
+  assert.equal(smtpConnectError({ code: "ESOCKET", message: "self-signed certificate" }), "tls_failed");
+  assert.equal(smtpConnectError({ code: "ETLS" }), "tls_failed");
+  assert.equal(smtpConnectError({ code: "ESOCKET", message: "ssl3_get_record:wrong version number" }), "tls_failed");
+  assert.equal(smtpConnectError({ code: "EDNS" }), "host_not_found");
+  assert.equal(smtpConnectError({ code: "ENOTFOUND" }), "host_not_found");
+  assert.equal(smtpConnectError({ code: "ETIMEDOUT", message: "Greeting never received" }), "connection_failed");
+  assert.equal(smtpConnectError({ code: "ECONNECTION" }), "connection_failed");
+  assert.equal(smtpConnectError({ code: "ECONNREFUSED" }), "connection_failed");
+  assert.equal(smtpConnectError({ code: "EPROTOCOL", responseCode: 554 }), "connection_failed");
+  assert.equal(smtpConnectError({}), "failed");
+});
+
+check("isBlockedSmtpAddress and pickSmtpAddress keep the server off internal networks", () => {
+  for (const ip of ["127.0.0.1", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.0.10", "169.254.169.254",
+    "100.64.0.1", "0.0.0.0", "224.0.0.1", "255.255.255.255", "::1", "::", "fe80::1", "fc00::1", "fd12::1",
+    "::ffff:127.0.0.1", "::ffff:10.0.0.1", "not-an-ip",
+    // transition and deprecated ranges that can reach an internal IPv4 or an unrouted network
+    "::7f00:1", "fec0::1", "feff::1", "2002:7f00:1::1", "2001::1", "192.88.99.1"]) assert.equal(isBlockedSmtpAddress(ip), true, ip);
+  for (const ip of ["177.153.0.10", "8.8.8.8", "172.32.0.1", "2804:14c::1", "::ffff:8.8.8.8", "2001:4860:4860::8888"])
+    assert.equal(isBlockedSmtpAddress(ip), false, ip);
+  assert.deepEqual(pickSmtpAddress([]), { ok: false, error: "host_not_found" });
+  assert.deepEqual(pickSmtpAddress([{ address: "8.8.8.8", family: 4 }, { address: "10.0.0.1", family: 4 }]), { ok: false, error: "host_not_allowed" });
+  assert.deepEqual(pickSmtpAddress([{ address: "2001:4860:4860::8888", family: 6 }, { address: "8.8.4.4", family: 4 }]), { ok: true, ip: "8.8.4.4", family: 4 });
+  assert.deepEqual(pickSmtpAddress([{ address: "2001:4860:4860::8888", family: 6 }]), { ok: true, ip: "2001:4860:4860::8888", family: 6 });
+});
+
+check("smtpAccountSchema validates and normalizes the SMTP form", () => {
+  const ok = smtpAccountSchema.parse({ email: " Contato@Cliente.com.br ", displayName: "", host: " SMTPI.KingHost.net ",
+    port: "587", security: "starttls", username: "", password: "x", hourlyLimit: "100", dailyLimit: "500" });
+  assert.equal(ok.email, "contato@cliente.com.br");
+  assert.equal(ok.host, "smtpi.kinghost.net");
+  assert.equal(ok.port, 587);
+  assert.equal(ok.username, "contato@cliente.com.br");
+  assert.equal(ok.displayName, null);
+  const base = { email: "a@b.com", host: "smtp.b.com", port: 465, security: "ssl", password: "x", hourlyLimit: 100, dailyLimit: 500 };
+  for (const host of ["smtp://smtpi.kinghost.net", "smtpi.kinghost.net:587", "smtp kinghost.net", "localhost", ""])
+    assert.equal(smtpAccountSchema.safeParse({ ...base, host }).success, false, host);
+  for (const port of [25, 2526]) assert.equal(smtpAccountSchema.safeParse({ ...base, port }).success, false);
+  for (const lim of [{ hourlyLimit: 0 }, { hourlyLimit: 1_701 }, { dailyLimit: 10_001 }, { hourlyLimit: 600, dailyLimit: 500 }])
+    assert.equal(smtpAccountSchema.safeParse({ ...base, ...lim }).success, false, JSON.stringify(lim));
+  assert.equal(smtpAccountSchema.safeParse({ ...base, password: "x".repeat(513) }).success, false);
+  assert.equal(smtpAccountSchema.safeParse({ ...base, password: "" }).success, true); // the action decides whether the password is missing
+});
+
+// Edges and notations the guard and the form must hold, beyond the examples above.
+check("smtpPaceMs and smtpSendMinutes stay sane at the edges", () => {
+  assert.equal(smtpPaceMs(0), 3_600_000); // a zero or negative limit reads as one per hour
+  assert.equal(smtpPaceMs(-5), 3_600_000);
+  assert.equal(smtpPaceMs(1_714), 2_101);
+  assert.equal(smtpPaceMs(1_715), 2_100); // from here on the mailbox pace is the floor
+  assert.equal(smtpSendMinutes(-5, 100), 1);
+  assert.equal(smtpSendMinutes(1, 1), 60);
+  assert.equal(smtpSendMinutes(501, 100), 301);
+});
+
+check("smtpAccountSchema refuses a pasted URL and keeps what must stay as typed", () => {
+  const base = { email: "a@b.com", host: "smtp.b.com", port: 587, security: "starttls", password: "x", hourlyLimit: 100, dailyLimit: 500 };
+  const parse = (extra: Record<string, unknown>) => smtpAccountSchema.safeParse({ ...base, ...extra });
+  assert.equal(parse({ host: " smtp://Smtpi.KingHost.net:587 " }).success, false);
+  for (const host of ["177.153.0.10", "mail.example.com.br", "xn--80ak6aa92e.com", "SMTP.Gmail.com"])
+    assert.equal(parse({ host }).success, true, host);
+  for (const host of ["177.153.0.256", "010.0.0.1", "smtp.25", "a.b", "-x.example.com", "x-.example.com", "under_score.example.com",
+    "smtp.example.com.", "2130706433", "[::1]", `${"x".repeat(250)}.com`])
+    assert.equal(parse({ host }).success, false, host);
+  for (const email of ["a@b", "a b@c.com", "", `${"x".repeat(250)}@b.com`]) assert.equal(parse({ email }).success, false, email);
+  for (const port of ["", undefined, 587.5, "abc"]) assert.equal(parse({ port }).success, false, String(port));
+  for (const lim of [{ hourlyLimit: 100.5 }, { hourlyLimit: "" }, { dailyLimit: undefined }])
+    assert.equal(parse(lim).success, false, JSON.stringify(lim));
+  for (const lim of [{ hourlyLimit: 1, dailyLimit: 1 }, { hourlyLimit: 500, dailyLimit: 500 }, { hourlyLimit: 1_700, dailyLimit: 10_000 }])
+    assert.equal(parse(lim).success, true, JSON.stringify(lim));
+  // the password is never trimmed; an explicit user is kept as typed (trimmed only); a name is trimmed
+  // (`satisfies` pins the output types the save action relies on: tsc checks them, not the run)
+  const typed = smtpAccountSchema.parse({ ...base, password: " p w ", username: " Contato ", displayName: "  Loja X  " });
+  assert.equal(typed.password, " p w ");
+  assert.equal(typed.username satisfies string, "Contato");
+  assert.equal(typed.displayName satisfies string | null, "Loja X");
+  assert.equal(typed.port satisfies 465 | 587 | 2525, 587);
+  const bare = smtpAccountSchema.parse(base);
+  assert.equal(bare.username, "a@b.com");
+  assert.equal(bare.displayName, null);
+});
+
+check("isBlockedSmtpAddress holds at the edge of every range and in every notation", () => {
+  // the first and the last address of every blocked range...
+  const inside = [
+    "0.0.0.0", "0.255.255.255", "10.0.0.0", "10.255.255.255", "100.64.0.0", "100.127.255.255", "127.0.0.0", "127.255.255.255",
+    "169.254.0.0", "169.254.255.255", "172.16.0.0", "172.31.255.255", "192.0.0.0", "192.0.0.255", "192.0.2.0", "192.0.2.255",
+    "192.168.0.0", "192.168.255.255", "198.18.0.0", "198.19.255.255", "198.51.100.0", "198.51.100.255", "203.0.113.0",
+    "203.0.113.255", "224.0.0.0", "239.255.255.255", "240.0.0.0", "255.255.255.255", "192.88.99.0", "192.88.99.255",
+    "::", "::1", "::ffff:ffff", "64:ff9b::", "64:ff9b::ffff:ffff", "100::", "100::ffff:ffff:ffff:ffff", "2001::",
+    "2001:0:ffff:ffff::1", "2001:db8::", "2001:db8:ffff:ffff::1", "2002::", "2002:ffff::1", "fc00::", "fdff:ffff::1",
+    "fe80::", "febf:ffff::1", "fec0::", "feff:ffff::1", "ff00::", "ffff::1",
+  ];
+  // ...and the address just past each range, which must stay open
+  const outside = [
+    "1.0.0.0", "9.255.255.255", "11.0.0.0", "100.63.255.255", "100.128.0.0", "126.255.255.255", "128.0.0.0", "169.253.255.255",
+    "169.255.0.0", "172.15.255.255", "172.32.0.0", "192.0.1.0", "192.0.3.0", "192.88.98.255", "192.88.100.0", "192.167.255.255",
+    "192.169.0.0", "198.17.255.255", "198.20.0.0", "198.51.99.255", "198.51.101.0", "203.0.112.255", "203.0.114.0",
+    "223.255.255.255",
+    "::1:0:0", "64:ff9a::1", "64:ff9c::1", "100:0:0:1::", "2001:1::1", "2001:db7::1", "2001:db9::1", "2001:ffff::1", "2003::1",
+    "fbff::1", "fe00::1", "fe7f::1",
+  ];
+  for (const ip of inside) assert.equal(isBlockedSmtpAddress(ip), true, ip);
+  for (const ip of outside) assert.equal(isBlockedSmtpAddress(ip), false, ip);
+  for (const ip of ["::ffff:7f00:1", "::FFFF:7F00:1", "0:0:0:0:0:ffff:127.0.0.1", "::ffff:a00:1", "::ffff:c0a8:1",
+    "::ffff:a9fe:a9fe", "::ffff:ac10:1", "::ffff:6440:1", "::ffff:c058:6301", "64:ff9b::7f00:1", "FD00::1", "ff02::1", "fe80::1%eth0",
+    "2804:14c::1%eth0", "0:0:0:0:0:0:7f00:1", "::127.0.0.1", "2002:0a00:0001::1", "2001:0:4136:e378:8000:63bf:3fff:fdd2"])
+    assert.equal(isBlockedSmtpAddress(ip), true, ip);
+  for (const ip of ["::ffff:808:808", "::ffff:8.8.4.4", "2606:4700:4700::1111", "2a00:1450:4001::1", "2001:4860:4860::8888"])
+    assert.equal(isBlockedSmtpAddress(ip), false, ip);
+  // whatever isn't a plain IP is refused, never waved through
+  for (const text of ["", " ", "8.8.8.8 ", "08.8.8.8", "010.0.0.1", "0177.0.0.1", "1.2.3", "1.2.3.4.5", "256.1.1.1", "localhost", "[::1]"])
+    assert.equal(isBlockedSmtpAddress(text), true, JSON.stringify(text));
+  // one internal answer refuses the whole name, whichever family it comes in
+  assert.deepEqual(pickSmtpAddress([{ address: "fd00::1", family: 6 }, { address: "8.8.8.8", family: 4 }]), { ok: false, error: "host_not_allowed" });
+  assert.deepEqual(pickSmtpAddress([{ address: "8.8.8.8", family: 4 }, { address: "::ffff:127.0.0.1", family: 6 }]), { ok: false, error: "host_not_allowed" });
+  assert.deepEqual(pickSmtpAddress([{ address: "garbage", family: 4 }]), { ok: false, error: "host_not_allowed" });
+});
+
+check("TLS trouble is told apart in every shape it arrives, and only before the hand-over", () => {
+  const tls = [
+    { code: "ETLS" },
+    { code: "EPROTO" },
+    { code: "ERR_TLS_CERT_ALTNAME_INVALID" },
+    { code: "ESOCKET", message: "unable to verify the first certificate" },
+    { code: "ESOCKET", message: "self signed certificate in certificate chain" },
+    { code: "ESOCKET", message: "error:0A00010B:SSL routines:ssl3_get_record:wrong version number" },
+  ];
+  for (const e of tls) {
+    assert.equal(smtpSendPhase("connect", e), "tls", JSON.stringify(e));
+    assert.equal(smtpConnectError(e), "tls_failed", JSON.stringify(e));
+  }
+  assert.equal(smtpSendPhase("login", { code: "ETLS" }), "tls");
+  // a refused connection is not TLS: it stays a retried connection failure
+  assert.equal(smtpSendPhase("connect", { code: "ESOCKET", message: "connect ECONNREFUSED 1.2.3.4:587" }), "connect");
+  assert.equal(smtpConnectError({ code: "ESOCKET", message: "connect ECONNREFUSED 1.2.3.4:587" }), "connection_failed");
+  assert.equal(smtpConnectError({ code: "EAI_AGAIN" }), "host_not_found");
+  assert.equal(smtpConnectError({ code: "ECONNRESET" }), "connection_failed");
+  assert.equal(smtpConnectError({ code: "EAUTH", responseCode: 454 }), "auth_failed");
+  // a server that doesn't greet like SMTP (EPROTOCOL) is a connection failure, even if its text mentions a certificate
+  const greeting = { code: "EPROTOCOL", message: "Invalid greeting. response=554 5.7.1 client certificate required" };
+  assert.equal(smtpSendPhase("connect", greeting), "connect");
+  assert.equal(smtpSendPhase("login", greeting), "connect");
+  assert.equal(smtpConnectError(greeting), "connection_failed");
+  // during the hand-over a network failure is always uncertain, whatever words its text has
+  assert.equal(smtpSendPhase("send", { code: "ESOCKET", message: "certificate" }), "transfer");
+  assert.equal(smtpSendPhase("send", { code: "ESTREAM" }), "transfer");
+  // an envelope refusal that names no known command still counts as the server saying no, not as uncertain
+  assert.equal(smtpSendPhase("send", { code: "EENVELOPE", command: "API" }), "data");
+  assert.equal(smtpSendPhase("send", { code: "EENVELOPE" }), "data");
+  // the stored code survives the round trip
+  assert.equal(smtpPhaseOf(smtpFailureCode("transfer", 0)), "transfer");
+  assert.equal(smtpPhaseOf(smtpFailureCode("message", 552)), "message");
+});
+
+check("smtpFailureAction keeps a recipient's own refusals out of the pauses, whatever the wording", () => {
+  const a = smtpFailureAction;
+  // a RCPT TO failure with no reply code at all still never pauses
+  assert.equal(a(0, "rcpt", "", 0), "recipient");
+  // the recipient's own "rate" or "quota" is the recipient's, not the account's limit
+  assert.equal(a(450, "rcpt-450", "4.2.1 The user is receiving mail at a rate that prevents additional messages", 0), "retry");
+  assert.equal(a(450, "rcpt-450", "4.2.1 The user is receiving mail at a rate that prevents additional messages", 5), "recipient");
+  assert.equal(a(552, "data-552", "5.2.2 Mailbox quota exceeded", 0), "recipient");
+  assert.equal(a(451, "message-451", "4.2.2 Mailbox over quota", 4), "retry");
+  assert.equal(a(451, "message-451", "4.2.2 Mailbox over quota", 5), "recipient");
+  // x.7.x is the account's or the policy's, so the limit wording applies; at MAIL FROM a 5xx is the sender's
+  assert.equal(a(550, "message-550", "5.7.1 Message rejected: rate limited", 0), "daily_limit");
+  assert.equal(a(550, "mail-550", "5.1.1 Sender unknown", 0), "blocked");
+  // a refused password reconnects, with or without a reply code
+  assert.equal(a(530, "auth-530", "5.7.0 Authentication required", 0), "reconnect");
+  assert.equal(a(0, "auth", "Invalid login", 0), "reconnect");
+  // size, in the server's own words (a DATA refusal would pause if it were not read as size)
+  assert.equal(a(552, "data-552", "Mensagem excede o tamanho máximo", 0), "recipient");
+  assert.equal(a(554, "data-554", "Message too big", 0), "recipient");
+  assert.equal(a(552, "mail-552", "5.3.4 Message size exceeds fixed limit", 0), "recipient");
+  assert.equal(isSmtpSizeRefusal("message-552", ""), true);
+  assert.equal(isSmtpSizeRefusal("message-552", "Message rejected"), true);
+  assert.equal(isSmtpSizeRefusal("rcpt-552", "5.2.3 Message length exceeds administrative limit"), true);
+  assert.equal(isSmtpSizeRefusal(null, "554 5.2.2 Message too large"), true);
+  assert.equal(isSmtpSizeRefusal("message-552", "5.2.2 Mailbox full"), false);
+  assert.equal(isSmtpSizeRefusal("message-552", "5.1.1 Recipient unknown"), false);
+  assert.equal(isSmtpSizeRefusal("message-550", "Message rejected"), false);
+  assert.equal(isSmtpSizeRefusal("rcpt-552", "5.2.2 Mailbox full"), false);
+  assert.equal(isSmtpSizeRefusal("message-550", "5.7.1 generated content blocked"), false);
+  assert.equal(isSmtpSizeRefusal(null, "host 15.3.45.2 blocked"), false); // 5.3.4 only counts as a whole status code
+  // retry budgets: the preparation (connect, login) gets 3 retries, any other temporary answer 5
+  assert.equal(a(0, "connect", "ETIMEDOUT", 2), "retry");
+  assert.equal(a(454, "auth-454", "4.7.0 Temporary authentication failure", 2), "retry");
+  assert.equal(a(421, "data-421", "4.3.2 Service shutting down", 4), "retry");
+  assert.equal(a(421, "data-421", "4.3.2 Service shutting down", 5), "pause");
+  // the sender or the relay refused on any command after the login: blocked, ahead of the size and recipient rules
+  for (const phase of ["mail", "rcpt", "data", "message"]) {
+    for (const text of ["Sender address rejected", "Mail is not owned by user", "Relay access denied", "Relaying denied"])
+      assert.equal(a(554, `${phase}-554`, text, 0), "blocked", `${phase}: ${text}`);
+    assert.equal(a(550, `${phase}-550`, "5.1.7 Bad sender's mailbox address syntax", 0), "blocked", phase);
+    assert.equal(a(450, `${phase}-450`, "4.1.8 Bad sender's system address", 0), "blocked", phase);
+  }
+  assert.equal(a(552, "message-552", "Relay access denied", 0), "blocked"); // not read as a bare 552 size
+  assert.equal(a(554, null, "Relay access denied", 0), "pause"); // only the answers after the login count
+  // a limit word is the account's when a sending word comes with it (each of them), the mailbox's when none does
+  for (const word of ["rate", "send", "sending", "sender", "sent", "envio", "envios", "enviar", "hour", "hourly", "day", "daily",
+    "hora", "horas", "dia", "diario", "diário", "diaria", "diária"])
+    assert.equal(a(552, "rcpt-552", `Quota exceeded: ${word}`, 0), "daily_limit", word);
+  assert.equal(a(552, "rcpt-552", "5.7.1 Mailbox quota exceeded", 0), "daily_limit"); // x.7.x is policy, not the mailbox
+  assert.equal(a(552, "data-552", "Over quota", 0), "recipient");
+  assert.equal(a(452, "data-452", "Over quota", 0), "retry");
+  assert.equal(a(552, "mail-552", "Over quota", 0), "daily_limit"); // at MAIL FROM it is the sender's own quota
+});
+
+check("smtpFailureAction reads 'cota' and 'diária', ignores echoed addresses and knows send-as refusals", () => {
+  const a = smtpFailureAction;
+  // "cota" is a limit word and "diária" a sending word (feminine, like "cota"): the account's daily quota pauses
+  assert.equal(a(550, "rcpt-550", "Cota diária de envio excedida", 0), "daily_limit");
+  assert.equal(a(550, "rcpt-550", "Cota diária excedida", 0), "daily_limit");
+  assert.equal(a(550, "rcpt-550", "Cota diaria excedida", 0), "daily_limit");
+  assert.equal(a(550, "mail-550", "Cota atingida", 0), "daily_limit");
+  // a mailbox's own "cota", with no sending word, is still that recipient's
+  assert.equal(a(552, "rcpt-552", "Cota excedida para o usuario", 0), "recipient");
+  assert.equal(a(552, "rcpt-552", "Cota atingida para esta caixa", 0), "recipient");
+  assert.equal(a(452, "rcpt-452", "Cota atingida para esta caixa", 0), "retry");
+  assert.equal(a(452, "rcpt-452", "Cota atingida para esta caixa", 5), "recipient");
+  // an address the server echoes back is a name, not words: "dia@..." or "envio@..." is no sending limit
+  assert.equal(a(552, "rcpt-552", "<dia@empresa.com.br>: Mailbox quota exceeded", 0), "recipient");
+  assert.equal(a(552, "rcpt-552", "envio@loja.com.br: Mailbox quota exceeded", 0), "recipient");
+  assert.equal(a(452, "rcpt-452", "<hora@empresa.com.br>... Over quota", 5), "recipient");
+  // the words around the address still count
+  assert.equal(a(550, "rcpt-550", "<dia@empresa.com.br>: daily sending quota exceeded", 0), "daily_limit");
+  assert.equal(a(550, "rcpt-550", "Limite de envio excedido para <contato@cliente.com.br>", 0), "daily_limit");
+  // nor is "cota" at the start of one ("<cotacao@...>", "<cotacoes@...>", "@cotabest..."): it is no limit word, on any rule.
+  // A recipient's refusal that also has an x.7.x code or a sending word stays the recipient's (a 4xx retries, then fails it),
+  // never "daily_limit": that pause hands the recipient back first in the queue and the resume stalls on it for good
+  assert.equal(a(550, "rcpt-550", "5.7.1 <cotacao@fornecedor.com.br>: Recipient address rejected: Access denied", 0), "recipient");
+  assert.equal(a(554, "rcpt-554", "5.7.1 <cotacoes@fornecedor.com.br>: Recipient address rejected: Access denied", 0), "recipient");
+  assert.equal(a(550, "rcpt-550", "5.7.1 <compras@cotabest.com.br>: Recipient address rejected: Access denied", 0), "recipient");
+  assert.equal(a(550, "rcpt-550", "5.7.1 compras@cotabest.com.br: Recipient address rejected: Access denied", 0), "recipient");
+  assert.equal(a(550, "rcpt-550", "<cotacao@fornecedor.com.br>: Recipient rejected by sender policy", 0), "recipient");
+  assert.equal(a(450, "rcpt-450", "4.7.1 <cotacao@fornecedor.com.br>: Recipient address rejected: Greylisted", 0), "retry");
+  assert.equal(a(450, "rcpt-450", "4.7.1 <cotacao@fornecedor.com.br>: Recipient address rejected: Greylisted", 5), "recipient");
+  assert.equal(a(554, "message-554", "5.7.1 <cotacao@fornecedor.com.br>: Message rejected", 0), "recipient");
+  // at DATA an unknown 5xx pauses with or without such an address; at MAIL FROM it blocks (5xx) or retries (4xx)
+  assert.equal(a(554, "data-554", "<cotacao@fornecedor.com.br>: transaction failed", 0), "pause");
+  assert.equal(a(550, "mail-550", "<cotacao@empresa.com.br>: Access denied", 0), "blocked");
+  assert.equal(a(451, "mail-451", "4.3.0 <cotacao@empresa.com.br>: Temporary lookup failure", 0), "retry");
+  // a 421 is the server's whatever address it echoes: it retries, it is not a limit
+  assert.equal(a(421, "rcpt-421", "<cotacao@x.com>: Service not available", 0), "retry");
+  // the words around such an address still count
+  assert.equal(a(550, "rcpt-550", "<cotacao@fornecedor.com.br>: Cota diária de envio excedida", 0), "daily_limit");
+  assert.equal(a(552, "rcpt-552", "<cotacao@fornecedor.com.br>: Cota excedida para o usuario", 0), "recipient");
+  assert.equal(a(550, "mail-550", "<cotacao@empresa.com.br>: Cota atingida", 0), "daily_limit");
+  assert.equal(a(421, "rcpt-421", "<cotacao@x.com>: Too many connections", 0), "daily_limit");
+  // Office 365's send-as refusals are the account's, on whichever command they come back
+  assert.equal(a(554, "message-554", "5.2.252 SendAsDenied; user@x not allowed to send as y@z", 0), "blocked");
+  assert.equal(a(550, "message-550", "5.7.60 SMTP; Client does not have permissions to send as this sender", 0), "blocked");
+  for (const phase of ["mail", "rcpt", "data", "message"])
+    for (const text of ["SendAsDenied", "Client does not have permission to send as this sender", "user is not allowed to send as x@y"])
+      assert.equal(a(550, `${phase}-550`, text, 0), "blocked", `${phase}: ${text}`);
+});
+
 // --- failure reasons -----------------------------------------------------------
 check("pausedReasonKey keeps known reasons and folds the rest into provider_error", () => {
   assert.equal(pausedReasonKey("daily_limit"), "daily_limit");
@@ -1045,8 +1558,8 @@ check("listReason picks the red line of the sends list", () => {
 
 // --- sends list per channel ----------------------------------------------------
 check("listChannelFromParam: no ?canal= means asking, unless Microsoft isn't set up", () => {
-  const ms = { microsoft: true, google: false };
-  const none = { microsoft: false, google: false };
+  const ms = { microsoft: true, google: false, smtp: false };
+  const none = { microsoft: false, google: false, smtp: false };
   assert.equal(listChannelFromParam(undefined, ms), null);
   assert.equal(listChannelFromParam("", ms), null);
   assert.equal(listChannelFromParam("outra", ms), null);
@@ -1058,12 +1571,12 @@ check("listChannelFromParam: no ?canal= means asking, unless Microsoft isn't set
 });
 
 check("listChannelFromParam with three channels", () => {
-  const both = { microsoft: true, google: true };
+  const both = { microsoft: true, google: true, smtp: false };
   assert.equal(listChannelFromParam("google", both), "google");
-  assert.equal(listChannelFromParam("google", { microsoft: true, google: false }), null);
-  assert.equal(listChannelFromParam("microsoft", { microsoft: false, google: true }), null);
-  assert.equal(listChannelFromParam(undefined, { microsoft: false, google: false }), "plataforma");
-  assert.equal(listChannelFromParam("google", { microsoft: false, google: false }), "plataforma");
+  assert.equal(listChannelFromParam("google", { microsoft: true, google: false, smtp: false }), null);
+  assert.equal(listChannelFromParam("microsoft", { microsoft: false, google: true, smtp: false }), null);
+  assert.equal(listChannelFromParam(undefined, { microsoft: false, google: false, smtp: false }), "plataforma");
+  assert.equal(listChannelFromParam("google", { microsoft: false, google: false, smtp: false }), "plataforma");
   assert.equal(listChannelOf("GOOGLE"), "google");
   assert.equal(broadcastChannelOf("google"), "GOOGLE");
 });
@@ -1077,6 +1590,101 @@ check("list channel links and the broadcast channel they map to", () => {
   assert.equal(listChannelOf("MICROSOFT"), "microsoft");
   assert.equal(broadcastChannelOf("plataforma"), "PLATFORM");
   assert.equal(broadcastChannelOf("microsoft"), "MICROSOFT");
+});
+
+check("SMTP failure reasons, paused texts and list channel", () => {
+  assert.equal(smtpRecipientError("rcpt-550", "5.1.1 User unknown"), "smtp:rcpt-550|5.1.1 User unknown");
+  assert.equal(smtpRecipientError("rcpt-550", "x".repeat(600)).length, 500);
+  assert.deepEqual(recipientFailure("smtp:rcpt-550|5.1.1 User unknown"), { key: "invalid_address", technical: "rcpt-550: 5.1.1 User unknown" });
+  assert.equal(recipientFailure("smtp:message-552|5.3.4 Message size exceeds fixed limit")?.key, "message_too_large");
+  assert.equal(recipientFailure("smtp:rcpt-552|5.2.2 Mailbox full")?.key, "generic");
+  assert.equal(recipientFailure("smtp:message-554|spam")?.key, "generic");
+  // a bare 552 at the final answer is a size, unless it carries an address or mailbox code (5.2.3 is a length again)
+  assert.equal(recipientFailure("smtp:message-552|5.2.2 Mailbox full")?.key, "generic");
+  assert.equal(recipientFailure("smtp:message-552|Message rejected")?.key, "message_too_large");
+  assert.equal(recipientFailure("smtp:message-552|5.2.3 Message length exceeds administrative limit")?.key, "message_too_large");
+  assert.equal(pausedMessageKey("SMTP", "daily_limit"), "paused.smtp_daily_limit");
+  assert.equal(pausedMessageKey("SMTP", "provider_error"), "paused.smtp_provider_error");
+  assert.equal(pausedMessageKey("SMTP", "quota"), "paused.quota");
+  assert.equal(listPausedMessageKey("SMTP", "reconnect"), "listReason.paused.smtp_reconnect");
+  assert.equal(listPausedMessageKey("SMTP", "provider_error"), "listReason.paused.provider_error");
+  assert.equal(failureMessageKey("SMTP", "message_too_large"), "failure.smtp_message_too_large");
+  assert.equal(failureMessageKey("MICROSOFT", "message_too_large"), "failure.message_too_large");
+  assert.equal(failureMessageKey("SMTP", "generic"), "failure.generic");
+  assert.equal(listChannelFromParam("smtp", { microsoft: false, google: false, smtp: true }), "smtp");
+  assert.equal(listChannelFromParam("smtp", { microsoft: true, google: true, smtp: false }), null);
+  assert.equal(listChannelFromParam(undefined, { microsoft: false, google: false, smtp: false }), "plataforma");
+  assert.equal(listChannelOf("SMTP"), "smtp");
+  assert.equal(broadcastChannelOf("smtp"), "SMTP");
+  assert.equal(emailListHref("smtp"), "/app/email?canal=smtp");
+  const now = new Date("2026-10-21T12:00:00Z");
+  assert.deepEqual(sentLastHourWhere("acc", now), {
+    status: { in: ["SENT", "SENDING", "UNCERTAIN"] },
+    sentAt: { gte: new Date("2026-10-21T11:00:00Z") },
+    broadcast: { senderAccountId: "acc" },
+  });
+});
+
+check("SMTP stored errors and channel wordings hold for every phase and reason", () => {
+  for (const reply of ["550", "551", "553", "501", "510", "511"])
+    assert.equal(recipientFailure(`smtp:rcpt-${reply}|x`)?.key, "invalid_address", reply);
+  for (const code of ["rcpt-554", "rcpt-552", "rcpt-450", "mail-550", "data-550", "message-550", "transfer", "guard"])
+    assert.equal(recipientFailure(`smtp:${code}|x`)?.key, "generic", code);
+  assert.deepEqual(recipientFailure("smtp:rcpt-550"), { key: "invalid_address", technical: "rcpt-550" });
+  assert.equal(recipientFailure("smtp:rcpt-552|5.3.4 Message size exceeds fixed limit")?.key, "message_too_large");
+  assert.equal(smtpRecipientError(null, "x"), "smtp:unknown|x");
+  for (const r of ["daily_limit", "reconnect", "no_sender_account", "account_blocked", "provider_error"] as const) {
+    assert.equal(pausedMessageKey("SMTP", r), `paused.smtp_${r}`);
+    assert.equal(pausedMessageKey("GOOGLE", r), `paused.google_${r}`);
+  }
+  for (const r of ["daily_limit", "reconnect", "no_sender_account", "account_blocked"] as const)
+    assert.equal(listPausedMessageKey("SMTP", r), `listReason.paused.smtp_${r}`);
+  for (const r of ["quota", "no_connection", "domain_not_allowed", "from_missing", "attachment_unavailable", "attachment_invalid"] as const) {
+    assert.equal(pausedMessageKey("SMTP", r), `paused.${r}`);
+    assert.equal(listPausedMessageKey("SMTP", r), `listReason.paused.${r}`);
+  }
+  assert.equal(pausedMessageKey("PLATFORM", "daily_limit"), "paused.daily_limit");
+  for (const key of ["invalid_address", "interrupted", "generic"] as const) assert.equal(failureMessageKey("SMTP", key), `failure.${key}`);
+  const smtpOnly = { microsoft: false, google: false, smtp: true };
+  assert.equal(listChannelFromParam(undefined, smtpOnly), null);
+  assert.equal(listChannelFromParam("microsoft", smtpOnly), null);
+  assert.equal(listChannelFromParam(["smtp", "plataforma"], smtpOnly), "smtp");
+  assert.equal(listChannelFromParam("smtp", { microsoft: true, google: true, smtp: true }), "smtp");
+});
+
+/** The keys (under emailBroadcast) that a message catalog has no text for. */
+function missingEmailKeys(catalog: object, keys: readonly string[]): string[] {
+  return keys.filter((key) => {
+    let node: unknown = (catalog as { emailBroadcast?: unknown }).emailBroadcast;
+    for (const part of key.split(".")) node = node && typeof node === "object" ? (node as Record<string, unknown>)[part] : undefined;
+    return typeof node !== "string";
+  });
+}
+
+check("every paused and failure text key the helpers return exists in pt.json and en.json", () => {
+  const channels = ["PLATFORM", "MICROSOFT", "GOOGLE", "SMTP"] as const satisfies readonly MailboxChannel[];
+  const failures = ["invalid_address", "message_too_large", "interrupted", "generic"] as const satisfies readonly RecipientFailureKey[];
+  // typecheck fails here when a channel or a failure key is added to failure-reason.ts without being listed above
+  type Unlisted = Exclude<MailboxChannel, (typeof channels)[number]> | Exclude<RecipientFailureKey, (typeof failures)[number]>;
+  const everyOneListed: [Unlisted] extends [never] ? true : false = true;
+  assert.ok(everyOneListed);
+  const keys = new Set<string>();
+  for (const channel of channels) {
+    for (const reason of PAUSED_REASONS) {
+      keys.add(pausedMessageKey(channel, reason));
+      keys.add(listPausedMessageKey(channel, reason));
+    }
+    for (const failure of failures) keys.add(failureMessageKey(channel, failure));
+  }
+  const all = [...keys];
+  assert.ok(all.includes("paused.smtp_reconnect") && all.includes("failure.smtp_message_too_large"), "the SMTP wordings are among them");
+  assert.deepEqual(missingEmailKeys(ptMessages, all), [], "pt.json");
+  assert.deepEqual(missingEmailKeys(enMessages, all), [], "en.json");
+  // the check bites: a catalog that lost one of them, or holds a group where a text should be, is caught
+  const pruned = structuredClone(ptMessages) as { emailBroadcast: { paused: Record<string, unknown> } };
+  delete pruned.emailBroadcast.paused.smtp_reconnect;
+  pruned.emailBroadcast.paused.quota = { text: "x" };
+  assert.deepEqual(missingEmailKeys(pruned, all).sort(), ["paused.quota", "paused.smtp_reconnect"]);
 });
 
 // --- Microsoft inbox ---------------------------------------------------------

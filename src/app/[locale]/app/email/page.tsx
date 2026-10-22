@@ -57,10 +57,10 @@ export default async function EmailPage({
   const microsoftEnabled = microsoftMailConfigured();
   // Google is a pilot channel: only the companies that may use it see it.
   const googleEnabled = googleMailEnabledFor(ctx.organizationId);
-  const hasMailboxChannel = microsoftEnabled || googleEnabled;
   const sp = await searchParams;
-  // Entering E-mail always asks the channel first (no remembered choice).
-  const view = listChannelFromParam(sp.canal, { microsoft: microsoftEnabled, google: googleEnabled });
+  // Entering E-mail always asks the channel first (no remembered choice). SMTP has no pilot: every company
+  // with E-mail may connect one, so there is always a channel to choose besides the platform.
+  const view = listChannelFromParam(sp.canal, { microsoft: microsoftEnabled, google: googleEnabled, smtp: true });
   // The Microsoft Inbox has its own screen key: a template can grant sending without reading.
   const inboxAllowed = microsoftEnabled && canAccessScreen(ctx, "emailInbox");
   /** Unread count for the badges (channel card, "Envios" tab), streamed so a slow Microsoft never holds the page. */
@@ -82,9 +82,10 @@ export default async function EmailPage({
   );
 
   if (view === null) {
-    const [microsoftAccount, googleAccount] = await Promise.all([
+    const [microsoftAccount, googleAccount, smtpAccount] = await Promise.all([
       microsoftEnabled ? getSenderAccountView(ctx.organizationId, "MICROSOFT") : Promise.resolve(null),
       googleEnabled ? getSenderAccountView(ctx.organizationId, "GOOGLE") : Promise.resolve(null),
+      getSenderAccountView(ctx.organizationId, "SMTP"),
     ]);
     return (
       <div className="flex flex-col gap-6">
@@ -95,6 +96,7 @@ export default async function EmailPage({
           microsoftEnabled={microsoftEnabled}
           google={googleAccount}
           googleEnabled={googleEnabled}
+          smtp={smtpAccount}
           quotaLimit={limit}
           inbox={
             inboxAllowed && microsoftAccount?.status === "ACTIVE"
@@ -106,8 +108,8 @@ export default async function EmailPage({
     );
   }
 
-  // The two mailbox channels (Microsoft and Google) share the layout; the platform has domains and a monthly quota.
-  const provider = view === "microsoft" ? "MICROSOFT" : view === "google" ? "GOOGLE" : null;
+  // The mailbox channels (Microsoft, Google and SMTP) share the layout; the platform has domains and a monthly quota.
+  const provider = view === "microsoft" ? "MICROSOFT" : view === "google" ? "GOOGLE" : view === "smtp" ? "SMTP" : null;
   const mailbox = provider !== null;
   const microsoft = view === "microsoft";
   const tab = microsoft && inboxAllowed ? microsoftTabFromParam(sp.aba) : "envios";
@@ -118,11 +120,9 @@ export default async function EmailPage({
         <ChannelIcon channel={view} />
         {microsoft && inboxAllowed ? t("channel.microsoftTitle") : t(`listChannel.${view}`)}
       </h2>
-      {hasMailboxChannel ? (
-        <Link href={emailListHref(null)} className="text-sm font-medium text-brand hover:underline">
-          {t("switchChannel")}
-        </Link>
-      ) : null}
+      <Link href={emailListHref(null)} className="text-sm font-medium text-brand hover:underline">
+        {t("switchChannel")}
+      </Link>
     </div>
   );
 
@@ -172,7 +172,7 @@ export default async function EmailPage({
     <>
       {/* /app/email is a top-level path, so the shell's BackBar hides itself; a
           channel's list is a step past the choice, so it gets the same control. */}
-      {hasMailboxChannel ? <BackButton fallback={emailListHref(null)} /> : null}
+      <BackButton fallback={emailListHref(null)} />
       <div className="flex flex-col gap-6">
         {header(`/app/email/new?via=${view === "plataforma" ? "platform" : view}`)}
 

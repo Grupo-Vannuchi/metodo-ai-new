@@ -6,7 +6,12 @@ import {
   getEmailBroadcastReport,
   type ReportFilter,
 } from "@/lib/queries/email-broadcasts";
-import { pausedMessageKey, pausedReasonKey, recipientFailure } from "@/lib/email-broadcast/failure-reason";
+import {
+  failureMessageKey,
+  pausedMessageKey,
+  pausedReasonKey,
+  recipientFailure,
+} from "@/lib/email-broadcast/failure-reason";
 import { readStats } from "@/lib/validations/email-broadcast";
 import { attachmentSizeParts, readAttachments } from "@/lib/email-broadcast/attachments";
 import { composeEmail } from "@/lib/email-broadcast/compose";
@@ -52,9 +57,10 @@ export default async function EmailReportPage({
   const b = await getEmailBroadcast(ctx.organizationId, id);
   if (!b) notFound();
   if (b.status === "DRAFT") redirect({ href: `/app/email/${id}/edit`, locale });
-  // Microsoft and Google send from the company's own mailbox: same counters and filters, no delivery tracking.
+  // Microsoft, Google and SMTP send from the company's own mailbox: same counters and filters, no delivery tracking.
   const google = b.channel === "GOOGLE";
-  const mailbox = b.channel === "MICROSOFT" || google;
+  const smtp = b.channel === "SMTP";
+  const mailbox = b.channel === "MICROSOFT" || google || smtp;
   const FILTERS = mailbox ? MAILBOX_FILTERS : PLATFORM_FILTERS;
   const COUNTERS: readonly Counter[] = mailbox ? MAILBOX_COUNTERS : PLATFORM_COUNTERS;
 
@@ -112,7 +118,7 @@ export default async function EmailReportPage({
           ) : null}
           {mailbox && b.fromEmail ? (
             <p className="mt-1 text-sm text-muted-foreground">
-              {t(google ? "report.viaGoogle" : "report.viaMicrosoft", { email: b.fromEmail })}
+              {t(smtp ? "report.viaSmtp" : google ? "report.viaGoogle" : "report.viaMicrosoft", { email: b.fromEmail })}
             </p>
           ) : null}
         </div>
@@ -127,7 +133,7 @@ export default async function EmailReportPage({
       ) : null}
       {mailbox ? (
         <p className="text-sm text-muted-foreground">
-          {t(google ? "report.noTrackingGoogle" : "report.noTrackingMicrosoft")}
+          {t(smtp ? "report.noTrackingSmtp" : google ? "report.noTrackingGoogle" : "report.noTrackingMicrosoft")}
         </p>
       ) : !deliveryTrackingConfigured() ? (
         <p className="text-sm text-muted-foreground">{t("report.noTracking")}</p>
@@ -214,7 +220,7 @@ export default async function EmailReportPage({
                       const failure = recipientFailure(r.error);
                       return failure ? (
                         <div title={failure.technical} className="mt-1 max-w-sm text-xs text-red-600">
-                          {t(`failure.${failure.key}`)}
+                          {t(failureMessageKey(b.channel, failure.key))}
                         </div>
                       ) : null;
                     })()}

@@ -1,6 +1,7 @@
 import type { AudienceStats, CandidateSource } from "./audience-core";
 import type { AudienceSelection } from "@/lib/validations/email-broadcast";
 import type { EmailAttachment } from "./attachments";
+import type { SmtpPort, SmtpSecurity } from "./smtp/core";
 
 /** Shapes shared by the E-mail pages, actions and client components. Types only. */
 
@@ -33,7 +34,7 @@ export type ComposerDraft = {
   picked: PickedTarget[];
   attachments: EmailAttachment[];
   signatureId: string | null;
-  channel: "PLATFORM" | "MICROSOFT" | "GOOGLE";
+  channel: "PLATFORM" | "MICROSOFT" | "GOOGLE" | "SMTP";
 };
 
 /** A signature as the composer and the Assinaturas tab show it; previewHtml
@@ -47,14 +48,33 @@ export type SignatureOption = {
   previewHtml: string;
 };
 
-/** The org's sending account (Microsoft or Google) as the screens show it (no credentials). */
+/** The org's sending account (Microsoft, Google or SMTP) as the screens show it (no credentials). */
 export type SenderAccountView = {
   id: string;
   email: string;
   displayName: string | null;
-  accountKind: "personal" | "work";
+  accountKind: "personal" | "work" | "smtp";
   status: "ACTIVE" | "NEEDS_RECONNECT";
   dailyLimit: number;
+  /** Only the SMTP account has one (the company's own figure); null for Microsoft and Google. */
+  hourlyLimit: number | null;
+  /** The SMTP server's name, never its password; null for Microsoft and Google. */
+  host: string | null;
   sentLast24h: number;
   remaining: number;
+};
+
+/** The SMTP account as its form is filled to edit or reconnect it: every field but the password, which never leaves the server. */
+export type SmtpAccountFormView = {
+  email: string;
+  displayName: string | null;
+  /** "" when the stored credentials can't be opened: the account then reads NEEDS_RECONNECT and the server is typed again. */
+  host: string;
+  port: SmtpPort;
+  security: SmtpSecurity;
+  /** "" for the same reason as `host`. */
+  username: string;
+  hourlyLimit: number;
+  dailyLimit: number;
+  status: "ACTIVE" | "NEEDS_RECONNECT";
 };

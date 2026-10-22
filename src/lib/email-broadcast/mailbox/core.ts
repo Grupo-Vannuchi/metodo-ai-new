@@ -1,8 +1,16 @@
 /**
  * Pure rules shared by the "send through the company's own mailbox" channels
- * (Microsoft, spec 2026-10-15; Google, spec 2026-10-19). No server imports, so
- * check:email and the composer can import it.
+ * (Microsoft, spec 2026-10-15; Google, spec 2026-10-19; SMTP, spec 2026-10-21).
+ * No server imports, so check:email and the composer can import it.
  */
+
+function sentSinceWhere(accountId: string, since: Date) {
+  return {
+    status: { in: ["SENT", "SENDING", "UNCERTAIN"] as ("SENT" | "SENDING" | "UNCERTAIN")[] },
+    sentAt: { gte: since },
+    broadcast: { senderAccountId: accountId },
+  };
+}
 
 /**
  * Prisma `where` (EmailBroadcastRecipient) for the e-mails that left, or may
@@ -10,11 +18,12 @@
  * a recipient is reserved, so SENDING and UNCERTAIN count too.
  */
 export function sentLast24hWhere(accountId: string, now: Date) {
-  return {
-    status: { in: ["SENT", "SENDING", "UNCERTAIN"] as ("SENT" | "SENDING" | "UNCERTAIN")[] },
-    sentAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
-    broadcast: { senderAccountId: accountId },
-  };
+  return sentSinceWhere(accountId, new Date(now.getTime() - 24 * 60 * 60 * 1000));
+}
+
+/** Same count over the last 60 min: what an SMTP account's hourly limit is checked against. */
+export function sentLastHourWhere(accountId: string, now: Date) {
+  return sentSinceWhere(accountId, new Date(now.getTime() - 60 * 60 * 1000));
 }
 
 /** What is left of the estimated daily limit (never negative). */
@@ -30,7 +39,33 @@ export function mailboxSendMinutes(count: number): number {
   return Math.max(1, Math.ceil((Math.max(0, count) * MAILBOX_PACE_MS) / 60_000));
 }
 
-/** What the dispatcher does with a failed provider call (Graph or Gmail). */
+/** The pause is stretched for at most this many sends of one account running at once. */
+const MAX_PACE_FACTOR = 20;
+
+/**
+ * The pause after an e-mail: the account's pace times the sends of that same
+ * account running right now (at least 1, at most 20), so all of them together
+ * keep the account's pace.
+ */
+export function mailboxPaceWaitMs(paceMs: number, running: number): number {
+  return paceMs * Math.min(Math.max(1, running), MAX_PACE_FACTOR);
+}
+
+/**
+ * A wait cut into pieces of at most `maxChunkMs` (the last one takes the rest),
+ * so the lease can be renewed before each piece: a long wait never outlives
+ * the dispatcher's 90 s lease. A total that isn't a number (NaN, Infinity)
+ * fails closed: one full piece, never no wait at all.
+ */
+export function waitChunksMs(totalMs: number, maxChunkMs = 10_000): number[] {
+  const step = Math.max(1, maxChunkMs);
+  if (!Number.isFinite(totalMs)) return [step];
+  const chunks: number[] = [];
+  for (let left = totalMs; left > 0; left -= step) chunks.push(Math.min(left, step));
+  return chunks;
+}
+
+/** What the dispatcher does with a failed provider call (Graph, Gmail or SMTP). */
 export type MailboxFailureAction =
   | "refresh"
   | "retry"
