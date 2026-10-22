@@ -76,8 +76,8 @@ const selectCls = cn(
  * stored. The password is never filled in: in an edit it can stay blank only
  * while the server, port, security and user are the ones it was typed for (the
  * same rule the server applies, canKeepSmtpPassword). Changing the sender's
- * address in an edit replaces the account (the server saves another row), so
- * that asks first.
+ * address in an edit or a reconnect replaces the account (the server saves
+ * another row), so that asks first.
  */
 export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { initial: SmtpFormInitial; mode: SmtpFormMode }) {
   const t = useTranslations("emailBroadcast");
@@ -124,8 +124,10 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
   const username = shownUsername.trim() || emailNorm;
   const maxHourly = format.number(LIMITS.smtpHourlyMax);
   const maxDaily = format.number(LIMITS.smtpDailyMax);
-  // Saving another address replaces the account: a new row, and the sends in progress through the old one pause.
-  const emailChanged = mode === "edit" && emailNorm !== "" && emailNorm !== initial.email;
+  // Saving another address replaces the account (a new row, and the sends through the old one stay paused), in an edit
+  // and in a reconnect alike.
+  const emailChanged =
+    (mode === "edit" || mode === "reconnect") && initial.email !== "" && emailNorm !== "" && emailNorm !== initial.email;
   // Blank is "keep the saved password" only for an edit that still points where the password was typed.
   const keepPassword =
     mode === "edit" &&

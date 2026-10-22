@@ -160,12 +160,13 @@ para o tipo mas sem dono ainda — não gatear nada por elas por engano.
 
 ## Paridade de i18n
 
-`src/messages/pt.json` e `src/messages/en.json` têm **3171 chaves-folha cada um** (contagem
+`src/messages/pt.json` e `src/messages/en.json` têm **3172 chaves-folha cada um** (contagem
 própria, recursiva sobre os dois arquivos — batem exatamente). Não existe script no repositório
-que verifique isso automaticamente: nenhum arquivo em `scripts/` nem entrada em `package.json`
-menciona `pt.json`/`en.json`. Adicionar uma chave de um lado sem adicionar do outro não quebra
-`typecheck`, `lint` nem `build` — só aparece como texto faltando (ou a chave crua) na tela de quem
-usa o idioma que ficou pra trás.
+que verifique a paridade inteira automaticamente: o único arquivo em `scripts/` que lê
+`pt.json`/`en.json` é o `check-email-broadcast.ts` (`npm run check:email`), e ele só confere que os
+textos dos motivos de pausa e de falha do E-mail existem nos dois. Adicionar uma chave de um lado sem
+adicionar do outro não quebra `typecheck`, `lint` nem `build` — só aparece como texto faltando (ou a
+chave crua) na tela de quem usa o idioma que ficou pra trás.
 
 **Textos jurídicos longos ficam fora dos catálogos**, em `src/messages/legal/<doc>.<locale>.json`
 (hoje só `privacy`, servida em `/privacy`). O motivo é peso: o `NextIntlClientProvider` do layout

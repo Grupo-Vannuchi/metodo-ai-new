@@ -2048,8 +2048,8 @@
     "confirmGoogleSent": "The e-mails are saved in {email}'s Gmail Sent folder, and Google doesn't report delivery or opens.",
     "smtpChip": "SMTP account",
     "smtpMissing": "There's no active SMTP account for this company. Set it up or reconnect it in New e-mail before sending.",
-    "confirmSmtpPace": "At the limit of {perHour} an hour, this part takes about {minutes, plural, one {# minute} other {# minutes}}.",
-    "confirmSmtpPaceHours": "At the limit of {perHour} an hour, this part takes about {hours} h.",
+    "confirmSmtpPace": "At the limit of {perHour, number} an hour, this part takes about {minutes, plural, one {# minute} other {# minutes}}.",
+    "confirmSmtpPaceHours": "At the limit of {perHour, number} an hour, this part takes about {hours} h.",
     "confirmSmtpSent": "No copy is kept in {email}'s Sent folder, and the provider doesn't report delivery or opens.",
     "image": {
       "button": "Image",
@@ -2209,7 +2209,7 @@
       },
       "error": {
         "auth_failed": "The server refused the user or the password.",
-        "tls_failed": "The server's certificate doesn't match the address you entered. Use the server your provider gives for e-mail programs.",
+        "tls_failed": "Couldn't open a secure connection to {host}:{port}. Check the security: SSL/TLS on 465; STARTTLS on 587 and 2525. If it's right, use the server your provider gives for e-mail programs: the certificate must match that name.",
         "connection_failed": "Couldn't connect to {host}:{port}. Check the server and the port; if you're using 465, try 587 with STARTTLS.",
         "host_not_found": "Server not found.",
         "host_not_allowed": "This server can't be used.",
@@ -2217,7 +2217,8 @@
         "failed": "Couldn't test the connection to the server. Check the details and try again.",
         "password_required": "Type this account's password: there is no stored password that can be used with these details.",
         "invalid": "Check the fields and try again.",
-        "busy": "A connection test is already running for this company. Wait for it to finish."
+        "busy": "A connection test is already running for this company. Wait for it to finish.",
+        "too_many_tests": "Too many connection attempts for this company. Wait a few minutes and try again."
       }
     },
     "title": "Email",

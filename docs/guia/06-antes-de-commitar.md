@@ -27,7 +27,8 @@ de minutos depois, na fila do CI.
 submenu E-mail (normalização, deduplicação, renderização, assinatura Svix, transições de status, domínio do remetente,
 espera da nova tentativa do e-mail transacional, as regras do envio pela conta Microsoft (tipo de conta, limite diário,
 caminho direto ou rascunho, faixas do upload, decisão sobre falhas do Graph), as regras do envio pela conta Google (tipo de conta pelo `hd`, conta sem Gmail, permissão parcial, limite diário, upload simples ou retomável, decisão sobre falhas do Gmail, recusas que pedem reconexão e piloto por empresa), as regras do envio por SMTP (ritmo a partir do limite por hora, decisão sobre as respostas do servidor, preparação separada da entrega, regra de endereços internos e portas, validação do formulário da conta e reaproveitamento da senha guardada), a montagem do MIME e os motivos de
-falha em português). Não usa banco nem rede. Rode sempre que mexer em `src/lib/email-broadcast/`.
+falha em português, conferindo que o texto de cada motivo de pausa e de falha existe em `pt.json` e `en.json`). Não usa
+banco nem rede. Rode sempre que mexer em `src/lib/email-broadcast/`.
 
 `npm run check:tasks` faz o mesmo para as regras puras do kanban de Tarefas
 ([src/lib/tasks/board-core.ts](../../src/lib/tasks/board-core.ts): distribuição inicial por data no

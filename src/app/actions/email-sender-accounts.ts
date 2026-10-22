@@ -20,7 +20,15 @@ export type SmtpSaveResult =
   | { ok: true; replaced: boolean }
   | {
       ok: false;
-      error: "unauthorized" | "forbidden" | "invalid" | "password_required" | "busy" | SmtpConnectError | "unknown";
+      error:
+        | "unauthorized"
+        | "forbidden"
+        | "invalid"
+        | "password_required"
+        | "busy"
+        | "too_many_tests"
+        | SmtpConnectError
+        | "unknown";
       technical?: string;
     };
 
@@ -32,6 +40,30 @@ export type SmtpSaveResult =
  * password after password on someone else's server.
  */
 const testingNow = new Set<string>();
+
+/** Connection tests one company may start in TEST_WINDOW_MS (in this process). */
+const TESTS_PER_WINDOW = 10;
+const TEST_WINDOW_MS = 10 * 60_000;
+/**
+ * When each company's recent connection tests started (in this process, ms).
+ * One at a time is not enough on its own: a test answers in a second or two,
+ * so the form would still try password after password against a server.
+ */
+const recentTests = new Map<string, number[]>();
+
+/**
+ * Takes one of the company's tests: false when it already started
+ * TESTS_PER_WINDOW in the last 10 minutes. A sliding window: each test frees
+ * its place 10 minutes after it started.
+ */
+function takeTestSlot(organizationId: string): boolean {
+  const now = Date.now();
+  const recent = (recentTests.get(organizationId) ?? []).filter((startedAt) => now - startedAt < TEST_WINDOW_MS);
+  const allowed = recent.length < TESTS_PER_WINDOW;
+  if (allowed) recent.push(now);
+  recentTests.set(organizationId, recent);
+  return allowed;
+}
 
 /**
  * Disconnect the org's mailbox for a provider (spec §5.3). The row goes away, so
@@ -76,8 +108,10 @@ export async function disconnectSenderAccount(
  * when it fails. An empty password keeps the saved one only for the server,
  * port, security and user it was typed for (canKeepSmtpPassword), so a stored
  * password is never sent anywhere else. One test at a time per company (see
- * `testingNow`). The password never leaves the server: not in the result
- * (`technical` comes redacted), the log or the audit.
+ * `testingNow`), and at most 10 tests per company in 10 minutes (see
+ * `takeTestSlot`); both are kept in this process's memory. The password never
+ * leaves the server: not in the result (`technical` comes redacted), the log
+ * or the audit.
  */
 export async function saveSmtpAccount(input: SmtpAccountInput): Promise<SmtpSaveResult> {
   const ctx = await getOrgContext();
@@ -93,6 +127,8 @@ export async function saveSmtpAccount(input: SmtpAccountInput): Promise<SmtpSave
   try {
     const settings = password ? { ...destination, password } : await withSavedPassword(ctx.organizationId, destination);
     if (!settings) return { ok: false, error: "password_required" };
+    // Only a call that is about to connect counts. No race: `testingNow` lets one call per company through at a time.
+    if (!takeTestSlot(ctx.organizationId)) return { ok: false, error: "too_many_tests" };
     const test = await verifySmtpSettings(settings);
     if (!test.ok) return { ok: false, error: test.error, technical: test.technical.slice(0, 300) };
     const saved = await storeSmtpAccount(ctx.organizationId, ctx.userId, {

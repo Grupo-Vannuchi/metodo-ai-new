@@ -1,6 +1,8 @@
 /**
- * RFC 5322 messages for Graph's MIME endpoints (sendMail and draft creation).
- * nodemailer is used ONLY as a message builder — nothing goes out over SMTP.
+ * RFC 5322 messages, built once for every mailbox channel: Graph's MIME
+ * endpoints (sendMail and draft creation), Gmail's messages.send, and the SMTP
+ * channel, which delivers the built MIME itself (smtp/send.ts). Here nodemailer
+ * only builds the message (MailComposer); nothing in this file sends it.
  * No server-only import, so check:email can test it.
  */
 import MailComposer from "nodemailer/lib/mail-composer";

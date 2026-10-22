@@ -2048,8 +2048,8 @@
     "confirmGoogleSent": "Os e-mails ficam salvos em Enviados do Gmail de {email}, e o Google não informa entrega nem abertura.",
     "smtpChip": "conta SMTP",
     "smtpMissing": "Não há uma conta SMTP ativa nesta empresa. Configure ou reconecte em Novo e-mail antes de enviar.",
-    "confirmSmtpPace": "No limite de {perHour} por hora, esta parte leva cerca de {minutes, plural, one {# minuto} other {# minutos}}.",
-    "confirmSmtpPaceHours": "No limite de {perHour} por hora, esta parte leva cerca de {hours} h.",
+    "confirmSmtpPace": "No limite de {perHour, number} por hora, esta parte leva cerca de {minutes, plural, one {# minuto} other {# minutos}}.",
+    "confirmSmtpPaceHours": "No limite de {perHour, number} por hora, esta parte leva cerca de {hours} h.",
     "confirmSmtpSent": "Nenhuma cópia fica em Enviados de {email}, e o provedor não informa entrega nem abertura.",
     "image": {
       "button": "Imagem",
@@ -2209,7 +2209,7 @@
       },
       "error": {
         "auth_failed": "O servidor recusou o usuário ou a senha.",
-        "tls_failed": "O certificado do servidor não confere com o endereço informado. Use o servidor que o provedor indica para programas de e-mail.",
+        "tls_failed": "Não foi possível abrir a conexão segura com {host}:{port}. Confira a segurança: SSL/TLS na 465; STARTTLS na 587 e na 2525. Se estiver certa, use o servidor que o provedor indica para programas de e-mail: o certificado precisa conferir com esse nome.",
         "connection_failed": "Não foi possível conectar em {host}:{port}. Confira o servidor e a porta; se estiver usando a 465, tente a 587 com STARTTLS.",
         "host_not_found": "Servidor não encontrado.",
         "host_not_allowed": "Este servidor não pode ser usado.",
@@ -2217,7 +2217,8 @@
         "failed": "Não foi possível testar a conexão com o servidor. Confira os dados e tente de novo.",
         "password_required": "Digite a senha desta conta: não há senha guardada que possa ser usada com estes dados.",
         "invalid": "Confira os campos e tente de novo.",
-        "busy": "Já existe um teste de conexão em andamento para esta empresa. Aguarde terminar."
+        "busy": "Já existe um teste de conexão em andamento para esta empresa. Aguarde terminar.",
+        "too_many_tests": "Muitas tentativas de conexão para esta empresa. Aguarde alguns minutos e tente de novo."
       }
     },
     "title": "E-mail",

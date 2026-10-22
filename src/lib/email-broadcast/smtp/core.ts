@@ -161,12 +161,14 @@ function isRecipientCode(code: EnhancedCode | null): boolean {
   return (code?.subject === 1 || code?.subject === 2) && !isSenderCode(code) && !isLengthCode(code);
 }
 
-const SENDER_TEXT = /sender address rejected|not owned by user|relay access denied|relaying denied/i;
+const SENDER_TEXT =
+  /sender address rejected|not owned by user|relay access denied|relaying denied|sendasdenied|permissions? to send as|not allowed to send as/i;
 
 /**
  * The answer is about the sender or about relaying (x.1.7, x.1.8 or those
- * words): the account's problem on whichever command it comes back. Postfix
- * says it at RCPT TO, but it is not each recipient's fault.
+ * words, Office 365's "SendAsDenied" and "permission to send as" included):
+ * the account's problem on whichever command it comes back. Postfix says it at
+ * RCPT TO, but it is not each recipient's fault.
  */
 function isSenderAnswer(message: string): boolean {
   return isSenderCode(enhancedCode(message)) || SENDER_TEXT.test(message);
@@ -186,20 +188,32 @@ export function isSmtpSizeRefusal(code: string | null, message: string): boolean
   return code === "message-552" && enhanced?.subject !== 1 && enhanced?.subject !== 2;
 }
 
-const LIMIT_TEXT = /\b(rate|limit|quota|too many|limite|excedid)/i;
-// Words that make a limit the account's SENDING limit ("rate", "per hour", "daily", "envio"...).
+const LIMIT_TEXT = /\b(rate|limit|quota|cota|too many|limite|excedid)/i;
+// Words that make a limit the account's SENDING limit ("rate", "per hour", "daily", "envio", "cota diária"...).
 const SENDING_TEXT =
-  /\b(rate|send|sending|sender|sent|envio|envios|enviar|hour|hourly|day|daily|hora|horas|dia|diario|diário)\b/i;
+  /\b(rate|send|sending|sender|sent|envio|envios|enviar|hour|hourly|day|daily|hora|horas|dia|diario|diário|diaria|diária)\b/i;
+// An address the server echoes back, in angle brackets or bare ("<dia@empresa.com.br>", "envio@loja.com").
+const ECHOED_ADDRESS = /<[^<>]*>|[^\s<>]+@[^\s<>]+/g;
+
+/**
+ * A sending word in the server's own words. The addresses it echoes back are
+ * left out first: they are names, so a recipient "dia@..." or "envio@..." never
+ * turns that mailbox's "quota exceeded" into the account's sending limit.
+ */
+function hasSendingWord(message: string): boolean {
+  return SENDING_TEXT.test(message.replace(ECHOED_ADDRESS, " "));
+}
 
 /**
  * The answer is one recipient's own: its address or mailbox (x.1.x, x.2.x), or
  * limit words with no sign of being the account's sending limit (no sending
- * word, no x.7.x policy code), like a bare "Over quota": that is the mailbox's.
+ * word outside an echoed address, no x.7.x policy code), like a bare "Over
+ * quota" or "Cota excedida para o usuario": that is the mailbox's.
  */
 function isRecipientAnswer(message: string): boolean {
   const enhanced = enhancedCode(message);
   if (isRecipientCode(enhanced)) return true;
-  return LIMIT_TEXT.test(message) && !SENDING_TEXT.test(message) && enhanced?.subject !== 7;
+  return LIMIT_TEXT.test(message) && !hasSendingWord(message) && enhanced?.subject !== 7;
 }
 
 /**
@@ -219,8 +233,8 @@ function isRecipientAnswer(message: string): boolean {
  *  6. the message is too big: this recipient fails;
  *  7. this recipient's own answer at RCPT TO, DATA or the final answer (an
  *     address or mailbox code x.1.x/x.2.x, or limit words with no sending word
- *     and no x.7.x code, like "Over quota"): 5 retries if temporary, then this
- *     recipient fails;
+ *     outside an echoed address and no x.7.x code, like "Over quota"): 5
+ *     retries if temporary, then this recipient fails;
  *  8. the answer talks about a limit: pause with "daily_limit";
  *  9. RCPT TO refused for any other reason: same as 7;
  * 10. any other 5xx: MAIL FROM blocks the account, the final answer fails this

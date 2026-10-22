@@ -12,8 +12,9 @@ import { sendSmtpMail } from "./send";
  * stored server settings instead of a token, the company's own daily and
  * hourly limits, and a pace that spreads the hour's e-mails evenly. Settings
  * that no longer open mark the account NEEDS_RECONNECT, and the send pauses
- * until the form saves them again. System context: the account is read with
- * organizationId and the provider explicit.
+ * until the form saves them again. Three hand-overs in a row that the server
+ * drops without an answer (UNCERTAIN) pause the send too. System context: the
+ * account is read with organizationId and the provider explicit.
  */
 export const smtpAdapter: MailboxAdapter<SmtpSettings> = {
   channel: "SMTP",
@@ -43,4 +44,5 @@ export const smtpAdapter: MailboxAdapter<SmtpSettings> = {
   send: sendSmtpMail,
   failureAction: (f, attempt) => smtpFailureAction(f.status, f.code, f.message, attempt),
   recipientError: smtpRecipientError,
+  uncertainPauseAfter: 3,
 };

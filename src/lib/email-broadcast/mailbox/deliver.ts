@@ -71,6 +71,12 @@ export type MailboxAdapter<A> = {
   failureAction(failure: MailboxSendFailure, attempt: number): MailboxFailureAction;
   /** How a failure is stored on the recipient. */
   recipientError(code: string | null, message: string): string;
+  /**
+   * Pause the send ("provider_error") after this many e-mails in a row ended
+   * UNCERTAIN: the server keeps dropping the hand-over without saying yes or
+   * no. Left out (Microsoft, Google), uncertain e-mails never pause the send.
+   */
+  uncertainPauseAfter?: number;
 };
 
 /**
@@ -114,8 +120,11 @@ export async function markInterruptedUncertain(broadcastId: string, organization
  * sentAt stamped), hand it to the provider, then SENT / FAILED / UNCERTAIN,
  * then wait the account's pace. A recipient still SENDING from a dead run was
  * cut mid-call (markInterruptedUncertain, called by the dispatcher): it is
- * never resent. No wait goes 10 s without renewing the lease. System context:
- * organizationId explicit everywhere.
+ * never resent. Three recipient failures in a row pause the send, and so do
+ * `adapter.uncertainPauseAfter` UNCERTAIN e-mails in a row (SMTP only); a SENT
+ * e-mail or a recipient failure (the server answered) starts that count over.
+ * No wait goes 10 s without renewing the lease. System context: organizationId
+ * explicit everywhere.
  */
 export async function runMailboxBroadcast<A>(run: MailboxRun, adapter: MailboxAdapter<A>): Promise<{ done: boolean }> {
   const org = run.organizationId;
@@ -146,6 +155,8 @@ export async function runMailboxBroadcast<A>(run: MailboxRun, adapter: MailboxAd
       : null;
 
   let streak = 0;
+  // UNCERTAIN e-mails in a row: a SENT one or a recipient failure (both mean the server answered) resets it.
+  let uncertainStreak = 0;
   let accessFailures = 0;
   while (Date.now() < run.deadline) {
     const current = await readBroadcast();
@@ -267,6 +278,7 @@ export async function runMailboxBroadcast<A>(run: MailboxRun, adapter: MailboxAd
       if (res.ok) {
         await settle({ status: "SENT", error: null });
         streak = 0;
+        uncertainStreak = 0;
         break;
       }
       const action = adapter.failureAction(res, attempt);
@@ -292,10 +304,18 @@ export async function runMailboxBroadcast<A>(run: MailboxRun, adapter: MailboxAd
       }
       if (action === "uncertain") {
         await settle({ status: "UNCERTAIN", error: INTERRUPTED_ERROR });
+        uncertainStreak++;
+        // This recipient is already settled (never sent again) and the rest stay QUEUED. The message comes from the
+        // adapter's send as it is stored elsewhere (SMTP's already has the account's secrets masked).
+        if (adapter.uncertainPauseAfter !== undefined && uncertainStreak >= adapter.uncertainPauseAfter) {
+          await run.pause("provider_error", `${uncertainStreak} envios seguidos sem confirmação do servidor: ${res.message}`);
+          return { done: true };
+        }
         break;
       }
       if (action === "recipient") {
         await settle({ status: "FAILED", error: adapter.recipientError(res.code, res.message), sentAt: null });
+        uncertainStreak = 0;
         streak++;
         if (streak >= 3) {
           await run.pause("provider_error", `3 consecutive failures (${res.status}): ${res.message}`);

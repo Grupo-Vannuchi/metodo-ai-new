@@ -79,6 +79,7 @@ import {
 import { EMPTY_AUDIENCE, audienceSelectionSchema, broadcastDraftSchema } from "../src/lib/validations/email-broadcast";
 import {
   INTERRUPTED_ERROR,
+  PAUSED_REASONS,
   failureMessageKey,
   googleRecipientError,
   listPausedMessageKey,
@@ -88,7 +89,11 @@ import {
   pausedReasonKey,
   recipientFailure,
   smtpRecipientError,
+  type MailboxChannel,
+  type RecipientFailureKey,
 } from "../src/lib/email-broadcast/failure-reason";
+import ptMessages from "../src/messages/pt.json";
+import enMessages from "../src/messages/en.json";
 import {
   MICROSOFT_CONSUMER_TENANT_ID,
   UPLOAD_CHUNK_BYTES,
@@ -135,7 +140,7 @@ import {
   smtpSendPhase,
 } from "../src/lib/email-broadcast/smtp/core";
 import { isBlockedSmtpAddress, pickSmtpAddress } from "../src/lib/email-broadcast/smtp/address";
-import { redactSmtpSecrets } from "../src/lib/email-broadcast/smtp/redact";
+import { redactAndCut, redactSmtpSecrets } from "../src/lib/email-broadcast/smtp/redact";
 import { smtpAccountSchema } from "../src/lib/validations/email-smtp-account";
 import {
   attachmentDisposition,
@@ -1155,6 +1160,25 @@ check("redactSmtpSecrets masks the password and what the login sends of it, and 
   assert.equal(redactSmtpSecrets("abc pw", { username: "", password: "pw" }), "abc ***");
 });
 
+check("redactAndCut masks a secret that straddles the cut: it redacts first, then cuts", () => {
+  const s = { username: "contato@cliente.com.br", password: "S3nh@ Secreta!" };
+  const b64 = (value: string) => Buffer.from(value, "utf8").toString("base64");
+  // the password starts 5 characters before the cut at 400
+  const text = `${"x".repeat(395)}${s.password} (tried)`;
+  // cutting first would leave its first 5 characters behind, where no search finds them any more
+  assert.ok(redactSmtpSecrets(text.slice(0, 400), s).includes(s.password.slice(0, 5)));
+  assert.equal(redactAndCut(text, s, 400), `${"x".repeat(395)}*** (`);
+  // the same for what the login sends of it, in base64
+  const echoed = `${"y".repeat(390)}${b64(s.password)} end`;
+  const cut = redactAndCut(echoed, s, 400);
+  assert.equal(cut, `${"y".repeat(390)}*** end`);
+  assert.ok(!cut.includes(b64(s.password).slice(0, 6)));
+  // never longer than the cut, and a short text comes back whole (redacted)
+  assert.equal(redactAndCut("z".repeat(900), s, 400).length, 400);
+  assert.equal(redactAndCut(`535 ${s.password}`, s, 400), "535 ***");
+  assert.equal(redactAndCut("", s, 400), "");
+});
+
 check("smtpSendPhase separates the preparation from the hand-over", () => {
   assert.equal(smtpSendPhase("connect", { code: "ETIMEDOUT" }), "connect");
   assert.equal(smtpSendPhase("connect", { code: "ESOCKET", message: "Hostname/IP does not match certificate's altnames" }), "tls");
@@ -1406,12 +1430,39 @@ check("smtpFailureAction keeps a recipient's own refusals out of the pauses, wha
   assert.equal(a(554, null, "Relay access denied", 0), "pause"); // only the answers after the login count
   // a limit word is the account's when a sending word comes with it (each of them), the mailbox's when none does
   for (const word of ["rate", "send", "sending", "sender", "sent", "envio", "envios", "enviar", "hour", "hourly", "day", "daily",
-    "hora", "horas", "dia", "diario", "diário"])
+    "hora", "horas", "dia", "diario", "diário", "diaria", "diária"])
     assert.equal(a(552, "rcpt-552", `Quota exceeded: ${word}`, 0), "daily_limit", word);
   assert.equal(a(552, "rcpt-552", "5.7.1 Mailbox quota exceeded", 0), "daily_limit"); // x.7.x is policy, not the mailbox
   assert.equal(a(552, "data-552", "Over quota", 0), "recipient");
   assert.equal(a(452, "data-452", "Over quota", 0), "retry");
   assert.equal(a(552, "mail-552", "Over quota", 0), "daily_limit"); // at MAIL FROM it is the sender's own quota
+});
+
+check("smtpFailureAction reads 'cota' and 'diária', ignores echoed addresses and knows send-as refusals", () => {
+  const a = smtpFailureAction;
+  // "cota" is a limit word and "diária" a sending word (feminine, like "cota"): the account's daily quota pauses
+  assert.equal(a(550, "rcpt-550", "Cota diária de envio excedida", 0), "daily_limit");
+  assert.equal(a(550, "rcpt-550", "Cota diária excedida", 0), "daily_limit");
+  assert.equal(a(550, "rcpt-550", "Cota diaria excedida", 0), "daily_limit");
+  assert.equal(a(550, "mail-550", "Cota atingida", 0), "daily_limit");
+  // a mailbox's own "cota", with no sending word, is still that recipient's
+  assert.equal(a(552, "rcpt-552", "Cota excedida para o usuario", 0), "recipient");
+  assert.equal(a(552, "rcpt-552", "Cota atingida para esta caixa", 0), "recipient");
+  assert.equal(a(452, "rcpt-452", "Cota atingida para esta caixa", 0), "retry");
+  assert.equal(a(452, "rcpt-452", "Cota atingida para esta caixa", 5), "recipient");
+  // an address the server echoes back is a name, not words: "dia@..." or "envio@..." is no sending limit
+  assert.equal(a(552, "rcpt-552", "<dia@empresa.com.br>: Mailbox quota exceeded", 0), "recipient");
+  assert.equal(a(552, "rcpt-552", "envio@loja.com.br: Mailbox quota exceeded", 0), "recipient");
+  assert.equal(a(452, "rcpt-452", "<hora@empresa.com.br>... Over quota", 5), "recipient");
+  // the words around the address still count
+  assert.equal(a(550, "rcpt-550", "<dia@empresa.com.br>: daily sending quota exceeded", 0), "daily_limit");
+  assert.equal(a(550, "rcpt-550", "Limite de envio excedido para <contato@cliente.com.br>", 0), "daily_limit");
+  // Office 365's send-as refusals are the account's, on whichever command they come back
+  assert.equal(a(554, "message-554", "5.2.252 SendAsDenied; user@x not allowed to send as y@z", 0), "blocked");
+  assert.equal(a(550, "message-550", "5.7.60 SMTP; Client does not have permissions to send as this sender", 0), "blocked");
+  for (const phase of ["mail", "rcpt", "data", "message"])
+    for (const text of ["SendAsDenied", "Client does not have permission to send as this sender", "user is not allowed to send as x@y"])
+      assert.equal(a(550, `${phase}-550`, text, 0), "blocked", `${phase}: ${text}`);
 });
 
 // --- failure reasons -----------------------------------------------------------
@@ -1577,6 +1628,41 @@ check("SMTP stored errors and channel wordings hold for every phase and reason",
   assert.equal(listChannelFromParam("microsoft", smtpOnly), null);
   assert.equal(listChannelFromParam(["smtp", "plataforma"], smtpOnly), "smtp");
   assert.equal(listChannelFromParam("smtp", { microsoft: true, google: true, smtp: true }), "smtp");
+});
+
+/** The keys (under emailBroadcast) that a message catalog has no text for. */
+function missingEmailKeys(catalog: object, keys: readonly string[]): string[] {
+  return keys.filter((key) => {
+    let node: unknown = (catalog as { emailBroadcast?: unknown }).emailBroadcast;
+    for (const part of key.split(".")) node = node && typeof node === "object" ? (node as Record<string, unknown>)[part] : undefined;
+    return typeof node !== "string";
+  });
+}
+
+check("every paused and failure text key the helpers return exists in pt.json and en.json", () => {
+  const channels = ["PLATFORM", "MICROSOFT", "GOOGLE", "SMTP"] as const satisfies readonly MailboxChannel[];
+  const failures = ["invalid_address", "message_too_large", "interrupted", "generic"] as const satisfies readonly RecipientFailureKey[];
+  // typecheck fails here when a channel or a failure key is added to failure-reason.ts without being listed above
+  type Unlisted = Exclude<MailboxChannel, (typeof channels)[number]> | Exclude<RecipientFailureKey, (typeof failures)[number]>;
+  const everyOneListed: [Unlisted] extends [never] ? true : false = true;
+  assert.ok(everyOneListed);
+  const keys = new Set<string>();
+  for (const channel of channels) {
+    for (const reason of PAUSED_REASONS) {
+      keys.add(pausedMessageKey(channel, reason));
+      keys.add(listPausedMessageKey(channel, reason));
+    }
+    for (const failure of failures) keys.add(failureMessageKey(channel, failure));
+  }
+  const all = [...keys];
+  assert.ok(all.includes("paused.smtp_reconnect") && all.includes("failure.smtp_message_too_large"), "the SMTP wordings are among them");
+  assert.deepEqual(missingEmailKeys(ptMessages, all), [], "pt.json");
+  assert.deepEqual(missingEmailKeys(enMessages, all), [], "en.json");
+  // the check bites: a catalog that lost one of them, or holds a group where a text should be, is caught
+  const pruned = structuredClone(ptMessages) as { emailBroadcast: { paused: Record<string, unknown> } };
+  delete pruned.emailBroadcast.paused.smtp_reconnect;
+  pruned.emailBroadcast.paused.quota = { text: "x" };
+  assert.deepEqual(missingEmailKeys(pruned, all).sort(), ["paused.quota", "paused.smtp_reconnect"]);
 });
 
 // --- Microsoft inbox ---------------------------------------------------------

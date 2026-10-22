@@ -14,10 +14,9 @@ import { RecipientPicker } from "@/components/email/recipient-picker";
 import { AudienceSummary } from "@/components/email/audience-summary";
 import { EmailAttachments } from "@/components/email/email-attachments";
 import { SignaturePreview } from "@/components/email/signature-preview";
-import { LIMITS } from "@/config/limits";
 import { estimateAttachmentSendMinutes } from "@/lib/email-broadcast/attachments";
 import { mailboxSendMinutes } from "@/lib/email-broadcast/mailbox/core";
-import { smtpSendMinutes } from "@/lib/email-broadcast/smtp/core";
+import { smtpHourlyLimit, smtpSendMinutes } from "@/lib/email-broadcast/smtp/core";
 import {
   previewEmailAudience,
   saveEmailDraft,
@@ -167,7 +166,7 @@ export function EmailComposer({
   // wait reads better in hours from 90 minutes on.
   function providerSentences(a: SenderAccountView, count: number): string[] {
     if (isSmtp) {
-      const perHour = a.hourlyLimit ?? LIMITS.smtpHourlyDefault;
+      const perHour = smtpHourlyLimit(a);
       const minutes = smtpSendMinutes(count, perHour);
       return [
         minutes >= 90
