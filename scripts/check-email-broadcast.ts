@@ -7,7 +7,10 @@
  * Next's bundler there is no `server-only` package to resolve.
  */
 import assert from "node:assert/strict";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import ExcelJS from "exceljs";
+import PostalMime, { type Attachment, type Email } from "postal-mime";
 import { isValidEmail, normalizeEmail, parseEmailList } from "../src/lib/email-broadcast/normalize";
 import { mergeCandidates, spreadsheetCandidates, type Candidate } from "../src/lib/email-broadcast/audience-core";
 import { transactionalRetryDelayMs } from "../src/lib/email/retry-after";
@@ -121,6 +124,7 @@ import {
   sentLast24hWhere,
   sentLastHourWhere,
   waitChunksMs,
+  type MailboxSendOutcome,
 } from "../src/lib/email-broadcast/mailbox/core";
 import {
   gmailFailureAction,
@@ -167,7 +171,27 @@ import {
   replyHtmlFromText,
   subjectAnswers,
   summaryFromGraph,
+  type InboxMessageSummary,
 } from "../src/lib/email-broadcast/microsoft/inbox-core";
+import {
+  IMAP_PORTS,
+  defaultImapSecurity,
+  imapConnectError,
+  imapMessageRef,
+  isAttachmentIndex,
+  parseImapMessageRef,
+  pickSentFolder,
+  replyHeaders,
+  replyOutcome,
+  suggestImapHost,
+  summaryFromImap,
+} from "../src/lib/email-broadcast/imap/core";
+import {
+  detailFromParsed,
+  hasAttachmentsInStructure,
+  listedAttachments,
+  type ImapBodyNode,
+} from "../src/lib/email-broadcast/imap/parse";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -2091,6 +2115,485 @@ check("attachmentDisposition survives lone surrogates and escapes ' ( ) * (RFC 5
   );
 });
 
+// --- IMAP inbox (SMTP account) ------------------------------------------------
+check("suggestImapHost swaps the SMTP label for imap and leaves other hosts alone", () => {
+  for (const smtp of ["smtpi.kinghost.net", "smtp.kinghost.net", "SMTPI.KingHost.NET", "  smtp.kinghost.net "]) {
+    assert.equal(suggestImapHost(smtp), "imap.kinghost.net", smtp);
+  }
+  assert.equal(suggestImapHost("smtpi.uni5.net"), "imap.uni5.net");
+  assert.equal(suggestImapHost("smtp.hostinger.com"), "imap.hostinger.com");
+  assert.equal(suggestImapHost("smtp.mail.yahoo.com"), "imap.mail.yahoo.com");
+  assert.equal(suggestImapHost("smtps.empresa.com.br"), "imap.empresa.com.br");
+  // Only the first label and only those exact words: anything else is the same host.
+  assert.equal(suggestImapHost("mail.empresa.com.br"), "mail.empresa.com.br");
+  assert.equal(suggestImapHost("smtp-relay.empresa.com.br"), "smtp-relay.empresa.com.br");
+  assert.equal(suggestImapHost("mail.smtp.empresa.com.br"), "mail.smtp.empresa.com.br");
+  assert.equal(suggestImapHost("smtp"), "smtp");
+  assert.equal(suggestImapHost(""), "");
+});
+
+check("IMAP offers 993 (SSL) and 143 (STARTTLS), each with its own default security", () => {
+  assert.deepEqual([...IMAP_PORTS], [993, 143]);
+  assert.equal(defaultImapSecurity(993), "ssl");
+  assert.equal(defaultImapSecurity(143), "starttls");
+});
+
+check("imapMessageRef and parseImapMessageRef agree and refuse anything but <uidvalidity>.<uid>", () => {
+  assert.equal(imapMessageRef(123, 45), "123.45");
+  assert.deepEqual(parseImapMessageRef("123.45"), { uidValidity: 123, uid: 45 });
+  assert.deepEqual(parseImapMessageRef(imapMessageRef(7, 9)), { uidValidity: 7, uid: 9 });
+  // UIDs and UIDVALIDITY are 32-bit numbers and never zero.
+  assert.deepEqual(parseImapMessageRef("4294967295.4294967295"), { uidValidity: 4294967295, uid: 4294967295 });
+  const refused = ["0.45", "12.0", "a.1", "1", "1.2.3", " 1.2", "1.2 ", "1.2\n", "4294967296.1", "1.4294967296"];
+  refused.push("01.2", "1.02", "-1.2", "1.-2", "1e3.2", "1.2e3", "", ".", "1.", ".1", "99999999999999999999.1");
+  for (const bad of refused) assert.equal(parseImapMessageRef(bad), null, JSON.stringify(bad));
+  for (const bad of [12, 1.2, null, undefined, {}, ["1.2"]]) assert.equal(parseImapMessageRef(bad), null);
+});
+
+check("isAttachmentIndex takes one to three digits and nothing else", () => {
+  for (const ok of ["0", "12", "999"]) assert.equal(isAttachmentIndex(ok), true, ok);
+  for (const bad of ["1234", "-1", "1.2", "a", "", " 1", "1 ", "1\n", 12, null, undefined]) {
+    assert.equal(isAttachmentIndex(bad), false, String(bad));
+  }
+});
+
+check("imapConnectError names the failure the form shows", () => {
+  const e = imapConnectError;
+  assert.equal(e({ authenticationFailed: true }), "auth_failed");
+  assert.equal(e({ authenticationFailed: true, code: "ECONNRESET" }), "auth_failed", "a refused login wins");
+  assert.equal(e({ code: "ENOTFOUND" }), "host_not_found");
+  assert.equal(e({ code: "EAI_AGAIN" }), "host_not_found");
+  for (const code of [
+    "ERR_TLS_CERT_ALTNAME_INVALID",
+    "DEPTH_ZERO_SELF_SIGNED_CERT",
+    "CERT_HAS_EXPIRED",
+    "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+    "ERR_SSL_WRONG_VERSION_NUMBER",
+  ]) {
+    assert.equal(e({ code }), "tls_failed", code);
+  }
+  // imapflow flags a server without STARTTLS (port 143 never falls back to plain text) only by its message.
+  assert.equal(e({ message: "Server does not support STARTTLS" }), "tls_failed");
+  assert.equal(e({ message: "self-signed certificate in certificate chain" }), "tls_failed");
+  for (const code of [
+    "ECONNREFUSED",
+    "ETIMEDOUT",
+    "ECONNRESET",
+    "EHOSTUNREACH",
+    "ETIMEOUT",
+    "CONNECT_TIMEOUT",
+    "GREETING_TIMEOUT",
+    "NoConnection",
+    "ClosedAfterConnectTLS",
+  ]) {
+    assert.equal(e({ code }), "connection_failed", code);
+  }
+  assert.equal(e({}), "failed");
+  assert.equal(e({ code: null, message: null }), "failed");
+  assert.equal(e({ code: "SOMETHING", message: "boom" }), "failed");
+});
+
+check("pickSentFolder prefers the \\Sent mark, then the usual names in the spec's order", () => {
+  assert.equal(pickSentFolder([{ path: "INBOX" }, { path: "INBOX.Sent" }]), "INBOX.Sent"); // KingHost
+  assert.equal(pickSentFolder([{ path: "Sent Mail", specialUse: "\\Sent" }, { path: "Sent" }]), "Sent Mail");
+  assert.equal(pickSentFolder([{ path: "Sent" }, { path: "Arquivo", specialUse: "\\Sent" }]), "Arquivo", "the mark beats a name listed first");
+  assert.equal(pickSentFolder([{ path: "enviados" }]), "enviados");
+  assert.equal(pickSentFolder([{ path: "Sent Items" }, { path: "Sent" }, { path: "INBOX.Sent" }]), "INBOX.Sent", "names go by preference, not folder order");
+  assert.equal(pickSentFolder([{ path: "Itens Enviados" }, { path: "Sent Items" }]), "Sent Items");
+  assert.equal(pickSentFolder([{ path: "INBOX.Drafts", specialUse: "\\Drafts" }, { path: "INBOX", specialUse: null }]), null);
+  assert.equal(pickSentFolder([{ path: "INBOX" }]), null);
+  assert.equal(pickSentFolder([]), null);
+});
+
+check("replyHeaders threads the reply with In-Reply-To and References and writes Re: once", () => {
+  assert.deepEqual(replyHeaders({ subject: "Promoção", messageId: "<a@x>", references: ["<r1@x>"] }), {
+    subject: "Re: Promoção",
+    headers: { "In-Reply-To": "<a@x>", References: "<r1@x> <a@x>" },
+  });
+  const subjectOf = (subject: string) => replyHeaders({ subject, messageId: "<a@x>", references: [] }).subject;
+  assert.equal(subjectOf("RE: oi"), "RE: oi");
+  assert.equal(subjectOf("Res: oi"), "Res: oi");
+  assert.equal(subjectOf("Re[2]: oi"), "Re[2]: oi");
+  assert.equal(subjectOf(" re : oi"), "re : oi");
+  // Words that only start like a marker, and forwards, still get one.
+  assert.equal(subjectOf("Resultado do mês"), "Re: Resultado do mês");
+  assert.equal(subjectOf("Reunião"), "Re: Reunião");
+  assert.equal(subjectOf("Fwd: oi"), "Re: Fwd: oi");
+  assert.equal(subjectOf("  "), "Re:");
+  // No Message-ID to answer: nothing to thread on, whatever the chain says.
+  assert.deepEqual(replyHeaders({ subject: "oi", messageId: null, references: ["<r1@x>"] }), { subject: "Re: oi", headers: {} });
+  // No chain yet: the References is the parent's id alone; an id already in the chain isn't repeated.
+  assert.deepEqual(replyHeaders({ subject: "oi", messageId: "<a@x>", references: [] }).headers, {
+    "In-Reply-To": "<a@x>",
+    References: "<a@x>",
+  });
+  assert.equal(replyHeaders({ subject: "oi", messageId: "<a@x>", references: ["<a@x>", "<b@x>"] }).headers.References, "<a@x> <b@x>");
+});
+
+check("replyHeaders keeps what the sender wrote out of the reply's headers", () => {
+  const r = replyHeaders({
+    subject: "oi\r\nBcc: x@y.com",
+    messageId: "<a@x>",
+    references: ["<r1@x> <r2@x>", "lixo", "<r3@x>\r\nBcc: z@y.com"],
+  });
+  assert.equal(r.subject, "Re: oi Bcc: x@y.com");
+  assert.deepEqual(r.headers, { "In-Reply-To": "<a@x>", References: "<r1@x> <r2@x> <r3@x> <a@x>" });
+  for (const messageId of ["<a@x>\r\nBcc: z@y.com", "sem-colchetes", "<a b@x>", "<>", ""]) {
+    assert.deepEqual(replyHeaders({ subject: "oi", messageId, references: ["<r1@x>"] }).headers, {}, JSON.stringify(messageId));
+  }
+});
+
+check("replyOutcome tells a sent reply from an uncertain one and a refused one", () => {
+  const fail = (status: number, stage: "prepare" | "send"): MailboxSendOutcome => ({
+    ok: false,
+    status,
+    code: null,
+    message: "x",
+    retryAfter: null,
+    stage,
+  });
+  assert.equal(replyOutcome({ ok: true }), "sent");
+  assert.equal(replyOutcome(fail(0, "send")), "uncertain", "a network failure while handing it over may have gone out");
+  assert.equal(replyOutcome(fail(550, "send")), "failed");
+  assert.equal(replyOutcome(fail(421, "send")), "failed");
+  assert.equal(replyOutcome(fail(0, "prepare")), "failed", "nothing left before the hand-over");
+  assert.equal(replyOutcome(fail(535, "prepare")), "failed");
+});
+
+check("summaryFromImap turns an envelope into a list row", () => {
+  const item = {
+    uid: 9,
+    uidValidity: 7,
+    subject: null,
+    from: [{ name: "Fulano", address: "Fulano@X.com" }],
+    date: new Date("2026-10-23T13:00:00Z"),
+    seen: true,
+    hasAttachments: false,
+  };
+  assert.deepEqual(summaryFromImap(item), {
+    id: "7.9",
+    subject: "",
+    from: { name: "Fulano", email: "fulano@x.com" },
+    receivedAt: "2026-10-23T13:00:00.000Z",
+    isRead: true,
+    hasAttachments: false,
+    preview: "",
+  });
+  // Nothing usable: no sender, an unreadable date, a padded subject. The list still renders.
+  assert.deepEqual(summaryFromImap({ ...item, subject: "  Oi  ", from: [], date: new Date(NaN), seen: false, hasAttachments: true }), {
+    id: "7.9",
+    subject: "Oi",
+    from: { name: null, email: null },
+    receivedAt: "1970-01-01T00:00:00.000Z",
+    isRead: false,
+    hasAttachments: true,
+    preview: "",
+  });
+  // The sender is the first entry that has an address; a name alone still shows.
+  assert.deepEqual(summaryFromImap({ ...item, from: [{ name: "Sem endereço" }, { address: "B@x.com" }] }).from, { name: null, email: "b@x.com" });
+  assert.deepEqual(summaryFromImap({ ...item, from: [{ name: " Só nome " }] }).from, { name: "Só nome", email: null });
+});
+
+check("hasAttachmentsInStructure flags files, not the body or the images in it", () => {
+  const text: ImapBodyNode = { type: "text/plain" };
+  const html: ImapBodyNode = { type: "text/html" };
+  const body: ImapBodyNode = { type: "multipart/alternative", childNodes: [text, html] };
+  const pdf: ImapBodyNode = {
+    type: "application/pdf",
+    disposition: "attachment",
+    dispositionParameters: { filename: "tabela.pdf" },
+    parameters: { name: "tabela.pdf" },
+  };
+  assert.equal(hasAttachmentsInStructure({ type: "multipart/mixed", childNodes: [body, pdf] }), true);
+  assert.equal(hasAttachmentsInStructure(body), false);
+  assert.equal(hasAttachmentsInStructure(text), false);
+  assert.equal(hasAttachmentsInStructure(undefined), false);
+  // An inline image with no name belongs to the body.
+  const logo: ImapBodyNode = { type: "image/png", disposition: "inline" };
+  assert.equal(hasAttachmentsInStructure({ type: "multipart/related", childNodes: [html, logo] }), false);
+  assert.equal(hasAttachmentsInStructure({ type: "multipart/mixed", childNodes: [text, logo] }), false);
+  // So does a named one in multipart/related (Gmail names its embedded images), as Graph's hasAttachments skips inline parts...
+  const named: ImapBodyNode = { type: "image/png", disposition: "inline", dispositionParameters: { filename: "image001.png" } };
+  assert.equal(hasAttachmentsInStructure({ type: "multipart/related", childNodes: [html, named] }), false);
+  // ...but a named file shown inline in multipart/mixed (Apple Mail does that with PDFs) is a file, and so is one with no disposition.
+  const inlinePdf: ImapBodyNode = { type: "application/pdf", disposition: "inline", dispositionParameters: { filename: "x.pdf" } };
+  assert.equal(hasAttachmentsInStructure({ type: "multipart/mixed", childNodes: [text, inlinePdf] }), true);
+  const zip: ImapBodyNode = { type: "application/zip", parameters: { name: "a.zip" } };
+  assert.equal(hasAttachmentsInStructure({ type: "multipart/mixed", childNodes: [text, zip] }), true);
+  // An explicit attachment counts wherever it sits, including inside a forwarded message.
+  assert.equal(hasAttachmentsInStructure({ type: "multipart/related", childNodes: [html, pdf] }), true);
+  const forwarded: ImapBodyNode = { type: "message/rfc822", childNodes: [{ type: "multipart/mixed", childNodes: [text, pdf] }] };
+  assert.equal(hasAttachmentsInStructure({ type: "multipart/mixed", childNodes: [text, forwarded] }), true);
+  assert.equal(hasAttachmentsInStructure({ type: "multipart/mixed", childNodes: [text, { type: "message/rfc822", disposition: "attachment" }] }), true);
+});
+
+// --- IMAP: the parsed e-mail as the reading pane shows it ---------------------------
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64",
+);
+const PDF = Buffer.from("%PDF-1.4 tabela de precos");
+const SUMMARY: InboxMessageSummary = {
+  id: "7.9",
+  subject: "Tabela",
+  from: { name: "Ana", email: "ana@x.com" },
+  receivedAt: "2026-10-23T13:00:00.000Z",
+  isRead: false,
+  hasAttachments: true,
+  preview: "",
+};
+const arrayBufferOf = (b: Uint8Array): ArrayBuffer => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
+const parsedEmail = (over: Partial<Email> = {}): Email => ({ headers: [], headerLines: [], attachments: [], ...over });
+const part = (over: Partial<Attachment> & Pick<Attachment, "mimeType">): Attachment => ({
+  filename: null,
+  disposition: null,
+  content: new ArrayBuffer(0),
+  ...over,
+});
+const dataUris = (doc: string) => doc.split("data:image/png;base64,").length - 1;
+
+check("detailFromParsed shows cid images in the body and lists the other attachments by their original index", () => {
+  const detail = detailFromParsed(
+    SUMMARY,
+    parsedEmail({
+      html: '<p>Oi</p><img src="cid:img1">',
+      to: [{ name: " Bia ", address: "Bia@X.com" }],
+      attachments: [
+        part({ filename: "logo.png", mimeType: "image/png", disposition: "inline", related: true, contentId: "<img1>", content: arrayBufferOf(PNG) }),
+        part({ filename: " tabela.pdf ", mimeType: "application/pdf", disposition: "attachment", content: arrayBufferOf(PDF) }),
+      ],
+    }),
+  );
+  assert.ok(detail.bodyDocument.includes(`<img src="data:image/png;base64,${PNG.toString("base64")}">`));
+  assert.ok(!detail.bodyDocument.includes("cid:"));
+  assert.match(detail.bodyDocument, /Content-Security-Policy/);
+  // The embedded image leaves the list; the PDF keeps its place in the parsed list (1), not its place in this one (0).
+  const pdfRow = { id: "1", name: "tabela.pdf", contentType: "application/pdf", size: PDF.length, downloadable: true };
+  assert.deepEqual(detail, {
+    ...SUMMARY, // the list row's fields come along untouched
+    to: [{ name: "Bia", email: "bia@x.com" }],
+    cc: [],
+    bodyDocument: detail.bodyDocument,
+    webLink: null,
+    attachments: [pdfRow],
+  });
+});
+
+check("detailFromParsed keeps an attachment's id when the images around it are shown in the body", () => {
+  const png = (cid: string) => part({ mimeType: "image/png", disposition: "inline", contentId: `<${cid}>`, content: arrayBufferOf(PNG) });
+  const detail = detailFromParsed(
+    SUMMARY,
+    parsedEmail({
+      html: '<img src="cid:a"><img src="cid:b">',
+      attachments: [
+        part({ filename: "zero.zip", mimeType: "application/zip" }),
+        png("a"),
+        part({ filename: "um.pdf", mimeType: "application/pdf" }),
+        png("b"),
+        part({ filename: null, mimeType: "text/csv" }),
+      ],
+    }),
+  );
+  assert.deepEqual(
+    detail.attachments.map((a) => [a.id, a.name]),
+    [
+      ["0", "zero.zip"],
+      ["2", "um.pdf"],
+      ["4", "anexo"],
+    ],
+  );
+  // listedAttachments is what the download route checks an id against: same rows, same objects.
+  const parsed = parsedEmail({ attachments: [part({ mimeType: "a/b" }), part({ mimeType: "c/d" })] });
+  const listed = listedAttachments(parsed);
+  assert.deepEqual(
+    listed.map((l) => l.index),
+    [0, 1],
+    "without a body pointing at them nothing is hidden",
+  );
+  assert.equal(listed[1].attachment, parsed.attachments[1]);
+  // Every listed id is one the download route accepts (three digits), however many parts the message has.
+  const flood = listedAttachments(parsedEmail({ attachments: Array.from({ length: 1_005 }, () => part({ mimeType: "a/b" })) }));
+  assert.equal(flood.length, 1_000);
+  assert.ok(flood.every((l) => isAttachmentIndex(String(l.index))));
+});
+
+check("detailFromParsed hides an image from the list only when it showed it in the body", () => {
+  const png = (over: Partial<Attachment>) => part({ mimeType: "image/png", disposition: "inline", content: arrayBufferOf(PNG), ...over });
+  const detailOf = (html: string, ...attachments: Attachment[]) => detailFromParsed(SUMMARY, parsedEmail({ html, attachments }));
+  const listedIds = (d: { attachments: { id: string }[] }) => d.attachments.map((a) => a.id);
+
+  // The content id is compared without brackets and without regard to case, on either side.
+  for (const [pointer, contentId] of [
+    ["CID:LOGO@01", "<logo@01>"],
+    ["cid:logo@01", "<Logo@01>"],
+    ["cid:logo@01", "logo@01"],
+  ]) {
+    const shown = detailOf(`<img src="${pointer}">`, png({ contentId }));
+    assert.equal(dataUris(shown.bodyDocument), 1, `${pointer} ~ ${contentId}`);
+    assert.deepEqual(shown.attachments, []);
+  }
+  // The body doesn't point at it: it stays in the list and the body is untouched.
+  const unused = detailOf('<img src="cid:outra">', png({ contentId: "<logo>", filename: "logo.png" }));
+  assert.equal(dataUris(unused.bodyDocument), 0);
+  assert.deepEqual(listedIds(unused), ["0"]);
+  // No Content-ID, or an e-mail with no HTML at all: nothing to show.
+  assert.equal(dataUris(detailOf('<img src="cid:logo">', png({})).bodyDocument), 0);
+  assert.deepEqual(listedIds(detailFromParsed(SUMMARY, parsedEmail({ text: "oi", attachments: [png({ contentId: "<logo>" })] }))), ["0"]);
+  // What the sender marked as an attachment is never turned into part of the body (as Graph's isInline).
+  const explicit = detailOf('<img src="cid:logo">', png({ contentId: "<logo>", disposition: "attachment" }));
+  assert.equal(dataUris(explicit.bodyDocument), 0);
+  assert.deepEqual(listedIds(explicit), ["0"]);
+  // An empty part is nothing to show.
+  assert.deepEqual(listedIds(detailOf('<img src="cid:logo">', png({ contentId: "<logo>", content: new ArrayBuffer(0) }))), ["0"]);
+  // Two parts with one content id: the first is shown, the other stays listed.
+  const twin = detailOf('<img src="cid:logo">', png({ contentId: "<logo>" }), png({ contentId: "<LOGO>", filename: "copia.png" }));
+  assert.equal(dataUris(twin.bodyDocument), 1);
+  assert.deepEqual(listedIds(twin), ["1"]);
+  // Only image/<token> becomes a data URI: a crafted type can't break out of the attribute.
+  for (const mimeType of ['image/png"><script>', "image/png onerror=x", "text/html", "image/", "application/pdf"]) {
+    const crafted = detailOf('<img src="cid:x">', png({ contentId: "<x>", mimeType }));
+    assert.ok(!crafted.bodyDocument.includes(";base64,"), mimeType);
+    assert.ok(!crafted.bodyDocument.includes("<script>"), mimeType);
+    assert.deepEqual(listedIds(crafted), ["0"], mimeType);
+  }
+  // The type is written trimmed and in lower case, exactly as it was checked.
+  assert.equal(dataUris(detailOf('<img src="cid:x">', png({ contentId: "<x>", mimeType: " Image/PNG " })).bodyDocument), 1);
+  // The same image under a CSS url() is swapped too.
+  assert.equal(dataUris(detailOf('<div style="background:url(cid:x)">', png({ contentId: "<x>" })).bodyDocument), 1);
+});
+
+check("detailFromParsed embeds at most 10 images, 1.5 MB each and 4 MB together, as the Microsoft inbox does", () => {
+  const img = (n: number, size: number) =>
+    part({ filename: `i${n}.png`, mimeType: "image/png", disposition: "inline", contentId: `<c${n}>`, content: new ArrayBuffer(size) });
+  const html = (ids: number[]) => ids.map((n) => `<img src="cid:c${n}">`).join("");
+  const listedIds = (d: { attachments: { id: string }[] }) => d.attachments.map((a) => a.id);
+
+  // 11 images, all in the body: the first 10 are shown and the 11th stays listed (still pointing at cid:).
+  const eleven = Array.from({ length: 11 }, (_, n) => img(n, 10));
+  const d11 = detailFromParsed(SUMMARY, parsedEmail({ html: html(eleven.map((_, n) => n)), attachments: eleven }));
+  assert.equal(dataUris(d11.bodyDocument), 10);
+  assert.deepEqual(listedIds(d11), ["10"]);
+  assert.ok(d11.bodyDocument.includes("cid:c10"));
+
+  // 1.5 MB is the most one image may have.
+  const each = detailFromParsed(SUMMARY, parsedEmail({ html: html([0, 1]), attachments: [img(0, 1_500_000), img(1, 1_500_001)] }));
+  assert.equal(dataUris(each.bodyDocument), 1);
+  assert.deepEqual(listedIds(each), ["1"]);
+
+  // 4 MB is the most they may have together: 1.5 + 1.5 + 1.0 fits exactly, one more byte does not.
+  const total = detailFromParsed(
+    SUMMARY,
+    parsedEmail({ html: html([0, 1, 2, 3]), attachments: [img(0, 1_500_000), img(1, 1_500_000), img(2, 1_000_000), img(3, 1)] }),
+  );
+  assert.equal(dataUris(total.bodyDocument), 3);
+  assert.deepEqual(listedIds(total), ["3"]);
+  // An image that would pass the budget stays listed, but a smaller one after it still fits.
+  const skip = detailFromParsed(
+    SUMMARY,
+    parsedEmail({ html: html([0, 1, 2, 3]), attachments: [img(0, 1_400_000), img(1, 1_400_000), img(2, 1_400_000), img(3, 1_000)] }),
+  );
+  assert.equal(dataUris(skip.bodyDocument), 3);
+  assert.deepEqual(listedIds(skip), ["2"]);
+
+  // Each reference in the body counts: a crafted body can't make one image fill the page many times over.
+  const repeated = detailFromParsed(SUMMARY, parsedEmail({ html: '<img src="cid:c0">'.repeat(3), attachments: [img(0, 1_400_000)] }));
+  assert.equal(dataUris(repeated.bodyDocument), 0);
+  assert.deepEqual(listedIds(repeated), ["0"]);
+  const twice = detailFromParsed(SUMMARY, parsedEmail({ html: '<img src="cid:c0"><img src="cid:c0">', attachments: [img(0, 1_000)] }));
+  assert.equal(dataUris(twice.bodyDocument), 2);
+  assert.deepEqual(twice.attachments, []);
+});
+
+check("detailFromParsed reads the bytes however postal-mime was asked to hand them over", () => {
+  const padded = Buffer.concat([Buffer.from("xx"), PNG, Buffer.from("yy")]);
+  const forms: { label: string; content: Attachment["content"]; encoding?: Attachment["encoding"]; bytes: Buffer }[] = [
+    { label: "ArrayBuffer", content: arrayBufferOf(PNG), bytes: PNG },
+    { label: "Uint8Array", content: new Uint8Array(arrayBufferOf(PNG)), bytes: PNG },
+    { label: "a view into a bigger buffer", content: new Uint8Array(padded.buffer, padded.byteOffset + 2, PNG.length), bytes: PNG },
+    { label: "Buffer", content: PNG, bytes: PNG },
+    { label: "base64 string", content: PNG.toString("base64"), encoding: "base64", bytes: PNG },
+    { label: "utf8 string", content: "ação", encoding: "utf8", bytes: Buffer.from("ação") },
+  ];
+  for (const { label, content, encoding, bytes } of forms) {
+    const detail = detailFromParsed(
+      SUMMARY,
+      parsedEmail({
+        html: '<img src="cid:a">',
+        attachments: [
+          part({ mimeType: "image/png", contentId: "<a>", content, encoding }),
+          part({ filename: "f.bin", mimeType: "application/octet-stream", content, encoding }),
+        ],
+      }),
+    );
+    // The image carries the same bytes whichever way they came; so does the listed file's size.
+    assert.ok(detail.bodyDocument.includes(`src="data:image/png;base64,${bytes.toString("base64")}"`), label);
+    assert.equal(detail.attachments[0].size, bytes.length, label);
+  }
+});
+
+check("detailFromParsed shows a text-only e-mail escaped, and an HTML part that is blank gives way to the text", () => {
+  const detail = detailFromParsed(SUMMARY, parsedEmail({ text: "Olá <b>mundo</b> & cia\n  recuo" }));
+  assert.ok(detail.bodyDocument.includes('<div style="white-space:pre-wrap">Olá &lt;b&gt;mundo&lt;/b&gt; &amp; cia\n  recuo</div>'));
+  assert.ok(!detail.bodyDocument.includes("<b>"));
+  assert.equal(detail.webLink, null);
+  assert.deepEqual(detail.attachments, []);
+  assert.deepEqual([detail.to, detail.cc], [[], []]);
+  const blank = detailFromParsed(SUMMARY, parsedEmail({ html: " \n ", text: "só texto" }));
+  assert.ok(blank.bodyDocument.includes('<div style="white-space:pre-wrap">só texto</div>'));
+  const none = detailFromParsed(SUMMARY, parsedEmail());
+  assert.ok(none.bodyDocument.includes('<div style="white-space:pre-wrap"></div>'));
+});
+
+check("detailFromParsed flattens address groups and drops blank recipients", () => {
+  const detail = detailFromParsed(
+    SUMMARY,
+    parsedEmail({
+      text: "oi",
+      to: [
+        { name: "Equipe", group: [{ name: "", address: "A@x.com" }, { name: "Beto", address: "b@x.com" }] },
+        { name: "Caio", address: "caio@x.com" },
+        { name: "", address: "" },
+      ],
+      cc: [{ name: "Só nome", address: "" }],
+    }),
+  );
+  assert.deepEqual(detail.to, [
+    { name: null, email: "a@x.com" },
+    { name: "Beto", email: "b@x.com" },
+    { name: "Caio", email: "caio@x.com" },
+  ]);
+  assert.deepEqual(detail.cc, [{ name: "Só nome", email: null }]);
+});
+
+check("the IMAP code never deletes, moves or copies mail, nor expunges or touches folders", () => {
+  const forbidden = /\b(messageDelete|messageMove|messageCopy|expunge|mailboxDelete|mailboxRename|mailboxCreate)\b/;
+  // The pattern itself, so a typo in it can't turn the scan below into a silent pass.
+  for (const bad of ["await c.messageDelete(uid)", "client.expunge()", "x.mailboxCreate('a')", "messageMove(1, 'Trash')", "messageCopy(1, 'a')"]) {
+    assert.ok(forbidden.test(bad), bad);
+  }
+  for (const fine of ["client.messageFlagsAdd(uid, ['\\\\Seen'])", "await client.append(path, mime)", "client.getMailboxLock('INBOX')"]) {
+    assert.ok(!forbidden.test(fine), fine);
+  }
+  // Only this folder is scanned, and one that doesn't exist yet counts as empty.
+  const sources = (dir: string): { path: string; text: string }[] => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw e;
+    }
+    return entries.flatMap((entry) => {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) return sources(path);
+      return /\.tsx?$/.test(entry.name) ? [{ path, text: readFileSync(path, "utf8") }] : [];
+    });
+  };
+  for (const file of sources(join(__dirname, "..", "src", "lib", "email-broadcast", "imap"))) {
+    assert.ok(!forbidden.test(file.text), `${file.path} uses a call the inbox must never make`);
+  }
+});
+
 async function checkAsync(name: string, fn: () => Promise<void>): Promise<void> {
   await fn();
   passed++;
@@ -2188,6 +2691,104 @@ async function main() {
     assert.match(mime, /^From: a@b\.com/m);
     assert.ok(!/multipart\/mixed/.test(mime));
     assert.ok(!/^Reply-To:/m.test(mime));
+  });
+
+  // The IMAP checks above build `Email` objects by hand; these read what postal-mime really returns.
+  const mixed = (parts: string[]): string =>
+    [
+      "From: =?UTF-8?Q?Jo=C3=A3o?= <Joao@Exemplo.com>",
+      "To: Equipe: a@x.com, b@x.com;, Maria <maria@x.com>",
+      "Cc: Caio <Caio@x.com>",
+      "Subject: =?UTF-8?Q?Promo=C3=A7=C3=A3o?=",
+      "Message-ID: <abc@x.com>",
+      "MIME-Version: 1.0",
+      'Content-Type: multipart/mixed; boundary="MIXED"',
+      "",
+      ...parts,
+      "--MIXED--",
+      "",
+    ].join("\r\n");
+  const relatedHtml = [
+    "--MIXED",
+    'Content-Type: multipart/related; boundary="REL"',
+    "",
+    "--REL",
+    "Content-Type: text/html; charset=utf-8",
+    "",
+    '<p>Oi <img src="cid:img1"></p>',
+    "--REL",
+    "Content-Type: image/png; name=logo.png",
+    "Content-Transfer-Encoding: base64",
+    "Content-ID: <img1>",
+    "Content-Disposition: inline; filename=logo.png",
+    "",
+    PNG.toString("base64"),
+    "--REL--",
+  ];
+  const pdfAttachment = [
+    "--MIXED",
+    'Content-Type: application/pdf; name="tabela.pdf"',
+    "Content-Transfer-Encoding: base64",
+    'Content-Disposition: attachment; filename="tabela.pdf"',
+    "",
+    PDF.toString("base64"),
+  ];
+
+  await checkAsync("detailFromParsed reads a real multipart e-mail: cid image shown, PDF listed, recipients flattened", async () => {
+    const mime = mixed([...relatedHtml, ...pdfAttachment]);
+    // Both ways postal-mime can hand the bytes over (its default and attachmentEncoding "base64").
+    for (const options of [undefined, { attachmentEncoding: "base64" as const }]) {
+      const parsed = await PostalMime.parse(mime, options);
+      const detail = detailFromParsed(SUMMARY, parsed);
+      assert.ok(detail.bodyDocument.includes(`<img src="data:image/png;base64,${PNG.toString("base64")}">`), JSON.stringify(options));
+      assert.ok(!detail.bodyDocument.includes("cid:"));
+      assert.deepEqual(detail.attachments, [{ id: "1", name: "tabela.pdf", contentType: "application/pdf", size: PDF.length, downloadable: true }]);
+      assert.deepEqual(
+        listedAttachments(parsed).map((l) => l.index),
+        [1],
+      );
+      assert.deepEqual(detail.to, [
+        { name: null, email: "a@x.com" },
+        { name: null, email: "b@x.com" },
+        { name: "Maria", email: "maria@x.com" },
+      ]);
+      assert.deepEqual(detail.cc, [{ name: "Caio", email: "caio@x.com" }]);
+      assert.equal(detail.webLink, null);
+    }
+  });
+
+  await checkAsync("detailFromParsed lists a real inline image that the HTML doesn't point at", async () => {
+    // Same e-mail, but the HTML no longer points at the image: it is an attachment like any other.
+    const noPointer = relatedHtml.map((line) => line.replace('<img src="cid:img1">', ""));
+    const parsed = await PostalMime.parse(mixed([...noPointer, ...pdfAttachment]));
+    const detail = detailFromParsed(SUMMARY, parsed);
+    assert.equal(dataUris(detail.bodyDocument), 0);
+    assert.deepEqual(
+      detail.attachments.map((a) => [a.id, a.name]),
+      [
+        ["0", "logo.png"],
+        ["1", "tabela.pdf"],
+      ],
+    );
+  });
+
+  await checkAsync("detailFromParsed reads a plain-text ISO-8859-1 e-mail as text, accents intact", async () => {
+    const latin1 = [
+      "From: cliente@exemplo.com.br",
+      "Subject: =?ISO-8859-1?Q?Promo=E7=E3o_de_outubro?=",
+      "MIME-Version: 1.0",
+      "Content-Type: text/plain; charset=iso-8859-1",
+      "Content-Transfer-Encoding: quoted-printable",
+      "",
+      "Promo=E7=E3o  de outubro: <10% de desconto> & mais",
+      "",
+    ].join("\r\n");
+    const parsed = await PostalMime.parse(latin1);
+    assert.equal(parsed.subject, "Promoção de outubro");
+    assert.equal(parsed.html, undefined, "a text-only message has no html part, so it takes the text path");
+    const detail = detailFromParsed(SUMMARY, parsed);
+    assert.ok(detail.bodyDocument.includes('<div style="white-space:pre-wrap">Promoção  de outubro: &lt;10% de desconto&gt; &amp; mais'));
+    assert.deepEqual(detail.attachments, []);
   });
 
   console.log(`\n✅ email-broadcast: ${passed} checks passed.`);
