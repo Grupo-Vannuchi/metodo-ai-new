@@ -8,7 +8,7 @@
  */
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import ExcelJS from "exceljs";
 import PostalMime, { type Attachment, type Email } from "postal-mime";
 import { isValidEmail, normalizeEmail, parseEmailList } from "../src/lib/email-broadcast/normalize";
@@ -198,6 +198,18 @@ function check(name: string, fn: () => void): void {
   fn();
   passed++;
   console.log(`  ✓ ${name}`);
+}
+
+/**
+ * Milliseconds `fn` takes. For the checks that a pattern fed a sender's text
+ * can't be made to backtrack quadratically: at the sizes they use, a quadratic
+ * pattern takes about a minute and a linear one a few milliseconds, so a
+ * generous limit is not flaky.
+ */
+function millis(fn: () => void): number {
+  const start = performance.now();
+  fn();
+  return performance.now() - start;
 }
 
 // --- normalize ---------------------------------------------------------------
@@ -1977,6 +1989,49 @@ check("normalizeSubject strips reply, forward and auto-reply markers", () => {
   assert.equal(normalizeSubject("[EXT] Re: Tabela"), "tabela");
 });
 
+check("normalizeSubject takes the same prefixes however they are spaced, and no others", () => {
+  // Spacing around the word, the counter and the colon; markers glued together or mixed with [tags] and *tags*.
+  assert.equal(normalizeSubject("  re [2] :  Oi"), "oi");
+  assert.equal(normalizeSubject("RES[10] :Oi"), "oi");
+  assert.equal(normalizeSubject("Re:Re:Re:Oi"), "oi");
+  assert.equal(normalizeSubject("auto-reply: out of office : Oi"), "oi");
+  assert.equal(normalizeSubject("autoreply: ausente: Oi"), "oi");
+  assert.equal(normalizeSubject("Re: [a] *b* TR: Oi"), "oi");
+  assert.equal(normalizeSubject("FW:[EXT]*x*  Re :Oi"), "oi");
+  assert.equal(normalizeSubject("Resposta automatica : Oi"), "oi");
+  assert.equal(normalizeSubject("Re: Re: "), "");
+  for (const word of ["re", "res", "enc", "fw", "fwd", "tr", "aw", "wg", "sv", "antw", "ausente"]) {
+    assert.equal(normalizeSubject(`${word.toUpperCase()}: Oi`), "oi", word);
+  }
+  // A word that merely starts like a marker, a marker with no colon, a counter that isn't digits: not prefixes.
+  assert.equal(normalizeSubject("Resultado: Oi"), "resultado: oi");
+  assert.equal(normalizeSubject("Trabalho: Oi"), "trabalho: oi");
+  assert.equal(normalizeSubject("Re x: Oi"), "re x: oi");
+  assert.equal(normalizeSubject("Re[x]: Oi"), "re[x]: oi");
+  assert.equal(normalizeSubject("Re[]: Oi"), "re[]: oi");
+  assert.equal(normalizeSubject("Re[2] x: Oi"), "re[2] x: oi");
+  assert.equal(normalizeSubject("[a]x: Oi"), "x: oi");
+});
+
+check("normalizeSubject stays linear on a subject padded with spaces", () => {
+  // A sender controls the subject. With two \s* either side of an optional group, each of these took about a minute.
+  const spaces = " ".repeat(200_000);
+  const cases: [subject: string, normalized: string][] = [
+    [`re${spaces}x`, "re x"],
+    [`re: re${spaces}x`, "re x"],
+    [`${spaces}re${spaces}x`, "re x"],
+    [`fwd [2]${spaces}x`, "fwd [2] x"],
+  ];
+  for (const [subject, normalized] of cases) {
+    let result = "";
+    const took = millis(() => {
+      result = normalizeSubject(subject);
+    });
+    assert.ok(took < 250, `${JSON.stringify(subject.slice(0, 10))}... took ${took.toFixed(0)} ms`);
+    assert.equal(result, normalized);
+  }
+});
+
 check("subjectAnswers matches literal pieces around {{nome}}/{{empresa}} in order", () => {
   assert.ok(subjectAnswers("Re: Tabela de preços — outubro", "Tabela de preços — outubro"));
   assert.ok(subjectAnswers("RES: Oi Ana, novidades da Loja X", "Oi {{nome}}, novidades da {{empresa}}"));
@@ -2215,9 +2270,19 @@ check("replyHeaders threads the reply with In-Reply-To and References and writes
   assert.equal(subjectOf("Res: oi"), "Res: oi");
   assert.equal(subjectOf("Re[2]: oi"), "Re[2]: oi");
   assert.equal(subjectOf(" re : oi"), "re : oi");
-  // Words that only start like a marker, and forwards, still get one.
+  assert.equal(subjectOf("re [2] : oi"), "re [2] : oi");
+  assert.equal(subjectOf("RES[10]:oi"), "RES[10]:oi");
+  assert.equal(subjectOf("Re:Re: oi"), "Re:Re: oi");
+  // Words that only start like a marker, a marker with no colon, a counter that isn't digits, and forwards, still get one.
   assert.equal(subjectOf("Resultado do mês"), "Re: Resultado do mês");
   assert.equal(subjectOf("Reunião"), "Re: Reunião");
+  assert.equal(subjectOf("Rex: oi"), "Re: Rex: oi");
+  assert.equal(subjectOf("Ress: oi"), "Re: Ress: oi");
+  assert.equal(subjectOf("Re x: oi"), "Re: Re x: oi");
+  assert.equal(subjectOf("Re[x]: oi"), "Re: Re[x]: oi");
+  assert.equal(subjectOf("Re[]: oi"), "Re: Re[]: oi");
+  assert.equal(subjectOf("Re[2] x: oi"), "Re: Re[2] x: oi");
+  assert.equal(subjectOf("Re[2]x: oi"), "Re: Re[2]x: oi");
   assert.equal(subjectOf("Fwd: oi"), "Re: Fwd: oi");
   assert.equal(subjectOf("  "), "Re:");
   // No Message-ID to answer: nothing to thread on, whatever the chain says.
@@ -2240,6 +2305,20 @@ check("replyHeaders keeps what the sender wrote out of the reply's headers", () 
   assert.deepEqual(r.headers, { "In-Reply-To": "<a@x>", References: "<r1@x> <r2@x> <r3@x> <a@x>" });
   for (const messageId of ["<a@x>\r\nBcc: z@y.com", "sem-colchetes", "<a b@x>", "<>", ""]) {
     assert.deepEqual(replyHeaders({ subject: "oi", messageId, references: ["<r1@x>"] }).headers, {}, JSON.stringify(messageId));
+  }
+});
+
+check("replyHeaders stays linear on a subject padded with spaces", () => {
+  // The subject comes straight from the server. With two \s* either side of an optional group, each of these took about a minute.
+  const spaces = " ".repeat(200_000);
+  for (const subject of [`re${spaces}x`, `res [2]${spaces}x`, `${spaces}re${spaces}x`]) {
+    let subjectOut = "";
+    const took = millis(() => {
+      subjectOut = replyHeaders({ subject, messageId: "<a@x>", references: [] }).subject;
+    });
+    assert.ok(took < 250, `${JSON.stringify(subject.slice(0, 10))}... took ${took.toFixed(0)} ms`);
+    // No colon, so it is no marker: the reply gets its own "Re:" (the padding at the ends is trimmed, as ever).
+    assert.equal(subjectOut, `Re: ${subject.trim()}`);
   }
 });
 
@@ -2565,32 +2644,72 @@ check("detailFromParsed flattens address groups and drops blank recipients", () 
   assert.deepEqual(detail.cc, [{ name: "Só nome", email: null }]);
 });
 
-check("the IMAP code never deletes, moves or copies mail, nor expunges or touches folders", () => {
-  const forbidden = /\b(messageDelete|messageMove|messageCopy|expunge|mailboxDelete|mailboxRename|mailboxCreate)\b/;
-  // The pattern itself, so a typo in it can't turn the scan below into a silent pass.
-  for (const bad of ["await c.messageDelete(uid)", "client.expunge()", "x.mailboxCreate('a')", "messageMove(1, 'Trash')", "messageCopy(1, 'a')"]) {
-    assert.ok(forbidden.test(bad), bad);
+/** Every .ts/.tsx file under `dir`, recursively. A folder that isn't there throws: a scan that finds nothing must not pass. */
+function sourcesUnder(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return sourcesUnder(path);
+    return /\.tsx?$/.test(entry.name) ? [path] : [];
+  });
+}
+
+check("the IMAP code never deletes, moves, copies or expunges mail, closes the mailbox, rewrites flags or touches folders", () => {
+  // The only writes the inbox may make are \Seen when an e-mail is opened, \Answered on a reply and the reply's copy in Sent.
+  // The words count wherever they appear, comments included.
+  const rules: { rule: string; re: RegExp; trips: string[] }[] = [
+    {
+      rule: "delete, move or copy e-mail, expunge, or change folders",
+      re: /\b(messageDelete|messageMove|messageCopy|expunge|mailboxDelete|mailboxRename|mailboxCreate)\b/,
+      trips: ["await c.messageDelete(uid)", "c.messageMove(1, 'Trash')", "c.messageCopy(1, 'a')", "client.expunge()", "x.mailboxDelete('a')", "x.mailboxRename('a', 'b')", "x.mailboxCreate('a')"],
+    },
+    {
+      // imapflow's mailboxClose sends CLOSE, which removes for good whatever is flagged \Deleted.
+      rule: "close the mailbox",
+      re: /\bmailboxClose\b/,
+      trips: ["await client.mailboxClose()"],
+    },
+    {
+      rule: "replace or remove flags",
+      re: /\b(messageFlagsSet|messageFlagsRemove|setFlagColor)\b/,
+      trips: ["client.messageFlagsSet(uid, [])", "client.messageFlagsRemove(uid, ['x'])", "client.setFlagColor(uid, 'red')"],
+    },
+    {
+      rule: "name the \\Deleted flag",
+      re: /\\+deleted\b/i,
+      trips: [String.raw`client.messageFlagsAdd(uid, ["\\Deleted"])`, String.raw`flags.has("\Deleted")`, String.raw`["\\deleted"]`, String.raw`["\\DELETED"]`],
+    },
+    {
+      rule: "name the Deleted flag",
+      re: /\bDeleted\b/,
+      trips: ['const FLAG = "Deleted"', "// never flag it Deleted"],
+    },
+  ];
+  // The patterns themselves, so a typo in one can't turn the scan below into a silent pass.
+  for (const { rule, re, trips } of rules) {
+    for (const sample of trips) assert.ok(re.test(sample), `${rule}: ${sample}`);
   }
-  for (const fine of ["client.messageFlagsAdd(uid, ['\\\\Seen'])", "await client.append(path, mime)", "client.getMailboxLock('INBOX')"]) {
-    assert.ok(!forbidden.test(fine), fine);
+  const allowed = [
+    String.raw`client.messageFlagsAdd(uid, ["\\Seen"])`,
+    String.raw`client.messageFlagsAdd(uid, ["\\Answered"])`,
+    String.raw`await client.append(path, mime, ["\\Seen"])`,
+    "const lock = await client.getMailboxLock('INBOX')",
+    "lock.release()",
+    "await client.logout()",
+  ];
+  for (const sample of allowed) {
+    for (const { rule, re } of rules) assert.ok(!re.test(sample), `${rule} wrongly trips on ${sample}`);
   }
-  // Only this folder is scanned, and one that doesn't exist yet counts as empty.
-  const sources = (dir: string): { path: string; text: string }[] => {
-    let entries;
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
-      throw e;
-    }
-    return entries.flatMap((entry) => {
-      const path = join(dir, entry.name);
-      if (entry.isDirectory()) return sources(path);
-      return /\.tsx?$/.test(entry.name) ? [{ path, text: readFileSync(path, "utf8") }] : [];
-    });
-  };
-  for (const file of sources(join(__dirname, "..", "src", "lib", "email-broadcast", "imap"))) {
-    assert.ok(!forbidden.test(file.text), `${file.path} uses a call the inbox must never make`);
+
+  const dir = join(__dirname, "..", "src", "lib", "email-broadcast", "imap");
+  const files = sourcesUnder(dir);
+  // Not a silent pass: the modules this folder is known to hold have to be among the files scanned.
+  const scanned = files.map((file) => relative(dir, file));
+  for (const required of ["core.ts", "parse.ts"]) {
+    assert.ok(scanned.includes(required), `${required} was not scanned (scanned: ${scanned.join(", ") || "nothing"})`);
+  }
+  for (const file of files) {
+    const text = readFileSync(file, "utf8");
+    for (const { rule, re } of rules) assert.ok(!re.test(text), `${relative(dir, file)} must not ${rule}`);
   }
 });
 

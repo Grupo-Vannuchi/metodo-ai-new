@@ -130,8 +130,14 @@ export function pickSentFolder(folders: { path: string; specialUse?: string | nu
   return null;
 }
 
-/** "Re:", "RE:", "Res:", "Re[2]:" at the start: the subject is already an answer. */
-const REPLY_MARKER_RE = /^\s*(re|res)\s*(\[\d+\])?\s*:/i;
+/**
+ * "Re:", "RE:", "Res:", "Re[2]:" at the start: the subject is already an answer.
+ * The subject is the sender's: each run of spaces is read by exactly one `\s*`.
+ * Two side by side (with the optional counter between them, say) split a run in
+ * every possible way when there is no colon, and the work grows with the square
+ * of its length (about a minute for 200,000 spaces).
+ */
+const REPLY_MARKER_RE = /^\s*res?\s*(?:\[\d+\]\s*)?:/i;
 /** A message id as headers write it: `<`, anything but spaces and angle brackets, `>`. Whatever else a sender put there is dropped. */
 const MESSAGE_ID_RE = /^<[^<>\s]+>$/;
 

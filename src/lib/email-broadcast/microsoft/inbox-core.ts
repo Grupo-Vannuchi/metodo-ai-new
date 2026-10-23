@@ -165,9 +165,13 @@ export function attachmentsFromGraph(value: unknown, embedded: ReadonlySet<strin
 /**
  * Leading reply/forward/auto-reply markers ("Re:", "RES:", "Fwd:", "Resposta
  * automática:", "Automatic reply:"…), repeated or with a counter ("RE[2]:").
+ * The subject is the sender's, so the pattern must not backtrack badly: each
+ * run of spaces is read by exactly one `\s*`. Two of them side by side (even
+ * with an optional group between) split a run in every possible way when the
+ * colon is missing, and the work grows with the square of the run's length.
  */
 const SUBJECT_PREFIX_RE =
-  /^(\s*((re|res|enc|fw|fwd|tr|aw|wg|sv|antw|resposta autom[aá]tica|automatic reply|auto[- ]?reply|out of office|ausente)\s*(\[\d+\])?\s*:|\[[^\]]{1,40}\]|\*[^*]{1,40}\*)\s*)+/i;
+  /^\s*(?:(?:(?:re|res|enc|fw|fwd|tr|aw|wg|sv|antw|resposta autom[aá]tica|automatic reply|auto[- ]?reply|out of office|ausente)\s*(?:\[\d+\]\s*)?:|\[[^\]]{1,40}\]|\*[^*]{1,40}\*)\s*)+/i;
 
 /** A subject for comparison: markers removed, spaces collapsed, lower case. */
 export function normalizeSubject(subject: string): string {

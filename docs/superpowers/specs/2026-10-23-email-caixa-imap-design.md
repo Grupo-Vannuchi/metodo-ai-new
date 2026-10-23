@@ -82,8 +82,9 @@ Teste feito em 2026-10-23 (só leitura): `imap.kinghost.net:993` (SSL, TLS 1.3, 
 - **Uma conexão IMAP por pedido** (o Passenger não mantém processo de fundo): conectar no IP checado pela
   guarda, autenticar, abrir a `INBOX`, executar, `LOGOUT` no `finally`. Tempos: conexão 15 s, saudação
   10 s, socket 30 s; `logger: false`; `disableAutoIdle: true`; ouvinte de `error` sempre presente.
-- **Ids na URL:** e-mail `msg=<uidvalidity>.<uid>` (só dígitos); anexo `a=<parte MIME>`
-  (`^\d+(\.\d+)*$`). UIDVALIDITY diferente da atual = "não encontrado".
+- **Ids na URL:** e-mail `msg=<uidvalidity>.<uid>` (só dígitos); anexo `a=<índice>`
+  (`^\d{1,3}$`, o índice do anexo na lista do e-mail já lido). UIDVALIDITY diferente da atual = "não
+  encontrado".
 - **Leitura:** listar com envelope/flags/estrutura (BODY.PEEK, não marca lido); abrir baixa o e-mail
   inteiro só até 15 MB — acima disso mostra cabeçalhos e o aviso "abra no webmail". Marcar lido é um
   `STORE +FLAGS (\Seen)` explícito.
