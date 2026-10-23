@@ -6,11 +6,25 @@ import {
   MAX_AUDIENCE_EMAILS,
   MAX_IMPORTS,
   MAX_IMPORT_NAME,
+  MAX_PERSON_TEXT,
   audienceEmailCount,
 } from "@/lib/email-broadcast/spreadsheet";
 
 const id = z.string().min(1).max(64);
 const emailList = z.array(z.string().max(320)).max(MAX_AUDIENCE_EMAILS);
+const personText = z.string().max(MAX_PERSON_TEXT);
+
+/** One imported spreadsheet. `people` (when the sheet had the header row) goes with `emails`, one per address, in order. */
+const spreadsheetImport = z
+  .object({
+    fileName: z.string().trim().min(1).max(MAX_IMPORT_NAME),
+    emails: emailList,
+    people: z
+      .array(z.object({ name: personText, company: personText }))
+      .max(MAX_AUDIENCE_EMAILS)
+      .optional(),
+  })
+  .refine((i) => !i.people || i.people.length === i.emails.length, "import_people_mismatch");
 
 /** Who receives a send: the UNION of every criterion. Stored as JSON on the draft. */
 export const audienceSelectionSchema = z
@@ -24,10 +38,7 @@ export const audienceSelectionSchema = z
     companyIds: z.array(id).max(1000).default([]),
     emails: emailList.default([]),
     // One entry per imported spreadsheet; drafts saved before imports existed parse with [].
-    imports: z
-      .array(z.object({ fileName: z.string().trim().min(1).max(MAX_IMPORT_NAME), emails: emailList }))
-      .max(MAX_IMPORTS)
-      .default([]),
+    imports: z.array(spreadsheetImport).max(MAX_IMPORTS).default([]),
   })
   .refine((sel) => audienceEmailCount(sel) <= MAX_AUDIENCE_EMAILS, "too_many_emails");
 

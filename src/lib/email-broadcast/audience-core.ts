@@ -1,4 +1,5 @@
 import { isValidEmail, normalizeEmail } from "./normalize";
+import type { PersonDetails } from "./spreadsheet";
 
 /**
  * The pure core of the audience resolution: every address found in every
@@ -36,6 +37,24 @@ export type AudienceStats = {
   suppressed: number;
   total: number;
 };
+
+/**
+ * The addresses of the imported spreadsheets, each with its row's name and
+ * company when the sheet had the header row (`people`, same order as
+ * `emails`). A blank name or company is no name, so another source can fill it.
+ */
+export function spreadsheetCandidates(
+  imports: readonly { emails: readonly string[]; people?: readonly PersonDetails[] }[],
+): Candidate[] {
+  return imports.flatMap((i) =>
+    i.emails.map((email, k) => ({
+      email,
+      source: "spreadsheet" as const,
+      name: i.people?.[k]?.name || null,
+      companyName: i.people?.[k]?.company || null,
+    })),
+  );
+}
 
 /** Which source names the recipient ({{nome}}/{{empresa}}) when an address repeats. */
 const PRIORITY: Record<CandidateSource, number> = { contact: 0, company: 1, manual: 2, spreadsheet: 3 };
