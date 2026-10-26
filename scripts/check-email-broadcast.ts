@@ -149,6 +149,7 @@ import {
   smtpPhaseOf,
   smtpSendMinutes,
   smtpSendPhase,
+  withSavedSmtpPassword,
 } from "../src/lib/email-broadcast/smtp/core";
 import { isBlockedSmtpAddress, pickSmtpAddress } from "../src/lib/email-broadcast/smtp/address";
 import { redactAndCut, redactSmtpSecrets } from "../src/lib/email-broadcast/smtp/redact";
@@ -185,6 +186,8 @@ import {
   replyOutcome,
   suggestImapHost,
   summaryFromImap,
+  type ImapConnectError,
+  type ImapSettings,
 } from "../src/lib/email-broadcast/imap/core";
 import {
   detailFromParsed,
@@ -1365,6 +1368,56 @@ check("canKeepSmtpPassword only reuses the saved password for the same server an
   assert.equal(canKeepSmtpPassword(saved, { ...same, username: "outro@b.com" }), false);
 });
 
+check("canKeepSmtpPassword also holds the inbox's server, port and security (spec 2026-10-23)", () => {
+  const smtp = { host: "smtpi.kinghost.net", port: 587, security: "starttls" as const, username: "a@b.com" };
+  const imap: ImapSettings = { host: "imap.kinghost.net", port: 993, security: "ssl" };
+  const saved = (inbox: ImapSettings | null) => ({ ...smtp, status: "ACTIVE" as const, imap: inbox });
+  // no inbox before and after, or the very same one: the password only goes where it was typed for
+  assert.equal(canKeepSmtpPassword(saved(null), { ...smtp, imap: null }), true);
+  assert.equal(canKeepSmtpPassword(saved(imap), { ...smtp, imap: { ...imap } }), true);
+  // switching the inbox on, or pointing it at another server, port or security, would send the saved password to a
+  // destination it wasn't typed for
+  assert.equal(canKeepSmtpPassword(saved(null), { ...smtp, imap }), false);
+  assert.equal(canKeepSmtpPassword(saved(imap), { ...smtp, imap: { ...imap, host: "imap.atacante.com" } }), false);
+  assert.equal(canKeepSmtpPassword(saved(imap), { ...smtp, imap: { ...imap, port: 143 } }), false);
+  assert.equal(canKeepSmtpPassword(saved(imap), { ...smtp, imap: { ...imap, security: "starttls" } }), false);
+  // switching it off: nothing is sent to it any more
+  assert.equal(canKeepSmtpPassword(saved(imap), { ...smtp, imap: null }), true);
+  // an inbox loosens none of the other rules
+  assert.equal(canKeepSmtpPassword(null, { ...smtp, imap }), false);
+  assert.equal(canKeepSmtpPassword({ ...saved(imap), status: "NEEDS_RECONNECT" }, { ...smtp, imap }), false);
+  assert.equal(canKeepSmtpPassword(saved(imap), { ...smtp, host: "smtp.atacante.com", imap }), false);
+  assert.equal(canKeepSmtpPassword(saved(imap), { ...smtp, port: 465, imap }), false);
+  assert.equal(canKeepSmtpPassword(saved(imap), { ...smtp, security: "ssl", imap }), false);
+  assert.equal(canKeepSmtpPassword(saved(imap), { ...smtp, username: "outro@b.com", imap }), false);
+  // `imap` left out reads as null on either side (a caller that doesn't know about the inbox)
+  const savedBare = { ...smtp, status: "ACTIVE" as const };
+  assert.equal(canKeepSmtpPassword(savedBare, smtp), true);
+  assert.equal(canKeepSmtpPassword(savedBare, { ...smtp, imap }), false, "an inbox switched on where there was none");
+  assert.equal(canKeepSmtpPassword(saved(imap), smtp), true, "an inbox left out is an inbox switched off");
+  assert.equal(canKeepSmtpPassword(saved(null), smtp), true);
+});
+
+check("withSavedSmtpPassword gives back what the form typed, the inbox included, with the saved password", () => {
+  const smtp = { host: "smtpi.kinghost.net", port: 587 as const, security: "starttls" as const, username: "a@b.com" };
+  const imap: ImapSettings = { host: "imap.kinghost.net", port: 993, security: "ssl" };
+  const saved = { ...smtp, password: "senha-guardada", imap, status: "ACTIVE" as const };
+  // an edit that touches nothing of the destination (the name, the limits): the inbox goes on, as it was
+  assert.deepEqual(withSavedSmtpPassword(saved, { ...smtp, imap }), { ...smtp, imap, password: "senha-guardada" });
+  // the inbox switched off is gone from what is saved, though the saved account had it
+  assert.deepEqual(withSavedSmtpPassword(saved, { ...smtp, imap: null }), { ...smtp, imap: null, password: "senha-guardada" });
+  assert.deepEqual(withSavedSmtpPassword({ ...saved, imap: null }, { ...smtp, imap: null }), { ...smtp, imap: null, password: "senha-guardada" });
+  // an account with no inbox that stays without one
+  assert.deepEqual(withSavedSmtpPassword({ ...smtp, password: "senha-guardada", status: "ACTIVE" }, smtp), { ...smtp, password: "senha-guardada" });
+  // edits the saved password can't follow: the password has to be typed
+  assert.equal(withSavedSmtpPassword({ ...saved, imap: null }, { ...smtp, imap }), null, "inbox switched on");
+  assert.equal(withSavedSmtpPassword(saved, { ...smtp, imap: { ...imap, host: "imap.atacante.com" } }), null, "inbox server changed");
+  assert.equal(withSavedSmtpPassword(saved, { ...smtp, imap: { ...imap, port: 143 } }), null, "inbox port changed");
+  assert.equal(withSavedSmtpPassword(saved, { ...smtp, host: "smtp.atacante.com", imap }), null, "sending server changed");
+  assert.equal(withSavedSmtpPassword({ ...saved, status: "NEEDS_RECONNECT" }, { ...smtp, imap }), null, "account needs reconnecting");
+  assert.equal(withSavedSmtpPassword(null, { ...smtp, imap }), null, "no account");
+});
+
 check("redactSmtpSecrets masks the password and what the login sends of it, and nothing else", () => {
   const s = { username: "contato@cliente.com.br", password: "S3nh@ Secreta!" };
   const b64 = (value: string) => Buffer.from(value, "utf8").toString("base64");
@@ -1556,6 +1609,74 @@ check("smtpAccountSchema refuses a pasted URL and keeps what must stay as typed"
   const bare = smtpAccountSchema.parse(base);
   assert.equal(bare.username, "a@b.com");
   assert.equal(bare.displayName, null);
+});
+
+check("smtpAccountSchema reads the inbox: a blank server is no inbox and the security follows the port", () => {
+  const base = { email: "a@b.com", host: "smtpi.kinghost.net", port: 587, security: "starttls", password: "x", hourlyLimit: 100, dailyLimit: 500 };
+  const inboxOf = (extra: Record<string, unknown>) => smtpAccountSchema.parse({ ...base, ...extra }).imap;
+  const problems = (extra: Record<string, unknown>) => {
+    const r = smtpAccountSchema.safeParse({ ...base, ...extra });
+    return r.success ? [] : r.error.issues.map((issue) => issue.message);
+  };
+  // no inbox: the keys left out (every form payload from before the inbox), blank, or only spaces
+  for (const extra of [{}, { imapHost: "" }, { imapHost: "   " }, { imapHost: "", imapPort: 143 }, { imapHost: undefined, imapPort: undefined }])
+    assert.equal(inboxOf(extra), null, JSON.stringify(extra));
+  // the port says how the connection is secured: 993 is TLS from the start, 143 upgrades with STARTTLS
+  assert.deepEqual(inboxOf({ imapHost: "imap.kinghost.net", imapPort: 993 }), { host: "imap.kinghost.net", port: 993, security: "ssl" });
+  assert.deepEqual(inboxOf({ imapHost: "imap.kinghost.net", imapPort: 143 }), { host: "imap.kinghost.net", port: 143, security: "starttls" });
+  // the server is trimmed and lower-cased like the sending one; the port may come as text (a form field)
+  assert.deepEqual(inboxOf({ imapHost: " IMAP.KingHost.NET ", imapPort: "143" }), { host: "imap.kinghost.net", port: 143, security: "starttls" });
+  assert.deepEqual(inboxOf({ imapHost: "177.153.0.10", imapPort: 993 }), { host: "177.153.0.10", port: 993, security: "ssl" });
+  // a server with no port is the usual one: 993, TLS from the start
+  assert.deepEqual(inboxOf({ imapHost: "imap.kinghost.net" }), { host: "imap.kinghost.net", port: 993, security: "ssl" });
+  // what the person typed is read into `imap` and no longer left beside it (the annotation pins the output type the
+  // save action relies on: tsc checks it, not the run)
+  const out = smtpAccountSchema.parse({ ...base, imapHost: "imap.kinghost.net", imapPort: 993 });
+  const read: ImapSettings | null = out.imap;
+  assert.deepEqual(read, { host: "imap.kinghost.net", port: 993, security: "ssl" });
+  assert.equal(Object.keys(out).includes("imapHost") || Object.keys(out).includes("imapPort"), false);
+  assert.equal(out.host, "smtpi.kinghost.net", "the sending server is untouched");
+  // only 993 and 143: never 110 (POP3), 143's neighbours, the sending ports or anything that isn't a whole port
+  assert.deepEqual(problems({ imapHost: "imap.kinghost.net", imapPort: 110 }), ["invalid_imap_port"]);
+  for (const imapPort of [25, 465, 587, 995, 992, 144, 0, -993, 993.5, "", "abc", "993abc"])
+    assert.equal(problems({ imapHost: "imap.kinghost.net", imapPort }).length > 0, true, String(imapPort));
+  // the server is a bare name or IPv4, as the sending one is: a pasted URL, a port, a space or a single label is refused
+  assert.deepEqual(problems({ imapHost: "imap://x", imapPort: 993 }), ["invalid_imap_host"]);
+  for (const imapHost of ["imap://imap.kinghost.net", "imap.kinghost.net:993", "imap kinghost.net", "imap.kinghost.net/inbox", "localhost", "imap.25",
+    "[::1]", "-x.example.com", "x-.example.com", "imap_x.example.com", "imap.example.com.", "2130706433", "177.153.0.256"])
+    assert.deepEqual(problems({ imapHost, imapPort: 993 }), ["invalid_imap_host"], imapHost);
+  assert.equal(problems({ imapHost: `${"x".repeat(250)}.com`, imapPort: 993 }).length > 0, true, "longer than a name can be");
+  // a problem with the inbox is its own: it never turns the sending half bad, nor the other way round
+  assert.deepEqual(problems({ imapHost: "imap://x", host: "smtp://x" }).sort(), ["invalid_host", "invalid_imap_host"]);
+});
+
+check("every inbox failure the form can name has its text in pt.json and en.json", () => {
+  const imapErrors = ["auth_failed", "tls_failed", "connection_failed", "host_not_found", "host_not_allowed", "failed"] as const satisfies readonly ImapConnectError[];
+  // typecheck fails here when imapConnectError learns a new failure that the form has no text for
+  type Unlisted = Exclude<ImapConnectError, (typeof imapErrors)[number]>;
+  const everyOneListed: [Unlisted] extends [never] ? true : false = true;
+  assert.ok(everyOneListed);
+  const keys = [
+    ...imapErrors.map((e) => `smtp.error.imap_${e}`),
+    "smtp.error.invalid_imap_host",
+    "smtp.fieldError.invalid_imap_host",
+    "smtp.fieldError.invalid_imap_port",
+    "smtp.form.imapSection",
+    "smtp.form.imapIntro",
+    "smtp.form.imapEnable",
+    "smtp.form.imapHost",
+    "smtp.form.imapHostPlaceholder",
+    "smtp.form.imapHostHint",
+    "smtp.form.imapPort",
+    "smtp.form.imapPasswordHint",
+  ];
+  assert.deepEqual(missingEmailKeys(ptMessages, keys), [], "pt.json");
+  assert.deepEqual(missingEmailKeys(enMessages, keys), [], "en.json");
+  // the messages that interpolate the server and the port name them, in both languages
+  for (const catalog of [ptMessages, enMessages]) {
+    const text = (key: string) => key.split(".").reduce<unknown>((node, part) => (node as Record<string, unknown>)[part], catalog.emailBroadcast) as string;
+    for (const e of ["tls_failed", "connection_failed"]) assert.ok(text(`smtp.error.imap_${e}`).includes("{host}:{port}"), e);
+  }
 });
 
 check("isBlockedSmtpAddress holds at the edge of every range and in every notation", () => {

@@ -14,7 +14,8 @@ export const dynamic = "force-dynamic";
  * account, edit it, or give it its password again. The E-mail layout already
  * requires the "email" screen and the Marketing module, and the save action
  * checks both again. The saved password is never read here: the form is
- * filled with everything else and the password is typed.
+ * filled with everything else, the inbox (IMAP) settings included, and the
+ * password is typed.
  */
 export default async function EmailSmtpPage({ params }: { params: Promise<{ locale: string }> }) {
   const locale = resolveLocale((await params).locale);
@@ -33,6 +34,7 @@ export default async function EmailSmtpPage({ params }: { params: Promise<{ loca
         port: account.port,
         security: account.security,
         username: account.username,
+        imap: account.imap,
         hourlyLimit: account.hourlyLimit,
         dailyLimit: account.dailyLimit,
       }
@@ -43,6 +45,7 @@ export default async function EmailSmtpPage({ params }: { params: Promise<{ loca
         port: 587,
         security: defaultSmtpSecurity(587),
         username: "",
+        imap: null,
         hourlyLimit: LIMITS.smtpHourlyDefault,
         dailyLimit: LIMITS.smtpDailyDefault,
       };

@@ -308,13 +308,36 @@ export function smtpFailureAction(
   return "pause";
 }
 
-/** Where a password goes: the server it is sent to and the user it is sent as. */
-type SmtpDestination = { host: string; port: number; security: SmtpSecurity; username: string };
+/**
+ * Where a password goes: the server it is sent to and the user it is sent as,
+ * and, when the account reads its inbox, the IMAP server it is sent to as well.
+ * An `imap` left out is an inbox that is off, like null.
+ */
+type SmtpDestination = {
+  host: string;
+  port: number;
+  security: SmtpSecurity;
+  username: string;
+  imap?: ImapSettings | null;
+};
+
+/**
+ * Whether the inbox login goes where the saved password was typed for. With no
+ * inbox to send it to (off before and after, or being switched off) there is
+ * nothing to leak; an inbox switched on, or moved to another server, port or
+ * security, would send the saved password to a server it wasn't typed for.
+ */
+function keepsImapDestination(saved: ImapSettings | null | undefined, next: ImapSettings | null | undefined): boolean {
+  if (!next) return true;
+  if (!saved) return false;
+  return saved.host === next.host && saved.port === next.port && saved.security === next.security;
+}
 
 /**
  * Whether an edit may keep the saved password when the form's is empty: only
  * for a connected account, and only if the server, port, security and user are
- * the same, so a stored password never goes to a destination it wasn't typed for.
+ * the same, and so are the IMAP server, port and security when the inbox is on,
+ * so a stored password never goes to a destination it wasn't typed for.
  */
 export function canKeepSmtpPassword(
   saved: (SmtpDestination & { status: "ACTIVE" | "NEEDS_RECONNECT" }) | null,
@@ -326,8 +349,24 @@ export function canKeepSmtpPassword(
     saved.host === next.host &&
     saved.port === next.port &&
     saved.security === next.security &&
-    saved.username === next.username
+    saved.username === next.username &&
+    keepsImapDestination(saved.imap, next.imap)
   );
+}
+
+/**
+ * The settings the form typed with the saved password, for an edit that left the
+ * password field empty: only when canKeepSmtpPassword allows it, otherwise null
+ * (the password has to be typed). All the rest is the form's, `imap` included, so
+ * an edit that doesn't touch the inbox keeps it, and switching it off removes it
+ * from what is saved.
+ */
+export function withSavedSmtpPassword(
+  saved: (SmtpSettings & { status: "ACTIVE" | "NEEDS_RECONNECT" }) | null,
+  next: Omit<SmtpSettings, "password">,
+): SmtpSettings | null {
+  if (saved === null || !canKeepSmtpPassword(saved, next)) return null;
+  return { ...next, password: saved.password };
 }
 
 /** Why the save form's connection test failed, as the screen message key. */
