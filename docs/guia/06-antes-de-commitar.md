@@ -48,6 +48,27 @@ membro vem de `phoneNumber` quando o id é um LID; [src/lib/whatsapp/group-impor
 o 9 nos celulares antigos de 12 dígitos, o nome "Contato #N" continuando a numeração da pasta do grupo e os
 números que já estão no CRM sendo pulados). Rode sempre que mexer nesses dois arquivos.
 
+`npm run check:mcp` cobre as regras puras do servidor MCP de leitura
+([src/lib/mcp/core.ts](../../src/lib/mcp/core.ts): comparação da chave com espaço ou quebra de linha
+colados, datas `AAAA-MM-DD` como dias UTC com o fim inclusivo, período invertido ou longo demais,
+limite de 50 a 200 itens por página, a linha única "Folha de pagamento" do resumo financeiro e a
+varredura que acha campo sensível na resposta). Ele também falha se algum arquivo de `src/lib/mcp/` ou
+`src/lib/queries/mcp/` chamar escrita do Prisma ou SQL cru: o MCP é só leitura. Não usa banco nem rede.
+Rode sempre que mexer nessas duas pastas.
+
+`npm run check:mcp:e2e` testa o servidor MCP de ponta a ponta contra o `next dev` em :3000
+([scripts/check-mcp-e2e.ts](../../scripts/check-mcp-e2e.ts)): 404 sem chave ou com chave errada, 405
+no GET, o cliente oficial do MCP conectando pela chave no caminho e no header, a lista exata de
+ferramentas (todas marcadas como só leitura), as asserções de cada módulo e, por último, a varredura:
+toda ferramenta com `organizationId` é chamada para a organização de teste A, que tem um texto-sentinela
+plantado em cada campo sensível, e para a B, vazia — nada sensível, nada da outra organização e nenhum
+erro na organização vazia. Precisa do Postgres
+do Docker, do `next dev` no ar e de `MCP_API_KEY` no `.env` (a mesma que o servidor lê). Cria duas
+organizações de teste e apaga tudo o que criou, mesmo quando falha; erros nunca mostram a chave. Se o
+`next dev` com Turbopack responder 404 em todas as rotas de API, suba com `npx next dev --webpack`.
+Com o Redis configurado, duas rodadas seguidas podem bater no limite de 120 chamadas por minuto —
+espere um minuto.
+
 ## `check:isolation`
 
 Isolamento multi-tenant é [a regra inviolável nº 1 do `CLAUDE.md`](../../CLAUDE.md) e o
