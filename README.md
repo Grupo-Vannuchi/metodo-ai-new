@@ -174,6 +174,7 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | não | rate-limit |
 | `GOOGLE_CLIENT_ID/SECRET`, `MICROSOFT_*`, `LINKEDIN_*` | não | login OAuth |
 | `CRON_SECRET` | p/ cron | autentica os endpoints `/api/cron/*` |
+| `MCP_API_KEY` | não | chave do servidor MCP de leitura (`/api/mcp`); sem ela o endpoint responde 404 |
 | `SEED_OWNER_EMAIL`, `SEED_OWNER_PASSWORD`, `SEED_ORG_NAME` | não | usadas pelo seed |
 
 > **Nunca commite segredos.** `.env` está no `.gitignore`.
@@ -340,6 +341,27 @@ domínio próprio, liberado assim:
 
 Um domínio pertence a uma empresa só (seus subdomínios e domínios-pai também ficam na mesma empresa; o comando recusa o contrário), e `metodotia.com` nunca é liberado para cliente. A chave do
 `.env` precisa estar como "Sending access" com **All domains** no Resend.
+
+### MCP de leitura: ligar o conector do Claude
+
+O servidor MCP (`/api/mcp`, [guia 05](docs/guia/05-rotas-e-jobs.md)) deixa o Claude consultar, só lendo, os
+dados de todas as empresas: 23 ferramentas de busca e resumo por módulo. Para ligar em produção:
+
+1. **Antes do merge**, gere uma chave
+   (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`), cadastre como `MCP_API_KEY`
+   nas variáveis de ambiente do app no hPanel e reinicie o app — as variáveis são lidas na subida. Sem ela,
+   ou com menos de 32 caracteres, `/api/mcp` responde 404 a tudo (o resto do site não é afetado). Use uma
+   chave diferente da do `.env` local.
+2. Depois do deploy, no claude.ai, edite (ou remova e adicione de novo) o conector personalizado
+   "METODO AI" com a URL `https://metodotia.com/api/mcp/<chave>`. Teste pedindo "liste as organizações".
+3. No Claude Code, o mesmo servidor entra com a chave no header:
+   `claude mcp add --transport http metodoai https://metodotia.com/api/mcp --header "Authorization: Bearer <chave>"`.
+4. **Trocar a chave** = gerar outra, trocar no hPanel (reiniciando o app) e no conector. Faça isso se ela
+   vazar: a chave no caminho fica nos logs de acesso da Hostinger.
+
+Nunca saem mensagens do WhatsApp, corpo de e-mail, salário ou folha por pessoa, dados bancários, credenciais
+nem anotações livres — a lista está no spec (`docs/superpowers/specs/2026-10-22-mcp-leitura-design.md`) e em
+`FORBIDDEN_KEYS` de `src/lib/mcp/core.ts`, que bloqueia qualquer resposta que traga um desses campos.
 
 ### Deploy — automático a cada push na `main`
 

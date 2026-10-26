@@ -56,6 +56,7 @@ sobrou.
 | Usuário logado conectando a caixa Microsoft do E-mail | sessão (`getOrgContext()`) + tela `email` + módulo `marketing`; o retorno confere `state`, verificador PKCE e empresa nos cookies `ms_mail_*` (10 min) | [src/app/api/email/microsoft/](../../src/app/api/email/microsoft/) |
 | Usuário logado conectando a conta Google do E-mail | sessão (`getOrgContext()`) + tela `email` + módulo `marketing` + empresa no piloto (`googleMailEnabledFor`); o retorno confere `state`, verificador PKCE e empresa nos cookies `gg_mail_*` (10 min) | [src/app/api/email/google/](../../src/app/api/email/google/) |
 | Usuário logado baixando anexo da caixa de entrada Microsoft | sessão (`getOrgContext()`) + telas `email` e `emailInbox` + módulo `marketing`; ids conferidos por `isGraphId`, e a mensagem precisa estar na pasta Caixa de Entrada da caixa da própria empresa | [src/app/api/email/microsoft/attachment/route.ts](../../src/app/api/email/microsoft/attachment/route.ts) |
+| Claude (servidor MCP de leitura) | chave `MCP_API_KEY` no `Authorization: Bearer` ou como último segmento do caminho (`/api/mcp/<chave>`) → `isMcpAuthorized(req, pathKey)` | [src/lib/mcp/auth.ts](../../src/lib/mcp/auth.ts) |
 
 `/api/email/microsoft/connect` e `/callback` (spec 2026-10-15) só redirecionam. `/api/email/microsoft/attachment` sempre responde como download (`application/octet-stream`, `Content-Disposition: attachment`, `nosniff`): um anexo HTML nunca é aberto na origem do app. O endereço de retorno cadastrado no app do Azure é `${NEXT_PUBLIC_SITE_URL}/api/email/microsoft/callback`, montado por `joinSiteUrl` sem barra dupla. As credenciais vão criptografadas para `email_sender_accounts` e nunca para o navegador ou para o log.
 
@@ -146,6 +147,27 @@ Evolution não assina os webhooks que envia. Real,
 Em desenvolvimento isso exige túnel (ngrok) com `NEXT_PUBLIC_SITE_URL` apontando pra ele —
 `localhost` não recebe webhook, porque é a Evolution quem precisa alcançar sua máquina pela
 internet, não o contrário.
+
+### Servidor MCP de leitura (Claude)
+
+`/api/mcp` e `/api/mcp/[key]` (spec 2026-10-22) deixam o Claude consultar, só lendo, os dados de
+**todas** as organizações. Quem chama não tem sessão nem organização ativa: a chave `MCP_API_KEY` é
+a única barreira, e cada ferramenta recebe o `organizationId` como argumento ([guia 03](03-multi-tenancy.md)).
+
+- **Chave:** no `Authorization: Bearer <chave>` (Claude Code) ou como último segmento do caminho
+  (`/api/mcp/<chave>`), porque o conector do claude.ai só aceita uma URL. Comparação em tempo
+  constante, como no cron; sem `MCP_API_KEY` no ambiente, ou com menos de 32 caracteres, tudo responde
+  404 — e só o MCP: a chave não tem tamanho mínimo no `env.ts`, para uma chave cortada não derrubar o site.
+- **404, nunca 401:** o claude.ai trata 401 como "comece o OAuth", e este servidor não tem OAuth.
+  Chave errada recebe o mesmo 404 de uma rota que não existe.
+- **Só POST:** GET (o fluxo SSE opcional do MCP) e DELETE (fim de sessão) respondem 405. O
+  transporte é sem sessão e responde em JSON, porque cada merge na `main` reinicia o Passenger e
+  cortaria qualquer conexão longa.
+- **Limite:** 120 chamadas por minuto (`makeRateLimiter`, prefixo `mcp:<NODE_ENV>`); sem Redis, libera.
+- **A chave no caminho fica nos logs de acesso da Hostinger** (e no terminal do `next dev`). Se
+  vazar, gere outra e troque no hPanel e no conector do claude.ai.
+
+Guard e comportamento: [src/lib/mcp/handler.ts](../../src/lib/mcp/handler.ts).
 
 ## O guard de cron: por que é compartilhado, e não copiado
 
