@@ -4,6 +4,7 @@
  * can import it (the address guard, which needs node:net, is in address.ts).
  */
 import { LIMITS } from "@/config/limits";
+import type { ImapSettings } from "../imap/core";
 import { MAILBOX_PACE_MS, type MailboxFailureAction } from "../mailbox/core";
 
 /** The ports the form accepts: 465 (TLS from the start), 587 (STARTTLS) and the 2525 alternative. Never 25. */
@@ -13,13 +14,18 @@ export type SmtpPort = (typeof SMTP_PORTS)[number];
 /** "ssl" = TLS from the first byte (port 465); "starttls" = plain greeting, upgraded to TLS before the login. */
 export type SmtpSecurity = "ssl" | "starttls";
 
-/** What is stored (sealed) for an account and what a connection is opened with. */
+/**
+ * What is stored (sealed) for an account and what a connection is opened with.
+ * `imap` is where the account's inbox is read from (spec 2026-10-23), with the
+ * same user and password: null or absent, the account only sends.
+ */
 export type SmtpSettings = {
   host: string;
   port: SmtpPort;
   security: SmtpSecurity;
   username: string;
   password: string;
+  imap?: ImapSettings | null;
 };
 
 /** The form's suggestion for a port; the person can still change it. */

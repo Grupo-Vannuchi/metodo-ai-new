@@ -69,6 +69,25 @@ organizações de teste e apaga tudo o que criou, mesmo quando falha; erros nunc
 Com o Redis configurado, duas rodadas seguidas podem bater no limite de 120 chamadas por minuto —
 espere um minuto.
 
+`npm run check:imap` testa o código de servidor da caixa de entrada por IMAP da conta SMTP
+([scripts/check-email-imap.ts](../../scripts/check-email-imap.ts)) contra uma caixa descartável da
+Ethereal (um servidor SMTP e IMAP de verdade, que não entrega nada para fora) e o Postgres local. Hoje
+cobre as credenciais da conta (`sealSmtpSettings` → `openSmtpSettings` devolve o IMAP igual; conta
+antiga, sem as chaves do IMAP, ou com chaves que não servem, abre com `imap: null` e o SMTP intacto) e a
+conexão de [src/lib/email-broadcast/imap/connect.ts](../../src/lib/email-broadcast/imap/connect.ts): login
+real em TLS, senha errada, certificado sempre conferido, nome que não resolve, endereço interno recusado
+antes de qualquer conexão, e a porta 143 só com STARTTLS (um servidor de mentira em loopback prova que
+nenhum login sai em texto puro). Nenhum texto de falha leva a senha. As tarefas seguintes da caixa
+(leitura, anexo, resposta) acrescentam os checks delas no mesmo script. Precisa de **internet** (a API da
+Ethereal e o IMAP dela, porta 993), do Postgres do Docker e de um `.env` válido, e **recusa rodar** se o
+`DATABASE_URL` não for local. Cria uma organização `IMAP-E2E-<carimbo>` e apaga o que criou, mesmo quando
+falha; a caixa da Ethereal não tem como ser apagada (expira sozinha) e a senha dela nunca vai para a
+saída. Roda com `tsx --tsconfig scripts/tsconfig.server.json`: o shim
+`scripts/shims/server-only.ts` deixa os módulos `server-only` carregarem fora do Next, e o tsconfig traz o
+alias `@/` e o `env.ts`. A rede instável derruba a criação da conta na Ethereal de vez em quando: o script
+tenta 3 vezes antes de desistir; se o erro for de rede, rode de novo. Rode sempre que mexer em
+`src/lib/email-broadcast/imap/` ou em `src/lib/email-broadcast/smtp/credentials.ts`.
+
 ## `check:isolation`
 
 Isolamento multi-tenant é [a regra inviolável nº 1 do `CLAUDE.md`](../../CLAUDE.md) e o

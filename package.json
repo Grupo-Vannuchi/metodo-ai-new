@@ -21,6 +21,7 @@
     "check:isolation": "tsx --env-file=.env scripts/check-isolation.ts",
     "check:node": "tsx scripts/check-node.ts",
     "check:email": "tsx scripts/check-email-broadcast.ts",
+    "check:imap": "tsx --tsconfig scripts/tsconfig.server.json --env-file=.env scripts/check-email-imap.ts",
     "check:tasks": "tsx scripts/check-task-board.ts",
     "check:search": "tsx scripts/check-search-options.ts",
     "check:groups": "tsx scripts/check-whatsapp-groups.ts",
