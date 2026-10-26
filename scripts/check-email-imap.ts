@@ -31,11 +31,12 @@ import { ImapFlow, type ImapFlowOptions } from "imapflow";
 import { createTestAccount, createTransport } from "nodemailer";
 import { env } from "@/lib/env";
 import { prisma as appPrisma } from "@/lib/prisma";
-import { closeImap, imapFlowOptions, openImap, verifyImapSettings } from "@/lib/email-broadcast/imap/connect";
+import { closeImap, imapFailureOf, imapFlowOptions, openImap, verifyImapSettings } from "@/lib/email-broadcast/imap/connect";
 import { imapConnectError, imapMessageRef, type ImapPort, type ImapSettings } from "@/lib/email-broadcast/imap/core";
 import {
   downloadImapAttachment,
   fetchListRows,
+  imapRequest,
   imapUnreadCount,
   loadImapInboxView,
   openMessage,
@@ -167,15 +168,37 @@ async function listenScripted(script: (socket: net.Socket) => void): Promise<{ p
   };
 }
 
+/** A command the fake mailbox received, and what it needs to answer it. */
+type FakeCommand = {
+  /** Upper case, "UID" folded into the verb: "STATUS", "UID SEARCH", "FETCH", "UID FETCH", "UID STORE"... */
+  name: string;
+  line: string;
+  tag: string;
+  /** The message set the command names, for the ones that take one (FETCH, UID FETCH...). */
+  set: string;
+  /** The FETCH rows (without the tagged OK) the fake would send for the e-mails a message set names, as this command asks. */
+  rows: (set: string) => string;
+};
+
+type FakeMailboxOptions = {
+  /** Levels of the second e-mail's body structure (the first one's is a text and a PDF). */
+  levels?: number;
+  /** Takes over a command: true when it did (answered it its own way, hung on it or dropped the connection). */
+  on?: (command: FakeCommand, socket: net.Socket) => boolean;
+};
+
 /**
  * A plain-text IMAP server with an Inbox of two e-mails (UIDs 1 and 2, UIDVALIDITY 1000), "m1" and "m2". It answers what
- * imapflow sends to log in, open the Inbox and fetch, with what is asked for: the second e-mail's body structure is
- * `levels` deep (the first one's is 2), and the source of each is a few lines of text.
+ * imapflow sends to log in, open the Inbox, count, search, fetch and mark, with what is asked for: the first e-mail has a
+ * PDF attached, the second's body structure is `levels` deep, and the source of each is a few lines of text. A check
+ * that needs a server misbehaving takes over the command it misbehaves on with `on`.
  */
-function listenFakeMailbox(levels: number): Promise<{ port: number; close: () => Promise<void> }> {
+function listenFakeMailbox(options: FakeMailboxOptions = {}): Promise<{ port: number; close: () => Promise<void> }> {
+  const levels = options.levels ?? 2;
   const caps = "IMAP4rev1 AUTH=PLAIN SASL-IR ID NAMESPACE ENABLE";
   const leaf = '("TEXT" "PLAIN" ("CHARSET" "utf-8") NIL NIL "7BIT" 8 1)';
-  const structure = (n: number) => `${"(".repeat(n)}${leaf}${' "MIXED")'.repeat(n)}`;
+  const pdf = '("APPLICATION" "PDF" ("NAME" "a.pdf") NIL NIL "BASE64" 100 NIL ("ATTACHMENT" ("FILENAME" "a.pdf")))';
+  const structure = (n: number) => (n === 1 ? `(${leaf} ${pdf} "MIXED")` : `${"(".repeat(levels)}${leaf}${' "MIXED")'.repeat(levels)}`);
   const source = (n: number) => `From: Fulano <fulano@exemplo.com.br>\r\nSubject: m${n}\r\n\r\ncorpo da mensagem ${n}\r\n`;
   const envelope = (n: number) =>
     `("Mon, 26 Oct 2026 10:00:00 -0300" "m${n}" (("Fulano" NIL "fulano" "exemplo.com.br")) NIL NIL NIL NIL NIL NIL "<m${n}@exemplo.com.br>")`;
@@ -193,7 +216,7 @@ function listenFakeMailbox(levels: number): Promise<{ port: number; close: () =>
     if (/INTERNALDATE/i.test(asked)) items.push('INTERNALDATE "26-Oct-2026 10:00:00 -0300"');
     if (/RFC822\.SIZE/i.test(asked)) items.push(`RFC822.SIZE ${source(n).length}`);
     if (/ENVELOPE/i.test(asked)) items.push(`ENVELOPE ${envelope(n)}`);
-    if (/BODYSTRUCTURE/i.test(asked)) items.push(`BODYSTRUCTURE ${structure(n === 2 ? levels : 2)}`);
+    if (/BODYSTRUCTURE/i.test(asked)) items.push(`BODYSTRUCTURE ${structure(n)}`);
     const body = /BODY(\.PEEK)?\[\]/i.test(asked) ? ` BODY[] {${source(n).length}}\r\n${source(n)}` : "";
     return `* ${n} FETCH (${items.join(" ")}${body})\r\n`;
   };
@@ -207,21 +230,26 @@ function listenFakeMailbox(levels: number): Promise<{ port: number; close: () =>
         pending = pending.slice(end + 2);
         const [tag, command = "", second = "", third = ""] = line.split(" ");
         const word = command.toUpperCase();
-        if (word === "CAPABILITY") socket.write(`* CAPABILITY ${caps}\r\n${tag} OK done\r\n`);
-        else if (word === "ID") socket.write(`* ID NIL\r\n${tag} OK done\r\n`);
-        else if (word === "AUTHENTICATE" || word === "LOGIN") socket.write(`${tag} OK logged in\r\n`);
-        else if (word === "NAMESPACE") socket.write(`* NAMESPACE NIL NIL NIL\r\n${tag} OK done\r\n`);
-        else if (word === "ENABLE") socket.write(`* ENABLED\r\n${tag} OK done\r\n`);
-        else if (word === "LIST") socket.write(`* LIST (\\HasNoChildren) "." "INBOX"\r\n${tag} OK done\r\n`);
-        else if (word === "SELECT") {
+        const name = word === "UID" ? `UID ${second.toUpperCase()}` : word;
+        const set = word === "UID" ? third : second;
+        const rows = (wanted: string) => named(wanted).map((n) => fetchRow(n, line)).join("");
+        if (options.on?.({ name, line, tag, set, rows }, socket)) continue;
+        if (name === "CAPABILITY") socket.write(`* CAPABILITY ${caps}\r\n${tag} OK done\r\n`);
+        else if (name === "ID") socket.write(`* ID NIL\r\n${tag} OK done\r\n`);
+        else if (name === "AUTHENTICATE" || name === "LOGIN") socket.write(`${tag} OK logged in\r\n`);
+        else if (name === "NAMESPACE") socket.write(`* NAMESPACE NIL NIL NIL\r\n${tag} OK done\r\n`);
+        else if (name === "ENABLE") socket.write(`* ENABLED\r\n${tag} OK done\r\n`);
+        else if (name === "LIST") socket.write(`* LIST (\\HasNoChildren) "." "INBOX"\r\n${tag} OK done\r\n`);
+        else if (name === "SELECT") {
           socket.write(
             `* FLAGS (\\Seen \\Answered)\r\n* 2 EXISTS\r\n* 0 RECENT\r\n* OK [UIDVALIDITY 1000] ok\r\n* OK [UIDNEXT 3] ok\r\n${tag} OK [READ-WRITE] SELECT completed\r\n`,
           );
-        } else if (word === "FETCH" || (word === "UID" && second.toUpperCase() === "FETCH")) {
-          const set = word === "FETCH" ? second : third;
-          socket.write(`${named(set).map((n) => fetchRow(n, line)).join("")}${tag} OK done\r\n`);
-        } else if (word === "NOOP") socket.write(`${tag} OK done\r\n`);
-        else if (word === "LOGOUT") socket.write(`* BYE bye\r\n${tag} OK done\r\n`);
+        } else if (name === "STATUS") socket.write(`* STATUS INBOX (UNSEEN 2)\r\n${tag} OK done\r\n`);
+        else if (name === "UID SEARCH") socket.write(`* SEARCH 1 2\r\n${tag} OK done\r\n`);
+        else if (name === "FETCH" || name === "UID FETCH") socket.write(`${rows(set)}${tag} OK done\r\n`);
+        else if (name === "UID STORE") socket.write(`* 1 FETCH (UID 1 FLAGS (\\Seen))\r\n${tag} OK done\r\n`);
+        else if (name === "NOOP") socket.write(`${tag} OK done\r\n`);
+        else if (name === "LOGOUT") socket.write(`* BYE bye\r\n${tag} OK done\r\n`);
         else socket.write(`${tag} NO not here\r\n`);
       }
     });
@@ -473,7 +501,7 @@ check("an e-mail whose body structure is too deep for imapflow isn't dropped: it
   // Servers differ in how deep a structure they report (Ethereal stops at about 20 levels); imapflow reads 25 levels of
   // nesting in an answer, the answer's own included, and drops a deeper one without an error. This server reports 30
   // for its second e-mail, as one that doesn't cut it would.
-  const fake = await listenFakeMailbox(30);
+  const fake = await listenFakeMailbox({ levels: 30 });
   const client = new ImapFlow(loopbackOptions(fake.port));
   client.on("error", () => {});
   try {
@@ -485,17 +513,18 @@ check("an e-mail whose body structure is too deep for imapflow isn't dropped: it
         (await client.fetchAll("1:*", { uid: true, bodyStructure: true })).map((row) => row.uid),
         [1],
       );
-      // The page of an unfiltered Inbox (sequence numbers) and of a search (UIDs): both get the two e-mails.
+      // The page of an unfiltered Inbox (sequence numbers) and of a search (UIDs): both get the two e-mails, the first with
+      // the mark of its PDF (its structure was read), the second with none to tell (it came back without the structure).
       for (const [range, byUid] of [
         ["1:*", false],
         ["1,2", true],
       ] as const) {
         const rows = await fetchListRows(client, range, { byUid, ids: [1, 2] });
         assert.deepEqual(
-          rows.map((row) => [row.uid, row.envelope?.subject, row.bodyStructure !== undefined]).sort(),
+          rows.map((row) => [row.uid, row.envelope.subject, row.hasAttachments]).sort(),
           [
             [1, "m1", true],
-            [2, "m2", false],
+            [2, "m2", undefined],
           ],
           range,
         );
@@ -724,8 +753,19 @@ function etherealCredentials(ctx: ImapCtx, imap: ImapSettings | null, pass = ctx
   });
 }
 
+/** The test organization's SMTP account row as the database has it now. */
+function accountRow(ctx: ImapCtx) {
+  return ctx.prisma.emailSenderAccount.findFirst({
+    where: { organizationId: ctx.orgId, provider: "SMTP" },
+    select: { status: true, lastError: true },
+  });
+}
+
 /** Changes the test organization's SMTP account row. */
-function updateAccount(ctx: ImapCtx, data: { credentials?: string; status?: "ACTIVE" | "NEEDS_RECONNECT" }) {
+function updateAccount(
+  ctx: ImapCtx,
+  data: { credentials?: string; status?: "ACTIVE" | "NEEDS_RECONNECT"; lastError?: string | null },
+) {
   return ctx.prisma.emailSenderAccount.updateMany({ where: { organizationId: ctx.orgId, provider: "SMTP" }, data });
 }
 
@@ -784,6 +824,57 @@ async function unread(ctx: ImapCtx): Promise<number | null> {
 /** "ok", or why a call failed. */
 const reason = (res: { ok: true } | { ok: false; reason: string }): string => (res.ok ? "ok" : res.reason);
 
+/**
+ * Runs `fn` (a view, a count or a download of the code under test) against a fake mailbox of its own instead of the
+ * account's server: openImap refuses loopback on purpose, so the connector is swapped for one that dials the fake
+ * with the options a real connection would have. `tuning` also lowers the budget and the byte cap.
+ */
+async function againstFake<T>(
+  options: FakeMailboxOptions,
+  fn: () => Promise<T>,
+  tuning: Partial<Omit<typeof imapRequest, "open">> = {},
+): Promise<T> {
+  const fake = await listenFakeMailbox(options);
+  const saved = { ...imapRequest };
+  imapRequest.open = async (): ReturnType<typeof openImap> => {
+    const client = new ImapFlow(loopbackOptions(fake.port));
+    client.on("error", () => {});
+    try {
+      await client.connect();
+      return { ok: true, client };
+    } catch (e) {
+      client.close();
+      // What it refuses is named the way a real server's refusal is (the fake's login uses these credentials).
+      return { ok: false, ...imapFailureOf(e, { user: "u", pass: "senha-ficticia" }) };
+    }
+  };
+  Object.assign(imapRequest, tuning);
+  try {
+    return await fn();
+  } finally {
+    Object.assign(imapRequest, saved);
+    await fake.close();
+  }
+}
+
+/** The inbox view of the test organization as a fake mailbox answers it; its logged failures are collected, not printed. */
+async function fakeView(
+  options: FakeMailboxOptions,
+  ctx: ImapCtx,
+  opts: { search?: string; unreadOnly?: boolean; messageId?: string | null } = {},
+  tuning: Partial<Omit<typeof imapRequest, "open">> = {},
+) {
+  let result!: Awaited<ReturnType<typeof loadImapInboxView>>;
+  const logged = await errorsLoggedBy(async () => {
+    result = await againstFake(
+      options,
+      () => loadImapInboxView(ctx.orgId, { search: "", unreadOnly: false, messageId: null, ...opts }),
+      tuning,
+    );
+  });
+  return { result, logged };
+}
+
 /** What `fn` writes with console.error, as one text, without printing it. */
 async function errorsLoggedBy(fn: () => Promise<void>): Promise<string> {
   const lines: string[] = [];
@@ -799,7 +890,7 @@ async function errorsLoggedBy(fn: () => Promise<void>): Promise<string> {
   return lines.join("\n");
 }
 
-check("the test account points at the Ethereal inbox, and its two e-mails arrive in order", async (ctx) => {
+check("the test organization's SMTP account points at the Ethereal inbox", async (ctx) => {
   await ctx.prisma.emailSenderAccount.create({
     data: {
       organizationId: ctx.orgId,
@@ -811,6 +902,230 @@ check("the test account points at the Ethereal inbox, and its two e-mails arrive
       connectedById: "imap-e2e",
     },
   });
+});
+
+// The next checks run the code under test against a fake mailbox of their own (againstFake): a server that refuses, drops,
+// hangs or floods is not something a real one can be asked to be, and what imapflow does about it is not what it looks like.
+
+type FakeOn = NonNullable<FakeMailboxOptions["on"]>;
+const refuse =
+  (verb: string): FakeOn =>
+  ({ name, tag }, socket) =>
+    name === verb ? (socket.write(`${tag} BAD [CLIENTBUG] refused\r\n`), true) : false;
+const dropOn =
+  (verb: string, only?: RegExp): FakeOn =>
+  ({ name, line }, socket) =>
+    name === verb && (!only || only.test(line)) ? (socket.destroy(), true) : false;
+const hangOn =
+  (verb: string): FakeOn =>
+  ({ name }) =>
+    name === verb;
+/** Answers the command as usual and hangs up right after: the next command finds no connection (and imapflow no mailbox). */
+const dropAfter =
+  (verb: string, only?: RegExp): FakeOn =>
+  ({ name, line, tag, set, rows }, socket) => {
+    if (name !== verb || (only && !only.test(line))) return false;
+    socket.end(`${rows(set)}${tag} OK done\r\n`);
+    return true;
+  };
+const SOURCE_FETCH = /BODY\.PEEK\[\]/i;
+const SIZE_FETCH = /RFC822\.SIZE/i;
+
+check("a search the server refuses is not_found; a refused list or count is not the text's fault; one that accepts is ok", async (ctx) => {
+  const accepted = await fakeView({}, ctx, { search: "x" });
+  assert.equal(reason(accepted.result), "ok", accepted.logged);
+  assert.ok(accepted.result.ok);
+  assert.deepEqual(
+    accepted.result.data.page.messages.map((m) => m.subject),
+    ["m2", "m1"],
+  );
+
+  // BAD to the search itself: nothing found because of the text ("try other words"), also with only the unread filter.
+  for (const opts of [{ search: "x" }, { search: "promoção" }, { unreadOnly: true }]) {
+    const { result } = await fakeView({ on: refuse("UID SEARCH") }, ctx, opts);
+    assert.equal(reason(result), "not_found", JSON.stringify(opts));
+  }
+  // BAD to the list or to the count after it is no fault of the text: try again later.
+  for (const [verb, opts] of [
+    ["UID FETCH", { search: "x" }],
+    ["FETCH", {}],
+    ["STATUS", {}],
+  ] as const) {
+    const { result } = await fakeView({ on: refuse(verb) }, ctx, opts);
+    assert.equal(reason(result), "temporary", `${verb}: ${JSON.stringify(result)}`);
+  }
+  // The count on its own, with its STATUS refused: no number, which is not a zero.
+  assert.equal(await againstFake({ on: refuse("STATUS") }, () => imapUnreadCount(ctx.orgId)), null);
+  assert.equal(await againstFake({}, () => imapUnreadCount(ctx.orgId)), 2, "the control: the same count against a server that answers");
+});
+
+check("a connection lost or cut in the middle of a request is temporary: never an empty inbox, a 404 or a zero", async (ctx) => {
+  // [what the server does, what is asked of it]
+  const views: [string, FakeOn, { search?: string; messageId?: string }][] = [
+    ["drops on STATUS", dropOn("STATUS"), {}],
+    ["drops on the search", dropOn("UID SEARCH"), { search: "x" }],
+    ["drops on the list by sequence number", dropOn("FETCH"), {}],
+    ["drops on the list by UID", dropOn("UID FETCH"), { search: "x" }],
+    ["drops on the opened e-mail's source", dropOn("UID FETCH", SOURCE_FETCH), { messageId: "1000.1" }],
+    // Between two commands: imapflow answers the next with nothing, without an error (no mailbox any more).
+    ["hangs up after the list, before the e-mail is opened", dropAfter("FETCH"), { messageId: "1000.1" }],
+    // The read mark is the one write, and imapflow's answer to a mark that couldn't be made is a quiet `false`: the page
+    // came out whole, but over a connection that is gone, and that is a "try again", not an answer.
+    ["hangs up after the e-mail's source, before the read mark", dropAfter("UID FETCH", SOURCE_FETCH), { messageId: "1000.1" }],
+  ];
+  for (const [label, on, opts] of views) {
+    const { result, logged } = await fakeView({ on }, ctx, opts);
+    assert.equal(reason(result), "temporary", `${label}: ${JSON.stringify(result)}`);
+    assert.ok(logged.length > 0, `${label}: the failure is logged`);
+  }
+  // The budget runs out while STATUS is in flight (the case the 60 s budget meets on a slow search of a big mailbox).
+  const started = Date.now();
+  const slow = await fakeView({ on: hangOn("STATUS") }, ctx, {}, { budgetMs: 300 });
+  assert.equal(reason(slow.result), "temporary", JSON.stringify(slow.result));
+  assert.ok(Date.now() - started < 5_000, `${Date.now() - started} ms`);
+  assert.ok(slow.logged.includes("more than"), slow.logged);
+
+  // The count and the download.
+  let lostCount: number | null = -1;
+  const lostDownloads: Record<string, string> = {};
+  const loggedBoth = await errorsLoggedBy(async () => {
+    lostCount = await againstFake({ on: dropOn("STATUS") }, () => imapUnreadCount(ctx.orgId));
+    const downloads: [string, FakeOn][] = [
+      ["drops on the source", dropOn("UID FETCH", SOURCE_FETCH)],
+      // The case of a download turned into a 404: the size comes, the connection goes, and the source is asked of nothing.
+      ["hangs up between the size and the source", dropAfter("UID FETCH", SIZE_FETCH)],
+    ];
+    for (const [label, on] of downloads) {
+      lostDownloads[label] = reason(await againstFake({ on }, () => downloadImapAttachment(ctx.orgId, "1000.1", "0")));
+    }
+  });
+  assert.equal(lostCount, null);
+  assert.deepEqual(lostDownloads, { "drops on the source": "temporary", "hangs up between the size and the source": "temporary" });
+  assert.ok(loggedBoth.length > 0, "the failures are logged");
+});
+
+check("a server that floods rows nobody asked for is cut off after a few, not read until the budget is gone", async (ctx) => {
+  const flood: FakeOn = ({ name }, socket) => {
+    if (name !== "FETCH") return false;
+    let n = 1_000;
+    const pump = () => {
+      if (socket.destroyed) return;
+      let out = "";
+      for (let i = 0; i < 2_000; i++, n++) out += `* ${n} FETCH (UID ${n} FLAGS ())\r\n`;
+      if (socket.write(out)) setImmediate(pump);
+      else socket.once("drain", pump);
+    };
+    pump();
+    return true;
+  };
+  const started = Date.now();
+  // A 5 s budget: reading the flood to the end would stop only there.
+  const { result, logged } = await fakeView({ on: flood }, ctx, {}, { budgetMs: 5_000 });
+  assert.equal(reason(result), "temporary", JSON.stringify(result));
+  assert.ok(Date.now() - started < 2_500, `${Date.now() - started} ms`);
+  assert.ok(logged.includes("more than"), logged);
+});
+
+check("a request that takes in more than its byte cap is cut off", async (ctx) => {
+  // Four answers of 1 MiB each, one every 120 ms: a request with a 2 MiB cap (looked at every 100 ms) meets it in the middle of one.
+  const numbers = "1 ".repeat(512 * 1024);
+  const slowSearch: FakeOn = ({ name, tag }, socket) => {
+    if (name !== "UID SEARCH") return false;
+    let sent = 0;
+    const timer = setInterval(() => {
+      if (socket.destroyed) return clearInterval(timer);
+      if (sent++ < 4) return void socket.write(`* SEARCH ${numbers}\r\n`);
+      clearInterval(timer);
+      socket.write(`${tag} OK done\r\n`);
+    }, 120);
+    return true;
+  };
+  // The control: the default cap takes those 4 MiB in.
+  const taken = await fakeView({ on: slowSearch }, ctx, { search: "x" });
+  assert.equal(reason(taken.result), "ok", taken.logged);
+  const cut = await fakeView({ on: slowSearch }, ctx, { search: "x" }, { maxReceivedBytes: 2 * 1024 * 1024 });
+  assert.equal(reason(cut.result), "temporary", JSON.stringify(cut.result));
+  assert.ok(cut.logged.includes("more than"), cut.logged);
+});
+
+check("rows nobody asked for, split in two or repeated don't turn into blank or doubled e-mails", async (ctx) => {
+  const noisy: FakeOn = ({ name, tag, rows }, socket) => {
+    if (name !== "FETCH") return false;
+    // E-mail 1; a flags-only row for e-mail 2 ahead of its own; e-mail 2; e-mail 1 again; a flags-only row that
+    // marks e-mail 1 read (someone read it meanwhile); and two e-mails nobody asked for, one of them complete.
+    const stray = rows("1").replace("* 1 FETCH (UID 1 ", "* 99 FETCH (UID 99 ");
+    socket.write(
+      `${rows("1")}* 2 FETCH (FLAGS (\\Flagged))\r\n${rows("2")}${rows("1")}* 1 FETCH (FLAGS (\\Seen))\r\n` +
+        `${stray}* 98 FETCH (UID 98 FLAGS ())\r\n${tag} OK done\r\n`,
+    );
+    return true;
+  };
+  const { result } = await fakeView({ on: noisy }, ctx);
+  assert.ok(result.ok, JSON.stringify(result));
+  // The extra rows add to the e-mail they are about (its PDF mark survives the later flags-only row; the read mark
+  // is the latest), and nothing of them becomes an e-mail of its own.
+  assert.deepEqual(
+    result.data.page.messages.map((m) => [m.id, m.subject, m.hasAttachments, m.isRead]),
+    [
+      ["1000.2", "m2", false, false],
+      ["1000.1", "m1", true, true],
+    ],
+  );
+});
+
+/** A raw client logged in to a fake mailbox with its Inbox open, for what is checked below the level of a view. */
+async function withFakeClient<T>(options: FakeMailboxOptions, fn: (client: ImapFlow) => Promise<T>): Promise<T> {
+  const fake = await listenFakeMailbox(options);
+  const client = new ImapFlow(loopbackOptions(fake.port));
+  client.on("error", () => {});
+  try {
+    await client.connect();
+    const lock = await client.getMailboxLock("INBOX");
+    try {
+      return await fn(client);
+    } finally {
+      lock.release();
+    }
+  } finally {
+    client.close();
+    await fake.close();
+  }
+}
+
+check("a row keeps only what the list asked for, and a refused second FETCH only leaves that e-mail out of the page", async () => {
+  // A literal nobody asked for hung on every row (16 MB in real life; five bytes show whether it is kept).
+  const withLiteral: FakeOn = ({ name, tag, set, rows }, socket) => {
+    if (name !== "FETCH") return false;
+    socket.write(`${rows(set).replace(/\)\r\n/g, " BODY[] {5}\r\nHELLO)\r\n")}${tag} OK done\r\n`);
+    return true;
+  };
+  await withFakeClient({ on: withLiteral }, async (client) => {
+    // The control: imapflow's own fetchAll hands that literal over.
+    const raw = await client.fetchAll("1:*", { uid: true, flags: true });
+    assert.deepEqual(
+      raw.map((row) => row.source?.toString()),
+      ["HELLO", "HELLO"],
+    );
+    const rows = await fetchListRows(client, "1:*", { byUid: false, ids: [1, 2] });
+    assert.equal(rows.length, 2);
+    for (const row of rows) {
+      assert.deepEqual(Object.keys(row).sort(), ["envelope", "flags", "hasAttachments", "internalDate", "seq", "uid"], String(row.uid));
+    }
+  });
+
+  // The second FETCH (without the structure) is the one refused; the first lost e-mail 2 to its deep structure.
+  const refuseFlat: FakeOn = ({ name, line, tag }, socket) =>
+    name === "FETCH" && !/BODYSTRUCTURE/i.test(line) ? (socket.write(`${tag} BAD refused\r\n`), true) : false;
+  const kept = await withFakeClient({ levels: 30, on: refuseFlat }, (client) =>
+    fetchListRows(client, "1:*", { byUid: false, ids: [1, 2] }),
+  );
+  assert.deepEqual(
+    kept.map((row) => row.uid),
+    [1],
+  );
+});
+
+check("the two e-mails reach the Ethereal inbox, in order", async (ctx) => {
   await sendThroughEthereal(ctx, M1);
   await waitForInbox(ctx, 1);
   await sendThroughEthereal(ctx, M2);
@@ -1068,6 +1383,8 @@ check("a server that can't be reached is temporary, and nothing it logs holds th
       });
       assert.ok(logged.length > 0, `${host}: the failure is logged`);
       assertNoSecret(logged, ctx.ethereal.pass);
+      // Trouble with the server is not trouble with the login: the account is left as it was, and sending goes on.
+      assert.equal((await accountRow(ctx))?.status, "ACTIVE", host);
     }
   } finally {
     await updateAccount(ctx, { credentials: etherealCredentials(ctx, etherealImap(ctx)) });
@@ -1149,8 +1466,15 @@ check("a message the parser refuses shows its headers and a notice, not an error
   assert.equal(reason(downloaded), "not_found");
 });
 
-check("a password the server refuses is reconnect, not an error and not a hang", async (ctx) => {
+check("a password the server refuses is reconnect and pauses the account: the next requests don't try it again", async (ctx) => {
   const wrong = `senha-errada-${ctx.stamp}`;
+  // Counts the connections the requests make (the real connector underneath).
+  const real = imapRequest.open;
+  let opens = 0;
+  imapRequest.open = (settings, auth) => {
+    opens++;
+    return real(settings, auth);
+  };
   try {
     await updateAccount(ctx, { credentials: etherealCredentials(ctx, etherealImap(ctx), wrong) });
     const logged = await errorsLoggedBy(async () => {
@@ -1161,8 +1485,55 @@ check("a password the server refuses is reconnect, not an error and not a hang",
       assert.deepEqual([reason(listed), reason(downloaded)], ["reconnect", "reconnect"]);
     });
     assertNoSecret(logged, wrong, ctx.ethereal.pass);
+    assert.equal(opens, 2, "each request tried the login once");
+
+    // The refused login paused the account (sending included, as with the other providers), and said why without the password.
+    const paused = await accountRow(ctx);
+    assert.equal(paused?.status, "NEEDS_RECONNECT");
+    assert.ok(paused?.lastError?.startsWith("imap login refused"), String(paused?.lastError));
+    assertNoSecret(paused?.lastError ?? "", wrong, ctx.ethereal.pass);
+
+    // From here on every kind of request answers reconnect without opening a connection (and the count, null).
+    opens = 0;
+    const [listed, downloaded, count] = await Promise.all([
+      loadImapInboxView(ctx.orgId, { search: "", unreadOnly: false, messageId: null }),
+      downloadImapAttachment(ctx.orgId, box.m2, box.pdf),
+      imapUnreadCount(ctx.orgId),
+    ]);
+    assert.deepEqual([reason(listed), reason(downloaded), count], ["reconnect", "reconnect", null]);
+    assert.equal(opens, 0, "a paused account is not dialed");
   } finally {
-    await updateAccount(ctx, { credentials: etherealCredentials(ctx, etherealImap(ctx)) });
+    imapRequest.open = real;
+    await updateAccount(ctx, { credentials: etherealCredentials(ctx, etherealImap(ctx)), status: "ACTIVE", lastError: null });
+  }
+});
+
+check("a login the server refuses only for now is temporary and leaves the account alone; a refusal of the credentials pauses it", async (ctx) => {
+  // imapflow calls every tagged NO of a login "authentication failed": a provider that is down or has too many of this
+  // person's connections open says it so in the reply code, and pausing the account (its sends included) for that would
+  // punish the person for the provider's bad moment.
+  const refusingLogin =
+    (reply: string): FakeOn =>
+    ({ name, tag }, socket) =>
+      name === "AUTHENTICATE" || name === "LOGIN" ? (socket.write(`${tag} NO ${reply}\r\n`), true) : false;
+  // [what the server says, what the request answers, the account afterwards]
+  const cases: [string, string, string][] = [
+    ["[UNAVAILABLE] Temporary authentication failure.", "temporary", "ACTIVE"],
+    ["[LIMIT] Maximum number of connections from user+IP exceeded", "temporary", "ACTIVE"],
+    ["[INUSE] The mailbox is in use", "temporary", "ACTIVE"],
+    ["[AUTHENTICATIONFAILED] Invalid credentials", "reconnect", "NEEDS_RECONNECT"],
+    // With no code, nothing says it isn't the credentials.
+    ["Login failed.", "reconnect", "NEEDS_RECONNECT"],
+  ];
+  try {
+    for (const [said, answered, status] of cases) {
+      const { result } = await fakeView({ on: refusingLogin(said) }, ctx);
+      assert.equal(reason(result), answered, said);
+      assert.equal((await accountRow(ctx))?.status, status, said);
+      await updateAccount(ctx, { status: "ACTIVE", lastError: null });
+    }
+  } finally {
+    await updateAccount(ctx, { status: "ACTIVE", lastError: null });
   }
 });
 

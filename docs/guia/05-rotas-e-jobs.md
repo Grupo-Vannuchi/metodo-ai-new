@@ -69,6 +69,16 @@ sobrou.
 `Content-Disposition: attachment`, `nosniff`, `no-store`). Diferente da Microsoft, o e-mail inteiro é baixado
 por IMAP (até 15 MB; acima disso nenhum anexo sai) e o arquivo sai da memória, não em fluxo. A senha da
 caixa nunca passa por aqui: quem abre a conexão é [src/lib/email-broadcast/imap/inbox.ts](../../src/lib/email-broadcast/imap/inbox.ts).
+Um login que o servidor IMAP recusa **pausa a conta** (`NEEDS_RECONNECT`, por `markNeedsReconnect`, com a
+`lastError` sem a senha) e responde `reconnect` (409); os pedidos seguintes respondem 409 sem abrir conexão, em
+vez de repetir a senha errada a cada tela aberta (um provedor que limita logins falhos poderia fechar a porta para
+o endereço da plataforma, para todas as empresas). A conta é a mesma do envio por SMTP: o envio pausa junto até o
+formulário ser salvo de novo, e por isso o login que o servidor recusa só por ora (`[UNAVAILABLE]`, `[LIMIT]` ou
+`[INUSE]`: provedor com problema ou conexões demais abertas, que o imapflow também chama de "falha de
+autenticação") não pausa nada e responde 502. Servidor fora do ar, conexão perdida ou cortada no meio do pedido e toda resposta
+que o imapflow engole (ele devolve `false`, `[]` ou `undefined` em vez de erro) são 502 (`temporary`), nunca um
+404 nem uma caixa vazia. Cada pedido tem teto de tempo (60 s), de bytes recebidos (15 MB e mais 8) e de linhas
+lidas; passou de um deles, a conexão é cortada e a resposta é 502.
 
 `/api/email/google/connect` e `/callback` (spec 2026-10-19) seguem o mesmo molde. O endereço de retorno cadastrado no projeto do Google Cloud é `${NEXT_PUBLIC_SITE_URL}/api/email/google/callback` (também por `joinSiteUrl`), e só o `access_type=offline` com `prompt=consent` faz o Google devolver o refresh token; o `select_account` apenas deixa a pessoa escolher a conta.
 

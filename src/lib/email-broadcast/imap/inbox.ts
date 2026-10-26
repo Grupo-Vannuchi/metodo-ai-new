@@ -1,6 +1,14 @@
 import "server-only";
 import PostalMime, { type Attachment, type Email } from "postal-mime";
-import type { FetchMessageObject, FetchQueryObject, ImapFlow, ImapFlowError, MailboxObject, SearchObject } from "imapflow";
+import type {
+  FetchMessageObject,
+  FetchQueryObject,
+  ImapFlow,
+  ImapFlowError,
+  MailboxObject,
+  MessageEnvelopeObject,
+  SearchObject,
+} from "imapflow";
 import { normalizeSearch } from "@/lib/search-options";
 import { tenantDb } from "@/lib/tenant-db";
 import {
@@ -18,6 +26,7 @@ import type {
   MailboxFailure,
   MailboxResult,
 } from "../microsoft/inbox";
+import { markNeedsReconnect } from "../mailbox/token";
 import { openSmtpSettings } from "../smtp/credentials";
 import { redactAndCut } from "../smtp/redact";
 import { closeImap, openImap, type ImapAuth } from "./connect";
@@ -32,12 +41,34 @@ import { IMAP_MAX_MESSAGE_BYTES, detailFromParsed, hasAttachmentsInStructure, li
  * mailbox is the \Seen mark of an e-mail the person opens; it never removes or
  * moves mail. The list never downloads a body; opening an e-mail downloads it
  * whole up to IMAP_MAX_MESSAGE_BYTES.
+ *
+ * The server is not trusted. connect.ts bounds each answer it sends; what a
+ * whole request may take in is bounded here: withImap watches its time and its
+ * bytes, and the FETCH rows are read one at a time, kept only if asked for and
+ * counted (gatherRows). And imapflow turns most failures into a quiet `false`,
+ * `undefined` or `[]`, so the code below never takes such an answer for the
+ * server's: a lost connection is "temporary", never an empty inbox.
  */
 
 const INBOX = "INBOX";
 const SEEN = "\\Seen";
 /** The whole request after the login: a server that answers a byte at a time is cut off here (the socket timer doesn't catch that). */
 const IMAP_REQUEST_BUDGET_MS = 60_000;
+/** The most one request takes in from the server: the biggest e-mail it reads whole, and room for the lists and the protocol around it. */
+const IMAP_MAX_REQUEST_BYTES = IMAP_MAX_MESSAGE_BYTES + 8 * 1024 * 1024;
+/** How often a request looks at its clock and at what it has received. */
+const IMAP_GUARD_TICK_MS = 100;
+
+/**
+ * How a request reaches the server and what it may cost: fixed in production. check:imap swaps these to run this code
+ * against a server of its own on loopback (openImap refuses internal addresses on purpose), to count the connections a
+ * request makes, and to reach the budget and the byte cap in a fraction of a second.
+ */
+export const imapRequest = {
+  open: openImap,
+  budgetMs: IMAP_REQUEST_BUDGET_MS,
+  maxReceivedBytes: IMAP_MAX_REQUEST_BYTES,
+};
 
 /** Shared by every call, so frozen: no caller can change what the next one gets. */
 const NOT_FOUND: MailboxFailure = Object.freeze({ ok: false, reason: "not_found" } as const);
@@ -59,6 +90,8 @@ const LIST_QUERY: FetchQueryObject = { ...BASE_QUERY, bodyStructure: true };
 const OPEN_QUERY: FetchQueryObject = { ...LIST_QUERY, size: true };
 /** The opened e-mail's query less the body structure: for one whose structure imapflow can't read (see fetchListRows). */
 const OPEN_QUERY_FLAT: FetchQueryObject = { ...BASE_QUERY, size: true };
+const SIZE_QUERY: FetchQueryObject = { uid: true, size: true };
+const SOURCE_QUERY: FetchQueryObject = { uid: true, source: true };
 
 /** One line about a failure for the log: imapflow's code and words, the login's secrets out, short. */
 function failureText(e: unknown, auth: ImapAuth): string {
@@ -78,14 +111,51 @@ function cut(client: ImapFlow): void {
   }
 }
 
+/** The server said NO or BAD to a command (and the connection went on), as opposed to a connection that was lost. */
+function refusedByServer(client: ImapFlow, e: unknown): boolean {
+  const err = (typeof e === "object" && e !== null ? e : {}) as ImapFlowError;
+  return client.usable && (err.responseStatus === "NO" || err.responseStatus === "BAD");
+}
+
+/**
+ * Reply codes (RFC 5530) of a login the server refuses without a word against the credentials: it is in trouble
+ * (UNAVAILABLE) or has too many connections of this person open (LIMIT, INUSE). imapflow calls every tagged NO or BAD
+ * of a login "authentication failed", these included, and trying again later fixes them. openImap's `technical` text
+ * starts with the code when the server sent one.
+ */
+const LOGIN_REFUSED_FOR_NOW = /^(UNAVAILABLE|LIMIT|INUSE)\b/;
+
+/**
+ * The server refused the login: the account is paused (NEEDS_RECONNECT), the way a refused token pauses the other
+ * providers' accounts. The next requests then answer "reconnect" without dialing, instead of trying the same password on
+ * every page view: a provider that throttles failed logins could close its door to the platform's address, for every
+ * company it serves. This is also the company's sending account, so its sends pause until the form saves it again,
+ * which is why a refusal that isn't about the credentials (LOGIN_REFUSED_FOR_NOW) doesn't get here.
+ * Failing to say so must not hide the answer: the person still has to reconnect.
+ */
+async function pauseAccount(organizationId: string, accountId: string, technical: string): Promise<void> {
+  try {
+    await markNeedsReconnect(organizationId, accountId, `imap login refused: ${technical}`);
+  } catch (e) {
+    console.error("IMAP account could not be paused:", e instanceof Error ? e.message.slice(0, 200) : "unknown error");
+  }
+}
+
 /**
  * Runs `run` on a connection to the company's mailbox, logged in and closed
  * again whatever happens. The account is the company's own (tenantDb): none, or
  * one that doesn't read an inbox, is "no_account"; one that was disconnected,
  * whose credentials no longer open or whose login the server refuses is
- * "reconnect"; any other trouble is "temporary" and is logged without the
- * password. Nothing here marks the account NEEDS_RECONNECT: it is also the
- * company's sending account, and a read that fails must not pause its sends.
+ * "reconnect" (a refused login also pauses the account, see pauseAccount); any
+ * other trouble, a login refused only for now included, is "temporary" and is
+ * logged without the password.
+ *
+ * A request is watched while it runs (imapRequest): past its time or the bytes it
+ * may take in, the connection is cut. A cut or lost connection makes imapflow
+ * answer search() and status() with `false` and the FETCH calls with nothing,
+ * instead of an error, so once `run` is done a connection that is no longer usable
+ * turns whatever it came to into "temporary": never an empty inbox, a "no
+ * results" or a 404.
  */
 async function withImap<T>(
   organizationId: string,
@@ -94,7 +164,7 @@ async function withImap<T>(
   // Filter by provider: a company may connect one account of each.
   const account = await tenantDb(organizationId).emailSenderAccount.findFirst({
     where: { provider: "SMTP" },
-    select: { status: true, credentials: true },
+    select: { id: true, status: true, credentials: true },
   });
   if (!account) return { ok: false, reason: "no_account" };
   const settings = openSmtpSettings(account.credentials);
@@ -104,23 +174,41 @@ async function withImap<T>(
   if (account.status !== "ACTIVE") return { ok: false, reason: "reconnect" };
 
   const auth: ImapAuth = { user: settings.username, pass: settings.password };
-  const opened = await openImap(settings.imap, auth);
+  const opened = await imapRequest.open(settings.imap, auth);
   if (!opened.ok) {
-    // A refused login is the expected way for a changed password to show up, and is not worth a log line each time.
-    if (opened.error === "auth_failed") return { ok: false, reason: "reconnect" };
+    if (opened.error === "auth_failed" && !LOGIN_REFUSED_FOR_NOW.test(opened.technical)) {
+      await pauseAccount(organizationId, account.id, opened.technical);
+      return { ok: false, reason: "reconnect" };
+    }
     console.error("IMAP inbox connection failed", opened.error, opened.technical);
     return TEMPORARY;
   }
 
   const { client } = opened;
-  const budget = setTimeout(() => cut(client), IMAP_REQUEST_BUDGET_MS);
+  const watch: { startedAt: number; cutFor: string | null } = { startedAt: Date.now(), cutFor: null };
+  const guard = setInterval(() => {
+    if (Date.now() - watch.startedAt > imapRequest.budgetMs) {
+      watch.cutFor = `it took more than ${imapRequest.budgetMs / 1000} s`;
+    } else if (client.stats().received > imapRequest.maxReceivedBytes) {
+      watch.cutFor = `it took in more than ${imapRequest.maxReceivedBytes} bytes`;
+    }
+    if (watch.cutFor !== null) {
+      clearInterval(guard);
+      cut(client);
+    }
+  }, IMAP_GUARD_TICK_MS);
   try {
-    return await run(client);
+    const result = await run(client);
+    if (watch.cutFor !== null || !client.usable) {
+      console.error(watch.cutFor !== null ? `IMAP request cut: ${watch.cutFor}` : "IMAP request lost its connection");
+      return TEMPORARY;
+    }
+    return result;
   } catch (e) {
-    console.error("IMAP inbox failed", failureText(e, auth));
+    console.error(watch.cutFor !== null ? `IMAP request cut: ${watch.cutFor}` : "IMAP inbox failed", failureText(e, auth));
     return TEMPORARY;
   } finally {
-    clearTimeout(budget);
+    clearInterval(guard);
     await closeImap(client);
   }
 }
@@ -165,59 +253,142 @@ function searchQuery(filter: { search: string; unreadOnly: boolean }): SearchObj
   return query;
 }
 
-/** A search the server refused or imapflow wouldn't build: the text is the problem, not the connection. */
-function searchRejected(e: unknown): boolean {
-  const err = (typeof e === "object" && e !== null ? e : {}) as ImapFlowError;
-  return err.responseStatus === "NO" || err.responseStatus === "BAD" || err.code === "InvalidSearchQuery";
+/**
+ * The UIDs the server finds, or null when it refused the search. imapflow's search()
+ * answers `false` (`undefined` with no mailbox) to every failure alike, a server's NO or
+ * BAD and a lost connection: only a connection that is still usable says the server
+ * refused. A query imapflow can't build throws before anything is sent; that is the
+ * text's fault too. A lost connection is neither: it throws.
+ */
+async function searchUids(client: ImapFlow, query: SearchObject): Promise<number[] | null> {
+  let found: Awaited<ReturnType<ImapFlow["search"]>>;
+  try {
+    found = await client.search(query, { uid: true });
+  } catch (e) {
+    if (client.usable) return null;
+    throw e;
+  }
+  if (Array.isArray(found)) return found;
+  if (client.usable) return null;
+  throw new Error("The connection was lost during the search");
 }
 
 /**
- * FETCH of the list rows for `range`, which should name the e-mails in `expected`
- * (UIDs when `byUid`, else sequence numbers). imapflow reads at most 25 levels of
- * nesting in a server's answer and drops, without a word, the answer that goes
- * deeper: an e-mail whose body structure is that deep (a sender can make one on
- * purpose, and a server may report it as it is) would vanish from the page.
- * Whatever `expected` names and didn't come back is asked for once more without
- * the structure and shows with no attachment mark. Exported for check:imap.
+ * What is kept of a FETCH row: the fields the query asked for and nothing else, and the
+ * body structure (which can weigh many times the bytes it came in) reduced to the one
+ * thing it is read for. A hostile server can hang anything on a row, a 16 MB literal
+ * included, and imapflow hands it all over.
+ */
+type Row = Partial<Omit<FetchMessageObject, "bodyStructure">> & { hasAttachments?: boolean };
+/** A row with what the pane needs to show an e-mail. */
+type ListRow = Row & { uid: number; envelope: MessageEnvelopeObject };
+
+function isListRow(row: Row | null | undefined): row is ListRow {
+  return row?.uid !== undefined && row.envelope !== undefined;
+}
+
+function keepAsked(row: FetchMessageObject, query: FetchQueryObject): Row {
+  const kept: Row = {};
+  if (row.seq !== undefined) kept.seq = row.seq;
+  if (row.uid !== undefined) kept.uid = row.uid;
+  if (query.flags && row.flags) kept.flags = row.flags;
+  if (query.envelope && row.envelope) kept.envelope = row.envelope;
+  if (query.internalDate && row.internalDate !== undefined) kept.internalDate = row.internalDate;
+  if (query.size && row.size !== undefined) kept.size = row.size;
+  if (query.source && row.source) kept.source = row.source;
+  if (query.bodyStructure && row.bodyStructure) kept.hasAttachments = hasAttachmentsInStructure(row.bodyStructure);
+  return kept;
+}
+
+/**
+ * A FETCH of `range`, which names the e-mails in `expected` (UIDs when `byUid`, else
+ * sequence numbers), read through imapflow's generator: one row at a time, the server held
+ * back until this loop asks for the next. fetchAll() and fetchOne() keep every row that
+ * arrives during the command, asked for or not, and the answer limits start over after each
+ * row: a server could stream rows into gigabytes (about 47,000 a second were measured) with
+ * the time budget as the only stop. Here a row nobody asked for is dropped, a second row
+ * for the same e-mail is merged into the first (servers may split an answer), and once the
+ * server has sent more rows than any real answer carries (twice what was asked, and ten) the
+ * connection is cut and this throws.
+ */
+async function gatherRows(
+  client: ImapFlow,
+  range: string,
+  query: FetchQueryObject,
+  expected: { byUid: boolean; ids: number[] },
+): Promise<Map<number, Row>> {
+  const wanted = new Set(expected.ids);
+  const limit = expected.ids.length * 2 + 10;
+  const rows = new Map<number, Row>();
+  let received = 0;
+  for await (const row of client.fetch(range, query, { uid: expected.byUid })) {
+    if (++received > limit) {
+      cut(client);
+      throw new Error(`The server sent more than ${limit} FETCH answers for ${expected.ids.length} e-mail(s)`);
+    }
+    const id = expected.byUid ? row.uid : row.seq;
+    if (!wanted.has(id)) continue;
+    rows.set(id, { ...rows.get(id), ...keepAsked(row, query) });
+  }
+  return rows;
+}
+
+/** One e-mail's row, read the way gatherRows reads (so with its limits). Null when the server sent none for it. */
+async function fetchOneRow(client: ImapFlow, uid: number, query: FetchQueryObject): Promise<Row | null> {
+  const rows = await gatherRows(client, String(uid), query, { byUid: true, ids: [uid] });
+  return rows.get(uid) ?? null;
+}
+
+/**
+ * The list rows for `range`, which names the e-mails in `expected`; the rows that came back
+ * complete (UID and envelope). imapflow reads at most 25 levels of nesting in a server's
+ * answer and drops, without a word, the answer that goes deeper: an e-mail whose body
+ * structure is that deep (a sender can make one on purpose, and a server may report it as it
+ * is) would vanish from the page. Whatever `expected` names and didn't come back complete is
+ * asked for once more without the structure and shows with no attachment mark. Exported for
+ * check:imap.
  */
 export async function fetchListRows(
   client: ImapFlow,
   range: string,
   expected: { byUid: boolean; ids: number[] },
-): Promise<FetchMessageObject[]> {
-  const options = { uid: expected.byUid };
-  const rows = await client.fetchAll(range, LIST_QUERY, options);
-  const have = new Set(rows.map((row) => (expected.byUid ? row.uid : row.seq)));
-  const missing = expected.ids.filter((id) => !have.has(id));
+): Promise<ListRow[]> {
+  const rows = await gatherRows(client, range, LIST_QUERY, expected);
+  const missing = expected.ids.filter((id) => !isListRow(rows.get(id)));
   if (missing.length > 0) {
     try {
-      rows.push(...(await client.fetchAll(missing.join(","), BASE_QUERY, options)));
-    } catch {
-      // What was asked for may be gone since (someone deleted it): the page goes on without it.
+      const again = await gatherRows(client, missing.join(","), BASE_QUERY, { byUid: expected.byUid, ids: missing });
+      for (const [id, row] of again) rows.set(id, { ...rows.get(id), ...row });
+    } catch (e) {
+      // What was asked for may be gone since (someone removed it, the server says no): the page goes on without it. A lost
+      // connection, or a server cut off for sending too much, is not that.
+      if (!refusedByServer(client, e)) throw e;
     }
   }
-  return rows;
+  return [...rows.values()].filter(isListRow);
 }
 
 /**
  * The newest INBOX_PAGE_SIZE e-mails, newest first. Without a filter these are
  * the last sequence numbers; with one, the server searches (UIDs) and the
  * newest of what it finds are fetched. An empty Inbox has no `1:*` to ask for.
+ * Null when the server refused the search.
  */
 async function listNewest(
   client: ImapFlow,
   mailbox: MailboxObject,
   filter: { search: string; unreadOnly: boolean },
-): Promise<FetchMessageObject[]> {
-  let found: FetchMessageObject[];
+): Promise<ListRow[] | null> {
+  let found: ListRow[];
   if (!filter.search && !filter.unreadOnly) {
     if (mailbox.exists === 0) return [];
     const first = Math.max(1, mailbox.exists - (INBOX_PAGE_SIZE - 1));
     const ids = Array.from({ length: mailbox.exists - first + 1 }, (_, i) => first + i);
     found = await fetchListRows(client, `${first}:*`, { byUid: false, ids });
   } else {
-    const uids = await client.search(searchQuery(filter), { uid: true });
-    const newest = (Array.isArray(uids) ? uids : []).sort((a, b) => b - a).slice(0, INBOX_PAGE_SIZE);
+    const uids = await searchUids(client, searchQuery(filter));
+    if (uids === null) return null;
+    const newest = uids.sort((a, b) => b - a).slice(0, INBOX_PAGE_SIZE);
     if (newest.length === 0) return [];
     found = await fetchListRows(client, newest.join(","), { byUid: true, ids: newest });
   }
@@ -225,15 +396,15 @@ async function listNewest(
 }
 
 /** A list row from what the server sent: the date is the delivery (INTERNALDATE), never the header the sender wrote. */
-function summaryOf(m: FetchMessageObject, uidValidity: number): InboxMessageSummary {
+function summaryOf(m: ListRow, uidValidity: number): InboxMessageSummary {
   return summaryFromImap({
     uid: m.uid,
     uidValidity,
-    subject: m.envelope?.subject ?? null,
-    from: m.envelope?.from ?? [],
+    subject: m.envelope.subject ?? null,
+    from: m.envelope.from ?? [],
     date: new Date(m.internalDate ?? 0),
     seen: m.flags?.has(SEEN) ?? false,
-    hasAttachments: hasAttachmentsInStructure(m.bodyStructure),
+    hasAttachments: m.hasAttachments ?? false,
   });
 }
 
@@ -243,11 +414,11 @@ function envelopeAddresses(list: { name?: string; address?: string }[] | undefin
 }
 
 /** An e-mail that isn't read whole: what the envelope says, and a notice in place of the body. */
-function headersOnly(summary: InboxMessageSummary, m: FetchMessageObject, notice: string): InboxMessageDetail {
+function headersOnly(summary: InboxMessageSummary, m: ListRow, notice: string): InboxMessageDetail {
   return {
     ...summary,
-    to: envelopeAddresses(m.envelope?.to),
-    cc: envelopeAddresses(m.envelope?.cc),
+    to: envelopeAddresses(m.envelope.to),
+    cc: envelopeAddresses(m.envelope.cc),
     bodyDocument: inboxBodyDocument({ contentType: "text", content: notice }),
     webLink: null,
     attachments: [],
@@ -258,8 +429,8 @@ type ParsedSource = { ok: true; email: Email } | { ok: false; why: "gone" | "unr
 
 /** Downloads the e-mail whole (the caller has checked its size) and parses it. A parse that fails is logged and is "unreadable". */
 async function readParsed(client: ImapFlow, uid: number): Promise<ParsedSource> {
-  const full = await client.fetchOne(String(uid), { uid: true, source: true }, { uid: true });
-  if (!full || !full.source) return { ok: false, why: "gone" };
+  const full = await fetchOneRow(client, uid, SOURCE_QUERY);
+  if (!full?.source) return { ok: false, why: "gone" };
   try {
     return { ok: true, email: await PostalMime.parse(full.source) };
   } catch (e) {
@@ -280,11 +451,10 @@ export async function openMessage(
   uid: number,
   maxBytes: number,
 ): Promise<InboxDetailResult> {
+  let meta = await fetchOneRow(client, uid, OPEN_QUERY);
   // An e-mail whose body structure is too deep for imapflow comes back empty (see fetchListRows): ask again without it.
-  const meta =
-    (await client.fetchOne(String(uid), OPEN_QUERY, { uid: true })) ||
-    (await client.fetchOne(String(uid), OPEN_QUERY_FLAT, { uid: true }));
-  if (!meta) return { ok: false, reason: "not_found" };
+  if (!isListRow(meta)) meta = await fetchOneRow(client, uid, OPEN_QUERY_FLAT);
+  if (!isListRow(meta)) return { ok: false, reason: "not_found" };
   const summary = summaryOf(meta, uidValidity);
   if (meta.size === undefined || meta.size > maxBytes) {
     return { ok: true, data: headersOnly(summary, meta, TOO_BIG_NOTICE) };
@@ -313,10 +483,12 @@ async function markSeen(client: ImapFlow, uid: number): Promise<boolean> {
  * read in the mailbox, as the Microsoft inbox does, and the returned page
  * already shows it read and counts one unread less. An id from another
  * numbering of the mailbox (UIDVALIDITY), or for an e-mail that is gone, only
- * fails `detail`; a search the server refuses fails the view as "not_found",
- * which the screen words as "try other words". `maxMessageBytes` is the size
- * above which an e-mail is not downloaded, IMAP_MAX_MESSAGE_BYTES unless a
- * check lowers it to reach that path without moving 15 MB.
+ * fails `detail`. A search the server refuses (NO or BAD, or a query it can't
+ * take) fails the view as "not_found", which the screen words as "try other
+ * words"; a count or a list it refuses, or a connection lost on the way, is
+ * "temporary". `maxMessageBytes` is the size above which an e-mail is not
+ * downloaded, IMAP_MAX_MESSAGE_BYTES unless a check lowers it to reach that
+ * path without moving 15 MB.
  */
 export function loadImapInboxView(
   organizationId: string,
@@ -327,15 +499,12 @@ export function loadImapInboxView(
   return withInbox<InboxView>(organizationId, async (client, mailbox) => {
     const uidValidity = Number(mailbox.uidValidity);
     const status = await client.status(INBOX, { unseen: true });
-    let unreadCount = status ? (status.unseen ?? 0) : 0;
+    // Like search(), status() answers `false` to a failure: a count nobody got is not a zero.
+    if (!status) return TEMPORARY;
+    let unreadCount = status.unseen ?? 0;
 
-    let listed: FetchMessageObject[];
-    try {
-      listed = await listNewest(client, mailbox, { search, unreadOnly: opts.unreadOnly });
-    } catch (e) {
-      if (search && searchRejected(e)) return NOT_FOUND;
-      throw e;
-    }
+    const listed = await listNewest(client, mailbox, { search, unreadOnly: opts.unreadOnly });
+    if (listed === null) return NOT_FOUND;
     let messages = listed.map((m) => summaryOf(m, uidValidity));
 
     let detail: InboxDetailResult | null = null;
@@ -402,7 +571,7 @@ export function downloadImapAttachment(
   if (!ref || !isAttachmentIndex(index)) return Promise.resolve(NOT_FOUND);
   return withInbox<InboxAttachmentDownload>(organizationId, async (client, mailbox) => {
     if (ref.uidValidity !== Number(mailbox.uidValidity)) return NOT_FOUND;
-    const meta = await client.fetchOne(String(ref.uid), { uid: true, size: true }, { uid: true });
+    const meta = await fetchOneRow(client, ref.uid, SIZE_QUERY);
     if (!meta || meta.size === undefined || meta.size > maxMessageBytes) return NOT_FOUND;
     const parsed = await readParsed(client, ref.uid);
     if (!parsed.ok) return NOT_FOUND;

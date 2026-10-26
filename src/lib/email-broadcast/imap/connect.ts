@@ -48,9 +48,12 @@ const IMAP_LOGOUT_WAIT_MS = 5_000;
  * included, is never written anywhere. No IDLE: a request is one short session.
  * No compression (COMPRESS=DEFLATE is negotiated after the login, and a few
  * bytes inflate into gigabytes) and a ceiling on every line, literal and response
- * a server sends (IMAP_MAX_*_BYTES): what a hostile server can make us hold in
- * memory is bounded, and a connection that passes it fails with LineTooLarge,
- * LiteralTooLarge or ResponseTooLarge.
+ * a server sends (IMAP_MAX_*_BYTES): a connection that passes one fails with
+ * LineTooLarge, LiteralTooLarge or ResponseTooLarge. These ceilings are per
+ * answer, not per request: imapflow starts counting again with each response, so
+ * a server that sends many answers under the ceiling is not stopped here. What a
+ * whole request may take in (the rows it keeps, the bytes it receives, its time)
+ * is bounded where the request is made, in withImap and gatherRows (inbox.ts).
  *
  * Throws when `ip` is anything the guard refuses, a name included, as
  * openSmtpConnection does: imapflow would resolve a name itself and connect around
@@ -131,6 +134,16 @@ function technicalText(text: string, auth: ImapAuth): string {
     .trim();
 }
 
+/**
+ * A failure of imapflow as openImap reports it: named by imapConnectError, the library's words as `technical`, redacted
+ * and cut. Exported for check:imap, which connects to servers of its own on loopback (openImap refuses those on purpose)
+ * and needs what they refuse classified the way a real server's refusal is.
+ */
+export function imapFailureOf(e: unknown, auth: ImapAuth): { error: ImapConnectError; technical: string } {
+  const facts = factsOf(e);
+  return { error: imapConnectError(facts), technical: technicalText(describe(facts), auth) };
+}
+
 /** Cuts the connection without a goodbye. Never throws: fine on a client never connected or already closed. */
 function closeNow(client: ImapFlow): void {
   try {
@@ -181,10 +194,10 @@ export async function openImap(
   } catch (e) {
     closeNow(client);
     // Out of time, the step only failed because the budget closed the client: the timeout is the real cause.
-    const facts: ImapErrorFacts = expired
-      ? factsOf({ code: "ETIMEDOUT", message: `The connection did not finish in ${IMAP_OPEN_BUDGET_MS / 1000} s` })
-      : factsOf(e);
-    return { ok: false, error: imapConnectError(facts), technical: technicalText(describe(facts), auth) };
+    const failure = expired
+      ? { code: "ETIMEDOUT", message: `The connection did not finish in ${IMAP_OPEN_BUDGET_MS / 1000} s` }
+      : e;
+    return { ok: false, ...imapFailureOf(failure, auth) };
   } finally {
     clearTimeout(budget);
   }
