@@ -10,14 +10,27 @@ import { isIP } from "node:net";
 import { ImapFlow, type ImapFlowOptions } from "imapflow";
 import { isBlockedSmtpAddress } from "../smtp/address";
 import { resolveSmtpHost } from "../smtp/connect";
-import { redactSmtpSecrets } from "../smtp/redact";
+import { redactAndCut } from "../smtp/redact";
 import { imapConnectError, type ImapConnectError, type ImapSettings } from "./core";
+import { IMAP_MAX_MESSAGE_BYTES } from "./parse";
 
 /** The login of the SMTP account, which is also the inbox's. */
 export type ImapAuth = { user: string; pass: string };
 
 /** One connection per request: 15 s to connect, 10 s for the greeting, 30 s of silence on the socket. */
 const IMAP_TIMEOUTS = { connection: 15_000, greeting: 10_000, socket: 30_000 };
+/**
+ * The most a server may send in one piece. imapflow's defaults (1 GB a line or a literal, 2 GB a response) would let
+ * a server the person pointed us at take the whole process down, and the inbox needs nowhere near that: the biggest
+ * thing it reads is a message whole, up to IMAP_MAX_MESSAGE_BYTES, which has a megabyte of headroom for a server whose
+ * size and literal differ a little. The longest line is a body structure or a search answer (about 8 bytes a match).
+ * A response carries a literal and the lines around it, and imapflow wants its limit above the literal's.
+ */
+const IMAP_MAX_LINE_BYTES = 4 * 1024 * 1024;
+const IMAP_MAX_LITERAL_BYTES = IMAP_MAX_MESSAGE_BYTES + 1024 * 1024;
+const IMAP_MAX_RESPONSE_BYTES = IMAP_MAX_LITERAL_BYTES + IMAP_MAX_LINE_BYTES;
+/** A failure's `technical` text reaches the screen and the log: at most this long, like the SMTP channel's. */
+const IMAP_TECHNICAL_MAX_CHARS = 400;
 /** Opening, from the name lookup to the end of the login, never takes longer than this. */
 const IMAP_OPEN_BUDGET_MS = 30_000;
 /** How long the goodbye (LOGOUT) is waited for before the connection is cut. */
@@ -33,6 +46,14 @@ const IMAP_LOGOUT_WAIT_MS = 5_000;
  * optional, imapflow goes on in clear text when the server doesn't offer it, and
  * the password would cross the wire. No logger: the conversation, the login
  * included, is never written anywhere. No IDLE: a request is one short session.
+ * No compression (COMPRESS=DEFLATE is negotiated after the login, and a few
+ * bytes inflate into gigabytes) and a ceiling on every line, literal and response
+ * a server sends (IMAP_MAX_*_BYTES): a connection that passes one fails with
+ * LineTooLarge, LiteralTooLarge or ResponseTooLarge. These ceilings are per
+ * answer, not per request: imapflow starts counting again with each response, so
+ * a server that sends many answers under the ceiling is not stopped here. What a
+ * whole request may take in (the rows it keeps, the bytes it receives, its time)
+ * is bounded where the request is made, in withImap and gatherRows (inbox.ts).
  *
  * Throws when `ip` is anything the guard refuses, a name included, as
  * openSmtpConnection does: imapflow would resolve a name itself and connect around
@@ -55,6 +76,10 @@ export function imapFlowOptions(settings: ImapSettings, ip: string, auth: ImapAu
     auth: { user: auth.user, pass: auth.pass },
     logger: false,
     disableAutoIdle: true,
+    disableCompression: true,
+    maxLineLength: IMAP_MAX_LINE_BYTES,
+    maxLiteralSize: IMAP_MAX_LITERAL_BYTES,
+    maxResponseSize: IMAP_MAX_RESPONSE_BYTES,
     connectionTimeout: IMAP_TIMEOUTS.connection,
     greetingTimeout: IMAP_TIMEOUTS.greeting,
     socketTimeout: IMAP_TIMEOUTS.socket,
@@ -96,13 +121,27 @@ function describe(f: ImapErrorFacts): string {
 }
 
 /**
- * A text for the screen or the log, on one line and with the secrets of `auth`
- * redacted. Redacted before the whitespace is folded, so a password with spaces
- * is still found as echoed. Every `technical` goes through here: a server may
- * echo the login back, and the text reaches the browser.
+ * A text for the screen or the log, on one line, with the secrets of `auth`
+ * redacted and at most IMAP_TECHNICAL_MAX_CHARS long. Redacted first, then cut
+ * (redactAndCut: a secret the cut splits in half would no longer be found), and
+ * only then folded to one line, so a password with spaces is still found as
+ * echoed. Every `technical` goes through here: a server may echo the login back
+ * or say as much as it likes, and the text reaches the browser.
  */
 function technicalText(text: string, auth: ImapAuth): string {
-  return redactSmtpSecrets(text, { username: auth.user, password: auth.pass }).replace(/\s+/g, " ").trim();
+  return redactAndCut(text, { username: auth.user, password: auth.pass }, IMAP_TECHNICAL_MAX_CHARS)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * A failure of imapflow as openImap reports it: named by imapConnectError, the library's words as `technical`, redacted
+ * and cut. Exported for check:imap, which connects to servers of its own on loopback (openImap refuses those on purpose)
+ * and needs what they refuse classified the way a real server's refusal is.
+ */
+export function imapFailureOf(e: unknown, auth: ImapAuth): { error: ImapConnectError; technical: string } {
+  const facts = factsOf(e);
+  return { error: imapConnectError(facts), technical: technicalText(describe(facts), auth) };
 }
 
 /** Cuts the connection without a goodbye. Never throws: fine on a client never connected or already closed. */
@@ -155,10 +194,10 @@ export async function openImap(
   } catch (e) {
     closeNow(client);
     // Out of time, the step only failed because the budget closed the client: the timeout is the real cause.
-    const facts: ImapErrorFacts = expired
-      ? factsOf({ code: "ETIMEDOUT", message: `The connection did not finish in ${IMAP_OPEN_BUDGET_MS / 1000} s` })
-      : factsOf(e);
-    return { ok: false, error: imapConnectError(facts), technical: technicalText(describe(facts), auth) };
+    const failure = expired
+      ? { code: "ETIMEDOUT", message: `The connection did not finish in ${IMAP_OPEN_BUDGET_MS / 1000} s` }
+      : e;
+    return { ok: false, ...imapFailureOf(failure, auth) };
   } finally {
     clearTimeout(budget);
   }

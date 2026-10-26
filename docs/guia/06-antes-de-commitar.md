@@ -77,16 +77,45 @@ antiga, sem as chaves do IMAP, ou com chaves que não servem, abre com `imap: nu
 conexão de [src/lib/email-broadcast/imap/connect.ts](../../src/lib/email-broadcast/imap/connect.ts): login
 real em TLS, senha errada, certificado sempre conferido, nome que não resolve, endereço interno recusado
 antes de qualquer conexão, e a porta 143 só com STARTTLS (um servidor de mentira em loopback prova que
-nenhum login sai em texto puro). Nenhum texto de falha leva a senha. As tarefas seguintes da caixa
-(leitura, anexo, resposta) acrescentam os checks delas no mesmo script. Precisa de **internet** (a API da
-Ethereal e o IMAP dela, porta 993), do Postgres do Docker e de um `.env` válido, e **recusa rodar** se o
-`DATABASE_URL` não for local. Cria uma organização `IMAP-E2E-<carimbo>` e apaga o que criou, mesmo quando
-falha; a caixa da Ethereal não tem como ser apagada (expira sozinha) e a senha dela nunca vai para a
-saída. Roda com `tsx --tsconfig scripts/tsconfig.server.json`: o shim
-`scripts/shims/server-only.ts` deixa os módulos `server-only` carregarem fora do Next, e o tsconfig traz o
-alias `@/` e o `env.ts`. A rede instável derruba a criação da conta na Ethereal de vez em quando: o script
-tenta 3 vezes antes de desistir; se o erro for de rede, rode de novo. Rode sempre que mexer em
-`src/lib/email-broadcast/imap/` ou em `src/lib/email-broadcast/smtp/credentials.ts`.
+nenhum login sai em texto puro; outros, que um servidor hostil não alcança: linha, literal e resposta têm
+teto (por resposta; o teto do pedido inteiro é do `inbox.ts`, mais abaixo), não há `COMPRESS=DEFLATE`, e o
+texto de falha é cortado em 400 caracteres depois de redigido).
+Nenhum texto de falha leva a senha. Cobre também a leitura da caixa de
+[src/lib/email-broadcast/imap/inbox.ts](../../src/lib/email-broadcast/imap/inbox.ts): dois e-mails reais
+entram pelo SMTP da própria Ethereal (um texto em ISO-8859-1 e um HTML com imagem `cid:` e `tabela.pdf`) e o
+script confere a lista (mais recente primeiro, não lidas, anexo, no máximo 50 e a contagem de todas), o
+filtro e a busca (acento, aspas, barra invertida, quebra de linha), abrir (corpo com a imagem embutida,
+marcado como lido na mesma resposta e no servidor, sem marcar os outros), o anexo (os mesmos bytes; fora da
+lista do e-mail é "não encontrado"), a UIDVALIDITY trocada, o limite de tamanho (a mensagem acima dele só
+mostra cabeçalhos e um aviso), uma mensagem que o parser recusa, outra empresa, conta sem IMAP, desconectada
+ou com credencial que não abre, senha recusada (`reconnect`, e a conta fica `NEEDS_RECONNECT`: o pedido
+seguinte responde `reconnect` sem abrir conexão nenhuma; um login recusado com `[UNAVAILABLE]`, `[LIMIT]` ou
+`[INUSE]` é `temporary` e deixa a conta como está) e servidor fora do ar (`temporary`, sem a senha no log e com a
+conta intacta). Servidores de mentira em loopback provam o que o imapflow esconde, porque ele responde
+`false`, `undefined` ou `[]` quando a conexão cai, sem erro. O `inbox.ts` roda de verdade contra eles
+(`openImap` recusa loopback de propósito, então o check troca o `imapRequest` que o `inbox.ts` exporta, o mesmo
+que baixa o teto de tempo e de bytes para caberem em frações de segundo): busca recusada é `not_found`; lista,
+contagem ou STATUS recusados, conexão perdida ou cortada no meio do pedido (no STATUS, na busca, na lista, ao
+abrir, entre o tamanho e o arquivo de um download, antes da marca de lido) e estouro do tempo são `temporary`,
+nunca uma caixa vazia, um 404 ou um zero; um servidor que despeja linhas que ninguém pediu é cortado depois de
+poucas, e o pedido que passa do teto de bytes também; linhas de e-mails que ninguém pediu, partidas em duas ou
+repetidas não viram e-mail em branco nem em dobro; a linha guarda só o que a lista pediu (um literal pendurado
+nela, de 16 MB na vida real, não fica na memória); e o e-mail com a estrutura mais funda do que o imapflow lê
+(ele larga o e-mail sem avisar) não some da lista, e a segunda consulta recusada só tira esse e-mail da
+página. A tarefa seguinte da caixa (resposta) acrescenta os checks dela no mesmo script. Precisa de **internet** (a API da Ethereal e o IMAP dela, porta 993), do
+Postgres do Docker e de um `.env` válido, e **recusa rodar** se o `DATABASE_URL` não for local. Cada pedido à
+caixa é uma conexão nova (uma dúzia de idas e vindas): com a rede daqui o script leva uns 3 minutos (a
+Ethereal fica longe), e a linha de cada check lento mostra o tempo dele. Cria uma organização `IMAP-E2E-<carimbo>` (e outra, para
+provar o isolamento) e apaga o que criou, mesmo quando falha; **se você matar o script no meio** (Ctrl+C,
+tempo esgotado), o que ele criou fica no banco e é preciso apagar a mão (`organizations` com nome
+`IMAP-E2E-%` e as linhas de `email_sender_accounts` delas). A caixa da Ethereal não tem como ser apagada
+(expira sozinha) e a senha dela nunca vai para a saída. Roda com
+`tsx --tsconfig scripts/tsconfig.server.json`: o shim `scripts/shims/server-only.ts` deixa os módulos
+`server-only` carregarem fora do Next, e o tsconfig traz o alias `@/` e o `env.ts`. A rede instável derruba a
+criação da conta na Ethereal de vez em quando: o script tenta 3 vezes antes de desistir; se o erro for de
+rede, rode de novo (os pedidos à caixa que devem ter resposta de verdade repetem até 2 vezes se vier
+`temporary`). Rode sempre que mexer em `src/lib/email-broadcast/imap/` ou em
+`src/lib/email-broadcast/smtp/credentials.ts`.
 
 ## `check:isolation`
 
