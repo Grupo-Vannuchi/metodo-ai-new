@@ -56,9 +56,19 @@ sobrou.
 | Usuário logado conectando a caixa Microsoft do E-mail | sessão (`getOrgContext()`) + tela `email` + módulo `marketing`; o retorno confere `state`, verificador PKCE e empresa nos cookies `ms_mail_*` (10 min) | [src/app/api/email/microsoft/](../../src/app/api/email/microsoft/) |
 | Usuário logado conectando a conta Google do E-mail | sessão (`getOrgContext()`) + tela `email` + módulo `marketing` + empresa no piloto (`googleMailEnabledFor`); o retorno confere `state`, verificador PKCE e empresa nos cookies `gg_mail_*` (10 min) | [src/app/api/email/google/](../../src/app/api/email/google/) |
 | Usuário logado baixando anexo da caixa de entrada Microsoft | sessão (`getOrgContext()`) + telas `email` e `emailInbox` + módulo `marketing`; ids conferidos por `isGraphId`, e a mensagem precisa estar na pasta Caixa de Entrada da caixa da própria empresa | [src/app/api/email/microsoft/attachment/route.ts](../../src/app/api/email/microsoft/attachment/route.ts) |
+| Usuário logado baixando anexo da caixa de entrada IMAP (conta SMTP) | sessão (`getOrgContext()`) + telas `email` e `emailInbox` + módulo `marketing`; `m` conferido por `parseImapMessageRef` e `a` por `isAttachmentIndex`; a conta é a da empresa da sessão (`tenantDb`), e o arquivo precisa estar na lista do e-mail (a mesma que a tela mostra) na INBOX dessa caixa | [src/app/api/email/smtp/attachment/route.ts](../../src/app/api/email/smtp/attachment/route.ts) |
 | Claude (servidor MCP de leitura) | chave `MCP_API_KEY` no `Authorization: Bearer` ou como último segmento do caminho (`/api/mcp/<chave>`) → `isMcpAuthorized(req, pathKey)` | [src/lib/mcp/auth.ts](../../src/lib/mcp/auth.ts) |
 
 `/api/email/microsoft/connect` e `/callback` (spec 2026-10-15) só redirecionam. `/api/email/microsoft/attachment` sempre responde como download (`application/octet-stream`, `Content-Disposition: attachment`, `nosniff`): um anexo HTML nunca é aberto na origem do app. O endereço de retorno cadastrado no app do Azure é `${NEXT_PUBLIC_SITE_URL}/api/email/microsoft/callback`, montado por `joinSiteUrl` sem barra dupla. As credenciais vão criptografadas para `email_sender_accounts` e nunca para o navegador ou para o log.
+
+`/api/email/smtp/attachment` (spec 2026-10-23) segue o molde do anexo da Microsoft, com os ids da caixa IMAP:
+`m=<uidvalidity>.<uid>` (só dígitos; uma numeração diferente da atual da caixa é "não encontrado") e
+`a=<índice do anexo na lista do e-mail>` (`^\d{1,3}$`; fora da lista, inclusive a imagem que o corpo já mostra,
+é 404). Respostas: sessão ausente 401, telas ou módulo 403, id mal formado 400, `not_found` 404,
+`reconnect`/`no_account` 409, o resto 502. Sempre download (`application/octet-stream`,
+`Content-Disposition: attachment`, `nosniff`, `no-store`). Diferente da Microsoft, o e-mail inteiro é baixado
+por IMAP (até 15 MB; acima disso nenhum anexo sai) e o arquivo sai da memória, não em fluxo. A senha da
+caixa nunca passa por aqui: quem abre a conexão é [src/lib/email-broadcast/imap/inbox.ts](../../src/lib/email-broadcast/imap/inbox.ts).
 
 `/api/email/google/connect` e `/callback` (spec 2026-10-19) seguem o mesmo molde. O endereço de retorno cadastrado no projeto do Google Cloud é `${NEXT_PUBLIC_SITE_URL}/api/email/google/callback` (também por `joinSiteUrl`), e só o `access_type=offline` com `prompt=consent` faz o Google devolver o refresh token; o `select_account` apenas deixa a pessoa escolher a conta.
 
