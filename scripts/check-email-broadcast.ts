@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import ExcelJS from "exceljs";
 import { isValidEmail, normalizeEmail, parseEmailList } from "../src/lib/email-broadcast/normalize";
-import { mergeCandidates, type Candidate } from "../src/lib/email-broadcast/audience-core";
+import { mergeCandidates, spreadsheetCandidates, type Candidate } from "../src/lib/email-broadcast/audience-core";
 import { transactionalRetryDelayMs } from "../src/lib/email/retry-after";
 import { buildMime } from "../src/lib/email-broadcast/microsoft/mime";
 import {
@@ -70,11 +70,18 @@ import {
 import {
   MAX_AUDIENCE_EMAILS,
   MAX_IMPORTS,
+  MAX_PERSON_TEXT,
   audienceEmailCount,
+  csvRows,
+  decodeCsv,
   extractEmails,
   fitImport,
+  readCsv,
+  readSheets,
   spreadsheetKind,
-  xlsxCellTexts,
+  withoutEmail,
+  xlsxSheets,
+  type SheetCell,
 } from "../src/lib/email-broadcast/spreadsheet";
 import { EMPTY_AUDIENCE, audienceSelectionSchema, broadcastDraftSchema } from "../src/lib/validations/email-broadcast";
 import {
@@ -256,6 +263,38 @@ check("mergeCandidates tags spreadsheet addresses and orders them after manual o
     [
       ["a@x.com", ["manual", "spreadsheet"]],
       ["b@x.com", ["spreadsheet"]],
+    ],
+  );
+});
+
+check("spreadsheetCandidates gives each address its row's name and company (blank → none)", () => {
+  assert.deepEqual(
+    spreadsheetCandidates([
+      { emails: ["a@x.com", "b@x.com"], people: [{ name: "Ana Lima", company: "" }, { name: "", company: "Y" }] },
+      { emails: ["c@x.com"] },
+    ]),
+    [
+      { email: "a@x.com", source: "spreadsheet", name: "Ana Lima", companyName: null },
+      { email: "b@x.com", source: "spreadsheet", name: null, companyName: "Y" },
+      { email: "c@x.com", source: "spreadsheet", name: null, companyName: null },
+    ],
+  );
+});
+
+check("mergeCandidates lets a contact's name win over a spreadsheet row, which fills the contact's blanks", () => {
+  const { recipients } = mergeCandidates(
+    [
+      { email: "ana@x.com", source: "spreadsheet", name: "Ana Planilha", companyName: "X da Planilha" },
+      { email: "ana@x.com", source: "contact", name: "Ana CRM", companyName: null, contactId: "c1" },
+      { email: "bia@x.com", source: "spreadsheet", name: "Bia Souza", companyName: "Y" },
+    ],
+    new Set(),
+  );
+  assert.deepEqual(
+    recipients.map((r) => [r.email, r.name, r.companyName]),
+    [
+      ["ana@x.com", "Ana CRM", "X da Planilha"],
+      ["bia@x.com", "Bia Souza", "Y"],
     ],
   );
 });
@@ -802,6 +841,161 @@ check("extractEmails strips CSV quotes and mailto: links", () => {
   assert.deepEqual(extractEmails(["MAILTO:Dani@W.com"]).emails, ["dani@w.com"]);
 });
 
+/** A sheet of plain cells (no links), as a .csv or a simple .xlsx gives it. */
+const sheet = (rows: string[][]): SheetCell[][] => rows.map((row) => row.map((text) => ({ text, link: null })));
+
+check("readSheets takes {{nome}} (nome + sobrenome) and {{empresa}} from the header row", () => {
+  const r = readSheets([
+    sheet([
+      ["email", "tipo_email", "nome", "sobrenome", "cargo", "empresa", "telefone"],
+      ["eallan@suzano.com.br", "corporativo", "Edson", "Allan Franco", "Supervisor", "Suzano — unidade Limeira/SP", "19 99154-3192"],
+      ["Wesley.RodrigoSilva@Hotmail.com", "pessoal", "Wesley", "Rodrigo", "Encarregado", "Toyota do Brasil", ""],
+      ["cxmbr1976@gmail.com", "pessoal", "Xiaomeng", "", "", "", ""],
+    ]),
+  ]);
+  assert.deepEqual(r.emails, ["eallan@suzano.com.br", "wesley.rodrigosilva@hotmail.com", "cxmbr1976@gmail.com"]);
+  assert.deepEqual(r.people, [
+    { name: "Edson Allan Franco", company: "Suzano — unidade Limeira/SP" },
+    { name: "Wesley Rodrigo", company: "Toyota do Brasil" },
+    { name: "Xiaomeng", company: "" },
+  ]);
+  assert.equal(r.invalid, 0);
+  assert.equal(r.duplicates, 0);
+});
+
+check("readSheets finds the columns without case, accents or separators, and only those four", () => {
+  const r = readSheets([
+    sheet([
+      [" ", ""],
+      ["Tipo_Email", "EMPRESA ", "Sobre-nome", "E-mail", "Nóme", "e_mail"],
+      ["corporativo", "ACME", "Lima", "joao@acme.com", "João", "outro@acme.com"],
+    ]),
+  ]);
+  // The first non-empty row is the header; the first "email" column wins.
+  assert.deepEqual(r.emails, ["joao@acme.com"]);
+  assert.deepEqual(r.people, [{ name: "João Lima", company: "ACME" }]);
+});
+
+check("readSheets without the email header reads every cell, as before", () => {
+  const r = readSheets([sheet([["Nome", "Contato"], ["Ana", "ana@x.com"], ["Bia", "bia@x.com; caio@x.com"]])]);
+  assert.deepEqual(r.emails, ["ana@x.com", "bia@x.com", "caio@x.com"]);
+  assert.equal(r.people, null);
+});
+
+check("readSheets keeps the first row of a repeated address and counts the rest", () => {
+  const r = readSheets([
+    sheet([
+      ["email", "nome", "empresa"],
+      ["ana@x.com", "Ana", "X"],
+      ["", "Sem e-mail", "Y"],
+      ["ANA@x.com", "Outra Ana", "Z"],
+      ["maria@@exemplo", "Maria", "W"],
+      ["bia@x.com; caio@x.com", "Família Souza", "V"],
+    ]),
+  ]);
+  assert.deepEqual(r.emails, ["ana@x.com", "bia@x.com", "caio@x.com"]);
+  assert.deepEqual(r.people, [
+    { name: "Ana", company: "X" },
+    { name: "Família Souza", company: "V" },
+    { name: "Família Souza", company: "V" },
+  ]);
+  assert.equal(r.duplicates, 1);
+  assert.equal(r.invalid, 1);
+});
+
+check("readSheets uses a link's target when the e-mail cell's text isn't an address", () => {
+  const r = readSheets([
+    [
+      [{ text: "email", link: null }, { text: "nome", link: null }],
+      [{ text: "Escreva para a Bia", link: "mailto:bia@x.com" }, { text: "Bia", link: null }],
+      [{ text: "caio@x.com", link: "mailto:caio@outro.com" }, { text: "Caio", link: null }],
+    ],
+  ]);
+  assert.deepEqual(r.emails, ["bia@x.com", "caio@x.com"]);
+  assert.deepEqual(r.people, [
+    { name: "Bia", company: "" },
+    { name: "Caio", company: "" },
+  ]);
+});
+
+check("readSheets reads columns by position, and mixes sheets with and without the header", () => {
+  const sparse: SheetCell[] = [];
+  sparse[0] = { text: "edu@x.com", link: null };
+  sparse[3] = { text: "Edu ACME", link: null };
+  const r = readSheets([[sheet([["email", "nome", "sobrenome", "empresa"]])[0], sparse], sheet([["avulso@y.com"]]), []]);
+  assert.deepEqual(r.emails, ["edu@x.com", "avulso@y.com"]);
+  assert.deepEqual(r.people, [
+    { name: "", company: "Edu ACME" },
+    { name: "", company: "" },
+  ]);
+});
+
+check("readSheets tidies names and companies and caps them at MAX_PERSON_TEXT", () => {
+  const long = "x".repeat(MAX_PERSON_TEXT + 20);
+  const r = readSheets([sheet([["email", "nome", "sobrenome", "empresa"], ["a@x.com", "  Ana \n Maria ", " Souza  ", long]])]);
+  assert.deepEqual(r.people, [{ name: "Ana Maria Souza", company: "x".repeat(MAX_PERSON_TEXT) }]);
+});
+
+check("csvRows reads quoted fields, the header line's separator and line breaks", () => {
+  assert.deepEqual(csvRows('﻿"email","nome"\r\n"a@x.com","Silva, Ana"\r\n'), [
+    ["email", "nome"],
+    ["a@x.com", "Silva, Ana"],
+  ]);
+  assert.deepEqual(csvRows('email;nome;empresa\nb@x.com;"Bia ""B"" Lima";"Rua 1\nSala 2"\n'), [
+    ["email", "nome", "empresa"],
+    ["b@x.com", 'Bia "B" Lima', "Rua 1\nSala 2"],
+  ]);
+  assert.deepEqual(csvRows("email\tnome\nc@x.com\tCaio"), [
+    ["email", "nome"],
+    ["c@x.com", "Caio"],
+  ]);
+  assert.deepEqual(csvRows('"e,mail";nome\nd@x.com;Dani'), [
+    ["e,mail", "nome"],
+    ["d@x.com", "Dani"],
+  ]);
+  assert.deepEqual(csvRows(""), []);
+});
+
+check("readCsv maps the header row and otherwise reads every address, as before", () => {
+  const mapped = readCsv(
+    '"email","tipo_email","nome","sobrenome","empresa"\n"eallan@suzano.com.br","corporativo","Edson","Allan Franco","Suzano"\n',
+  );
+  assert.deepEqual(mapped.emails, ["eallan@suzano.com.br"]);
+  assert.deepEqual(mapped.people, [{ name: "Edson Allan Franco", company: "Suzano" }]);
+  const excelBr = readCsv("E-mail;Nome;Sobrenome;Empresa\r\nana@x.com;Ana;Lima;ACME\r\n");
+  assert.deepEqual(excelBr.people, [{ name: "Ana Lima", company: "ACME" }]);
+  const legacy = readCsv('nome,contato\n"Silva, Ana","ana@x.com"\nBia;mailto:bia@y.com\r\n');
+  assert.deepEqual(legacy.emails, ["ana@x.com", "bia@y.com"]);
+  assert.equal(legacy.people, null);
+});
+
+check("decodeCsv reads UTF-8 and falls back to Excel's Windows-1252", () => {
+  const joao = `Jo${String.fromCharCode(0xe3)}o`; // "João"
+  assert.equal(decodeCsv(new TextEncoder().encode(`nome\n${joao}`)), `nome\n${joao}`);
+  // Windows-1252 bytes: "ã" is the single byte 0xE3, invalid as UTF-8.
+  assert.equal(decodeCsv(new Uint8Array([0x6e, 0x6f, 0x6d, 0x65, 0x0a, 0x4a, 0x6f, 0xe3, 0x6f])), `nome\n${joao}`);
+  const ansi = new Uint8Array([...new TextEncoder().encode("email;nome\na@x.com;Jo"), 0xe3, 0x6f]);
+  assert.deepEqual(readCsv(decodeCsv(ansi)).people, [{ name: joao, company: "" }]);
+});
+
+check("withoutEmail drops an address together with its name and company", () => {
+  const imp = {
+    fileName: "a.xlsx",
+    emails: ["a@x.com", "b@x.com"],
+    people: [
+      { name: "Ana", company: "X" },
+      { name: "Bia", company: "Y" },
+    ],
+  };
+  assert.deepEqual(withoutEmail(imp, "a@x.com"), {
+    fileName: "a.xlsx",
+    emails: ["b@x.com"],
+    people: [{ name: "Bia", company: "Y" }],
+  });
+  assert.deepEqual(withoutEmail({ fileName: "b.csv", emails: ["a@x.com"] }, "a@x.com"), { fileName: "b.csv", emails: [] });
+  assert.equal(withoutEmail(imp, "z@x.com"), imp);
+});
+
 check("fitImport keeps what fits under the cap and counts the rest", () => {
   assert.equal(MAX_AUDIENCE_EMAILS, 5000);
   assert.deepEqual(fitImport(["a@x.com", "b@x.com", "c@x.com"], 4998), { kept: ["a@x.com", "b@x.com"], dropped: 1 });
@@ -835,6 +1029,23 @@ check("audience schema keeps old drafts and caps typed + imported at 5,000", () 
   assert.equal(MAX_IMPORTS, 20);
   assert.ok(audienceSelectionSchema.safeParse({ imports: files(MAX_IMPORTS) }).success);
   assert.ok(!audienceSelectionSchema.safeParse({ imports: files(MAX_IMPORTS + 1) }).success);
+});
+
+check("audience schema keeps an import's people and refuses a list out of step with its addresses", () => {
+  const imp = {
+    fileName: "a.xlsx",
+    emails: ["a@x.com", "b@x.com"],
+    people: [
+      { name: "Ana", company: "X" },
+      { name: "", company: "" },
+    ],
+  };
+  assert.deepEqual(audienceSelectionSchema.parse({ imports: [imp] }).imports, [imp]);
+  assert.ok(!audienceSelectionSchema.safeParse({ imports: [{ ...imp, people: imp.people.slice(1) }] }).success);
+  const long = { ...imp, people: [{ name: "x".repeat(MAX_PERSON_TEXT + 1), company: "" }, imp.people[1]] };
+  assert.ok(!audienceSelectionSchema.safeParse({ imports: [long] }).success);
+  const plain = audienceSelectionSchema.parse({ imports: [{ fileName: "b.csv", emails: ["c@x.com"] }] });
+  assert.equal(plain.imports[0].people, undefined);
 });
 
 check("broadcastDraftSchema saves a draft for every channel, SMTP included", () => {
@@ -1887,7 +2098,7 @@ async function checkAsync(name: string, fn: () => Promise<void>): Promise<void> 
 }
 
 async function main() {
-  await checkAsync("xlsxCellTexts reads every sheet, link targets and rich text of a real .xlsx", async () => {
+  await checkAsync("xlsxSheets + readSheets read every sheet, link targets and rich text of a real .xlsx", async () => {
     const wb = new ExcelJS.Workbook();
     const a = wb.addWorksheet("Evento SP");
     a.addRow(["Nome", "E-mail", "Idade"]);
@@ -1899,14 +2110,35 @@ async function main() {
     b.addRow(["Edu", "edu@x.com"]);
     const data = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
 
-    const r = extractEmails(await xlsxCellTexts(ExcelJS, data));
+    const r = readSheets(await xlsxSheets(ExcelJS, data));
     assert.deepEqual(r.emails, ["ana@x.com", "bia@x.com", "caio@x.com", "dani@x.com", "edu@x.com"]);
+    // "Evento SP" has the Nome/E-mail header row; "Evento RJ" has none, so Edu comes without a name.
+    assert.deepEqual(
+      r.people?.map((p) => p.name),
+      ["Ana", "Bia", "Caio", "Dani", ""],
+    );
     assert.equal(r.duplicates, 0);
     assert.equal(r.invalid, 0);
   });
 
-  await checkAsync("xlsxCellTexts rejects a file that isn't an .xlsx", async () => {
-    await assert.rejects(xlsxCellTexts(ExcelJS, new TextEncoder().encode("ana@x.com").buffer as ArrayBuffer));
+  await checkAsync("xlsxSheets keeps each cell in its own column when a row has empty cells", async () => {
+    const wb = new ExcelJS.Workbook();
+    const s = wb.addWorksheet("Prospecção");
+    s.addRow(["email", "tipo_email", "nome", "sobrenome", "cargo", "empresa", "telefone", "ultima_interacao"]);
+    s.addRow(["wesley.rodrigosilva@hotmail.com", "pessoal", "Wesley", "Rodrigo", "", "Toyota do Brasil", "", new Date(Date.UTC(2026, 9, 16))]);
+    s.addRow(["eallan@suzano.com.br", "corporativo", "Edson", "Allan Franco", null, "Suzano — unidade Limeira/SP"]);
+    const data = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
+
+    const r = readSheets(await xlsxSheets(ExcelJS, data));
+    assert.deepEqual(r.emails, ["wesley.rodrigosilva@hotmail.com", "eallan@suzano.com.br"]);
+    assert.deepEqual(r.people, [
+      { name: "Wesley Rodrigo", company: "Toyota do Brasil" },
+      { name: "Edson Allan Franco", company: "Suzano — unidade Limeira/SP" },
+    ]);
+  });
+
+  await checkAsync("xlsxSheets rejects a file that isn't an .xlsx", async () => {
+    await assert.rejects(xlsxSheets(ExcelJS, new TextEncoder().encode("ana@x.com").buffer as ArrayBuffer));
   });
 
   await checkAsync("buildMime encodes accents and keeps the unsubscribe headers and both parts", async () => {

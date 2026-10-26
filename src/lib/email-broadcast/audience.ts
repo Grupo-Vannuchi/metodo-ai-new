@@ -2,7 +2,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { tenantDb } from "@/lib/tenant-db";
 import { normalizeEmail } from "./normalize";
-import { mergeCandidates, type Candidate } from "./audience-core";
+import { mergeCandidates, spreadsheetCandidates, type Candidate } from "./audience-core";
 import type { AudienceSelection } from "@/lib/validations/email-broadcast";
 
 /** Only rows whose e-mail at least looks like an address (skips null and ""). */
@@ -61,7 +61,7 @@ export async function resolveAudience(organizationId: string, sel: AudienceSelec
       companyId: c.id,
     })),
     ...sel.emails.map((email) => ({ email, source: "manual" as const })),
-    ...sel.imports.flatMap((i) => i.emails.map((email) => ({ email, source: "spreadsheet" as const }))),
+    ...spreadsheetCandidates(sel.imports),
   ];
 
   const blocked = new Set<string>([

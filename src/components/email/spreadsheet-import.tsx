@@ -12,27 +12,33 @@ import {
   MAX_SPREADSHEET_BYTES,
   SPREADSHEET_ACCEPT,
   audienceEmailCount,
-  extractEmails,
+  decodeCsv,
   fitImport,
+  readCsv,
+  readSheets,
   spreadsheetKind,
-  xlsxCellTexts,
+  withoutEmail,
+  xlsxSheets,
+  type SpreadsheetRead,
 } from "@/lib/email-broadcast/spreadsheet";
 import type { AudienceSelection } from "@/lib/validations/email-broadcast";
 
 type SheetImport = AudienceSelection["imports"][number];
 
-/** Cell texts of a .csv (the whole text) or an .xlsx (exceljs, loaded only now: it's heavy). */
-async function cellTexts(file: File, kind: "xlsx" | "csv"): Promise<string[]> {
-  if (kind === "csv") return [await file.text()];
+/** A .csv (UTF-8 or Excel's Windows-1252) or an .xlsx (exceljs, loaded only now: it's heavy). */
+async function readFile(file: File, kind: "xlsx" | "csv"): Promise<SpreadsheetRead> {
+  if (kind === "csv") return readCsv(decodeCsv(await file.arrayBuffer()));
   const excel = await import("exceljs");
-  return xlsxCellTexts(excel.default ?? excel, await file.arrayBuffer());
+  return readSheets(await xlsxSheets(excel.default ?? excel, await file.arrayBuffer()));
 }
 
 /**
  * "Planilha" block of the recipients: files are read in the browser and only
- * their addresses go into the audience. Typed + imported addresses share
- * MAX_AUDIENCE_EMAILS. While reading, the parent disables save/send and
- * removal is blocked here, so the list built across awaits can't race an edit.
+ * their addresses go into the audience, with each one's name and company when
+ * the sheet has the email/nome/sobrenome/empresa header row (see readSheets).
+ * Typed + imported addresses share MAX_AUDIENCE_EMAILS. While reading, the
+ * parent disables save/send and removal is blocked here, so the list built
+ * across awaits can't race an edit.
  */
 export function SpreadsheetImport({
   imports,
@@ -82,9 +88,9 @@ export function SpreadsheetImport({
           toast(t("sheet.tooBig", { file: file.name }), { variant: "error" });
           continue;
         }
-        let found: ReturnType<typeof extractEmails>;
+        let found: SpreadsheetRead;
         try {
-          found = extractEmails(await cellTexts(file, kind));
+          found = await readFile(file, kind);
         } catch (error) {
           console.error("[email-spreadsheet] read failed", error);
           toast(t("sheet.unreadable", { file: file.name }), { variant: "error" });
@@ -96,20 +102,25 @@ export function SpreadsheetImport({
         }
         const used = audienceEmailCount({ emails: [], imports: list }) + latestTyped.current;
         const { kept, dropped } = fitImport(found.emails, used);
+        // The kept addresses are the first ones, so their people are the first ones too.
+        const people = found.people?.slice(0, kept.length);
         if (kept.length > 0) {
-          list = [...list, { fileName: file.name.slice(0, MAX_IMPORT_NAME), emails: kept }];
+          list = [...list, { fileName: file.name.slice(0, MAX_IMPORT_NAME), emails: kept, ...(people ? { people } : {}) }];
           onChange(list);
         }
+        const noName = people?.filter((p) => !p.name).length ?? 0;
+        const noCompany = people?.filter((p) => !p.company).length ?? 0;
+        const missing = noName + noCompany > 0 ? ` ${t("sheet.missing", { names: noName, companies: noCompany })}` : "";
         if (kept.length === 0) {
           toast(t("sheet.full", { file: file.name }), { variant: "error" });
         } else if (dropped > 0) {
-          toast(t("sheet.limit", { kept: kept.length, file: file.name, dropped }), { variant: "error" });
+          toast(t("sheet.limit", { kept: kept.length, file: file.name, dropped }) + missing, { variant: "error" });
         } else {
           const ignored =
             found.invalid + found.duplicates > 0
               ? ` ${t("sheet.ignored", { invalid: found.invalid, duplicates: found.duplicates })}`
               : "";
-          toast(t("sheet.imported", { count: kept.length, file: file.name }) + ignored);
+          toast(t("sheet.imported", { count: kept.length, file: file.name }) + ignored + missing);
         }
       }
     } finally {
@@ -121,7 +132,7 @@ export function SpreadsheetImport({
   const removeEmail = (index: number, email: string) =>
     onChange(
       imports
-        .map((imp, i) => (i === index ? { ...imp, emails: imp.emails.filter((e) => e !== email) } : imp))
+        .map((imp, i) => (i === index ? withoutEmail(imp, email) : imp))
         .filter((imp) => imp.emails.length > 0),
     );
 
@@ -206,20 +217,27 @@ export function SpreadsheetImport({
                 </button>
               </div>
               <ul className="max-h-60 overflow-y-auto py-1">
-                {imp.emails.map((email) => (
-                  <li key={email} className="flex items-center justify-between gap-3 py-0.5 pl-3.5 pr-1.5 text-sm">
-                    <span className="truncate">{email}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeEmail(index, email)}
-                      disabled={reading}
-                      aria-label={t("remove", { email })}
-                      className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-                    >
-                      <X className="size-3.5" aria-hidden />
-                    </button>
-                  </li>
-                ))}
+                {imp.emails.map((email, k) => {
+                  const person = imp.people?.[k];
+                  const details = person ? [person.name, person.company].filter(Boolean).join(" · ") : "";
+                  return (
+                    <li key={email} className="flex items-center justify-between gap-3 py-0.5 pl-3.5 pr-1.5 text-sm">
+                      <span className="flex min-w-0 flex-col">
+                        <span className="truncate">{email}</span>
+                        {details ? <span className="truncate text-xs text-muted-foreground">{details}</span> : null}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeEmail(index, email)}
+                        disabled={reading}
+                        aria-label={t("remove", { email })}
+                        className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                      >
+                        <X className="size-3.5" aria-hidden />
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
