@@ -208,6 +208,9 @@ check("the test organization exists and holds no sender account yet", async (ctx
 
 // ── Connection: the options, then a real server ──────────────────────────────
 
+/** An address the guard lets through (198.51.100.0/24, the documentation range, is refused). No check here dials it. */
+const PUBLIC_IP = "8.8.8.8";
+
 check("imapFlowOptions: ssl, mandatory STARTTLS, the typed name as SNI, the certificate always checked", () => {
   const auth = { user: "u", pass: "p" };
   const common = {
@@ -221,18 +224,18 @@ check("imapFlowOptions: ssl, mandatory STARTTLS, the typed name as SNI, the cert
   const name = "imap.empresa.com.br";
   const tls = { servername: name, rejectUnauthorized: true };
   // The address is the one the guard approved; the typed name only travels as SNI and as the name the certificate must carry.
-  assert.deepEqual(imapFlowOptions({ host: name, port: 993, security: "ssl" }, "198.51.100.7", auth), {
+  assert.deepEqual(imapFlowOptions({ host: name, port: 993, security: "ssl" }, PUBLIC_IP, auth), {
     ...common,
-    host: "198.51.100.7",
+    host: PUBLIC_IP,
     port: 993,
     secure: true,
     doSTARTTLS: false,
     servername: name,
     tls,
   });
-  assert.deepEqual(imapFlowOptions({ host: name, port: 143, security: "starttls" }, "198.51.100.7", auth), {
+  assert.deepEqual(imapFlowOptions({ host: name, port: 143, security: "starttls" }, PUBLIC_IP, auth), {
     ...common,
-    host: "198.51.100.7",
+    host: PUBLIC_IP,
     port: 143,
     secure: false,
     doSTARTTLS: true,
@@ -240,17 +243,23 @@ check("imapFlowOptions: ssl, mandatory STARTTLS, the typed name as SNI, the cert
     tls,
   });
   // A typed IP is its own name: no SNI, and the certificate is then checked against the IP.
-  assert.deepEqual(imapFlowOptions({ host: "198.51.100.7", port: 993, security: "ssl" }, "198.51.100.7", auth), {
+  assert.deepEqual(imapFlowOptions({ host: PUBLIC_IP, port: 993, security: "ssl" }, PUBLIC_IP, auth), {
     ...common,
-    host: "198.51.100.7",
+    host: PUBLIC_IP,
     port: 993,
     secure: true,
     doSTARTTLS: false,
     servername: undefined,
     tls: { servername: undefined, rejectUnauthorized: true },
   });
-  // Never a name: imapflow would resolve it itself and connect around the guard.
-  assert.throws(() => imapFlowOptions({ host: name, port: 993, security: "ssl" }, name, auth));
+  // Like openSmtpConnection, never an address the guard refuses, so no caller has to remember to ask it first: not a name
+  // (imapflow would resolve it itself and connect around the guard), nor a loopback, private, link-local, scoped or mapped address.
+  const refusal = { message: "imapFlowOptions takes the address resolveSmtpHost approved" };
+  for (const refused of [name, "127.0.0.1", "10.0.0.5", "169.254.169.254", "::1", "fe80::1%eth0", "::ffff:127.0.0.1"]) {
+    assert.throws(() => imapFlowOptions({ host: name, port: 993, security: "ssl" }, refused, auth), refusal, `${refused} must be refused`);
+  }
+  // The control: a public IPv6 address goes through, so the refusals above are the guard's and not a blanket no.
+  assert.equal(imapFlowOptions({ host: name, port: 993, security: "ssl" }, "2606:4700:4700::1111", auth).host, "2606:4700:4700::1111");
 });
 
 check("143 with STARTTLS: a server that doesn't offer STARTTLS gets no login at all, never in clear text", async () => {
@@ -258,8 +267,9 @@ check("143 with STARTTLS: a server that doesn't offer STARTTLS gets no login at 
   const secret = `senha-${Date.now()}`;
   try {
     const settings: ImapSettings = { host: "imap.empresa.com.br", port: 143, security: "starttls" };
-    // The options openImap connects with, pointed at the loopback server (openImap itself never dials one).
-    const options = { ...imapFlowOptions(settings, "127.0.0.1", { user: "u", pass: secret }), port: fake.port };
+    // The options openImap connects with for a public address, pointed at the loopback server: only where they dial changes
+    // (imapFlowOptions itself refuses 127.0.0.1, and openImap never dials a loopback address).
+    const options = { ...imapFlowOptions(settings, PUBLIC_IP, { user: "u", pass: secret }), host: "127.0.0.1", port: fake.port };
     const loginSent = () =>
       /\b(AUTHENTICATE|LOGIN)\b/i.test(fake.received()) || fake.received().includes(Buffer.from(`\0u\0${secret}`).toString("base64"));
 

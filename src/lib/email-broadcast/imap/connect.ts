@@ -8,6 +8,7 @@
 import "server-only";
 import { isIP } from "node:net";
 import { ImapFlow, type ImapFlowOptions } from "imapflow";
+import { isBlockedSmtpAddress } from "../smtp/address";
 import { resolveSmtpHost } from "../smtp/connect";
 import { redactSmtpSecrets } from "../smtp/redact";
 import { imapConnectError, type ImapConnectError, type ImapSettings } from "./core";
@@ -33,12 +34,15 @@ const IMAP_LOGOUT_WAIT_MS = 5_000;
  * the password would cross the wire. No logger: the conversation, the login
  * included, is never written anywhere. No IDLE: a request is one short session.
  *
- * Throws when `ip` is not an IP, a name included: imapflow would resolve a name
- * itself and connect around the guard. The IP is not judged here: openImap is
- * the way in, and check:imap points these same options at a loopback test server.
+ * Throws when `ip` is anything the guard refuses, a name included, as
+ * openSmtpConnection does: imapflow would resolve a name itself and connect around
+ * the guard, and an internal address must never be dialed, whoever the caller is.
+ * So the protection doesn't rest on every caller asking resolveSmtpHost first
+ * (openImap does, with the host the person typed). check:imap builds these options
+ * for a public address and points the result at a loopback test server.
  */
 export function imapFlowOptions(settings: ImapSettings, ip: string, auth: ImapAuth): ImapFlowOptions {
-  if (isIP(ip) === 0) throw new Error("imapFlowOptions takes the address resolveSmtpHost approved");
+  if (isBlockedSmtpAddress(ip)) throw new Error("imapFlowOptions takes the address resolveSmtpHost approved");
   // A typed IP is its own name: SNI never carries an address, and the certificate is then checked against the IP.
   const servername = isIP(settings.host) === 0 ? settings.host : undefined;
   return {
