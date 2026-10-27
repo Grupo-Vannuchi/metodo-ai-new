@@ -35,6 +35,14 @@ banco nem rede. Rode sempre que mexer em `src/lib/email-broadcast/`.
 horário de Brasília, posição entre cards, nome de coluna, coluna da tarefa nova pela data, para onde vai
 o card ao concluir, reabrir ou arrastar para a coluna de concluídas). Rode sempre que mexer nesse arquivo.
 
+`npm run check:automation` cobre as regras puras da automação de WhatsApp. Em
+[src/lib/automation/types.ts](../../src/lib/automation/types.ts), confere a leitura e a validação da regra:
+início por palavra ou por qualquer mensagem, menu de opções e regras salvas antes do menu. Em
+[src/lib/automation/menu.ts](../../src/lib/automation/menu.ts), confere o texto do menu e qual opção cada
+resposta escolhe. Em [src/lib/automation/flow-core.ts](../../src/lib/automation/flow-core.ts), confere o
+caminho ativo, quando "qualquer mensagem" começa, e as notas e o título da oportunidade. Não usa banco nem
+rede. Rode sempre que mexer em `src/lib/automation/`.
+
 `npm run check:search` cobre o filtro da busca ao digitar
 ([src/lib/search-options.ts](../../src/lib/search-options.ts): sem acento e sem maiúscula, quem começa
 com o texto vem primeiro, limite da lista). Ele é usado pelo `SearchSelect`

@@ -22,6 +22,7 @@
     "check:node": "tsx scripts/check-node.ts",
     "check:email": "tsx scripts/check-email-broadcast.ts",
     "check:tasks": "tsx scripts/check-task-board.ts",
+    "check:automation": "tsx scripts/check-automation.ts",
     "check:search": "tsx scripts/check-search-options.ts",
     "check:groups": "tsx scripts/check-whatsapp-groups.ts",
     "check:mcp": "tsx scripts/check-mcp.ts",

@@ -1151,6 +1151,7 @@
       },
       "waMatchHint": "Qualquer número que mandar a palavra inicia o fluxo. Maiúsculas e acentos não fazem diferença. Depois que o fluxo abre, as respostas seguem sem a palavra; a conversa sai do fluxo após 24 h sem resposta.",
       "questionsCount": "{count, plural, one {# pergunta} other {# perguntas}}",
+      "optionsCount": "{count, plural, one {# opção} other {# opções}}",
       "welcomeMessage": "Mensagem de boas-vindas",
       "welcomeMessagePlaceholder": "Ex.: Olá! Que bom falar com você. Vou fazer algumas perguntas rápidas.",
       "questions": "Perguntas, nesta ordem",
@@ -1188,6 +1189,7 @@
       },
       "action": {
         "ask_questions": "Fazer perguntas",
+        "ask_menu": "Menu de opções",
         "create_opportunity": "Criar oportunidade",
         "create_task": "Criar tarefa",
         "notify_owner": "Notificar responsável",

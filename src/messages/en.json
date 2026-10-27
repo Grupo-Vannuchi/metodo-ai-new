@@ -1151,6 +1151,7 @@
       },
       "waMatchHint": "Any number that sends the keyword starts the flow. Case and accents don't matter. Once the flow opens, replies continue without the keyword; the conversation leaves the flow after 24 h without a reply.",
       "questionsCount": "{count, plural, one {# question} other {# questions}}",
+      "optionsCount": "{count, plural, one {# option} other {# options}}",
       "welcomeMessage": "Welcome message",
       "welcomeMessagePlaceholder": "e.g. Hi! Great to hear from you. I'll ask a few quick questions.",
       "questions": "Questions, in this order",
@@ -1188,6 +1189,7 @@
       },
       "action": {
         "ask_questions": "Ask questions",
+        "ask_menu": "Options menu",
         "create_opportunity": "Create opportunity",
         "create_task": "Create task",
         "notify_owner": "Notify owner",

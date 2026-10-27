@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import {
   Plus, Trash2, Pencil, Zap, X, CheckSquare, Bell, BellPlus, MessageCircle, Mail,
   ArrowRightLeft, UserCog, CalendarClock, Tag, Wallet, Webhook, ZoomIn, ZoomOut, Maximize2,
-  MessagesSquare, Briefcase,
+  MessagesSquare, Briefcase, ListOrdered,
 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
@@ -70,7 +70,7 @@ function normalizeLayout(actionCount: number, layout: Layout): Layout {
     actions: actions.map((p) => ({ x: p.x + dx, y: p.y + dy })),
   };
 }
-const emptyWa = (connectionId = ""): WhatsappTriggerConfig => ({ connectionId, keyword: "", match: "contains" });
+const emptyWa = (connectionId = ""): WhatsappTriggerConfig => ({ connectionId, start: "keyword", keyword: "", match: "contains" });
 const emptyDraft = (): Draft => ({
   id: null, name: "", trigger: "stage_entered", triggerStageId: "", minValue: "", maxValue: "", actions: [], layout: {},
   wa: emptyWa(),
@@ -79,6 +79,7 @@ const parseMoney = (s: string) => (s ? Number(s.replace(/[^\d.,]/g, "").replace(
 
 const ACTION_ICON: Record<ActionType, typeof CheckSquare> = {
   ask_questions: MessagesSquare,
+  ask_menu: ListOrdered,
   create_opportunity: Briefcase,
   create_task: CheckSquare,
   notify_owner: Bell,
@@ -96,6 +97,7 @@ const ACTION_ICON: Record<ActionType, typeof CheckSquare> = {
 function newAction(type: ActionType, firstTemplate?: string, firstStage?: string, firstMember?: string): RuleAction {
   switch (type) {
     case "ask_questions": return { type, questions: [{ label: "", field: "notes" }] };
+    case "ask_menu": return { type, question: "", options: [{ label: "", questions: [] }, { label: "", questions: [] }] };
     case "create_opportunity": return { type };
     case "create_task": return { type, title: "", priority: "MEDIUM" };
     case "notify_owner": return { type };
@@ -151,6 +153,7 @@ export function AutomationsClient({
   function actionSummary(a: RuleAction): string {
     switch (a.type) {
       case "ask_questions": return `${t("action.ask_questions")}: ${t("questionsCount", { count: a.questions.length })}`;
+      case "ask_menu": return `${t("action.ask_menu")}: ${t("optionsCount", { count: a.options.length })}`;
       case "create_opportunity": return t("action.create_opportunity");
       case "create_task": return t("action.create_task") + (a.title ? `: ${a.title}` : "");
       case "notify_owner": return t("action.notify_owner");
