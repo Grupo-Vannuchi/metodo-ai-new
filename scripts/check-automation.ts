@@ -6,6 +6,16 @@
 import assert from "node:assert/strict";
 import { parseActions, parseConfig, ruleProblem, type RuleAction, type RuleConfig } from "../src/lib/automation/types";
 import { formatMenu, invalidMenuReply, parseMenuChoice } from "../src/lib/automation/menu";
+import {
+  activePath,
+  canStartOnAnyMessage,
+  opportunityNotes,
+  opportunityTitle,
+  pickMenuChoice,
+  sessionFitsRule,
+  type AnyStartFacts,
+} from "../src/lib/automation/flow-core";
+import type { FlowStep } from "../src/lib/automation/types";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -143,6 +153,130 @@ check("parseMenuChoice: anything else is no choice", () => {
   for (const t of ["4", "0", "10", "1 e 2", "oi", "o de sábado", ""]) {
     assert.equal(parseMenuChoice(t, L), null, `"${t}" should not pick an option`);
   }
+});
+
+// ── Flow: active path, session fit, menu choice ────────────────────────────
+
+const ask: FlowStep = {
+  type: "ask_questions",
+  questions: [{ label: "Nome?", field: "name" }, { label: "Data?", field: "notes" }],
+  finalMessage: "Fim",
+};
+const menuStep: FlowStep = {
+  type: "ask_menu",
+  question: "Qual evento?",
+  options: [
+    { label: "Evento X", questions: [{ label: "Ingressos?", field: "notes" }], finalMessage: "FX" },
+    { label: "Evento Y", questions: [{ label: "Empresa?", field: "notes" }, { label: "Pessoas?", field: "notes" }], finalMessage: "FY" },
+    { label: "Atendente", questions: [] },
+  ],
+};
+
+check("activePath: fixed questions are the step's own", () => {
+  assert.deepEqual(activePath(ask, {}), { questions: ask.questions, finalMessage: "Fim" });
+});
+
+check("activePath: a menu waits for the choice, then follows the chosen option", () => {
+  assert.equal(activePath(menuStep, {}), null);
+  assert.deepEqual(activePath(menuStep, { menu: "1", menuLabel: "Evento Y" }), {
+    questions: menuStep.type === "ask_menu" ? menuStep.options[1].questions : [],
+    finalMessage: "FY",
+    choice: { index: 1, label: "Evento Y" },
+  });
+  assert.equal(activePath(menuStep, { menu: "7" }), null);
+  assert.equal(activePath(menuStep, { menu: "x" }), null);
+});
+
+check("sessionFitsRule: sessions that can go on", () => {
+  assert.equal(sessionFitsRule(ask, {}), true);
+  assert.equal(sessionFitsRule(ask, { "0": "Ana" }), true);
+  assert.equal(sessionFitsRule(menuStep, {}), true);
+  assert.equal(sessionFitsRule(menuStep, { menu: "1", menuLabel: "Evento Y", "0": "ACME" }), true);
+});
+
+check("sessionFitsRule: sessions the rule no longer fits", () => {
+  assert.equal(sessionFitsRule(ask, { menu: "0", menuLabel: "Evento X" }), false, "questions rule with a menu answer");
+  assert.equal(sessionFitsRule(ask, { "0": "Ana", "1": "sexta" }), false, "all questions answered");
+  assert.equal(sessionFitsRule(menuStep, { "0": "Ana" }), false, "rule switched from questions to a menu");
+  assert.equal(sessionFitsRule(menuStep, { menu: "1", menuLabel: "Evento X" }), false, "options reordered or renamed");
+  assert.equal(sessionFitsRule(menuStep, { menu: "5", menuLabel: "Evento Y" }), false, "index out of range");
+  assert.equal(sessionFitsRule(menuStep, { menu: "1", menuLabel: "Evento Y", "0": "ACME", "1": "12" }), false, "path done");
+});
+
+check("pickMenuChoice: the last line that picks an option wins", () => {
+  const L = ["Evento X", "Evento Y", "Evento Z"];
+  assert.equal(pickMenuChoice(["2", "obrigado"], L), 1);
+  assert.equal(pickMenuChoice(["oi", "3"], L), 2);
+  assert.equal(pickMenuChoice(["oi", "tudo bem"], L), null);
+});
+
+// ── Flow: when "any message" starts ─────────────────────────────────────────
+
+const ARRIVED = new Date("2026-10-27T12:00:00Z");
+const ago = (ms: number) => new Date(ARRIVED.getTime() - ms);
+const H = 60 * 60 * 1000;
+const D = 24 * H;
+const facts = (over: Partial<AnyStartFacts> = {}): AnyStartFacts => ({
+  arrivedAt: ARRIVED,
+  assigned: false,
+  lastActivityAt: null,
+  lastSession: null,
+  humanReplyAfterLastSession: false,
+  ...over,
+});
+
+check("canStartOnAnyMessage: a new conversation starts", () => {
+  assert.equal(canStartOnAnyMessage(facts()), true);
+});
+
+check("canStartOnAnyMessage: it takes 7 full days of quiet", () => {
+  assert.equal(canStartOnAnyMessage(facts({ lastActivityAt: ago(7 * D - H) })), false);
+  assert.equal(canStartOnAnyMessage(facts({ lastActivityAt: ago(7 * D) })), true);
+});
+
+check("canStartOnAnyMessage: an assigned conversation never starts", () => {
+  assert.equal(canStartOnAnyMessage(facts({ assigned: true })), false);
+  assert.equal(canStartOnAnyMessage(facts({ assigned: true, lastActivityAt: ago(30 * D) })), false);
+});
+
+check("canStartOnAnyMessage: a lead who abandoned the flow restarts unless a person replied since", () => {
+  for (const status of ["EXPIRED", "CANCELED"] as const) {
+    const lastSession = { status, createdAt: ago(26 * H) };
+    assert.equal(canStartOnAnyMessage(facts({ lastActivityAt: ago(H), lastSession })), true, status);
+    assert.equal(canStartOnAnyMessage(facts({ lastActivityAt: ago(H), lastSession, humanReplyAfterLastSession: true })), false, status);
+  }
+});
+
+check("canStartOnAnyMessage: a finished flow doesn't restart on the next message", () => {
+  for (const status of ["COMPLETED", "HANDOFF"] as const) {
+    assert.equal(canStartOnAnyMessage(facts({ lastActivityAt: ago(H), lastSession: { status, createdAt: ago(2 * H) } })), false, status);
+  }
+});
+
+// ── Flow: what the opportunity gets ─────────────────────────────────────────
+
+check("opportunityNotes: fixed questions read exactly as before", () => {
+  const path = activePath(ask, {})!;
+  assert.equal(
+    opportunityNotes("Eventos", path, { "0": "Ana" }),
+    'Nome?: Ana\nData?: —\nOrigem: WhatsApp (automação "Eventos")',
+  );
+});
+
+check("opportunityNotes: a menu path opens with the chosen option", () => {
+  const answers = { menu: "1", menuLabel: "Evento Y", "0": "ACME", "1": "12" };
+  assert.equal(
+    opportunityNotes("Eventos", activePath(menuStep, answers)!, answers),
+    'Opção escolhida: Evento Y\nEmpresa?: ACME\nPessoas?: 12\nOrigem: WhatsApp (automação "Eventos")',
+  );
+});
+
+check("opportunityTitle: rule · option · contact, or rule · contact as before", () => {
+  const plain = activePath(ask, {})!;
+  assert.equal(opportunityTitle("Eventos", plain, "Ana"), "Eventos · Ana");
+  assert.equal(opportunityTitle("Eventos", plain, null), "Eventos · ");
+  const chosen = activePath(menuStep, { menu: "1", menuLabel: "Evento Y" })!;
+  assert.equal(opportunityTitle("Eventos", chosen, "Ana"), "Eventos · Evento Y · Ana");
 });
 
 console.log(`\n✅ automation: ${passed} checks passed.`);
