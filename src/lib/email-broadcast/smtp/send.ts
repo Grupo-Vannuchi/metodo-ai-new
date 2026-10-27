@@ -44,19 +44,9 @@ function smtpFailure(
 
 /**
  * One e-mail through the account's own SMTP server (spec 2026-10-21, 5.2): the
- * MIME of the other channels, delivered as it is over a connection of its own,
- * with MAIL FROM = the account's address and RCPT TO = the recipient. The
- * server's name goes through the address guard first ("host_not_allowed" is
- * the "guard" phase, a name that doesn't resolve is a connection failure).
- * Then connect, log in and hand the e-mail over, one step straight after the
- * other. A failure is named by the step it came from (smtpSendPhase): before
- * the content leaves, or with the server answering no, the e-mail was not
- * accepted; a network failure or a timeout while handing it over may have come
- * after the final dot ("transfer": uncertain, never sent again). The whole
- * attempt has SMTP_SEND_BUDGET_MS: out of time, the connection is closed, and
- * that is a connection failure before the hand-over and "transfer" during it.
- * The connection is always closed. Whatever the server wrote back, a failure's
- * `message` has the account's password (and what the login sent of it) masked.
+ * MIME of the other channels, built here and handed over by sendSmtpMime. The
+ * envelope is MAIL FROM = the account's address and RCPT TO = the recipient. A
+ * MIME that can't be built is a failure before anything left ("prepare").
  * Never throws.
  */
 export async function sendSmtpMail(
@@ -78,7 +68,32 @@ export async function sendSmtpMail(
       stage: "prepare",
     };
   }
+  return sendSmtpMime(settings, { from: mail.from.address, to: [mail.to] }, mime, startedAt);
+}
 
+/**
+ * An e-mail that is already built (RFC 5322, as buildMime writes it) through the
+ * account's own SMTP server (spec 2026-10-21, 5.2), delivered as it is over a
+ * connection of its own, with the envelope given. The server's name goes through
+ * the address guard first ("host_not_allowed" is the "guard" phase, a name that
+ * doesn't resolve is a connection failure). Then connect, log in and hand the
+ * e-mail over, one step straight after the other. A failure is named by the step
+ * it came from (smtpSendPhase): before the content leaves, or with the server
+ * answering no, the e-mail was not accepted; a network failure or a timeout while
+ * handing it over may have come after the final dot ("transfer": uncertain, never
+ * sent again). The whole attempt has SMTP_SEND_BUDGET_MS from `startedAt` (the
+ * moment sendSmtpMail began building the MIME; now by default): out of time, the
+ * connection is closed, and that is a connection failure before the hand-over and
+ * "transfer" during it. The connection is always closed. Whatever the server wrote
+ * back, a failure's `message` has the account's password (and what the login sent
+ * of it) masked. Never throws.
+ */
+export async function sendSmtpMime(
+  settings: SmtpSettings,
+  envelope: { from: string; to: string[] },
+  mime: Buffer,
+  startedAt: number = Date.now(),
+): Promise<MailboxSendOutcome> {
   const target = await resolveSmtpHost(settings.host);
   if (!target.ok) {
     return target.error === "host_not_allowed"
@@ -107,7 +122,7 @@ export async function sendSmtpMail(
     step = "login";
     await smtpLogin(opened, settings.username, settings.password);
     step = "send";
-    await smtpSendRaw(opened, { from: mail.from.address, to: [mail.to] }, mime);
+    await smtpSendRaw(opened, envelope, mime);
     return { ok: true };
   } catch (e) {
     // Out of time, the step only failed because the budget closed the connection: the timeout is the real cause.

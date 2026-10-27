@@ -102,7 +102,15 @@ poucas, e o pedido que passa do teto de bytes também; linhas de e-mails que nin
 repetidas não viram e-mail em branco nem em dobro; a linha guarda só o que a lista pediu (um literal pendurado
 nela, de 16 MB na vida real, não fica na memória); e o e-mail com a estrutura mais funda do que o imapflow lê
 (ele larga o e-mail sem avisar) não some da lista, e a segunda consulta recusada só tira esse e-mail da
-página. A tarefa seguinte da caixa (resposta) acrescenta os checks dela no mesmo script. Precisa de **internet** (a API da Ethereal e o IMAP dela, porta 993), do
+página. Cobre também a resposta (`replyToImapMessage`, `smtp/send.ts`): `sendSmtpMail` continua entregando e
+`sendSmtpMime` recusa servidor interno e senha errada sem repetir a senha; responder ao M1 sai pelo SMTP da
+Ethereal na mesma conversa (`In-Reply-To`, `References`, `Re:`), grava a cópia na pasta `\Sent` e deixa só o M1
+`\Answered`; Reply-To, assunto numa linha só e cadeia de `References` cortada; remetente sem endereço simples
+(inclusive um que fecharia o `RCPT TO`) não recebe nada; e, contra o servidor de mentira
+(`scripts/shims/fake-imap.ts`, que agora também aceita `APPEND` e `LIST` com pastas), que o envio recusado é
+`temporary`, o que pode ter saído é `uncertain` (sem cópia, sem marca, sem segundo pedido) e que, depois de
+enviada, nada do IMAP (pasta sem marca, cópia recusada, conexão caída, UIDVALIDITY trocada, outra conta) a
+transforma em falha nem a envia duas vezes. Precisa de **internet** (a API da Ethereal e o IMAP dela, porta 993), do
 Postgres do Docker e de um `.env` válido, e **recusa rodar** se o `DATABASE_URL` não for local. Cada pedido à
 caixa é uma conexão nova (uma dúzia de idas e vindas): com a rede daqui o script leva uns 3 minutos (a
 Ethereal fica longe), e a linha de cada check lento mostra o tempo dele. Cria uma organização `IMAP-E2E-<carimbo>` (e outra, para
@@ -115,7 +123,7 @@ tempo esgotado), o que ele criou fica no banco e é preciso apagar a mão (`orga
 criação da conta na Ethereal de vez em quando: o script tenta 3 vezes antes de desistir; se o erro for de
 rede, rode de novo (os pedidos à caixa que devem ter resposta de verdade repetem até 2 vezes se vier
 `temporary`). Rode sempre que mexer em `src/lib/email-broadcast/imap/` ou em
-`src/lib/email-broadcast/smtp/credentials.ts`.
+`src/lib/email-broadcast/smtp/credentials.ts` ou `smtp/send.ts`.
 
 ## `check:isolation`
 

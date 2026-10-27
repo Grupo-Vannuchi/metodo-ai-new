@@ -29,6 +29,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { ImapFlow, type ImapFlowOptions } from "imapflow";
 import { createTestAccount, createTransport } from "nodemailer";
+import PostalMime, { type Email } from "postal-mime";
 import { env } from "@/lib/env";
 import { prisma as appPrisma } from "@/lib/prisma";
 import { closeImap, imapFailureOf, imapFlowOptions, openImap, verifyImapSettings } from "@/lib/email-broadcast/imap/connect";
@@ -40,12 +41,16 @@ import {
   imapUnreadCount,
   loadImapInboxView,
   openMessage,
+  replyToImapMessage,
 } from "@/lib/email-broadcast/imap/inbox";
 import { IMAP_MAX_MESSAGE_BYTES } from "@/lib/email-broadcast/imap/parse";
+import type { MailboxSendOutcome } from "@/lib/email-broadcast/mailbox/core";
 import { redactSmtpSecrets } from "@/lib/email-broadcast/smtp/redact";
+import { sendSmtpMail, sendSmtpMime } from "@/lib/email-broadcast/smtp/send";
 import type { SmtpSettings } from "@/lib/email-broadcast/smtp/core";
 import { openSmtpSettings, sealSmtpSettings } from "@/lib/email-broadcast/smtp/credentials";
 import { decryptCredentials, encryptCredentials } from "@/lib/integrations/crypto";
+import { listenFakeImap, listenFakeMailbox, listenScripted, newFakeRecord, type FakeMailboxOptions } from "./shims/fake-imap";
 
 type EtherealAccount = {
   user: string;
@@ -92,168 +97,6 @@ function etherealImap(ctx: ImapCtx): ImapSettings {
 
 function etherealAuth(ctx: ImapCtx): { user: string; pass: string } {
   return { user: ctx.ethereal.user, pass: ctx.ethereal.pass };
-}
-
-/**
- * A plain-text IMAP server on loopback: counts its connections and keeps every byte its clients send. With
- * `loginOk` it lets any login through (and answers what a client asks right after it), so a test can see what
- * a connection asks for once it is logged in; it answers NO to everything else, COMPRESS included.
- */
-type FakeImap = { port: number; connections: () => number; received: () => string; close: () => Promise<void> };
-
-async function listenFakeImap(capabilities: string, opts: { loginOk?: boolean } = {}): Promise<FakeImap> {
-  let connections = 0;
-  let received = "";
-  const sockets = new Set<net.Socket>();
-  const server = net.createServer((socket) => {
-    connections++;
-    sockets.add(socket);
-    socket.on("close", () => sockets.delete(socket));
-    socket.on("error", () => {});
-    let pending = "";
-    socket.write(`* OK [CAPABILITY ${capabilities}] fake IMAP ready\r\n`);
-    socket.on("data", (chunk) => {
-      const text = chunk.toString("latin1");
-      received += text;
-      pending += text;
-      for (let end = pending.indexOf("\r\n"); end >= 0; end = pending.indexOf("\r\n")) {
-        const [tag, command = ""] = pending.slice(0, end).split(" ");
-        pending = pending.slice(end + 2);
-        const word = command.toUpperCase();
-        if (word === "CAPABILITY") socket.write(`* CAPABILITY ${capabilities}\r\n${tag} OK done\r\n`);
-        else if (word === "ID") socket.write(`* ID NIL\r\n${tag} OK done\r\n`);
-        else if (opts.loginOk && (word === "AUTHENTICATE" || word === "LOGIN")) socket.write(`${tag} OK logged in\r\n`);
-        else if (opts.loginOk && word === "NAMESPACE") socket.write(`* NAMESPACE NIL NIL NIL\r\n${tag} OK done\r\n`);
-        else if (opts.loginOk && word === "ENABLE") socket.write(`* ENABLED\r\n${tag} OK done\r\n`);
-        else socket.write(`${tag} NO not here\r\n`);
-      }
-    });
-  });
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
-  });
-  return {
-    port: (server.address() as net.AddressInfo).port,
-    connections: () => connections,
-    received: () => received,
-    close: () =>
-      new Promise<void>((resolve) => {
-        for (const socket of sockets) socket.destroy();
-        server.close(() => resolve());
-      }),
-  };
-}
-
-/** A server on loopback that runs `script` on every connection: for a hostile server that follows no protocol. */
-async function listenScripted(script: (socket: net.Socket) => void): Promise<{ port: number; close: () => Promise<void> }> {
-  const sockets = new Set<net.Socket>();
-  const server = net.createServer((socket) => {
-    sockets.add(socket);
-    socket.on("close", () => sockets.delete(socket));
-    socket.on("error", () => {});
-    script(socket);
-  });
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
-  });
-  return {
-    port: (server.address() as net.AddressInfo).port,
-    close: () =>
-      new Promise<void>((resolve) => {
-        for (const socket of sockets) socket.destroy();
-        server.close(() => resolve());
-      }),
-  };
-}
-
-/** A command the fake mailbox received, and what it needs to answer it. */
-type FakeCommand = {
-  /** Upper case, "UID" folded into the verb: "STATUS", "UID SEARCH", "FETCH", "UID FETCH", "UID STORE"... */
-  name: string;
-  line: string;
-  tag: string;
-  /** The message set the command names, for the ones that take one (FETCH, UID FETCH...). */
-  set: string;
-  /** The FETCH rows (without the tagged OK) the fake would send for the e-mails a message set names, as this command asks. */
-  rows: (set: string) => string;
-};
-
-type FakeMailboxOptions = {
-  /** Levels of the second e-mail's body structure (the first one's is a text and a PDF). */
-  levels?: number;
-  /** Takes over a command: true when it did (answered it its own way, hung on it or dropped the connection). */
-  on?: (command: FakeCommand, socket: net.Socket) => boolean;
-};
-
-/**
- * A plain-text IMAP server with an Inbox of two e-mails (UIDs 1 and 2, UIDVALIDITY 1000), "m1" and "m2". It answers what
- * imapflow sends to log in, open the Inbox, count, search, fetch and mark, with what is asked for: the first e-mail has a
- * PDF attached, the second's body structure is `levels` deep, and the source of each is a few lines of text. A check
- * that needs a server misbehaving takes over the command it misbehaves on with `on`.
- */
-function listenFakeMailbox(options: FakeMailboxOptions = {}): Promise<{ port: number; close: () => Promise<void> }> {
-  const levels = options.levels ?? 2;
-  const caps = "IMAP4rev1 AUTH=PLAIN SASL-IR ID NAMESPACE ENABLE";
-  const leaf = '("TEXT" "PLAIN" ("CHARSET" "utf-8") NIL NIL "7BIT" 8 1)';
-  const pdf = '("APPLICATION" "PDF" ("NAME" "a.pdf") NIL NIL "BASE64" 100 NIL ("ATTACHMENT" ("FILENAME" "a.pdf")))';
-  const structure = (n: number) => (n === 1 ? `(${leaf} ${pdf} "MIXED")` : `${"(".repeat(levels)}${leaf}${' "MIXED")'.repeat(levels)}`);
-  const source = (n: number) => `From: Fulano <fulano@exemplo.com.br>\r\nSubject: m${n}\r\n\r\ncorpo da mensagem ${n}\r\n`;
-  const envelope = (n: number) =>
-    `("Mon, 26 Oct 2026 10:00:00 -0300" "m${n}" (("Fulano" NIL "fulano" "exemplo.com.br")) NIL NIL NIL NIL NIL NIL "<m${n}@exemplo.com.br>")`;
-  // The e-mails a message set names (1, 2, 1:*, 1,2), where "*" is the last one.
-  const named = (set: string) =>
-    [1, 2].filter((n) =>
-      set.split(",").some((part) => {
-        const [from, to = from] = part.split(":").map((end) => (end === "*" ? 2 : Number(end)));
-        return n >= Math.min(from, to) && n <= Math.max(from, to);
-      }),
-    );
-  const fetchRow = (n: number, asked: string) => {
-    const items = [`UID ${n}`];
-    if (/FLAGS/i.test(asked)) items.push("FLAGS ()");
-    if (/INTERNALDATE/i.test(asked)) items.push('INTERNALDATE "26-Oct-2026 10:00:00 -0300"');
-    if (/RFC822\.SIZE/i.test(asked)) items.push(`RFC822.SIZE ${source(n).length}`);
-    if (/ENVELOPE/i.test(asked)) items.push(`ENVELOPE ${envelope(n)}`);
-    if (/BODYSTRUCTURE/i.test(asked)) items.push(`BODYSTRUCTURE ${structure(n)}`);
-    const body = /BODY(\.PEEK)?\[\]/i.test(asked) ? ` BODY[] {${source(n).length}}\r\n${source(n)}` : "";
-    return `* ${n} FETCH (${items.join(" ")}${body})\r\n`;
-  };
-  return listenScripted((socket) => {
-    let pending = "";
-    socket.write(`* OK [CAPABILITY ${caps}] fake IMAP ready\r\n`);
-    socket.on("data", (chunk) => {
-      pending += chunk.toString("latin1");
-      for (let end = pending.indexOf("\r\n"); end >= 0; end = pending.indexOf("\r\n")) {
-        const line = pending.slice(0, end);
-        pending = pending.slice(end + 2);
-        const [tag, command = "", second = "", third = ""] = line.split(" ");
-        const word = command.toUpperCase();
-        const name = word === "UID" ? `UID ${second.toUpperCase()}` : word;
-        const set = word === "UID" ? third : second;
-        const rows = (wanted: string) => named(wanted).map((n) => fetchRow(n, line)).join("");
-        if (options.on?.({ name, line, tag, set, rows }, socket)) continue;
-        if (name === "CAPABILITY") socket.write(`* CAPABILITY ${caps}\r\n${tag} OK done\r\n`);
-        else if (name === "ID") socket.write(`* ID NIL\r\n${tag} OK done\r\n`);
-        else if (name === "AUTHENTICATE" || name === "LOGIN") socket.write(`${tag} OK logged in\r\n`);
-        else if (name === "NAMESPACE") socket.write(`* NAMESPACE NIL NIL NIL\r\n${tag} OK done\r\n`);
-        else if (name === "ENABLE") socket.write(`* ENABLED\r\n${tag} OK done\r\n`);
-        else if (name === "LIST") socket.write(`* LIST (\\HasNoChildren) "." "INBOX"\r\n${tag} OK done\r\n`);
-        else if (name === "SELECT") {
-          socket.write(
-            `* FLAGS (\\Seen \\Answered)\r\n* 2 EXISTS\r\n* 0 RECENT\r\n* OK [UIDVALIDITY 1000] ok\r\n* OK [UIDNEXT 3] ok\r\n${tag} OK [READ-WRITE] SELECT completed\r\n`,
-          );
-        } else if (name === "STATUS") socket.write(`* STATUS INBOX (UNSEEN 2)\r\n${tag} OK done\r\n`);
-        else if (name === "UID SEARCH") socket.write(`* SEARCH 1 2\r\n${tag} OK done\r\n`);
-        else if (name === "FETCH" || name === "UID FETCH") socket.write(`${rows(set)}${tag} OK done\r\n`);
-        else if (name === "UID STORE") socket.write(`* 1 FETCH (UID 1 FLAGS (\\Seen))\r\n${tag} OK done\r\n`);
-        else if (name === "NOOP") socket.write(`${tag} OK done\r\n`);
-        else if (name === "LOGOUT") socket.write(`* BYE bye\r\n${tag} OK done\r\n`);
-        else socket.write(`${tag} NO not here\r\n`);
-      }
-    });
-  });
 }
 
 /** Connects with these options: the error it failed with, or null when it connected. The client is closed either way. */
@@ -1535,6 +1378,556 @@ check("a login the server refuses only for now is temporary and leaves the accou
   } finally {
     await updateAccount(ctx, { status: "ACTIVE", lastError: null });
   }
+});
+
+// ── Resposta: answering an e-mail of the Inbox (imap/inbox.ts) ───────────────
+//
+// The reply leaves by the account's own SMTP server, a copy goes to its Sent folder and the e-mail answered is marked
+// \Answered. Ethereal files whatever goes out through its SMTP in the sender's own Inbox (outside recipients included: it
+// delivers nothing) and keeps no copy in Sent by itself, so what the Sent folder gains is the code's own APPEND. These
+// checks come last: the replies land in the Inbox and would spoil the counts of the ones above. The ones that run the code
+// against a fake mailbox hand the e-mail to a stub instead of Ethereal's SMTP (imapRequest.send), to make that step fail the
+// ways a server does and to see exactly what it is given.
+
+const REPLY_TEXT = "Olá!\nObrigado pelo contato <b>não</b> & até breve.";
+
+/** What the code under test hands to the SMTP server: the account's settings, the envelope and the e-mail itself. */
+type HandedOver = { settings: SmtpSettings; envelope: { from: string; to: string[] }; mime: Buffer };
+
+const HAND_OVER_OK: MailboxSendOutcome = { ok: true };
+const handOverFailed = (status: number, stage: "prepare" | "send", message: string): MailboxSendOutcome => ({
+  ok: false,
+  status,
+  code: null,
+  message,
+  retryAfter: null,
+  stage,
+});
+
+/** Runs `fn` with the hand-over to the SMTP server replaced by `answer`, and the list of what it was given. The real one is back at the end. */
+async function withHandOver<T>(
+  answer: (handed: HandedOver) => Promise<MailboxSendOutcome> | MailboxSendOutcome,
+  fn: (handedOver: HandedOver[]) => Promise<T>,
+): Promise<T> {
+  const handedOver: HandedOver[] = [];
+  const real = imapRequest.send;
+  imapRequest.send = async (settings, envelope, mime) => {
+    const handed = { settings, envelope, mime };
+    handedOver.push(handed);
+    return answer(handed);
+  };
+  try {
+    return await fn(handedOver);
+  } finally {
+    imapRequest.send = real;
+  }
+}
+
+/**
+ * A reply to the fake mailbox's first e-mail (m1, from Fulano) by the test organization's account, with the hand-over stubbed:
+ * what it answered, what was handed over, what the fake mailbox was asked, and what the code logged (collected, not printed).
+ */
+async function replyAgainstFake(
+  ctx: ImapCtx,
+  options: FakeMailboxOptions,
+  answer: (handed: HandedOver) => Promise<MailboxSendOutcome> | MailboxSendOutcome = () => HAND_OVER_OK,
+  messageId = "1000.1",
+) {
+  const record = newFakeRecord();
+  const handedOver: HandedOver[] = [];
+  let result!: Awaited<ReturnType<typeof replyToImapMessage>>;
+  const logged = await errorsLoggedBy(async () => {
+    result = await againstFake({ ...options, record }, () => replyToImapMessage(ctx.orgId, messageId, REPLY_TEXT), {
+      send: async (settings, envelope, mime) => {
+        const handed = { settings, envelope, mime };
+        handedOver.push(handed);
+        return answer(handed);
+      },
+    });
+  });
+  return { result, handedOver, record, logged };
+}
+
+/** `fn` on a connection to the Ethereal mailbox itself, no folder open. */
+async function withEtherealClient<T>(ctx: ImapCtx, fn: (client: ImapFlow) => Promise<T>): Promise<T> {
+  const opened = await openImap(etherealImap(ctx), etherealAuth(ctx));
+  if (!opened.ok) throw new Error(`could not open the Ethereal mailbox (${opened.error})`);
+  try {
+    return await fn(opened.client);
+  } finally {
+    await closeImap(opened.client);
+  }
+}
+
+/** What the Ethereal mailbox holds, asked of the server itself. */
+type MailboxState = { sent: string; inbox: number; sentCount: number; answered: number[] };
+
+async function readState(client: ImapFlow): Promise<MailboxState> {
+  const sent = (await client.list()).find((folder) => folder.specialUse === "\\Sent")?.path;
+  assert.ok(sent, "Ethereal marks one folder \\Sent");
+  const inbox = await client.status("INBOX", { messages: true });
+  const sentStatus = await client.status(sent, { messages: true });
+  assert.ok(inbox && sentStatus, "the server answered the counts");
+  const lock = await client.getMailboxLock("INBOX");
+  try {
+    const rows = await client.fetchAll("1:*", { uid: true, flags: true });
+    const answered = rows.filter((row) => row.flags?.has("\\Answered")).map((row) => row.uid);
+    return { sent, inbox: inbox.messages ?? 0, sentCount: sentStatus.messages ?? 0, answered };
+  } finally {
+    lock.release();
+  }
+}
+
+type Arrived = {
+  state: MailboxState;
+  /** The e-mails of the Inbox that answer `inReplyTo`, parsed. */
+  replies: Email[];
+  /** The newest e-mail of the Sent folder. */
+  newestSent: { seen: boolean; bytes: Buffer; email: Email } | null;
+};
+
+/** Waits (up to 30 s) until the Ethereal Inbox holds `inboxCount` e-mails, then reads what a reply left: the answers to `inReplyTo` and the newest e-mail of Sent. */
+async function etherealAfterReply(ctx: ImapCtx, inboxCount: number, inReplyTo: string): Promise<Arrived> {
+  return withEtherealClient(ctx, async (client) => {
+    for (let attempt = 0; ; attempt++) {
+      const status = await client.status("INBOX", { messages: true });
+      if (status && (status.messages ?? 0) >= inboxCount) break;
+      if (attempt === 30) throw new Error(`${inboxCount} e-mail(s) did not reach the Ethereal inbox in 30 s`);
+      await sleep(1_000);
+    }
+    const state = await readState(client);
+    const replies: Email[] = [];
+    const inbox = await client.getMailboxLock("INBOX");
+    try {
+      for (const uid of (await client.search({ header: { "in-reply-to": inReplyTo } }, { uid: true })) || []) {
+        const row = await client.fetchOne(String(uid), { uid: true, source: true }, { uid: true });
+        if (row && row.source) replies.push(await PostalMime.parse(row.source));
+      }
+    } finally {
+      inbox.release();
+    }
+    let newestSent: Arrived["newestSent"] = null;
+    if (state.sentCount > 0) {
+      const sent = await client.getMailboxLock(state.sent);
+      try {
+        const row = await client.fetchOne("*", { uid: true, flags: true, source: true });
+        if (row && row.source) {
+          newestSent = { seen: row.flags?.has("\\Seen") ?? false, bytes: row.source, email: await PostalMime.parse(row.source) };
+        }
+      } finally {
+        sent.release();
+      }
+    }
+    return { state, replies, newestSent };
+  });
+}
+
+/** A header value on one line: PostalMime hands a folded one back as the server folded it. */
+const oneLine = (value: string | undefined): string => (value ?? "").replace(/\s+/g, " ").trim();
+
+/** The test organization's SMTP account row. */
+async function smtpAccountRow(ctx: ImapCtx) {
+  const row = await ctx.prisma.emailSenderAccount.findFirst({ where: { organizationId: ctx.orgId, provider: "SMTP" } });
+  assert.ok(row, "the test organization has its SMTP account");
+  return row;
+}
+
+check("sendSmtpMail still delivers through the account's SMTP server; sendSmtpMime refuses an internal server and a wrong password without echoing it", async (ctx) => {
+  const settings: SmtpSettings = {
+    host: ctx.ethereal.smtp.host,
+    port: 587,
+    security: "starttls",
+    username: ctx.ethereal.user,
+    password: ctx.ethereal.pass,
+  };
+  const delivered = await sendSmtpMail(
+    settings,
+    {
+      from: { name: "IMAP E2E", address: ctx.ethereal.user },
+      to: ctx.ethereal.user,
+      replyTo: null,
+      subject: `Envio de regressao ${ctx.stamp}`,
+      html: "<p>oi</p>",
+      text: "oi",
+      headers: {},
+    },
+    [],
+  );
+  assert.deepEqual(delivered, { ok: true });
+  // The address guard answers before any connection, in the shape of every other refusal of the send path.
+  const envelope = { from: ctx.ethereal.user, to: [ctx.ethereal.user] };
+  assert.deepEqual(await sendSmtpMime({ ...settings, host: "127.0.0.1" }, envelope, Buffer.from("x")), {
+    ok: false,
+    status: 0,
+    code: "guard",
+    message: "127.0.0.1: internal or reserved address",
+    retryAfter: null,
+    stage: "prepare",
+  });
+  const wrong = `senha-errada-${ctx.stamp}`;
+  const refused = await sendSmtpMime({ ...settings, password: wrong }, envelope, Buffer.from("x"));
+  assert.equal(refused.ok, false);
+  if (refused.ok) return;
+  assert.equal(refused.stage, "prepare", "a refused login left nothing");
+  assert.match(refused.code ?? "", /^auth/);
+  assertNoSecret(refused.message, wrong, ctx.ethereal.pass);
+});
+
+const replyBox = { account: "" };
+
+check("replying to M1 sends the answer by the account's SMTP in the same conversation, keeps a copy in Sent and marks M1 answered", async (ctx) => {
+  replyBox.account = (await smtpAccountRow(ctx)).id;
+  const before = await withEtherealClient(ctx, readState);
+  assert.deepEqual(before.answered, [], "nothing is answered yet");
+  assert.equal(before.sentCount, 0, "Ethereal keeps no copy in Sent by itself");
+
+  const res = await untilAnswered(() => replyToImapMessage(ctx.orgId, box.m1, REPLY_TEXT));
+  assert.ok(res.ok, `the reply: ${reason(res)}`);
+  assert.deepEqual(res.data, { accountId: replyBox.account, to: "cliente@exemplo.com.br", uncertain: false, savedToSent: true });
+
+  // The answer comes back to the Inbox (Ethereal files what leaves it there), threaded under M1: its own copies in the Inbox have its
+  // Message-ID too, but no In-Reply-To.
+  const after = await etherealAfterReply(ctx, before.inbox + 1, "<m1@exemplo.com.br>");
+  assert.equal(after.replies.length, 1, "exactly one answer was sent");
+  const [mail] = after.replies;
+  assert.equal(mail.subject, "Re: Promoção de outubro");
+  assert.equal(mail.inReplyTo, "<m1@exemplo.com.br>");
+  assert.equal(oneLine(mail.references), "<m1@exemplo.com.br>");
+  assert.deepEqual(
+    mail.to?.map((a) => a.address),
+    ["cliente@exemplo.com.br"],
+  );
+  assert.equal(mail.from?.address, ctx.ethereal.user.toLowerCase());
+  assert.equal(mail.from?.name, "IMAP E2E");
+  assert.equal(mail.text?.replace(/\r\n/g, "\n").trim(), REPLY_TEXT);
+  assert.ok(mail.html?.includes("Olá!<br>Obrigado pelo contato &lt;b&gt;não&lt;/b&gt; &amp; até breve."), mail.html);
+
+  // The copy in Sent is that same e-mail, read (the person wrote it); and M1 is the only e-mail of the Inbox marked answered.
+  assert.equal(after.state.sentCount, 1, "the Sent folder gained the copy");
+  assert.ok(after.newestSent, "the copy is there");
+  assert.equal(after.newestSent.seen, true);
+  assert.equal(after.newestSent.email.messageId, mail.messageId);
+  assert.equal(after.newestSent.email.subject, "Re: Promoção de outubro");
+  assert.deepEqual(after.state.answered, [uidOf(box.m1)]);
+});
+
+/** The e-mails a sender can make hard to answer; appended to the Inbox as a sender's server would have delivered them. */
+const REPLY_FIXTURES = {
+  // Two Reply-To addresses, a subject padded with blanks, a comment after the Message-ID and a folded References.
+  reply: [
+    "From: Cliente <cliente@exemplo.com.br>",
+    "Reply-To: Atendimento <atendimento@exemplo.com.br>, outro@exemplo.com.br",
+    "To: caixa@exemplo.com.br",
+    "Subject: Assunto    com   muitos     espacos",
+    "Message-ID: <f1@exemplo.com.br> (comentario)",
+    "References: <raiz@exemplo.com.br>",
+    " <f0@exemplo.com.br>",
+    "MIME-Version: 1.0",
+    "Content-Type: text/plain; charset=utf-8",
+    "",
+    "corpo",
+    "",
+  ].join("\r\n"),
+  // A subject that decodes to a line break and a header of its own.
+  lineBreak: [
+    "From: Cliente <cliente@exemplo.com.br>",
+    "To: caixa@exemplo.com.br",
+    "Subject: =?UTF-8?Q?a=0D=0AX-Evil:_1?=",
+    "Message-ID: <f4@exemplo.com.br>",
+    "",
+    "corpo",
+    "",
+  ].join("\r\n"),
+  // A From whose address would end the RCPT TO line and start another command.
+  hostile: [
+    'From: <"a> RCPT TO:<z"@exemplo.com.br>',
+    "To: caixa@exemplo.com.br",
+    "Subject: x",
+    "Message-ID: <f3@exemplo.com.br>",
+    "",
+    "corpo",
+    "",
+  ].join("\r\n"),
+  // No From and no Reply-To at all.
+  nobody: ["To: caixa@exemplo.com.br", "Subject: sem remetente", "", "corpo", ""].join("\r\n"),
+};
+
+check("a reply goes to the Reply-To, with the subject on one line and the original's chain; an e-mail with no plain address to answer gets none", async (ctx) => {
+  const refs = await withEtherealInbox(ctx, async (client) => {
+    const out = {} as Record<keyof typeof REPLY_FIXTURES, string>;
+    for (const key of Object.keys(REPLY_FIXTURES) as (keyof typeof REPLY_FIXTURES)[]) {
+      const appended = await client.append("INBOX", Buffer.from(REPLY_FIXTURES[key]));
+      assert.ok(appended && appended.uid !== undefined && appended.uidValidity !== undefined, `Ethereal took the ${key} e-mail`);
+      out[key] = imapMessageRef(Number(appended.uidValidity), appended.uid);
+    }
+    return out;
+  });
+  const account = await smtpAccountRow(ctx);
+
+  // Read-only for the two with nothing to answer, and writing for the two with something: all four at once.
+  const { answers, handedOver } = await withHandOver(
+    () => HAND_OVER_OK,
+    async (handed) => {
+      const answers = await Promise.all(
+        (["reply", "lineBreak", "hostile", "nobody"] as const).map((key) => untilAnswered(() => replyToImapMessage(ctx.orgId, refs[key], REPLY_TEXT))),
+      );
+      return { answers, handedOver: [...handed] };
+    },
+  );
+  const [reply, lineBreak, hostile, nobody] = answers;
+  assert.deepEqual(
+    [reason(hostile), reason(nobody)],
+    ["not_found", "not_found"],
+    "an address that is no plain mailbox, and no address at all, leave nothing to answer",
+  );
+  assert.ok(reply.ok && lineBreak.ok, `the replies: ${reason(reply)} / ${reason(lineBreak)}`);
+  assert.deepEqual(reply.data, { accountId: account.id, to: "atendimento@exemplo.com.br", uncertain: false, savedToSent: true });
+  assert.equal(lineBreak.data.to, "cliente@exemplo.com.br");
+  assert.equal(handedOver.length, 2, "only the two with someone to answer were handed over");
+
+  const handedFor = (to: string) => {
+    const handed = handedOver.find((h) => h.envelope.to.join() === to);
+    assert.ok(handed, `something was handed over for ${to}`);
+    return handed;
+  };
+  const toReply = handedFor("atendimento@exemplo.com.br");
+  assert.equal(toReply.envelope.from, account.email);
+  const mail = await PostalMime.parse(toReply.mime);
+  assert.equal(mail.subject, "Re: Assunto com muitos espacos", "the blanks collapse");
+  assert.equal(mail.inReplyTo, "<f1@exemplo.com.br>", "without the comment the envelope keeps after the id");
+  assert.equal(oneLine(mail.references), "<raiz@exemplo.com.br> <f0@exemplo.com.br> <f1@exemplo.com.br>");
+  assert.deepEqual(
+    mail.to?.map((a) => a.address),
+    ["atendimento@exemplo.com.br"],
+    "to the first Reply-To address only",
+  );
+
+  const toLineBreak = handedFor("cliente@exemplo.com.br");
+  const flat = await PostalMime.parse(toLineBreak.mime);
+  assert.equal(flat.subject, "Re: a X-Evil: 1");
+  assert.ok(!flat.headers.some((h) => h.key === "x-evil"), "the subject started no header of its own");
+  assert.ok(!toLineBreak.mime.toString("latin1").includes("\r\nX-Evil"), "nor a line of the MIME");
+
+  // On the server: the two answered e-mails are marked (with M1 before them), the two with nobody to answer are not, and Sent holds the three copies.
+  const state = await withEtherealClient(ctx, readState);
+  assert.deepEqual(
+    state.answered,
+    [uidOf(box.m1), uidOf(refs.reply), uidOf(refs.lineBreak)].sort((a, b) => a - b),
+  );
+  assert.equal(state.sentCount, 3);
+});
+
+check("a hand-over the server refuses is temporary and one that may have gone out is uncertain: neither keeps a copy or marks anything, and no password reaches the log", async (ctx) => {
+  const secret = ctx.ethereal.pass;
+  const echo = `550 5.7.1 rejected for ${ctx.ethereal.user} with ${secret}`;
+  const temporary = "temporary" as const;
+  const uncertain = "uncertain" as const;
+  // [what happens at the SMTP server, what the reply comes to]
+  const cases: [string, () => Promise<MailboxSendOutcome>, typeof temporary | typeof uncertain][] = [
+    ["the server says no after the content", async () => handOverFailed(550, "send", echo), temporary],
+    ["the server hangs up with a 4xx", async () => handOverFailed(421, "send", echo), temporary],
+    ["it never connected or logged in", async () => handOverFailed(0, "prepare", echo), temporary],
+    ["the line drops while the e-mail is handed over", async () => handOverFailed(0, "send", echo), uncertain],
+    [
+      "something throws that should not",
+      async () => {
+        throw new Error(echo);
+      },
+      uncertain,
+    ],
+  ];
+  for (const [label, answer, comes] of cases) {
+    const { result, handedOver, record, logged } = await replyAgainstFake(ctx, {}, answer);
+    assert.equal(handedOver.length, 1, `${label}: handed over once`);
+    if (comes === temporary) {
+      assert.equal(reason(result), "temporary", label);
+    } else {
+      assert.ok(result.ok, `${label}: ${JSON.stringify(result)}`);
+      assert.equal(result.data.uncertain, true, label);
+      assert.equal(result.data.savedToSent, false, label);
+    }
+    assert.equal(record.connections, 1, `${label}: no second request`);
+    assert.equal(record.appended.length, 0, `${label}: no copy`);
+    assert.ok(!record.lines.some((line) => /\bSTORE\b/.test(line)), `${label}: nothing marked`);
+    assert.ok(logged.length > 0, `${label}: it is logged`);
+    assertNoSecret(logged, secret);
+  }
+});
+
+check("once the reply is sent nothing the mailbox does turns it into a failure: the copy and the mark are best effort, and it is sent once", async (ctx) => {
+  const account = await smtpAccountRow(ctx);
+  const answered = /\bUID STORE 1 \+FLAGS \(\\Answered\)$/;
+  const marksAnswered = (lines: string[]) => lines.some((line) => answered.test(line));
+
+  // The shape of KingHost's Dovecot: the Sent folder is INBOX.Sent and carries no mark. The copy is what was sent, byte for byte.
+  const dovecot = await replyAgainstFake(ctx, { folders: [{ path: "INBOX.Sent" }] });
+  assert.deepEqual(dovecot.result, {
+    ok: true,
+    data: { accountId: account.id, to: "fulano@exemplo.com.br", uncertain: false, savedToSent: true },
+  });
+  assert.equal(dovecot.handedOver.length, 1);
+  const [handed] = dovecot.handedOver;
+  assert.deepEqual(handed.envelope, { from: account.email, to: ["fulano@exemplo.com.br"] });
+  const mail = await PostalMime.parse(handed.mime);
+  assert.equal(mail.subject, "Re: m1");
+  assert.equal(mail.inReplyTo, "<m1@exemplo.com.br>");
+  assert.equal(oneLine(mail.references), "<raiz@exemplo.com.br> <meio@exemplo.com.br> <m1@exemplo.com.br>");
+  assert.equal(mail.from?.address, account.email);
+  assert.equal(dovecot.record.connections, 2, "one request to read, one to keep the copy and the mark");
+  assert.equal(dovecot.record.appended.length, 1);
+  const [copy] = dovecot.record.appended;
+  assert.deepEqual([copy.destination, copy.flags], ["INBOX.Sent", "\\Seen"]);
+  assert.ok(copy.bytes.equals(handed.mime), "the copy is the e-mail that was sent");
+  assert.ok(marksAnswered(dovecot.record.lines), dovecot.record.lines.join("\n"));
+  assert.equal(dovecot.logged, "", "a reply that went through logs nothing");
+
+  // [what the mailbox does, the folders it has, whether the copy is kept, how many copies it was given, whether the e-mail is marked]
+  const refusingCopy: FakeOn = ({ name, tag }, socket) =>
+    name === "APPEND" ? (socket.write(`${tag} NO [OVERQUOTA] The mailbox is full\r\n`), true) : false;
+  // (getMailboxLock asks for the INBOX alone; the folders are asked for with a *.)
+  const refusingFolderList: FakeOn = ({ name, tag, line }, socket) =>
+    name === "LIST" && line.endsWith('"*"') ? (socket.write(`${tag} BAD [CLIENTBUG] refused\r\n`), true) : false;
+  let selects = 0;
+  const renumberedAfterReading: FakeOn = ({ name, tag }, socket) => {
+    if (name !== "SELECT" || ++selects === 1) return false;
+    socket.write(`* FLAGS (\\Seen \\Answered)\r\n* 2 EXISTS\r\n* 0 RECENT\r\n* OK [UIDVALIDITY 2000] ok\r\n* OK [UIDNEXT 3] ok\r\n${tag} OK [READ-WRITE] SELECT completed\r\n`);
+    return true;
+  };
+  let logins = 0;
+  const downForTheSecondRequest: FakeOn = ({ name, tag }, socket) =>
+    (name === "AUTHENTICATE" || name === "LOGIN") && ++logins === 2 ? (socket.write(`${tag} NO [UNAVAILABLE] Try again later\r\n`), true) : false;
+  const sentFolder = [{ path: "INBOX.Sent" }];
+  type Want = { saved: boolean; copies: number; marked: boolean; to?: string };
+  const variants: [string, FakeMailboxOptions, Want][] = [
+    [
+      "a folder the server marks \\Sent wins over a name that fits",
+      { folders: [{ path: "Sent" }, { path: "Arquivo", flags: "\\Sent" }] },
+      { saved: true, copies: 1, marked: true, to: "Arquivo" },
+    ],
+    ["no Sent folder: no copy, the mark all the same", { folders: [{ path: "INBOX.Drafts", flags: "\\Drafts" }] }, { saved: false, copies: 0, marked: true }],
+    ["the server refuses the copy", { folders: sentFolder, on: refusingCopy }, { saved: false, copies: 0, marked: true }],
+    ["the server refuses to list its folders", { folders: sentFolder, on: refusingFolderList }, { saved: false, copies: 0, marked: true }],
+    ["the connection drops on the copy", { folders: sentFolder, on: dropOn("APPEND") }, { saved: false, copies: 0, marked: false }],
+    ["the connection drops after the copy, on the mark (asked for, never taken): the copy still counts", { folders: sentFolder, on: dropOn("UID STORE") }, { saved: true, copies: 1, marked: true }],
+    [
+      "the Inbox was renumbered since the e-mail was read: the copy is kept, the mark would land on another e-mail",
+      { folders: sentFolder, on: renumberedAfterReading },
+      { saved: true, copies: 1, marked: false },
+    ],
+    ["the server can't be logged in to for the second request", { folders: sentFolder, on: downForTheSecondRequest }, { saved: false, copies: 0, marked: false }],
+  ];
+  for (const [label, options, want] of variants) {
+    selects = 0;
+    logins = 0;
+    const run = await replyAgainstFake(ctx, options);
+    assert.ok(run.result.ok, `${label}: ${JSON.stringify(run.result)}`);
+    assert.deepEqual([run.result.data.uncertain, run.result.data.savedToSent], [false, want.saved], label);
+    assert.equal(run.handedOver.length, 1, `${label}: sent exactly once`);
+    assert.equal(run.record.appended.length, want.copies, `${label}: copies`);
+    if (want.to) assert.equal(run.record.appended[0]?.destination, want.to, label);
+    assert.equal(marksAnswered(run.record.lines), want.marked, `${label}: the mark`);
+  }
+  // A login the server refuses for good in that second request pauses the account, as anywhere (the credentials changed), and the reply is still ok.
+  try {
+    let revokedLogins = 0;
+    const revoked: FakeOn = ({ name, tag }, socket) =>
+      (name === "AUTHENTICATE" || name === "LOGIN") && ++revokedLogins === 2
+        ? (socket.write(`${tag} NO [AUTHENTICATIONFAILED] Invalid credentials\r\n`), true)
+        : false;
+    const run = await replyAgainstFake(ctx, { folders: sentFolder, on: revoked });
+    assert.ok(run.result.ok && run.result.data.savedToSent === false && run.handedOver.length === 1, JSON.stringify(run.result));
+    assert.equal((await accountRow(ctx))?.status, "NEEDS_RECONNECT");
+  } finally {
+    await updateAccount(ctx, { status: "ACTIVE", lastError: null });
+  }
+});
+
+check("the copy belongs to the mailbox the reply left from: another address connected meanwhile gets no copy and no mark", async (ctx) => {
+  const original = await smtpAccountRow(ctx);
+  const { id: replacedId, ...data } = original;
+  void replacedId;
+  let created: string | null = null;
+  try {
+    const run = await replyAgainstFake(ctx, { folders: [{ path: "INBOX.Sent" }] }, async () => {
+      // While the e-mail is on its way the company connects another SMTP address: the old row goes, a new one (another id) comes.
+      await ctx.prisma.emailSenderAccount.deleteMany({ where: { id: original.id } });
+      created = (await ctx.prisma.emailSenderAccount.create({ data: { ...data, email: `outro-${ctx.stamp}@exemplo.com.br` } })).id;
+      return HAND_OVER_OK;
+    });
+    assert.ok(run.result.ok, JSON.stringify(run.result));
+    assert.deepEqual(
+      [run.result.data.accountId, run.result.data.savedToSent],
+      [original.id, false],
+    );
+    assert.equal(run.handedOver.length, 1);
+    assert.equal(run.record.appended.length, 0, "no copy in the other address's mailbox");
+    assert.ok(!run.record.lines.some((line) => /\bSTORE\b/.test(line)), "no mark");
+  } finally {
+    if (created) await ctx.prisma.emailSenderAccount.deleteMany({ where: { id: created } });
+    if (!(await ctx.prisma.emailSenderAccount.findFirst({ where: { id: original.id } }))) {
+      await ctx.prisma.emailSenderAccount.create({ data: { ...data, id: original.id } });
+    }
+  }
+});
+
+check("nothing is sent for another company, an account that can't be used or an id that names no e-mail", async (ctx) => {
+  const other = await ctx.prisma.organization.create({
+    data: { name: `IMAP-E2E-${ctx.stamp}-C`, slug: `imap-e2e-${ctx.stamp}-c` },
+  });
+  cleanups.push(async (c) => {
+    await c.prisma.emailSenderAccount.deleteMany({ where: { organizationId: other.id } });
+    await c.prisma.organization.deleteMany({ where: { id: other.id } });
+  });
+  await withHandOver(
+    () => HAND_OVER_OK,
+    async (handedOver) => {
+      // Another company has no account of its own to answer from.
+      assert.equal(reason(await replyToImapMessage(other.id, box.m1, REPLY_TEXT)), "no_account");
+      // The account is not in a state to read an inbox.
+      const accounts: [string, { credentials?: string; status?: "ACTIVE" | "NEEDS_RECONNECT" }, string][] = [
+        ["no IMAP half", { credentials: etherealCredentials(ctx, null) }, "no_account"],
+        ["NEEDS_RECONNECT", { credentials: etherealCredentials(ctx, etherealImap(ctx)), status: "NEEDS_RECONNECT" }, "reconnect"],
+        ["credentials that don't open", { credentials: "not-a-sealed-text", status: "ACTIVE" }, "reconnect"],
+      ];
+      try {
+        for (const [label, data, expected] of accounts) {
+          await updateAccount(ctx, data);
+          assert.equal(reason(await replyToImapMessage(ctx.orgId, box.m1, REPLY_TEXT)), expected, label);
+        }
+      } finally {
+        await updateAccount(ctx, { credentials: etherealCredentials(ctx, etherealImap(ctx)), status: "ACTIVE" });
+      }
+      // Ids the URL could have been tampered into are refused before any connection.
+      for (const id of ["", "abc", "1.0", "1000.0", "01000.1", "1000.1 ", "1000.1.1", "4294967296.1", "-1.1"]) {
+        assert.equal(reason(await replyToImapMessage(ctx.orgId, id, REPLY_TEXT)), "not_found", JSON.stringify(id));
+      }
+      assert.equal(handedOver.length, 0, "nothing was handed over");
+    },
+  );
+  // An id from another numbering of the mailbox, or an e-mail that is not there: the request reads, finds nothing to answer, sends and marks nothing.
+  for (const [label, id] of [["another numbering", "999.1"], ["an e-mail that isn't there", "1000.9"]]) {
+    const run = await replyAgainstFake(ctx, { folders: [{ path: "INBOX.Sent" }] }, undefined, id);
+    assert.equal(reason(run.result), "not_found", label);
+    assert.equal(run.handedOver.length, 0, label);
+    assert.equal(run.record.connections, 1, label);
+    assert.equal(run.record.appended.length, 0, label);
+  }
+});
+
+check("a sender's giant References chain is cut: the reply repeats the newest ids of what was read, and the e-mail it answers last", async (ctx) => {
+  // 4 MB of ids (the server can send up to 16 MiB in one piece); only the first 64 KiB are read, and the reply carries at most 25 of them.
+  const ids = Array.from({ length: 200_000 }, (_, i) => `<r${i}@exemplo.com.br>`);
+  const headerBlock = () => `Message-ID: <m1@exemplo.com.br>\r\nReferences: ${ids.join(" ")}\r\n\r\n`;
+  const startedAt = Date.now();
+  const run = await replyAgainstFake(ctx, { folders: [{ path: "INBOX.Sent" }], headerBlock });
+  assert.ok(run.result.ok, JSON.stringify(run.result));
+  assert.ok(Date.now() - startedAt < 10_000, `${Date.now() - startedAt} ms`);
+  const mail = await PostalMime.parse(run.handedOver[0].mime);
+  const chain = oneLine(mail.references).split(" ");
+  assert.equal(chain.length, 25);
+  assert.equal(chain[24], "<m1@exemplo.com.br>");
+  assert.equal(mail.inReplyTo, "<m1@exemplo.com.br>");
+  assert.ok(run.handedOver[0].mime.length < 4_096, `${run.handedOver[0].mime.length} bytes`);
 });
 
 // ── Run ──────────────────────────────────────────────────────────────────────

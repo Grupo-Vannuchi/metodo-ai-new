@@ -172,6 +172,103 @@ export function replyOutcome(o: MailboxSendOutcome): "sent" | "uncertain" | "fai
   return o.stage === "send" && o.status === 0 ? "uncertain" : "failed";
 }
 
+/** The longest subject a reply carries: one line of a header, where the sender's own may be megabytes. */
+export const REPLY_SUBJECT_MAX_CHARS = 250;
+/**
+ * The most ids of the chain a reply repeats in References, the newest ones (the last is the e-mail answered). A longer
+ * header can get the reply refused (Postfix stops at 100 KB of headers), and the receiver has the older e-mails already.
+ */
+export const REPLY_REFERENCES_MAX = 25;
+/** How much of the header block fetched from the server is read: a real References chain is a few KB, the sender's can be megabytes. */
+export const THREAD_HEADERS_MAX_CHARS = 64 * 1024;
+
+/** An id as a header writes it: `<`, printable ASCII but angle brackets and spaces, `>`. Nothing that could end a header line. */
+const ID_TOKEN_RE = /<[\x21-\x3b\x3d\x3f-\x7e]{1,998}>/g;
+
+/**
+ * The Message-ID and the References chain out of the header block the server hands over for
+ * `BODY[HEADER.FIELDS (MESSAGE-ID REFERENCES)]`: lines folded back into one, names in any case, and only the `<id>`
+ * tokens of each value (a comment after an id, a stray word, anything that isn't an id is left out). The first
+ * Message-ID wins and every References line adds to the chain, in order. Reads at most THREAD_HEADERS_MAX_CHARS.
+ */
+export function threadIdsFromHeaders(block: string): { messageId: string | null; references: string[] } {
+  const lines = block.slice(0, THREAD_HEADERS_MAX_CHARS).replace(/\r?\n[ \t]+/g, " ").split(/\r?\n/);
+  let messageId: string | null = null;
+  const references: string[] = [];
+  for (const line of lines) {
+    const colon = line.indexOf(":");
+    if (colon < 1) continue;
+    const name = line.slice(0, colon).trim().toLowerCase();
+    if (name !== "message-id" && name !== "references") continue;
+    const ids = line.slice(colon + 1).match(ID_TOKEN_RE) ?? [];
+    if (name === "message-id") {
+      messageId ??= ids[0] ?? null;
+    } else {
+      for (const id of ids) references.push(id);
+    }
+  }
+  return { messageId, references };
+}
+
+/**
+ * A plain mailbox: letters, digits and . _ + ' = - before the @ (no dot first, last or doubled), a dotted domain
+ * after it (letters, digits and hyphens, a name in letters at the end, so an IP is not one). No quotes, brackets, spaces,
+ * commas, colons or angle brackets: whatever the sender put in the header, nothing here can end the RCPT TO line, add a
+ * recipient or ask a relay to route it.
+ */
+const REPLY_LOCAL_RE = /^[A-Za-z0-9_+'=-]+(?:\.[A-Za-z0-9_+'=-]+)*$/;
+const REPLY_DOMAIN_RE = /^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z][A-Za-z0-9-]{0,61}[A-Za-z0-9]$/;
+
+function isPlainMailbox(address: string): boolean {
+  // The lengths first: they bound the work the patterns do on a sender's text (RFC 5321: 64 before the @, 254 in all).
+  if (address.length > 254) return false;
+  const at = address.indexOf("@");
+  if (at < 1 || at > 64 || address.indexOf("@", at + 1) !== -1) return false;
+  return REPLY_LOCAL_RE.test(address.slice(0, at)) && REPLY_DOMAIN_RE.test(address.slice(at + 1));
+}
+
+/**
+ * Who a reply goes to: the first plain mailbox (isPlainMailbox) among the Reply-To addresses and, when there is none,
+ * among the From ones. Pass the lists in that order. The addresses come from the sender, so one that isn't plain is not
+ * used (a sender can write anything in the header, an address that closes the RCPT TO line included), and a Reply-To
+ * with nothing usable in it is as good as none. Null when no list has one. Returned as the sender wrote it.
+ */
+export function replyAddress(lists: readonly (readonly { address?: string | null }[] | undefined)[]): string | null {
+  for (const list of lists) {
+    for (const entry of list ?? []) {
+      const address = (entry.address ?? "").trim();
+      if (isPlainMailbox(address)) return address;
+    }
+  }
+  return null;
+}
+
+/** `text` cut to at most `max` UTF-16 units without splitting an emoji, and without the blank the cut may leave at the end. */
+function cutText(text: string, max: number): string {
+  if (text.length <= max) return text;
+  let end = max;
+  const last = text.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+  return text.slice(0, end).trimEnd();
+}
+
+/**
+ * replyHeaders for a reply that is really sent: the subject, which is the sender's own words, is made one short line
+ * first (every control character a blank, runs of blanks one, at most REPLY_SUBJECT_MAX_CHARS with the "Re: "), and
+ * the chain in References is cut to its newest REPLY_REFERENCES_MAX ids. replyHeaders keeps a subject's internal blanks
+ * on purpose (its own tests pin that); a header that carries them, or carries megabytes, is not one to send.
+ */
+export function replyHeadersForSend(original: { subject: string; messageId: string | null; references: string[] }): {
+  subject: string;
+  headers: Record<string, string>;
+} {
+  const line = original.subject.replace(/\p{Cc}+/gu, " ").replace(/\s+/g, " ").trim();
+  const { subject, headers } = replyHeaders({ ...original, subject: line });
+  const chain = headers.References?.split(" ") ?? [];
+  if (chain.length > REPLY_REFERENCES_MAX) headers.References = chain.slice(-REPLY_REFERENCES_MAX).join(" ");
+  return { subject: cutText(subject, REPLY_SUBJECT_MAX_CHARS), headers };
+}
+
 /** A sender or recipient as the inbox shows it: trimmed, the address in lower case, a blank one as null. */
 export function addressFromImap(name: string | null | undefined, address: string | null | undefined): InboxAddress {
   return { name: (name ?? "").trim() || null, email: (address ?? "").trim().toLowerCase() || null };

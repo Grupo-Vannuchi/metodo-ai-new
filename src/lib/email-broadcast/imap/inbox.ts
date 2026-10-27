@@ -15,6 +15,7 @@ import {
   INBOX_PAGE_SIZE,
   SEARCH_MAX_CHARS,
   inboxBodyDocument,
+  replyHtmlFromText,
   type InboxAddress,
   type InboxMessageDetail,
   type InboxMessageSummary,
@@ -27,20 +28,36 @@ import type {
   MailboxResult,
 } from "../microsoft/inbox";
 import { markNeedsReconnect } from "../mailbox/token";
+import type { MailboxSendOutcome } from "../mailbox/core";
+import { buildMime } from "../microsoft/mime";
+import type { SmtpSettings } from "../smtp/core";
 import { openSmtpSettings } from "../smtp/credentials";
 import { redactAndCut } from "../smtp/redact";
+import { sendSmtpMime } from "../smtp/send";
 import { closeImap, openImap, type ImapAuth } from "./connect";
-import { addressFromImap, isAttachmentIndex, parseImapMessageRef, summaryFromImap } from "./core";
+import {
+  THREAD_HEADERS_MAX_CHARS,
+  addressFromImap,
+  isAttachmentIndex,
+  parseImapMessageRef,
+  pickSentFolder,
+  replyAddress,
+  replyHeadersForSend,
+  replyOutcome,
+  summaryFromImap,
+  threadIdsFromHeaders,
+} from "./core";
 import { IMAP_MAX_MESSAGE_BYTES, detailFromParsed, hasAttachmentsInStructure, listedAttachments } from "./parse";
 
 /**
  * Reading the inbox of the company's SMTP account over IMAP (spec 2026-10-23),
  * returning what the Microsoft inbox returns (MailboxResult, InboxView) so one
  * screen shows both. Every call resolves the company's own account, opens one
- * connection, works in the INBOX and closes. The only thing it writes to the
- * mailbox is the \Seen mark of an e-mail the person opens; it never removes or
- * moves mail. The list never downloads a body; opening an e-mail downloads it
- * whole up to IMAP_MAX_MESSAGE_BYTES.
+ * connection, works in the INBOX and closes. The only things it writes to the
+ * mailbox are the \Seen mark of an e-mail the person opens and, for a reply, the
+ * \Answered mark of the e-mail answered and a copy of the reply in the Sent
+ * folder; it never removes or moves mail. The list never downloads a body;
+ * opening an e-mail downloads it whole up to IMAP_MAX_MESSAGE_BYTES.
  *
  * The server is not trusted. connect.ts bounds each answer it sends; what a
  * whole request may take in is bounded here: withImap watches its time and its
@@ -52,6 +69,7 @@ import { IMAP_MAX_MESSAGE_BYTES, detailFromParsed, hasAttachmentsInStructure, li
 
 const INBOX = "INBOX";
 const SEEN = "\\Seen";
+const ANSWERED = "\\Answered";
 /** The whole request after the login: a server that answers a byte at a time is cut off here (the socket timer doesn't catch that). */
 const IMAP_REQUEST_BUDGET_MS = 60_000;
 /** The most one request takes in from the server: the biggest e-mail it reads whole, and room for the lists and the protocol around it. */
@@ -62,10 +80,12 @@ const IMAP_GUARD_TICK_MS = 100;
 /**
  * How a request reaches the server and what it may cost: fixed in production. check:imap swaps these to run this code
  * against a server of its own on loopback (openImap refuses internal addresses on purpose), to count the connections a
- * request makes, and to reach the budget and the byte cap in a fraction of a second.
+ * request makes, to reach the budget and the byte cap in a fraction of a second, and, for a reply, to see what is handed
+ * to the SMTP server (`send`) and to make that hand-over fail the ways a server does.
  */
 export const imapRequest = {
   open: openImap,
+  send: sendSmtpMime,
   budgetMs: IMAP_REQUEST_BUDGET_MS,
   maxReceivedBytes: IMAP_MAX_REQUEST_BYTES,
 };
@@ -142,6 +162,12 @@ async function pauseAccount(organizationId: string, accountId: string, technical
 }
 
 /**
+ * The company's SMTP account as a request that answers by e-mail sees it: who it is, how it sends (the login is also
+ * the inbox's) and the name it writes under. Never leaves the server: it holds the password.
+ */
+type MailAccount = { id: string; email: string; displayName: string | null; smtp: SmtpSettings };
+
+/**
  * Runs `run` on a connection to the company's mailbox, logged in and closed
  * again whatever happens. The account is the company's own (tenantDb): none, or
  * one that doesn't read an inbox, is "no_account"; one that was disconnected,
@@ -159,12 +185,12 @@ async function pauseAccount(organizationId: string, accountId: string, technical
  */
 async function withImap<T>(
   organizationId: string,
-  run: (client: ImapFlow) => Promise<MailboxResult<T>>,
+  run: (client: ImapFlow, account: MailAccount) => Promise<MailboxResult<T>>,
 ): Promise<MailboxResult<T>> {
   // Filter by provider: a company may connect one account of each.
   const account = await tenantDb(organizationId).emailSenderAccount.findFirst({
     where: { provider: "SMTP" },
-    select: { id: true, status: true, credentials: true },
+    select: { id: true, email: true, displayName: true, status: true, credentials: true },
   });
   if (!account) return { ok: false, reason: "no_account" };
   const settings = openSmtpSettings(account.credentials);
@@ -198,7 +224,7 @@ async function withImap<T>(
     }
   }, IMAP_GUARD_TICK_MS);
   try {
-    const result = await run(client);
+    const result = await run(client, { id: account.id, email: account.email, displayName: account.displayName, smtp: settings });
     if (watch.cutFor !== null || !client.usable) {
       console.error(watch.cutFor !== null ? `IMAP request cut: ${watch.cutFor}` : "IMAP request lost its connection");
       return TEMPORARY;
@@ -216,14 +242,14 @@ async function withImap<T>(
 /** `run` inside the INBOX, opened read and write (opening an e-mail marks it read) and let go of at the end. */
 function withInbox<T>(
   organizationId: string,
-  run: (client: ImapFlow, mailbox: MailboxObject) => Promise<MailboxResult<T>>,
+  run: (client: ImapFlow, mailbox: MailboxObject, account: MailAccount) => Promise<MailboxResult<T>>,
 ): Promise<MailboxResult<T>> {
-  return withImap(organizationId, async (client) => {
+  return withImap(organizationId, async (client, account) => {
     const lock = await client.getMailboxLock(INBOX);
     try {
       const mailbox = client.mailbox;
       if (!mailbox) return TEMPORARY;
-      return await run(client, mailbox);
+      return await run(client, mailbox, account);
     } finally {
       lock.release();
     }
@@ -296,6 +322,7 @@ function keepAsked(row: FetchMessageObject, query: FetchQueryObject): Row {
   if (query.internalDate && row.internalDate !== undefined) kept.internalDate = row.internalDate;
   if (query.size && row.size !== undefined) kept.size = row.size;
   if (query.source && row.source) kept.source = row.source;
+  if (query.headers && row.headers) kept.headers = row.headers;
   if (query.bodyStructure && row.bodyStructure) kept.hasAttachments = hasAttachmentsInStructure(row.bodyStructure);
   return kept;
 }
@@ -465,10 +492,13 @@ export async function openMessage(
   return { ok: true, data: headersOnly(summary, meta, UNREADABLE_NOTICE) };
 }
 
-/** \Seen on an e-mail, the one write the inbox makes. True when the server took it; a failure only means it stays unread. */
-async function markSeen(client: ImapFlow, uid: number): Promise<boolean> {
+/**
+ * A flag added to an e-mail, the only change the inbox makes to one: \Seen when the person opens it, \Answered when a reply to
+ * it has gone out. The flags already on it stay. True when the server took it; a failure only means it stays as it was.
+ */
+async function addFlag(client: ImapFlow, uid: number, flag: typeof SEEN | typeof ANSWERED): Promise<boolean> {
   try {
-    return (await client.messageFlagsAdd(String(uid), [SEEN], { uid: true })) === true;
+    return (await client.messageFlagsAdd(String(uid), [flag], { uid: true })) === true;
   } catch {
     return false;
   }
@@ -514,7 +544,7 @@ export function loadImapInboxView(
         ref && ref.uidValidity === uidValidity
           ? await openMessage(client, uidValidity, ref.uid, maxBytes)
           : { ok: false, reason: "not_found" };
-      if (ref && detail.ok && !detail.data.isRead && (await markSeen(client, ref.uid))) {
+      if (ref && detail.ok && !detail.data.isRead && (await addFlag(client, ref.uid, SEEN))) {
         const opened = detail.data;
         opened.isRead = true;
         messages = messages.map((m) => (m.id === opened.id ? { ...m, isRead: true } : m));
@@ -584,4 +614,148 @@ export function downloadImapAttachment(
       data: { name: (listed.attachment.filename ?? "").trim() || "anexo", body: streamOf(bytes), size: bytes.byteLength },
     };
   });
+}
+
+/** What a reply needs of the e-mail it answers: its envelope (who wrote, the subject) and the two threading headers. Never a body. */
+const ORIGINAL_QUERY: FetchQueryObject = { uid: true, envelope: true, headers: ["message-id", "references"] };
+
+/** A reply as it will be sent: who it goes to, its subject and threading headers, and the account it leaves from. */
+type ReplyPlan = { account: MailAccount; to: string; subject: string; headers: Record<string, string> };
+
+/**
+ * Reads the e-mail being answered and decides what the reply looks like. It goes to the Reply-To address and, when that has
+ * no plain mailbox in it, to the From (replyAddress: the sender wrote these, and the address ends up in an SMTP command);
+ * with no address to answer there is no reply. The subject and the threading headers are replyHeadersForSend's. The Message-ID
+ * is the one the header block carries (the envelope keeps a comment after it, "<id> (text)", that is no id), the envelope's
+ * when the block has none. The e-mail has to be in the numbering the id was made in (UIDVALIDITY), as when it is opened.
+ */
+async function planReply(
+  client: ImapFlow,
+  mailbox: MailboxObject,
+  account: MailAccount,
+  ref: { uidValidity: number; uid: number },
+): Promise<MailboxResult<ReplyPlan>> {
+  if (ref.uidValidity !== Number(mailbox.uidValidity)) return NOT_FOUND;
+  const row = await fetchOneRow(client, ref.uid, ORIGINAL_QUERY);
+  if (!isListRow(row)) return NOT_FOUND;
+  const to = replyAddress([row.envelope.replyTo, row.envelope.from]);
+  if (to === null) return NOT_FOUND;
+  const block = row.headers ? row.headers.subarray(0, THREAD_HEADERS_MAX_CHARS).toString("latin1") : "";
+  const ids = threadIdsFromHeaders(block);
+  const { subject, headers } = replyHeadersForSend({
+    subject: row.envelope.subject ?? "",
+    messageId: ids.messageId ?? row.envelope.messageId ?? null,
+    references: ids.references,
+  });
+  return { ok: true, data: { account, to, subject, headers } };
+}
+
+/** Whether a folder's own attributes (what the server says, not imapflow's guess from its name) mark it \Sent. */
+function marksSent(flags: Iterable<string>): boolean {
+  for (const flag of flags) if (flag.replace(/^\\/, "").toLowerCase() === "sent") return true;
+  return false;
+}
+
+/**
+ * Keeps a copy of the reply in the mailbox's Sent folder, so the webmail shows what went out: the folder the server marks \Sent
+ * or else the first of the usual names (pickSentFolder). No such folder, or any trouble, means no copy. The copy is flagged
+ * \Seen, the person wrote it. True only when the server took it. Never throws.
+ */
+async function keepCopyInSent(client: ImapFlow, mime: Buffer, auth: ImapAuth): Promise<boolean> {
+  try {
+    // listOnly: the plain LIST is enough, but it leaves imapflow's own `specialUse` out, so the attributes are read as they are.
+    const folders = await client.list({ listOnly: true });
+    const sent = pickSentFolder(folders.map((f) => ({ path: f.path, specialUse: marksSent(f.flags) ? "\\Sent" : null })));
+    if (sent === null) return false;
+    // imapflow answers `false` when the connection is not there to take it, and throws when the server says no.
+    return Boolean(await client.append(sent, mime, [SEEN]));
+  } catch (e) {
+    console.error("IMAP reply copy was not saved:", failureText(e, auth));
+    return false;
+  }
+}
+
+/**
+ * Answers an e-mail of the Inbox with a plain-text reply from the company's own account (spec 2026-10-23): it leaves by the
+ * account's SMTP server, in the same conversation (In-Reply-To, References, "Re: ..."), to the Reply-To address of the e-mail
+ * or else its From; a copy is kept in the mailbox's Sent folder, so the webmail shows it too, and the e-mail is marked
+ * \Answered. `text` is what the person typed (the caller has checked it is not empty and not too long).
+ *
+ * Three steps, never inside one connection: the hand-over to the SMTP server can take a minute, an IMAP connection left idle
+ * that long is dropped, and withImap turns any answer over a dropped connection into "temporary", which here would be a reply
+ * that has gone out reported as one that has not (and sent twice). So the e-mail is read in a request of its own, the reply
+ * is sent with no IMAP connection open, and a second short request keeps the copy and the mark. What happened before decides
+ * what the caller may do:
+ *  - before the hand-over (the e-mail is gone or has no address to answer, the account asks to reconnect, the MIME can't be
+ *    built, the SMTP server says no): nothing left. `not_found`, `no_account`, `reconnect` or `temporary`; trying again is safe;
+ *  - the hand-over may have reached the server (a network failure or a timeout while handing it over, replyOutcome):
+ *    `uncertain`, with no copy and no mark, and nothing here or in the caller sends it again;
+ *  - sent: the answer is ok whatever the second request does. The copy and the mark are best effort, `savedToSent` says
+ *    whether the copy is in the mailbox, and a failure there is only logged. Nothing after the hand-over can throw.
+ * The e-mail is the one the id names in the numbering it was made in, and the account the copy goes to is the one the reply
+ * left from (replaced meanwhile, there is no copy and no mark). Nothing that leaves here, the logs included, holds the password.
+ */
+export async function replyToImapMessage(
+  organizationId: string,
+  messageId: string,
+  text: string,
+): Promise<MailboxResult<{ accountId: string; to: string | null; uncertain: boolean; savedToSent: boolean }>> {
+  const ref = parseImapMessageRef(messageId);
+  if (!ref) return NOT_FOUND;
+
+  const planned = await withInbox<ReplyPlan>(organizationId, (client, mailbox, account) =>
+    planReply(client, mailbox, account, ref),
+  );
+  if (!planned.ok) return planned;
+  const { account, to, subject, headers } = planned.data;
+  const auth: ImapAuth = { user: account.smtp.username, pass: account.smtp.password };
+
+  let mime: Buffer;
+  try {
+    mime = await buildMime({
+      from: { name: account.displayName, address: account.email },
+      to,
+      replyTo: null,
+      subject,
+      html: replyHtmlFromText(text),
+      text,
+      headers,
+      attachments: [],
+    });
+  } catch (e) {
+    console.error("IMAP reply could not be built:", failureText(e, auth));
+    return TEMPORARY;
+  }
+
+  let outcome: MailboxSendOutcome;
+  try {
+    outcome = await imapRequest.send(account.smtp, { from: account.email, to: [to] }, mime);
+  } catch (e) {
+    // sendSmtpMime never throws. If something did, nobody can say the e-mail did not leave: not a failure to try again.
+    console.error("IMAP reply: the hand-over failed in an unknown way:", failureText(e, auth));
+    return { ok: true, data: { accountId: account.id, to, uncertain: true, savedToSent: false } };
+  }
+  const verdict = replyOutcome(outcome);
+  if (!outcome.ok) {
+    const why = failureText({ code: outcome.code, message: outcome.message }, auth);
+    console.error(verdict === "failed" ? "IMAP reply was not sent:" : "IMAP reply may have been sent:", why);
+  }
+  if (verdict === "failed") return TEMPORARY;
+  if (verdict === "uncertain") return { ok: true, data: { accountId: account.id, to, uncertain: true, savedToSent: false } };
+
+  // Sent. From here nothing may fail the answer, or the person would send it again.
+  let savedToSent = false;
+  try {
+    await withInbox<null>(organizationId, async (client, mailbox, again) => {
+      // The company may have connected another address since the reply left: the copy belongs to the mailbox it left from.
+      if (again.id !== account.id) return NOT_FOUND;
+      savedToSent = await keepCopyInSent(client, mime, auth);
+      // The UID names this e-mail only in the numbering the id was made in.
+      if (ref.uidValidity === Number(mailbox.uidValidity)) await addFlag(client, ref.uid, ANSWERED);
+      return { ok: true, data: null };
+    });
+  } catch (e) {
+    console.error("IMAP reply: the copy and the mark could not be made:", failureText(e, auth));
+  }
+  return { ok: true, data: { accountId: account.id, to, uncertain: false, savedToSent } };
 }

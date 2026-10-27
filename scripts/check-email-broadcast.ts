@@ -176,16 +176,22 @@ import {
 } from "../src/lib/email-broadcast/microsoft/inbox-core";
 import {
   IMAP_PORTS,
+  REPLY_REFERENCES_MAX,
+  REPLY_SUBJECT_MAX_CHARS,
+  THREAD_HEADERS_MAX_CHARS,
   defaultImapSecurity,
   imapConnectError,
   imapMessageRef,
   isAttachmentIndex,
   parseImapMessageRef,
   pickSentFolder,
+  replyAddress,
   replyHeaders,
+  replyHeadersForSend,
   replyOutcome,
   suggestImapHost,
   summaryFromImap,
+  threadIdsFromHeaders,
   type ImapConnectError,
   type ImapSettings,
 } from "../src/lib/email-broadcast/imap/core";
@@ -2458,6 +2464,188 @@ check("replyOutcome tells a sent reply from an uncertain one and a refused one",
   assert.equal(replyOutcome(fail(421, "send")), "failed");
   assert.equal(replyOutcome(fail(0, "prepare")), "failed", "nothing left before the hand-over");
   assert.equal(replyOutcome(fail(535, "prepare")), "failed");
+});
+
+check("replyAddress answers to the Reply-To, else the From, and only to a plain mailbox", () => {
+  const one = (address: string) => [{ address }];
+  assert.equal(replyAddress([one("resp@x.com"), one("from@x.com")]), "resp@x.com");
+  assert.equal(replyAddress([undefined, one("from@x.com")]), "from@x.com");
+  assert.equal(replyAddress([[], one("from@x.com")]), "from@x.com");
+  // A Reply-To with nothing usable in it (a group has no address, a name alone neither) is as good as none.
+  assert.equal(replyAddress([[{ address: "" }, { address: null }, {}], one("from@x.com")]), "from@x.com");
+  assert.equal(replyAddress([one("Nome <resp@x.com>"), one("from@x.com")]), "from@x.com");
+  // In a list, the first usable one, in order; a list is only looked at when the one before it gave nothing.
+  assert.equal(replyAddress([[{ address: "lixo" }, { address: "dois@x.com" }, { address: "tres@x.com" }]]), "dois@x.com");
+  assert.equal(replyAddress([one("resp@x.com"), one("from@x.com")]), "resp@x.com");
+  assert.equal(replyAddress([one("  espacos@x.com\r\n")]), "espacos@x.com", "only the ends are trimmed");
+  assert.equal(replyAddress([one("a@b.com ")]), "a@b.com");
+  assert.equal(replyAddress([]), null);
+  assert.equal(replyAddress([undefined, []]), null);
+  assert.equal(replyAddress([one("lixo")]), null);
+  // The address is returned as the sender wrote it (the domain is not case sensitive and the local part may be).
+  assert.equal(replyAddress([one("Varandas@Empresa.COM.BR")]), "Varandas@Empresa.COM.BR");
+  for (const ok of [
+    "a@b.co",
+    "nome.sobrenome@empresa.com.br",
+    "a+tag@x.com",
+    "o'brien@x.com",
+    "a_b-c@sub.dominio.com.br",
+    "a=b@x.com",
+    "a@xn--exemplo-9ua.com.br",
+    "a@b.c-d.com",
+    "1@2.org",
+    `${"a".repeat(64)}@x.com`,
+  ]) {
+    assert.equal(replyAddress([one(ok)]), ok, ok);
+  }
+  // What could end the RCPT TO line, add a recipient, route the mail elsewhere or isn't an address at all.
+  for (const bad of [
+    "a@b.co\r\nRCPT TO:<x@y.com>",
+    "a@b.co>\r\nMAIL FROM:<x@y.com>",
+    "a>@b.co",
+    "a\nb@c.com",
+    "a b@c.com",
+    "a@b.com,c@d.com",
+    "a@b.com;c@d.com",
+    "<a@b.com>",
+    "Nome <a@b.com>",
+    '"a b"@c.com',
+    '"a>RCPT TO:<z"@c.com',
+    "a@[127.0.0.1]",
+    "a@127.0.0.1",
+    "a@localhost",
+    "a@b",
+    "a@.com",
+    "a@b..com",
+    "a@-b.com",
+    "a@b-.com",
+    "a@b.com.",
+    "a@b.c",
+    ".a@b.com",
+    "a.@b.com",
+    "a..b@c.com",
+    "a%c@d.com",
+    "a|b@c.com",
+    "a`b@c.com",
+    "a$b@c.com",
+    "a\\b@c.com",
+    "ação@x.com",
+    "a@exemplo.çom",
+    "a\0@b.com",
+    "a@@b.com",
+    "a@b@c.com",
+    "@b.com",
+    "a@",
+    "",
+    `${"a".repeat(65)}@x.com`,
+    `a@${"b".repeat(64)}.com`,
+    `a@${"b.".repeat(130)}com`,
+  ]) {
+    assert.equal(replyAddress([one(bad)]), null, JSON.stringify(bad));
+  }
+  // Linear: the sender's text is cut by its length before any pattern reads it.
+  for (const bad of ["a".repeat(2_000_000), `a@${"b".repeat(2_000_000)}`, `a@${"b.".repeat(1_000_000)}`]) {
+    let answered: string | null = "";
+    const took = millis(() => {
+      answered = replyAddress([one(bad)]);
+    });
+    assert.equal(answered, null);
+    assert.ok(took < 250, `${bad.slice(0, 8)}... took ${took.toFixed(0)} ms`);
+  }
+});
+
+check("threadIdsFromHeaders reads the Message-ID and the References chain out of a fetched header block", () => {
+  const block = [
+    "Message-ID: <m1@exemplo.com.br>",
+    "References: <raiz@exemplo.com.br> <meio@exemplo.com.br>",
+    " <ultimo@exemplo.com.br>",
+    "",
+    "",
+  ].join("\r\n");
+  assert.deepEqual(threadIdsFromHeaders(block), {
+    messageId: "<m1@exemplo.com.br>",
+    references: ["<raiz@exemplo.com.br>", "<meio@exemplo.com.br>", "<ultimo@exemplo.com.br>"],
+  });
+  // The header name in any case, a comment after the id (the server's envelope would keep it), tabs, bare line feeds.
+  assert.deepEqual(threadIdsFromHeaders("MESSAGE-id:\t<a@x> (comentario <b@x>)\nreferences: <r1@x>\n\t<r2@x>\n\n"), {
+    messageId: "<a@x>",
+    references: ["<r1@x>", "<r2@x>"],
+  });
+  // Several References lines add up, in order; the first Message-ID is the one.
+  assert.deepEqual(threadIdsFromHeaders("References: <r1@x>\r\nMessage-ID: <a@x>\r\nReferences: <r2@x>\r\nMessage-ID: <b@x>\r\n\r\n"), {
+    messageId: "<a@x>",
+    references: ["<r1@x>", "<r2@x>"],
+  });
+  // Nothing usable: no header, no ids, words that aren't ids, an empty block.
+  for (const empty of ["", "\r\n\r\n", "Message-ID: sem-colchetes\r\nReferences: lixo <>\r\n\r\n", "Subject: <a@x>\r\n\r\n", ": <a@x>\r\n"]) {
+    assert.deepEqual(threadIdsFromHeaders(empty), { messageId: null, references: [] }, JSON.stringify(empty));
+  }
+  // An id is printable ASCII with no space or bracket inside, so nothing a sender writes in a header can leave it. (The
+  // <b@x> inside the junk <a<b@x> is a well-formed id of its own.)
+  assert.deepEqual(threadIdsFromHeaders("Message-ID: <a b@x>\r\nReferences: <ã@x> <ok@x> <a<b@x> <a@x\u0000>\r\n\r\n"), {
+    messageId: null,
+    references: ["<ok@x>", "<b@x>"],
+  });
+  // Another header is never read as one of these, however it is spelled.
+  assert.deepEqual(threadIdsFromHeaders("X-References: <a@x>\r\nIn-Reply-To: <b@x>\r\nMessage-ID-2: <c@x>\r\n\r\n"), { messageId: null, references: [] });
+  // Only the first THREAD_HEADERS_MAX_CHARS are read, and a huge block is read in no time.
+  const filler = `Message-ID: <a@x>\r\nReferences: ${"<r@x> ".repeat(100)}\r\n`;
+  const huge = `${filler}X-Padding: ${"y".repeat(THREAD_HEADERS_MAX_CHARS)}\r\nReferences: <depois@x>\r\n\r\n`;
+  assert.ok(!threadIdsFromHeaders(huge).references.includes("<depois@x>"), "past the window");
+  assert.equal(threadIdsFromHeaders(huge).references.length, 100);
+  for (const text of [`References: ${"<a@x>".repeat(2_000_000)}`, `References: ${"<".repeat(5_000_000)}`, `References: <${"a".repeat(5_000_000)}`]) {
+    const took = millis(() => threadIdsFromHeaders(text));
+    assert.ok(took < 250, `${text.slice(0, 20)}... took ${took.toFixed(0)} ms`);
+  }
+});
+
+check("replyHeadersForSend writes the subject on one short line and keeps the newest ids of the chain", () => {
+  const subjectOf = (subject: string) => replyHeadersForSend({ subject, messageId: "<a@x>", references: [] }).subject;
+  assert.equal(subjectOf("Promoção   de\toutubro"), "Re: Promoção de outubro", "blanks collapse (replyHeaders keeps them on purpose)");
+  assert.equal(subjectOf("  RE:    oi  "), "RE: oi");
+  assert.equal(subjectOf("oi\r\nBcc: x@y.com"), "Re: oi Bcc: x@y.com", "a line break never reaches a header");
+  assert.equal(subjectOf("oi\u0000\u0085\u007fmundo"), "Re: oi mundo", "control characters are blanks");
+  assert.equal(subjectOf("a b"), "Re: a b");
+  assert.equal(subjectOf(""), "Re:");
+  assert.equal(subjectOf("\r\n \t"), "Re:");
+  // Cut to REPLY_SUBJECT_MAX_CHARS, "Re: " included, without a blank at the end.
+  const long = subjectOf("x".repeat(5_000));
+  assert.equal(long.length, REPLY_SUBJECT_MAX_CHARS);
+  assert.ok(long.startsWith("Re: xxxx"));
+  const room = REPLY_SUBJECT_MAX_CHARS - "Re: ".length;
+  const atBlank = subjectOf(`${"x".repeat(room - 1)} ${"y".repeat(50)}`);
+  assert.equal(atBlank, `Re: ${"x".repeat(room - 1)}`, "the blank the cut leaves is dropped");
+  assert.equal(subjectOf("x".repeat(room)), `Re: ${"x".repeat(room)}`, "exactly the limit is kept whole");
+  // An emoji (two UTF-16 units) is never cut in half.
+  for (const pad of [room - 1, room, room - 2]) {
+    const cut = subjectOf(`${"x".repeat(pad)}${"😀".repeat(100)}`);
+    assert.ok(cut.length <= REPLY_SUBJECT_MAX_CHARS);
+    // A lone surrogate does not survive being written as UTF-8 and read back.
+    assert.equal(Buffer.from(cut, "utf8").toString("utf8"), cut, `a lone surrogate at ${pad}`);
+  }
+  // Linear on a subject padded with blanks or with control characters.
+  for (const subject of [" ".repeat(2_000_000), `x${" ".repeat(2_000_000)}y`, "\u0000".repeat(2_000_000), `re${" ".repeat(2_000_000)}x`]) {
+    let out = "";
+    const took = millis(() => {
+      out = subjectOf(subject);
+    });
+    assert.ok(took < 250, `${JSON.stringify(subject.slice(0, 6))}... took ${took.toFixed(0)} ms`);
+    assert.ok(out.length <= REPLY_SUBJECT_MAX_CHARS);
+  }
+  // The threading is replyHeaders': In-Reply-To the original's id, the chain and then that id.
+  assert.deepEqual(replyHeadersForSend({ subject: "oi", messageId: "<a@x>", references: ["<r@x>"] }).headers, {
+    "In-Reply-To": "<a@x>",
+    References: "<r@x> <a@x>",
+  });
+  assert.deepEqual(replyHeadersForSend({ subject: "oi", messageId: null, references: ["<r@x>"] }), { subject: "Re: oi", headers: {} });
+  // A long chain keeps its newest ids; the original's own id stays last. A short one is left alone.
+  const ids = Array.from({ length: 100 }, (_, i) => `<r${i}@x>`);
+  const kept = replyHeadersForSend({ subject: "oi", messageId: "<a@x>", references: ids }).headers.References.split(" ");
+  assert.equal(kept.length, REPLY_REFERENCES_MAX);
+  assert.deepEqual(kept.slice(-2), ["<r99@x>", "<a@x>"]);
+  assert.equal(kept[0], `<r${100 - (REPLY_REFERENCES_MAX - 1)}@x>`);
+  const exact = ids.slice(0, REPLY_REFERENCES_MAX - 1);
+  assert.equal(replyHeadersForSend({ subject: "oi", messageId: "<a@x>", references: exact }).headers.References.split(" ").length, REPLY_REFERENCES_MAX);
 });
 
 check("summaryFromImap turns an envelope into a list row", () => {
