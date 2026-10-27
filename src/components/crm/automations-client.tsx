@@ -56,6 +56,8 @@ const NODE_W = 216;
 const GAP = 24;
 const ROW = 130;
 const gridPos = (i: number): NodePos => ({ x: 24 + ((i + 1) % 3) * (NODE_W + GAP), y: 24 + Math.floor((i + 1) / 3 + 1) * ROW });
+/** A menu sits beside the trigger, so its options and the next steps still fit the canvas. */
+const MENU_POS: NodePos = { x: 24 + NODE_W + GAP, y: 24 };
 const menuOf = (actions: RuleAction[]) => (actions[0]?.type === "ask_menu" ? actions[0] : null);
 
 /** Default position for a node when the saved layout has none. With a menu as
@@ -63,8 +65,9 @@ const menuOf = (actions: RuleAction[]) => (actions[0]?.type === "ask_menu" ? act
 function defaultPos(key: NodeKey, actions: RuleAction[], layout: Layout): NodePos {
   if (key === "trigger") return { x: 24, y: 24 };
   const menu = menuOf(actions);
-  if (!menu || key === 0) return typeof key === "number" ? gridPos(key) : gridPos(0);
-  const at = layout.actions?.[0] ?? gridPos(0);
+  if (!menu) return typeof key === "number" ? gridPos(key) : gridPos(0);
+  if (key === 0) return MENU_POS;
+  const at = layout.actions?.[0] ?? MENU_POS;
   if (typeof key === "object") {
     const startX = Math.max(24, at.x - ((menu.options.length - 1) / 2) * (NODE_W + GAP));
     return { x: startX + key.branch * (NODE_W + GAP), y: at.y + ROW };
@@ -460,8 +463,9 @@ export function AutomationsClient({
           </div>
 
           <div className="grid gap-3 lg:grid-cols-[1fr_18rem]">
-            {/* Canvas (relative wrapper holds the floating zoom controls). */}
-            <div className="relative">
+            {/* Canvas (relative wrapper holds the floating zoom controls). It keeps
+                the canvas height even when the inspector beside it is taller. */}
+            <div className="relative self-start">
               <div
                 ref={canvasRef}
                 className="relative h-[26rem] cursor-grab overflow-hidden rounded-xl border border-border active:cursor-grabbing"
