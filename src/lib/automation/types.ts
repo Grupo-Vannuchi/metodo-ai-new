@@ -81,6 +81,37 @@ export function isFlowStep(a: RuleAction | undefined): a is FlowStep {
   return a?.type === "ask_questions" || a?.type === "ask_menu";
 }
 
+type QuestionsStep = Extract<RuleAction, { type: "ask_questions" }>;
+type MenuStep = Extract<RuleAction, { type: "ask_menu" }>;
+
+/** "Fazer perguntas" → "Menu de opções" in the editor: the welcome stays, and
+ *  the questions already written (with the final message) become option 1. */
+export function toMenuStep(step: QuestionsStep): MenuStep {
+  const questions = step.questions.filter((q) => q.label.trim());
+  return {
+    type: "ask_menu",
+    ...(step.firstMessage ? { firstMessage: step.firstMessage } : {}),
+    question: "",
+    options: [
+      { label: "", questions, ...(step.finalMessage ? { finalMessage: step.finalMessage } : {}) },
+      { label: "", questions: [] },
+    ],
+  };
+}
+
+/** "Menu de opções" → "Fazer perguntas": the welcome and option 1's questions
+ *  and final message stay; the other options go. */
+export function toQuestionsStep(step: MenuStep): QuestionsStep {
+  const first = step.options[0];
+  const questions = first?.questions.length ? first.questions : [{ label: "", field: "notes" as const }];
+  return {
+    type: "ask_questions",
+    ...(step.firstMessage ? { firstMessage: step.firstMessage } : {}),
+    questions,
+    ...(first?.finalMessage ? { finalMessage: first.finalMessage } : {}),
+  };
+}
+
 export type KeywordMatch = "contains" | "exact";
 /** "keyword": the message must carry the keyword; "any": any message on a
  *  new or quiet conversation starts the flow. */

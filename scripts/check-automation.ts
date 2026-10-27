@@ -4,7 +4,7 @@
  * option. Run with `npm run check:automation`; exits non-zero on the first failure.
  */
 import assert from "node:assert/strict";
-import { parseActions, parseConfig, ruleProblem, type RuleAction, type RuleConfig } from "../src/lib/automation/types";
+import { parseActions, parseConfig, ruleProblem, toMenuStep, toQuestionsStep, type RuleAction, type RuleConfig } from "../src/lib/automation/types";
 import { formatMenu, invalidMenuReply, parseMenuChoice } from "../src/lib/automation/menu";
 import {
   activePath,
@@ -126,6 +126,59 @@ check("ruleProblem: the menu must be the only flow step, and first", () => {
 
 check("ruleProblem: the menu outside the WhatsApp trigger is 'whatsappOnly'", () => {
   assert.equal(ruleProblem({ name: "x", trigger: "stage_entered", triggerStageId: "s", actions: [menu()], config: {} }), "whatsappOnly");
+});
+
+// ── Swapping the first step ─────────────────────────────────────────────────
+
+check("toMenuStep: keeps the welcome; the filled questions and final message become option 1", () => {
+  const menuStep = toMenuStep({
+    type: "ask_questions",
+    firstMessage: "Oi!",
+    questions: [{ label: "Nome?", field: "name" }, { label: " ", field: "notes" }],
+    finalMessage: "Fim",
+  });
+  assert.deepEqual(menuStep, {
+    type: "ask_menu",
+    firstMessage: "Oi!",
+    question: "",
+    options: [
+      { label: "", questions: [{ label: "Nome?", field: "name" }], finalMessage: "Fim" },
+      { label: "", questions: [] },
+    ],
+  });
+});
+
+check("toMenuStep: the editor's blank default becomes an empty menu that still needs filling", () => {
+  const menuStep = toMenuStep({ type: "ask_questions", questions: [{ label: "", field: "notes" }] });
+  assert.deepEqual(menuStep, { type: "ask_menu", question: "", options: [{ label: "", questions: [] }, { label: "", questions: [] }] });
+});
+
+check("toQuestionsStep: keeps the welcome and option 1's questions and final message", () => {
+  const back = toQuestionsStep({
+    type: "ask_menu",
+    firstMessage: "Oi!",
+    question: "Qual evento?",
+    options: [
+      { label: "X", questions: [{ label: "Nome?", field: "name" }], finalMessage: "Fim" },
+      { label: "Y", questions: [{ label: "Empresa?", field: "notes" }] },
+    ],
+  });
+  assert.deepEqual(back, { type: "ask_questions", firstMessage: "Oi!", questions: [{ label: "Nome?", field: "name" }], finalMessage: "Fim" });
+});
+
+check("toQuestionsStep: an option 1 without questions starts with one blank question", () => {
+  const back = toQuestionsStep({ type: "ask_menu", question: "Q", options: [{ label: "X", questions: [] }, { label: "Y", questions: [] }] });
+  assert.deepEqual(back, { type: "ask_questions", questions: [{ label: "", field: "notes" }] });
+});
+
+check("menu → questions → menu keeps option 1's work", () => {
+  const start: RuleAction = {
+    type: "ask_questions",
+    firstMessage: "Oi!",
+    questions: [{ label: "Nome?", field: "name" }],
+    finalMessage: "Fim",
+  };
+  assert.deepEqual(toQuestionsStep(toMenuStep(start) as Extract<RuleAction, { type: "ask_menu" }>), start);
 });
 
 // ── Menu text ───────────────────────────────────────────────────────────────
