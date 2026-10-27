@@ -1155,7 +1155,7 @@
         "keyword": "Com uma palavra-chave",
         "any": "Com qualquer mensagem"
       },
-      "waStartAnyHint": "Quem escrever para este número recebe o fluxo se a conversa for nova ou estiver parada há 7 dias. Conversas atribuídas a alguém ficam de fora, e regras com palavra-chave neste número têm prioridade.",
+      "waStartAnyHint": "Quem escrever para este número recebe o fluxo se a conversa for nova ou estiver parada há 7 dias. Conversas atribuídas a alguém ficam de fora, e regras com palavra-chave neste número têm prioridade. O bot para quando alguém da equipe assume a conversa.",
       "waStartAnyShort": "qualquer mensagem",
       "questionsCount": "{count, plural, one {# pergunta} other {# perguntas}}",
       "optionsCount": "{count, plural, one {# opção} other {# opções}}",

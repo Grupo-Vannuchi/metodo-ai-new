@@ -74,7 +74,8 @@ export type AnyStartFacts = {
   /** Newest earlier message that counts as activity: any outbound, or an
    *  inbound more than BURST_GRACE_MS before arrivedAt. Null = new conversation. */
   lastActivityAt: Date | null;
-  /** The newest session of THIS rule in the conversation. */
+  /** The conversation's newest session, when it belongs to THIS rule (null
+   *  when there's none or another rule's flow ran after it). */
   lastSession: { status: SessionStatus; createdAt: Date } | null;
   /** A person (not the bot) wrote to the lead after lastSession began. */
   humanReplyAfterLastSession: boolean;

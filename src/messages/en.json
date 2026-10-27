@@ -1155,7 +1155,7 @@
         "keyword": "With a keyword",
         "any": "With any message"
       },
-      "waStartAnyHint": "Anyone who writes to this number gets the flow when the conversation is new or has been quiet for 7 days. Conversations assigned to someone are left out, and keyword rules on this number take priority.",
+      "waStartAnyHint": "Anyone who writes to this number gets the flow when the conversation is new or has been quiet for 7 days. Conversations assigned to someone are left out, and keyword rules on this number take priority. The bot stops once someone on the team takes over the conversation.",
       "waStartAnyShort": "any message",
       "questionsCount": "{count, plural, one {# question} other {# questions}}",
       "optionsCount": "{count, plural, one {# option} other {# options}}",

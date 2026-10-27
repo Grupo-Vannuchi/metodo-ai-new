@@ -304,6 +304,67 @@ const cases: Record<string, (l: Lead) => Promise<void>> = {
     await say(l, "2");
     await expectReplies(l, ["Qual a empresa?"]);
   },
+  // Two messages at nearly the same moment: one welcome, one menu, one live session.
+  // The conversation already exists (quiet for 8 days) so both messages are
+  // stored and both claims race; on a brand-new conversation the inbox's own
+  // ingest drops the second one (unique connectionId+remoteJid), which isn't this flow's to fix.
+  async J2(l) {
+    await seedConversation(l, { outboundAgo: 8 * DAY });
+    await Promise.all([say(l, "Oi"), sleep(30).then(() => say(l, "tudo bem?"))]);
+    await expectReplies(l, ["BV-ANY", MENU_ANY]);
+    assert.equal((await sessionsOf(l)).filter((s) => s.status === "ACTIVE").length, 1);
+    await say(l, "2");
+    await expectReplies(l, ["Qual a empresa?"]);
+  },
+  // The team writes while the menu waits: the "any message" flow steps aside.
+  async N1(l) {
+    await say(l, "Oi");
+    await expectReplies(l, ["BV-ANY", MENU_ANY]);
+    await teamMessage((await conversationOf(l)).id, 0);
+    await say(l, "obrigado");
+    await expectSilence(l);
+    assert.deepEqual((await sessionsOf(l)).map((s) => s.status), ["HANDOFF"]);
+  },
+  // Assigned to someone while the menu waits: same.
+  async N2(l) {
+    await say(l, "Oi");
+    await expectReplies(l, ["BV-ANY", MENU_ANY]);
+    const c = await conversationOf(l);
+    await prisma.conversation.updateMany({ where: { organizationId: fx!.orgId, id: c.id }, data: { assignedToId: `e2e-user-${stamp}` } });
+    await say(l, "2");
+    await expectSilence(l);
+    assert.deepEqual((await sessionsOf(l)).map((s) => s.status), ["HANDOFF"]);
+  },
+  // The team writes during the 8 s wait before the bot answers: the bot stays quiet.
+  async N3(l) {
+    await say(l, "Oi");
+    await expectReplies(l, ["BV-ANY", MENU_ANY]);
+    await say(l, "2");
+    await sleep(1000);
+    await teamMessage((await conversationOf(l)).id, 0);
+    await expectSilence(l);
+    assert.deepEqual((await sessionsOf(l)).map((s) => s.status), ["HANDOFF"]);
+  },
+  // A keyword flow keeps going when the team writes (the user's call for keyword flows).
+  async N4(l) {
+    await say(l, "quero falar do evento");
+    await expectReplies(l, ["BV-KW", MENU_KW]);
+    await teamMessage((await conversationOf(l)).id, 0);
+    await say(l, "2");
+    await expectReplies(l, ["Qual a empresa?"]);
+  },
+  // A finished keyword flow doesn't wake an old abandoned "any message" session.
+  async P(l) {
+    await say(l, "Oi");
+    await expectReplies(l, ["BV-ANY", MENU_ANY]);
+    await expireOpenSession(l);
+    await say(l, "quero falar do evento");
+    await expectReplies(l, ["BV-KW", MENU_KW]);
+    await say(l, "3");
+    await expectReplies(l, ["FA"]);
+    await say(l, "obrigado");
+    await expectSilence(l);
+  },
   // A rule saved before the menu works as before.
   async L(l) {
     await say(l, "orcamento");

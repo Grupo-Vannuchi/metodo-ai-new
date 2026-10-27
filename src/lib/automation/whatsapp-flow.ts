@@ -162,7 +162,7 @@ async function anyMessageStart(
   const rule = rules.find((r) => r.wa.start === "any");
   if (!rule) return null;
   const conversationId = conversation.id;
-  const [activity, lastSession] = await Promise.all([
+  const [activity, newest] = await Promise.all([
     // The lead's own messages of this same burst aren't earlier activity.
     prisma.message.findFirst({
       where: {
@@ -175,26 +175,41 @@ async function anyMessageStart(
       orderBy: { createdAt: "desc" },
       select: { createdAt: true },
     }),
+    // The conversation's newest session, whatever its rule: an abandoned
+    // session of this rule stops counting once another flow ran after it.
     prisma.automationSession.findFirst({
-      where: { organizationId, conversationId, ruleId: rule.id },
-      orderBy: { createdAt: "desc" },
-      select: { status: true, createdAt: true },
+      where: { organizationId, conversationId },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { ruleId: true, status: true, createdAt: true },
     }),
   ]);
-  const humanReply = lastSession
-    ? await prisma.message.findFirst({
-        where: { organizationId, conversationId, direction: "OUTBOUND", agentReply: false, createdAt: { gt: lastSession.createdAt } },
-        select: { id: true },
-      })
-    : null;
+  const lastSession = newest?.ruleId === rule.id ? newest : null;
   const starts = canStartOnAnyMessage({
     arrivedAt,
     assigned: !!conversation.assignedToId,
     lastActivityAt: activity?.createdAt ?? null,
     lastSession,
-    humanReplyAfterLastSession: !!humanReply,
+    humanReplyAfterLastSession: lastSession ? await humanWroteSince(organizationId, conversationId, lastSession.createdAt) : false,
   });
   return starts ? rule : null;
+}
+
+/** A person (not the bot) wrote to the lead after `since`. */
+async function humanWroteSince(organizationId: string, conversationId: string, since: Date): Promise<boolean> {
+  const message = await prisma.message.findFirst({
+    where: { organizationId, conversationId, direction: "OUTBOUND", agentReply: false, createdAt: { gt: since } },
+    select: { id: true },
+  });
+  return !!message;
+}
+
+/** The team took the conversation: it's assigned to someone, or a person wrote after `since`. */
+async function teamTookOver(organizationId: string, conversationId: string, since: Date): Promise<boolean> {
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: conversationId, organizationId },
+    select: { assignedToId: true },
+  });
+  return !!conversation?.assignedToId || (await humanWroteSince(organizationId, conversationId, since));
 }
 
 /** Two messages of a burst can each open a session at the same moment: keep
@@ -250,6 +265,17 @@ async function runFlowTurn(claim: Claim, m: ParsedInbound): Promise<void> {
   });
   if (!session) return;
 
+  // An "any message" flow steps aside once the team takes the conversation:
+  // the lead is talking to a person now, not to the menu. (Keyword flows keep
+  // going, as before: the lead asked for them.)
+  if (rule.wa.start === "any" && (await teamTookOver(organizationId, conversationId, session.createdAt))) {
+    await prisma.automationSession.updateMany({
+      where: { id: sessionId, organizationId, status: "ACTIVE" },
+      data: { status: "HANDOFF", finishedAt: new Date() },
+    });
+    return;
+  }
+
   const send = (text: string) => sendReply(claim, m.remoteJid, text);
   const { step } = rule;
 
@@ -291,13 +317,12 @@ async function runFlowTurn(claim: Claim, m: ParsedInbound): Promise<void> {
     }
     answers[MENU_KEY] = String(choice);
     answers[MENU_LABEL_KEY] = step.options[choice].label;
-    await saveAnswers(claim, answers);
     const path = activePath(step, answers)!;
-    if (path.questions.length > 0) {
-      await send(path.questions[0].label);
+    if (path.questions.length === 0) {
+      await finishTurn(claim, send, path, answers);
       return;
     }
-    await finishTurn(claim, send, path, answers);
+    if (await saveAnswers(claim, answers)) await send(path.questions[0].label);
     return;
   }
 
@@ -322,10 +347,8 @@ async function runFlowTurn(claim: Claim, m: ParsedInbound): Promise<void> {
   }
 
   answers[String(current)] = reply;
-  await saveAnswers(claim, answers);
-
   if (current + 1 < questions.length) {
-    await send(questions[current + 1].label);
+    if (await saveAnswers(claim, answers)) await send(questions[current + 1].label);
     return;
   }
   await finishTurn(claim, send, path, answers);
@@ -333,8 +356,10 @@ async function runFlowTurn(claim: Claim, m: ParsedInbound): Promise<void> {
 
 /** Last answer is in: close, say goodbye, then record it all in the CRM. */
 async function finishTurn(claim: Claim, send: (text: string) => Promise<void>, path: ActivePath, answers: Answers): Promise<void> {
-  // Close first so a concurrent turn can't finish twice.
-  if (!(await closeSession(claim))) return;
+  // The last answer and the close go in one write: a concurrent turn can't
+  // finish twice, and a concurrent claim never sees a finished path still open
+  // (it would cancel the session as "no longer fitting" and the lead would be lost).
+  if (!(await closeSession(claim, answers))) return;
   const conn = await prisma.integrationConnection.findFirst({
     where: { id: claim.connectionId, organizationId: claim.organizationId },
     select: { ownerId: true },
@@ -381,18 +406,22 @@ async function finishFlow(claim: Claim, ownerId: string | null, path: ActivePath
   await runActionsForOpportunity(organizationId, opp.id, after, ACTOR, rule.id);
 }
 
-async function saveAnswers(claim: Claim, answers: Answers): Promise<void> {
-  await prisma.automationSession.updateMany({
-    where: { id: claim.sessionId, organizationId: claim.organizationId },
-    data: { answers },
-  });
-}
-
-/** Close the session if still open; false when another turn already did. */
-async function closeSession(claim: Claim): Promise<boolean> {
+/** Save the answers while the session is still open; false when it was closed
+ *  meanwhile (handed off, cancelled, finished), so nothing more gets sent. */
+async function saveAnswers(claim: Claim, answers: Answers): Promise<boolean> {
   const res = await prisma.automationSession.updateMany({
     where: { id: claim.sessionId, organizationId: claim.organizationId, status: "ACTIVE" },
-    data: { status: "COMPLETED", finishedAt: new Date() },
+    data: { answers },
+  });
+  return res.count > 0;
+}
+
+/** Store the final answers and close the session if still open; false when
+ *  another turn or claim already closed it. */
+async function closeSession(claim: Claim, answers: Answers): Promise<boolean> {
+  const res = await prisma.automationSession.updateMany({
+    where: { id: claim.sessionId, organizationId: claim.organizationId, status: "ACTIVE" },
+    data: { answers, status: "COMPLETED", finishedAt: new Date() },
   });
   return res.count > 0;
 }

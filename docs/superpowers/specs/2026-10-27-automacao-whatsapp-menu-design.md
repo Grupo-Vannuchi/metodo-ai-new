@@ -42,7 +42,8 @@ O usuário também pediu que a regra possa começar **sem palavra-chave**: qualq
 | Início sem palavra-chave | O gatilho ganha a escolha "Com uma palavra-chave" ou "Com qualquer mensagem" | usuário |
 | Quando "qualquer mensagem" começa | Só se a conversa for nova ou estiver parada há **7 dias** (nenhuma mensagem, de nenhum lado, nos 7 dias antes desta) | usuário (aceitou a recomendação) |
 | Conversa atribuída a alguém da equipe | "Qualquer mensagem" não começa, igual ao agente de IA, que fica quieto nesses casos | minha decisão |
-| Lead que abandonou o menu | Se a última sessão desta regra na conversa expirou ou foi cancelada, e ninguém da equipe escreveu desde que ela começou, a próxima mensagem do lead abre o fluxo de novo, sem esperar os 7 dias | minha decisão (sem isso o lead fica 7 dias sem conseguir voltar, porque não existe palavra para reenviar) |
+| Lead que abandonou o menu | Se a sessão mais recente da conversa é desta regra e expirou ou foi cancelada, e ninguém da equipe escreveu desde que ela começou, a próxima mensagem do lead abre o fluxo de novo, sem esperar os 7 dias. Se outro fluxo rodou depois (ex.: uma regra com palavra-chave), a sessão abandonada não conta mais | minha decisão (sem isso o lead fica 7 dias sem conseguir voltar, porque não existe palavra para reenviar); o "mais recente da conversa" veio da revisão final |
+| Equipe assume no meio do fluxo | Num fluxo "qualquer mensagem", se a conversa for atribuída a alguém ou uma pessoa da equipe escrever depois que o fluxo começou, o bot para (sessão `HANDOFF`) e não manda mais nada. Nas regras com palavra-chave o fluxo continua, como já era | minha decisão, da revisão final (sem isso, um cliente antigo que cai no menu recebe "Não entendi" a cada resposta ao vendedor); palavra-chave segue a decisão anterior do usuário |
 | Contato com oportunidade aberta | "Qualquer mensagem" começa mesmo assim; terminar o fluxo cria outra oportunidade | usuário (aceitou a recomendação: o lead pode estar perguntando de outro evento) |
 | Formato do menu | Texto numerado. O usuário pediu botões clicáveis e voltou para texto: o cliente usa o número conectado por QR code (Evolution), onde botões não chegam na versão estável (issues evolution-api #2404 e #2390; correção só na 2.4.0, pré-lançamento) | usuário |
 | Prioridade no mesmo número | Sessão aberta > regras com palavra-chave (a mais antiga primeiro, como hoje) > a regra de qualquer mensagem | minha decisão |
@@ -66,7 +67,9 @@ Modo **qualquer mensagem**: a mensagem inicia o fluxo quando, ao mesmo tempo:
 - a conversa não está atribuída a ninguém (`conversation.assignedToId` vazio);
 - e uma destas vale:
   - **conversa parada:** não existe mensagem na conversa (de entrada ou de saída, de pessoa ou de bot) nos 7 dias anteriores à mensagem que chegou. Conversa nova conta como parada;
-  - **lead que abandonou:** a sessão mais recente desta regra na conversa terminou `EXPIRED` ou `CANCELED`, e nenhuma mensagem de saída escrita por pessoa (saída sem `agentReply`) apareceu na conversa desde que essa sessão começou. A mensagem que chegou não vale como resposta: o fluxo recomeça da boas-vindas e do menu.
+  - **lead que abandonou:** a sessão mais recente da conversa (de qualquer regra) é desta regra e terminou `EXPIRED` ou `CANCELED`, e nenhuma mensagem de saída escrita por pessoa (saída sem `agentReply`) apareceu na conversa desde que essa sessão começou. A mensagem que chegou não vale como resposta: o fluxo recomeça da boas-vindas e do menu.
+
+Depois que um fluxo "qualquer mensagem" começou, ele para (sessão `HANDOFF`, nada mais é enviado) se a conversa for atribuída a alguém ou se uma pessoa da equipe escrever. A checagem acontece antes de cada resposta do bot, depois da espera de 8 s.
 
 A regra dos 7 dias impede que o bot mande o menu quando o lead responde alguém da equipe, ou escreve logo depois de terminar o fluxo (sessão `COMPLETED`). Mensagens que não iniciam o fluxo seguem para o agente de IA, como hoje.
 

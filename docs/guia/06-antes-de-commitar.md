@@ -50,7 +50,9 @@ verdade. Os casos cobrem:
 - menu por palavra-chave e por qualquer mensagem, resposta inválida, opção sem perguntas, regra antiga;
 - conversa recente, atribuída ou parada há 8 dias;
 - lead que some 25 h, com e sem resposta da equipe depois;
-- "Oi" + "tudo bem?" seguidos, e regra editada no meio da conversa.
+- equipe que assume no meio do menu (mensagem, atribuição ou resposta durante a espera de 8 s), e o fluxo de palavra-chave que continua;
+- fluxo de palavra-chave terminado que não reabre um menu antigo abandonado;
+- "Oi" + "tudo bem?" seguidos e quase ao mesmo tempo, e regra editada no meio da conversa.
 
 Cria uma organização de teste e apaga tudo o que criou, inclusive sobras de uma rodada interrompida.
 Precisa do Postgres do Docker e do `next dev` no ar; se o Turbopack responder 404 nas rotas de API, suba
