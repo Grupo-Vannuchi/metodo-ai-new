@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import {
   Plus, Trash2, Pencil, Zap, X, CheckSquare, Bell, BellPlus, MessageCircle, Mail,
   ArrowRightLeft, UserCog, CalendarClock, Tag, Wallet, Webhook, ZoomIn, ZoomOut, Maximize2,
-  MessagesSquare, Briefcase,
+  MessagesSquare, Briefcase, ListOrdered, CornerDownRight,
 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
@@ -16,26 +16,27 @@ import {
   TRIGGERS,
   ACTION_TYPES,
   WHATSAPP_ONLY_ACTIONS,
-  QUESTION_FIELDS,
-  MAX_FLOW_QUESTIONS,
   triggerNeedsStage,
   isWhatsappTrigger,
+  isFlowStep,
   ruleProblem,
   type RuleAction,
   type RuleConfig,
   type TriggerType,
   type ActionType,
   type NodePos,
-  type QuestionField,
+  type MenuOption,
+  type WhatsappStart,
   type WhatsappTriggerConfig,
 } from "@/lib/automation/types";
 import type { AutomationRuleView, WhatsappConnectionOption } from "@/lib/queries/automations";
 import { createRule, updateRule, deleteRule, toggleRule } from "@/app/actions/automations";
+import { Field, MenuInspector, OptionInspector, QuestionsEditor, Select } from "@/components/crm/automation-flow-inspectors";
 
 type Stage = { id: string; name: string; pipeline: string };
 type Template = { id: string; name: string };
 type Member = { id: string; name: string };
-type Layout = { trigger?: NodePos; actions?: NodePos[] };
+type Layout = { trigger?: NodePos; actions?: NodePos[]; branches?: NodePos[] };
 type Draft = {
   id: string | null;
   name: string;
@@ -47,30 +48,57 @@ type Draft = {
   layout: Layout;
   wa: WhatsappTriggerConfig;
 };
-/** "trigger" or an action index. */
-type Selection = "trigger" | number | null;
+/** A canvas node: the trigger, an action index, or a menu option's node. */
+type NodeKey = "trigger" | number | { branch: number };
+type Selection = NodeKey | null;
 
 const NODE_W = 216;
-/** Default position for a node when the saved layout has none. */
-function defaultPos(key: "trigger" | number): NodePos {
+const GAP = 24;
+const ROW = 130;
+const gridPos = (i: number): NodePos => ({ x: 24 + ((i + 1) % 3) * (NODE_W + GAP), y: 24 + Math.floor((i + 1) / 3 + 1) * ROW });
+/** A menu sits beside the trigger, so its options and the next steps still fit the canvas. */
+const MENU_POS: NodePos = { x: 24 + NODE_W + GAP, y: 24 };
+const menuOf = (actions: RuleAction[]) => (actions[0]?.type === "ask_menu" ? actions[0] : null);
+
+/** Default position for a node when the saved layout has none. With a menu as
+ *  the first step, its options sit in a row below it and the next steps below that. */
+function defaultPos(key: NodeKey, actions: RuleAction[], layout: Layout): NodePos {
   if (key === "trigger") return { x: 24, y: 24 };
-  return { x: 24 + ((key + 1) % 3) * (NODE_W + 24), y: 24 + Math.floor((key + 1) / 3 + 1) * 130 };
+  const menu = menuOf(actions);
+  if (!menu) return typeof key === "number" ? gridPos(key) : gridPos(0);
+  if (key === 0) return MENU_POS;
+  const at = layout.actions?.[0] ?? MENU_POS;
+  if (typeof key === "object") {
+    const startX = Math.max(24, at.x - ((menu.options.length - 1) / 2) * (NODE_W + GAP));
+    return { x: startX + key.branch * (NODE_W + GAP), y: at.y + ROW };
+  }
+  return { x: at.x + ((key - 1) % 3) * (NODE_W + GAP), y: at.y + 2 * ROW + Math.floor((key - 1) / 3) * ROW };
+}
+
+/** Every node's position, saved or default, with one entry per menu option. */
+function fullLayout(actions: RuleAction[], layout: Layout): Layout {
+  const trigger = layout.trigger ?? defaultPos("trigger", actions, layout);
+  const acts = actions.map((_, i) => layout.actions?.[i] ?? defaultPos(i, actions, layout));
+  const menu = menuOf(actions);
+  const branches = menu?.options.map((_, i) => layout.branches?.[i] ?? defaultPos({ branch: i }, actions, { ...layout, actions: acts }));
+  return { trigger, actions: acts, ...(branches ? { branches } : {}) };
 }
 
 /** Shift all positions so the top-left node sits at (24, 24) — guarantees the
  * whole flow is visible when the editor opens, regardless of saved coords. */
-function normalizeLayout(actionCount: number, layout: Layout): Layout {
-  const trigger = layout.trigger ?? defaultPos("trigger");
-  const actions = Array.from({ length: actionCount }, (_, i) => layout.actions?.[i] ?? defaultPos(i));
-  const all = [trigger, ...actions];
+function normalizeLayout(actions: RuleAction[], layout: Layout): Layout {
+  const full = fullLayout(actions, layout);
+  const all = [full.trigger!, ...full.actions!, ...(full.branches ?? [])];
   const dx = 24 - Math.min(...all.map((p) => p.x));
   const dy = 24 - Math.min(...all.map((p) => p.y));
+  const move = (p: NodePos) => ({ x: p.x + dx, y: p.y + dy });
   return {
-    trigger: { x: trigger.x + dx, y: trigger.y + dy },
-    actions: actions.map((p) => ({ x: p.x + dx, y: p.y + dy })),
+    trigger: move(full.trigger!),
+    actions: full.actions!.map(move),
+    ...(full.branches ? { branches: full.branches.map(move) } : {}),
   };
 }
-const emptyWa = (connectionId = ""): WhatsappTriggerConfig => ({ connectionId, keyword: "", match: "contains" });
+const emptyWa = (connectionId = ""): WhatsappTriggerConfig => ({ connectionId, start: "keyword", keyword: "", match: "contains" });
 const emptyDraft = (): Draft => ({
   id: null, name: "", trigger: "stage_entered", triggerStageId: "", minValue: "", maxValue: "", actions: [], layout: {},
   wa: emptyWa(),
@@ -79,6 +107,7 @@ const parseMoney = (s: string) => (s ? Number(s.replace(/[^\d.,]/g, "").replace(
 
 const ACTION_ICON: Record<ActionType, typeof CheckSquare> = {
   ask_questions: MessagesSquare,
+  ask_menu: ListOrdered,
   create_opportunity: Briefcase,
   create_task: CheckSquare,
   notify_owner: Bell,
@@ -96,6 +125,7 @@ const ACTION_ICON: Record<ActionType, typeof CheckSquare> = {
 function newAction(type: ActionType, firstTemplate?: string, firstStage?: string, firstMember?: string): RuleAction {
   switch (type) {
     case "ask_questions": return { type, questions: [{ label: "", field: "notes" }] };
+    case "ask_menu": return { type, question: "", options: [{ label: "", questions: [] }, { label: "", questions: [] }] };
     case "create_opportunity": return { type };
     case "create_task": return { type, title: "", priority: "MEDIUM" };
     case "notify_owner": return { type };
@@ -135,6 +165,7 @@ export function AutomationsClient({
   const [selected, setSelected] = useState<Selection>("trigger");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -148,9 +179,13 @@ export function AutomationsClient({
   const templateName = (id: string) => templates.find((x) => x.id === id)?.name ?? id;
   const memberName = (id: string) => members.find((x) => x.id === id)?.name ?? id;
 
+  const waSummary = (wa: WhatsappTriggerConfig) =>
+    wa.start === "any" ? ` · ${t("waStartAnyShort")}` : wa.keyword ? ` · "${wa.keyword}"` : "";
+
   function actionSummary(a: RuleAction): string {
     switch (a.type) {
       case "ask_questions": return `${t("action.ask_questions")}: ${t("questionsCount", { count: a.questions.length })}`;
+      case "ask_menu": return `${t("action.ask_menu")}: ${t("optionsCount", { count: a.options.length })}`;
       case "create_opportunity": return t("action.create_opportunity");
       case "create_task": return t("action.create_task") + (a.title ? `: ${a.title}` : "");
       case "notify_owner": return t("action.notify_owner");
@@ -180,7 +215,7 @@ export function AutomationsClient({
         minValue: rule.config.minValue ? String(rule.config.minValue) : "",
         maxValue: rule.config.maxValue ? String(rule.config.maxValue) : "",
         actions: rule.actions,
-        layout: normalizeLayout(rule.actions.length, rule.config.layout ?? {}),
+        layout: normalizeLayout(rule.actions, rule.config.layout ?? {}),
         wa: rule.config.whatsapp ?? emptyWa(),
       });
     } else {
@@ -188,12 +223,12 @@ export function AutomationsClient({
     }
   }
 
-  /** Switching to the WhatsApp trigger puts "Responder com IA" first, which the
-   *  flow requires; the canvas layout restarts so nodes don't overlap. */
+  /** Switching to the WhatsApp trigger puts "Fazer perguntas" first, since the
+   *  flow needs a first step; the canvas layout restarts so nodes don't overlap. */
   function changeTrigger(next: TriggerType) {
     setDraft((d) => {
       if (!d) return d;
-      if (!isWhatsappTrigger(next) || d.actions.some((a) => a.type === "ask_questions")) return { ...d, trigger: next };
+      if (!isWhatsappTrigger(next) || d.actions.some(isFlowStep)) return { ...d, trigger: next };
       return { ...d, trigger: next, actions: [newAction("ask_questions"), ...d.actions], layout: {} };
     });
   }
@@ -203,41 +238,89 @@ export function AutomationsClient({
   const availableActions = ACTION_TYPES.filter((type) => {
     if (!WHATSAPP_ONLY_ACTIONS.includes(type)) return true;
     if (!isWa) return false;
-    return type !== "ask_questions" || !draft?.actions.some((a) => a.type === "ask_questions");
+    // A rule has one first step: "Fazer perguntas" or "Menu de opções".
+    return type === "create_opportunity" || !draft?.actions.some(isFlowStep);
   });
+  const menu = draft ? menuOf(draft.actions) : null;
 
-  function posOf(key: "trigger" | number): NodePos {
+  function posOf(key: NodeKey): NodePos {
     if (!draft) return { x: 0, y: 0 };
-    if (key === "trigger") return draft.layout.trigger ?? defaultPos("trigger");
-    return draft.layout.actions?.[key] ?? defaultPos(key);
+    const saved =
+      key === "trigger" ? draft.layout.trigger
+      : typeof key === "number" ? draft.layout.actions?.[key]
+      : draft.layout.branches?.[key.branch];
+    return saved ?? defaultPos(key, draft.actions, draft.layout);
   }
+  const isSelected = (key: NodeKey) =>
+    typeof key === "object" ? typeof selected === "object" && selected?.branch === key.branch : selected === key;
 
   function patchAction(i: number, next: RuleAction) {
     setDraft((d) => (d ? { ...d, actions: d.actions.map((x, j) => (j === i ? next : x)) } : d));
   }
 
   function addAction(type: ActionType) {
+    const first = type === "ask_questions" || type === "ask_menu";
     setDraft((d) => {
       if (!d) return d;
+      const action = newAction(type, templates[0]?.id, stages[0]?.id, members[0]?.id);
+      // The first step goes before everything else; the canvas re-lays out around it.
+      if (first) return { ...d, actions: [action, ...d.actions], layout: { trigger: d.layout.trigger } };
       const idx = d.actions.length;
-      const actions = [...d.actions, newAction(type, templates[0]?.id, stages[0]?.id, members[0]?.id)];
+      const actions = [...d.actions, action];
       const layoutActions = [...(d.layout.actions ?? [])];
-      layoutActions[idx] = posOf(idx);
+      layoutActions[idx] = defaultPos(idx, actions, d.layout);
       return { ...d, actions, layout: { ...d.layout, actions: layoutActions } };
     });
-    setSelected(draft ? draft.actions.length : null);
+    setSelected(first ? 0 : draft ? draft.actions.length : null);
   }
 
   function removeAction(i: number) {
     setDraft((d) => {
       if (!d) return d;
+      const droppedMenu = d.actions[i]?.type === "ask_menu";
       return {
         ...d,
         actions: d.actions.filter((_, j) => j !== i),
-        layout: { ...d.layout, actions: (d.layout.actions ?? []).filter((_, j) => j !== i) },
+        layout: {
+          ...d.layout,
+          actions: (d.layout.actions ?? []).filter((_, j) => j !== i),
+          branches: droppedMenu ? undefined : d.layout.branches,
+        },
       };
     });
     setSelected("trigger");
+  }
+
+  // ── Menu options: each one is also a canvas node, so its position follows it ──
+  function patchMenu(update: (options: MenuOption[], branches: NodePos[]) => [MenuOption[], NodePos[]]) {
+    setDraft((d) => {
+      const m = d ? menuOf(d.actions) : null;
+      if (!d || !m) return d;
+      const branches = fullLayout(d.actions, d.layout).branches ?? [];
+      const [options, nextBranches] = update(m.options, branches);
+      return {
+        ...d,
+        actions: [{ ...m, options }, ...d.actions.slice(1)],
+        layout: { ...d.layout, branches: nextBranches },
+      };
+    });
+  }
+  function patchOption(i: number, next: MenuOption) {
+    patchMenu((options, branches) => [options.map((o, j) => (j === i ? next : o)), branches]);
+  }
+  function removeOption(i: number) {
+    patchMenu((options, branches) => [options.filter((_, j) => j !== i), branches.filter((_, j) => j !== i)]);
+    setSelected((s) => (typeof s === "object" && s !== null ? 0 : s));
+  }
+  function moveOption(i: number, delta: -1 | 1) {
+    const swap = <T,>(list: T[]) => {
+      const j = i + delta;
+      if (j < 0 || j >= list.length) return list;
+      const next = [...list];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    };
+    patchMenu((options, branches) => [swap(options), swap(branches)]);
   }
 
   // ── Dragging ───────────────────────────────────────────────────────────────
@@ -257,7 +340,7 @@ export function AutomationsClient({
     window.addEventListener("mouseup", onUp);
   }
 
-  function startDrag(key: "trigger" | number, e: React.MouseEvent) {
+  function startDrag(key: NodeKey, e: React.MouseEvent) {
     if (!canEdit) return;
     const el = canvasRef.current;
     if (!el) return;
@@ -278,6 +361,12 @@ export function AutomationsClient({
       setDraft((d) => {
         if (!d) return d;
         if (key === "trigger") return { ...d, layout: { ...d.layout, trigger: { x, y } } };
+        if (typeof key === "object") {
+          // Fill every option's position so indices stay aligned when saved.
+          const arr = [...(fullLayout(d.actions, d.layout).branches ?? [])];
+          arr[key.branch] = { x, y };
+          return { ...d, layout: { ...d.layout, branches: arr } };
+        }
         const arr = [...(d.layout.actions ?? [])];
         arr[key] = { x, y };
         return { ...d, layout: { ...d.layout, actions: arr } };
@@ -294,9 +383,11 @@ export function AutomationsClient({
   function save() {
     if (!draft) return;
     setError(null);
+    // Saved with every node's position, one per option, so indices line up on reopen.
+    const layout = fullLayout(draft.actions, draft.layout);
     const config: RuleConfig = isWa
-      ? { layout: draft.layout, whatsapp: draft.wa }
-      : { minValue: parseMoney(draft.minValue), maxValue: parseMoney(draft.maxValue), layout: draft.layout };
+      ? { layout, whatsapp: draft.wa }
+      : { minValue: parseMoney(draft.minValue), maxValue: parseMoney(draft.maxValue), layout };
     const problem = ruleProblem({ ...draft, config });
     if (problem) return setError(t(`problem.${problem}`));
     const payload = { name: draft.name, trigger: draft.trigger, triggerStageId: draft.triggerStageId, actions: draft.actions, config };
@@ -315,13 +406,32 @@ export function AutomationsClient({
       start(async () => { await deleteRule(id); router.refresh(); });
     });
   }
-  const toggle = (id: string, enabled: boolean) => start(async () => { await toggleRule(id, enabled); router.refresh(); });
+  const toggle = (id: string, enabled: boolean) =>
+    start(async () => {
+      setListError(null);
+      const r = await toggleRule(id, enabled);
+      if (r.error) setListError(t(`err.${r.error}`));
+      router.refresh();
+    });
 
   // Connector line between two node centers.
-  const center = (key: "trigger" | number) => {
+  const center = (key: NodeKey) => {
     const p = posOf(key);
     return { x: p.x + NODE_W / 2, y: p.y + 34 };
   };
+  const link = (from: NodeKey, to: NodeKey) => {
+    const a = center(from);
+    const b = center(to);
+    return `M ${a.x} ${a.y} C ${a.x} ${(a.y + b.y) / 2}, ${b.x} ${(a.y + b.y) / 2}, ${b.x} ${b.y}`;
+  };
+  // With a menu, the options sit between it and the next step instead of a direct line.
+  const links: [NodeKey, NodeKey][] = draft
+    ? draft.actions.flatMap((_, i): [NodeKey, NodeKey][] => {
+        if (i === 0) return [["trigger", 0], ...(menu?.options.map((_, b): [NodeKey, NodeKey] => [0, { branch: b }]) ?? [])];
+        if (i === 1 && menu) return menu.options.map((_, b): [NodeKey, NodeKey] => [{ branch: b }, 1]);
+        return [[i - 1, i]];
+      })
+    : [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -353,8 +463,9 @@ export function AutomationsClient({
           </div>
 
           <div className="grid gap-3 lg:grid-cols-[1fr_18rem]">
-            {/* Canvas (relative wrapper holds the floating zoom controls). */}
-            <div className="relative">
+            {/* Canvas (relative wrapper holds the floating zoom controls). It keeps
+                the canvas height even when the inspector beside it is taller. */}
+            <div className="relative self-start">
               <div
                 ref={canvasRef}
                 className="relative h-[26rem] cursor-grab overflow-hidden rounded-xl border border-border active:cursor-grabbing"
@@ -374,23 +485,21 @@ export function AutomationsClient({
                   onMouseDown={startPan}
                 >
                   <svg width={2400} height={1600} className="pointer-events-none absolute left-0 top-0" aria-hidden>
-                    {draft.actions.map((_, i) => {
-                      const from = i === 0 ? center("trigger") : center(i - 1);
-                      const to = center(i);
-                      return <path key={i} d={`M ${from.x} ${from.y} C ${from.x} ${(from.y + to.y) / 2}, ${to.x} ${(from.y + to.y) / 2}, ${to.x} ${to.y}`} fill="none" stroke="var(--color-brand)" strokeOpacity="0.5" strokeWidth="2" />;
-                    })}
+                    {links.map(([from, to], i) => (
+                      <path key={i} d={link(from, to)} fill="none" stroke="var(--color-brand)" strokeOpacity="0.5" strokeWidth="2" />
+                    ))}
                   </svg>
 
                   <CanvasNode
                     pos={posOf("trigger")}
-                    selected={selected === "trigger"}
+                    selected={isSelected("trigger")}
                     tone="bg-brand/10 text-brand"
                     icon={Zap}
                     label={t("triggerLabel")}
                     summary={
                       t(`trigger.${draft.trigger}`) +
                       (triggerNeedsStage(draft.trigger) ? ` · ${stageName(draft.triggerStageId)}` : "") +
-                      (isWa && draft.wa.keyword ? ` · "${draft.wa.keyword}"` : "")
+                      (isWa ? waSummary(draft.wa) : "")
                     }
                     onSelect={() => setSelected("trigger")}
                     onDragStart={(e) => startDrag("trigger", e)}
@@ -400,7 +509,7 @@ export function AutomationsClient({
                     <CanvasNode
                       key={i}
                       pos={posOf(i)}
-                      selected={selected === i}
+                      selected={isSelected(i)}
                       tone="bg-muted text-foreground"
                       icon={ACTION_ICON[a.type]}
                       label={t(`action.${a.type}`)}
@@ -409,6 +518,22 @@ export function AutomationsClient({
                       onDragStart={(e) => startDrag(i, e)}
                       onRemove={() => removeAction(i)}
                       removeLabel={t("removeAction")}
+                    />
+                  ))}
+
+                  {menu?.options.map((o, b) => (
+                    <CanvasNode
+                      key={`branch-${b}`}
+                      pos={posOf({ branch: b })}
+                      selected={isSelected({ branch: b })}
+                      tone="bg-card text-foreground border-b border-dashed border-border"
+                      icon={CornerDownRight}
+                      label={`${b + 1} · ${o.label.trim() || t("optionTitle", { n: b + 1 })}`}
+                      summary={o.questions.length ? t("questionsCount", { count: o.questions.length }) : t("optionFinalOnly")}
+                      onSelect={() => setSelected({ branch: b })}
+                      onDragStart={(e) => startDrag({ branch: b }, e)}
+                      onRemove={() => removeOption(b)}
+                      removeLabel={t("removeOption")}
                     />
                   ))}
                 </div>
@@ -455,13 +580,26 @@ export function AutomationsClient({
                         />
                       </Field>
                       {connections.length === 0 ? <p className="text-xs text-muted-foreground">{t("waNoConnections")}</p> : null}
-                      <Field label={t("waKeyword")}>
-                        <Input value={draft.wa.keyword} onChange={(e) => setDraft({ ...draft, wa: { ...draft.wa, keyword: e.target.value.slice(0, 60) } })} placeholder={t("waKeywordPlaceholder")} className="h-9" />
+                      <Field label={t("waStart")}>
+                        <Select
+                          value={draft.wa.start}
+                          onChange={(v) => setDraft({ ...draft, wa: { ...draft.wa, start: (v === "any" ? "any" : "keyword") as WhatsappStart } })}
+                          options={(["keyword", "any"] as const).map((s) => ({ value: s, label: t(`waStartMode.${s}`) }))}
+                        />
                       </Field>
-                      <Field label={t("waMatch")}>
-                        <Select value={draft.wa.match} onChange={(v) => setDraft({ ...draft, wa: { ...draft.wa, match: v === "exact" ? "exact" : "contains" } })} options={(["contains", "exact"] as const).map((m) => ({ value: m, label: t(`waMatchMode.${m}`) }))} />
-                      </Field>
-                      <p className="text-xs text-muted-foreground">{t("waMatchHint")}</p>
+                      {draft.wa.start === "any" ? (
+                        <p className="text-xs text-muted-foreground">{t("waStartAnyHint")}</p>
+                      ) : (
+                        <>
+                          <Field label={t("waKeyword")}>
+                            <Input value={draft.wa.keyword} onChange={(e) => setDraft({ ...draft, wa: { ...draft.wa, keyword: e.target.value.slice(0, 60) } })} placeholder={t("waKeywordPlaceholder")} className="h-9" />
+                          </Field>
+                          <Field label={t("waMatch")}>
+                            <Select value={draft.wa.match} onChange={(v) => setDraft({ ...draft, wa: { ...draft.wa, match: v === "exact" ? "exact" : "contains" } })} options={(["contains", "exact"] as const).map((m) => ({ value: m, label: t(`waMatchMode.${m}`) }))} />
+                          </Field>
+                          <p className="text-xs text-muted-foreground">{t("waMatchHint")}</p>
+                        </>
+                      )}
                     </>
                   ) : (
                     <>
@@ -478,9 +616,18 @@ export function AutomationsClient({
                 <ActionInspector
                   action={draft.actions[selected]}
                   onChange={(next) => patchAction(selected, next)}
+                  onRemoveOption={removeOption}
+                  onMoveOption={moveOption}
                   templates={templates}
                   stages={stages}
                   members={members}
+                  t={t}
+                />
+              ) : typeof selected === "object" && selected && menu?.options[selected.branch] ? (
+                <OptionInspector
+                  index={selected.branch}
+                  option={menu.options[selected.branch]}
+                  onChange={(next) => patchOption(selected.branch, next)}
                   t={t}
                 />
               ) : (
@@ -498,6 +645,7 @@ export function AutomationsClient({
       ) : null}
 
       {/* ── Rule list ─────────────────────────────────────────────────────── */}
+      {listError ? <p className="text-sm text-red-500">{listError}</p> : null}
       {rules.length === 0 && !draft ? (
         <p className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">{t("empty")}</p>
       ) : (
@@ -529,7 +677,7 @@ export function AutomationsClient({
                     <span className="rounded-md bg-brand/10 px-2 py-0.5 font-medium text-brand">
                       {t(`trigger.${rule.trigger}`)}
                       {triggerNeedsStage(rule.trigger) ? ` · ${stageName(rule.triggerStageId)}` : ""}
-                      {isWhatsappTrigger(rule.trigger) && rule.config.whatsapp ? ` · "${rule.config.whatsapp.keyword}"` : ""}
+                      {isWhatsappTrigger(rule.trigger) && rule.config.whatsapp ? waSummary(rule.config.whatsapp) : ""}
                     </span>
                     {rule.actions.map((a, i) => (
                       <span key={i} className="rounded-md bg-muted px-2 py-0.5 text-muted-foreground">→ {actionSummary(a)}</span>
@@ -580,28 +728,13 @@ function CanvasNode({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function Select({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; placeholder?: string }) {
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="h-9 rounded-lg border border-border bg-card px-2 text-sm focus-visible:border-brand focus-visible:outline-none">
-      {placeholder ? <option value="">{placeholder}</option> : null}
-      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
-  );
-}
-
 function ActionInspector({
-  action, onChange, templates, stages, members, t,
+  action, onChange, onRemoveOption, onMoveOption, templates, stages, members, t,
 }: {
-  action: RuleAction; onChange: (a: RuleAction) => void; templates: Template[]; stages: Stage[]; members: Member[];
+  action: RuleAction; onChange: (a: RuleAction) => void;
+  /** Menu options are canvas nodes too, so removing/reordering one goes through the editor. */
+  onRemoveOption: (i: number) => void; onMoveOption: (i: number, delta: -1 | 1) => void;
+  templates: Template[]; stages: Stage[]; members: Member[];
   t: ReturnType<typeof useTranslations>;
 }) {
   return (
@@ -613,44 +746,15 @@ function ActionInspector({
           <Field label={t("welcomeMessage")}>
             <textarea value={action.firstMessage ?? ""} onChange={(e) => onChange({ ...action, firstMessage: e.target.value })} rows={3} placeholder={t("welcomeMessagePlaceholder")} className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none" />
           </Field>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">{t("questions")}</span>
-            {action.questions.map((q, i) => (
-              <div key={i} className="flex flex-col gap-1 rounded-lg border border-border p-2">
-                <div className="flex items-start gap-1.5">
-                  <span className="mt-1.5 w-4 shrink-0 text-xs tabular-nums text-muted-foreground">{i + 1}</span>
-                  <textarea
-                    value={q.label}
-                    onChange={(e) => onChange({ ...action, questions: action.questions.map((x, j) => (j === i ? { ...x, label: e.target.value.slice(0, 300) } : x)) })}
-                    placeholder={t("questionPlaceholder")}
-                    aria-label={`${t("questions")} ${i + 1}`}
-                    rows={2}
-                    className="min-w-0 flex-1 rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none"
-                  />
-                  <button type="button" onClick={() => onChange({ ...action, questions: action.questions.filter((_, j) => j !== i) })} aria-label={t("removeQuestion")} className="mt-1 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"><X className="size-3.5" /></button>
-                </div>
-                <Select
-                  value={q.field}
-                  onChange={(v) => onChange({ ...action, questions: action.questions.map((x, j) => (j === i ? { ...x, field: v as QuestionField } : x)) })}
-                  options={QUESTION_FIELDS.map((f) => ({ value: f, label: t(`answerField.${f}`) }))}
-                />
-              </div>
-            ))}
-            <button
-              type="button"
-              onClick={() => onChange({ ...action, questions: [...action.questions, { label: "", field: "notes" }] })}
-              disabled={action.questions.length >= MAX_FLOW_QUESTIONS}
-              className="inline-flex items-center gap-1 self-start text-xs font-medium text-brand hover:underline disabled:opacity-50"
-            >
-              <Plus className="size-3.5" />
-              {t("addQuestion")}
-            </button>
-            <p className="text-xs text-muted-foreground">{t("questionsHint")}</p>
-          </div>
+          <QuestionsEditor questions={action.questions} onChange={(questions) => onChange({ ...action, questions })} t={t} />
           <Field label={t("finalMessage")}>
             <textarea value={action.finalMessage ?? ""} onChange={(e) => onChange({ ...action, finalMessage: e.target.value })} rows={2} placeholder={t("finalMessagePlaceholder")} className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none" />
           </Field>
         </>
+      ) : null}
+
+      {action.type === "ask_menu" ? (
+        <MenuInspector step={action} onChange={onChange} onRemoveOption={onRemoveOption} onMoveOption={onMoveOption} t={t} />
       ) : null}
 
       {action.type === "create_opportunity" ? <p className="text-xs text-muted-foreground">{t("createOppHint")}</p> : null}

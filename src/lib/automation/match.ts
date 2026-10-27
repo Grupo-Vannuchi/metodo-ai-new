@@ -1,7 +1,7 @@
 import type { KeywordMatch } from "@/lib/automation/types";
 
 /** Lowercase, no accents, punctuation folded into single spaces. */
-function normalizeText(s: string): string {
+export function normalizeText(s: string): string {
   return s
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
