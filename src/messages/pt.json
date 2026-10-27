@@ -1150,8 +1150,30 @@
         "exact": "Mensagem só com a palavra"
       },
       "waMatchHint": "Qualquer número que mandar a palavra inicia o fluxo. Maiúsculas e acentos não fazem diferença. Depois que o fluxo abre, as respostas seguem sem a palavra; a conversa sai do fluxo após 24 h sem resposta.",
+      "waStart": "O fluxo começa",
+      "waStartMode": {
+        "keyword": "Com uma palavra-chave",
+        "any": "Com qualquer mensagem"
+      },
+      "waStartAnyHint": "Quem escrever para este número recebe o fluxo se a conversa for nova ou estiver parada há 7 dias. Conversas atribuídas a alguém ficam de fora, e regras com palavra-chave neste número têm prioridade.",
+      "waStartAnyShort": "qualquer mensagem",
       "questionsCount": "{count, plural, one {# pergunta} other {# perguntas}}",
       "optionsCount": "{count, plural, one {# opção} other {# opções}}",
+      "menuQuestion": "Pergunta do menu",
+      "menuQuestionPlaceholder": "Ex.: Sobre qual evento você deseja falar?",
+      "menuOptions": "Opções, nesta ordem",
+      "menuOptionPlaceholder": "Ex.: Evento X",
+      "addOption": "Adicionar opção",
+      "removeOption": "Remover opção",
+      "moveOptionUp": "Subir",
+      "moveOptionDown": "Descer",
+      "menuOptionsHint": "De 2 a 9 opções. As perguntas de cada uma ficam no bloco dela.",
+      "menuPreview": "Como o lead vê",
+      "menuInvalidHint": "Se a resposta não for uma das opções, o menu é enviado de novo.",
+      "optionLabel": "Nome da opção",
+      "optionTitle": "Opção {n}",
+      "optionNoQuestions": "Nenhuma pergunta. O lead recebe a mensagem final logo depois de escolher.",
+      "optionFinalOnly": "só a mensagem final",
       "welcomeMessage": "Mensagem de boas-vindas",
       "welcomeMessagePlaceholder": "Ex.: Olá! Que bom falar com você. Vou fazer algumas perguntas rápidas.",
       "questions": "Perguntas, nesta ordem",
@@ -1173,9 +1195,11 @@
         "stage": "Escolha o estágio do gatilho.",
         "connection": "Escolha o número que recebe as mensagens.",
         "keyword": "Defina a palavra que inicia o fluxo.",
-        "questionsFirst": "Com o gatilho de WhatsApp, a primeira ação precisa ser \"Fazer perguntas\", e só uma.",
+        "questionsFirst": "Com o gatilho de WhatsApp, o primeiro passo precisa ser \"Fazer perguntas\" ou \"Menu de opções\", e só um deles.",
         "questions": "Preencha todas as perguntas.",
-        "whatsappOnly": "\"Fazer perguntas\" e \"Criar oportunidade\" só funcionam com o gatilho de WhatsApp."
+        "menuQuestion": "Escreva a pergunta do menu.",
+        "menuOptions": "O menu precisa de pelo menos 2 opções, todas com nome.",
+        "whatsappOnly": "\"Fazer perguntas\", \"Menu de opções\" e \"Criar oportunidade\" só funcionam com o gatilho de WhatsApp."
       },
       "trigger": {
         "opportunity_created": "Oportunidade criada",
@@ -1207,7 +1231,8 @@
         "invalid": "Preencha o nome, o gatilho e ao menos uma ação.",
         "forbidden": "Sem permissão.",
         "unauthorized": "Sessão expirada.",
-        "unknown": "Algo deu errado."
+        "unknown": "Algo deu errado.",
+        "anyTaken": "Este número já tem uma regra ativa que começa com qualquer mensagem. Desative a outra primeiro."
       }
     },
     "goals": {
