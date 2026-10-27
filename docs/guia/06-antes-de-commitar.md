@@ -43,6 +43,19 @@ resposta escolhe. Em [src/lib/automation/flow-core.ts](../../src/lib/automation/
 caminho ativo, quando "qualquer mensagem" começa, e as notas e o título da oportunidade. Não usa banco nem
 rede. Rode sempre que mexer em `src/lib/automation/`.
 
+`npm run check:automation:e2e` testa a conversa inteira da automação de WhatsApp contra o `next dev` em
+:3000 ([scripts/check-automation-e2e.ts](../../scripts/check-automation-e2e.ts)). O lead escreve pelo
+webhook da Evolution e o bot responde para uma Evolution falsa em :4999, então nenhuma mensagem sai de
+verdade. Os casos cobrem:
+- menu por palavra-chave e por qualquer mensagem, resposta inválida, opção sem perguntas, regra antiga;
+- conversa recente, atribuída ou parada há 8 dias;
+- lead que some 25 h, com e sem resposta da equipe depois;
+- "Oi" + "tudo bem?" seguidos, e regra editada no meio da conversa.
+
+Cria uma organização de teste e apaga tudo o que criou, inclusive sobras de uma rodada interrompida.
+Precisa do Postgres do Docker e do `next dev` no ar; se o Turbopack responder 404 nas rotas de API, suba
+com `npx next dev --webpack`. Cada turno espera o debounce de 8 s, então leva uns dois minutos.
+
 `npm run check:search` cobre o filtro da busca ao digitar
 ([src/lib/search-options.ts](../../src/lib/search-options.ts): sem acento e sem maiúscula, quem começa
 com o texto vem primeiro, limite da lista). Ele é usado pelo `SearchSelect`
