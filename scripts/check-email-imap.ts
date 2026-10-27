@@ -1258,7 +1258,7 @@ check("an e-mail over the size cap is not downloaded: its headers and a notice a
   assert.deepEqual(d.cc, [{ name: "Financeiro", email: "financeiro@exemplo.com.br" }]);
   assert.deepEqual(d.attachments, []);
   assert.equal(d.webLink, null);
-  assert.ok(d.bodyDocument.includes("15 MB"), "the notice says why");
+  assert.equal(d.notice, "tooBig", "the screen words the notice");
   assert.ok(!d.bodyDocument.includes("Segue a tabela") && !d.bodyDocument.includes("data:image"), "the body was not downloaded");
   assert.equal(reason(file), "not_found", "nor are its attachments");
 });
@@ -1299,7 +1299,7 @@ check("a message the parser refuses shows its headers and a notice, not an error
   assert.equal(detail.data.subject, "Mensagem em camadas");
   assert.deepEqual(detail.data.from, { name: "Estranho", email: "estranho@exemplo.com.br" });
   assert.deepEqual(detail.data.attachments, []);
-  assert.ok(detail.data.bodyDocument.includes("Não foi possível mostrar"), "the notice says it can't be shown");
+  assert.equal(detail.data.notice, "unreadable", "the screen words the notice");
   assert.ok(!detail.data.bodyDocument.includes("no fundo"));
   assert.equal(detail.data.isRead, true);
   assert.equal(page.messages[0].id, id);

@@ -165,7 +165,7 @@ import {
   inboxSearchFromParam,
   isGraphId,
   matchReplyToSend,
-  microsoftTabFromParam,
+  mailboxTabFromParam,
   neutralizeOpeners,
   normalizeSubject,
   replaceCidImages,
@@ -2063,9 +2063,9 @@ check("every paused and failure text key the helpers return exists in pt.json an
 
 // --- Microsoft inbox ---------------------------------------------------------
 check("inbox tab, filter and search come from the URL with safe defaults", () => {
-  assert.equal(microsoftTabFromParam("caixa"), "caixa");
-  assert.equal(microsoftTabFromParam(undefined), "envios");
-  assert.equal(microsoftTabFromParam("x"), "envios");
+  assert.equal(mailboxTabFromParam("caixa"), "caixa");
+  assert.equal(mailboxTabFromParam(undefined), "envios");
+  assert.equal(mailboxTabFromParam("x"), "envios");
   assert.equal(inboxFilterFromParam(["nao-lidas"]), "nao-lidas");
   assert.equal(inboxFilterFromParam("respostas"), "respostas");
   assert.equal(inboxFilterFromParam("tudo"), "todas");
@@ -2086,6 +2086,15 @@ check("inboxHref keeps only what differs from the defaults", () => {
     inboxHref({ filtro: "nao-lidas", q: "tabela de preço", msg: "AAMk=" }),
     "/app/email?canal=microsoft&aba=caixa&filtro=nao-lidas&q=tabela+de+pre%C3%A7o&msg=AAMk%3D",
   );
+});
+
+check("inboxHref carries the SMTP channel when asked", () => {
+  assert.equal(
+    inboxHref({ canal: "smtp", filtro: "nao-lidas", q: "x", msg: "1.2" }),
+    "/app/email?canal=smtp&aba=caixa&filtro=nao-lidas&q=x&msg=1.2",
+  );
+  assert.equal(inboxHref({ canal: "smtp" }), "/app/email?canal=smtp&aba=caixa");
+  assert.equal(inboxHref({ canal: "microsoft" }), inboxHref());
 });
 
 check("isGraphId accepts Graph ids and refuses anything that could bend a URL", () => {

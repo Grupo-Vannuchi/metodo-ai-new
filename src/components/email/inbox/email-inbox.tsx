@@ -2,6 +2,7 @@ import { getFormatter, getTranslations } from "next-intl/server";
 import { ArrowLeft, Download, MailOpen, Paperclip, Reply, UserRound } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { loadInboxView } from "@/lib/email-broadcast/microsoft/inbox";
+import { loadImapInboxView } from "@/lib/email-broadcast/imap/inbox";
 import {
   INBOX_PAGE_SIZE,
   inboxHref,
@@ -9,10 +10,12 @@ import {
   type InboxAddress,
   type InboxFilter,
   type InboxMessageDetail,
+  type MailboxChannel,
   type ReplyMatch,
 } from "@/lib/email-broadcast/microsoft/inbox-core";
-import { crmContactsByEmail, microsoftSendsTo, type InboxCrmContact } from "@/lib/queries/email-inbox";
+import { crmContactsByEmail, mailboxSendsTo, type InboxCrmContact } from "@/lib/queries/email-inbox";
 import type { SenderAccountView } from "@/lib/email-broadcast/types";
+import { IMAP_MAX_MESSAGE_BYTES } from "@/lib/email-broadcast/imap/parse";
 import { SenderAccountPanel } from "@/components/email/sender-account-panel";
 import { InboxSearch } from "@/components/email/inbox/inbox-search";
 import { InboxReply } from "@/components/email/inbox/inbox-reply";
@@ -35,12 +38,13 @@ function initials(label: string): string {
 }
 
 /**
- * The connected Microsoft mailbox's Inbox inside E-mail (list + reading pane).
- * Server-rendered from Microsoft Graph on every request; nothing from the
- * mailbox is stored. The CRM card shows only when the server says the member
+ * The connected mailbox's Inbox inside E-mail (list + reading pane): the
+ * Microsoft one, or the company's SMTP account read over IMAP. Server-rendered
+ * from the mailbox on every request; nothing from it is stored. The CRM card shows only when the server says the member
  * can see contacts (`showCrm`).
  */
 export async function EmailInbox({
+  channel,
   organizationId,
   account,
   filter,
@@ -48,6 +52,7 @@ export async function EmailInbox({
   messageId,
   showCrm,
 }: {
+  channel: MailboxChannel;
   organizationId: string;
   account: SenderAccountView;
   filter: InboxFilter;
@@ -60,24 +65,34 @@ export async function EmailInbox({
   const now = new Date();
 
   // One load for the list and the open e-mail: the mailbox takes few concurrent calls.
-  const view = await loadInboxView(organizationId, { search, unreadOnly: filter === "nao-lidas", messageId });
+  const smtp = channel === "smtp";
+  const load = smtp ? loadImapInboxView : loadInboxView;
+  const view = await load(organizationId, { search, unreadOnly: filter === "nao-lidas", messageId });
 
   if (!view.ok) {
     if (view.reason === "reconnect" || view.reason === "no_account") {
       return (
         <div className="max-w-2xl">
           <SenderAccountPanel
-            provider="MICROSOFT"
+            provider={smtp ? "SMTP" : "MICROSOFT"}
             account={account.status === "ACTIVE" ? { ...account, status: "NEEDS_RECONNECT" } : account}
           />
         </div>
       );
     }
+    // A search the server refused. Without text it was the "Não lidas" filter (SMTP only): there are no words to change.
+    const refused = view.reason === "not_found";
+    const filterRefused = refused && !search;
     return (
       <div className="flex flex-col items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-5 py-4 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-        <p className="text-sm">{search && view.reason === "not_found" ? t("searchFailed") : t("loadFailed")}</p>
-        <Link href={inboxHref({ filtro: filter })} className={buttonVariants({ variant: "outline", size: "sm" })}>
-          {t("tryAgain")}
+        <p className="text-sm">
+          {refused && search ? t("searchFailed") : filterRefused && smtp ? t("filterFailed") : t("loadFailed")}
+        </p>
+        <Link
+          href={inboxHref({ canal: channel, filtro: filterRefused && smtp ? "todas" : filter })}
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
+          {filterRefused && smtp ? t("showAll") : t("tryAgain")}
         </Link>
       </div>
     );
@@ -91,7 +106,7 @@ export async function EmailInbox({
   const senders = [...messages.map((m) => m.from.email), detail?.from.email ?? null];
   const [contacts, sends] = await Promise.all([
     showCrm ? crmContactsByEmail(organizationId, senders) : Promise.resolve(new Map<string, InboxCrmContact>()),
-    microsoftSendsTo(organizationId, senders),
+    mailboxSendsTo(organizationId, smtp ? "SMTP" : "MICROSOFT", senders),
   ]);
   const replyOf = (m: { from: InboxAddress; subject: string; receivedAt: string }): ReplyMatch | null =>
     matchReplyToSend({ fromEmail: m.from.email, subject: m.subject, receivedAt: new Date(m.receivedAt) }, sends);
@@ -108,7 +123,7 @@ export async function EmailInbox({
   };
 
   const emptyText = search ? t("emptySearch", { q: search }) : filter === "todas" ? t("empty") : t("emptyFilter");
-  const listHref = inboxHref({ filtro: filter, q: search });
+  const listHref = inboxHref({ canal: channel, filtro: filter, q: search });
 
   return (
     <div className="flex min-h-[640px] flex-col overflow-hidden rounded-xl border border-border bg-card md:flex-row">
@@ -120,12 +135,12 @@ export async function EmailInbox({
         )}
       >
         <div className="flex flex-col gap-3 border-b border-border p-4">
-          <InboxSearch search={search} filter={filter} messageId={messageId} />
+          <InboxSearch channel={channel} search={search} filter={filter} messageId={messageId} />
           <nav aria-label={t("filtersLabel")} className="flex flex-wrap gap-1.5">
             {FILTERS.map((f) => (
               <Link
                 key={f}
-                href={inboxHref({ filtro: f, q: search })}
+                href={inboxHref({ canal: channel, filtro: f, q: search })}
                 aria-current={f === filter ? "page" : undefined}
                 className={cn(
                   "inline-flex h-8 items-center gap-1 rounded-full border pl-3 pr-2 text-[13px] font-medium transition-colors",
@@ -154,7 +169,7 @@ export async function EmailInbox({
               return (
                 <li key={m.id} className="border-b border-border last:border-0">
                   <Link
-                    href={inboxHref({ filtro: filter, q: search, msg: m.id })}
+                    href={inboxHref({ canal: channel, filtro: filter, q: search, msg: m.id })}
                     prefetch={false}
                     aria-current={selected ? "true" : undefined}
                     className={cn(
@@ -235,6 +250,7 @@ export async function EmailInbox({
         ) : (
           <MessageView
             key={detail.id}
+            channel={channel}
             detail={detail}
             mailbox={account.email}
             contact={detail.from.email ? (contacts.get(detail.from.email) ?? null) : null}
@@ -255,6 +271,7 @@ export async function EmailInbox({
 }
 
 async function MessageView({
+  channel,
   detail,
   mailbox,
   contact,
@@ -264,6 +281,7 @@ async function MessageView({
   sentOn,
   sizeOf,
 }: {
+  channel: MailboxChannel;
   detail: InboxMessageDetail;
   mailbox: string;
   contact: InboxCrmContact | null;
@@ -350,13 +368,21 @@ async function MessageView({
         </div>
       ) : null}
 
-      <iframe
-        title={t("bodyTitle")}
-        srcDoc={detail.bodyDocument}
-        sandbox="allow-popups allow-popups-to-escape-sandbox"
-        referrerPolicy="no-referrer"
-        className="h-[60vh] min-h-80 w-full rounded-lg border border-border bg-white"
-      />
+      {detail.notice ? (
+        <p className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+          {t(detail.notice === "tooBig" ? "smtp.noticeTooBig" : "smtp.noticeUnreadable", {
+            mb: IMAP_MAX_MESSAGE_BYTES / (1024 * 1024),
+          })}
+        </p>
+      ) : (
+        <iframe
+          title={t("bodyTitle")}
+          srcDoc={detail.bodyDocument}
+          sandbox="allow-popups allow-popups-to-escape-sandbox"
+          referrerPolicy="no-referrer"
+          className="h-[60vh] min-h-80 w-full rounded-lg border border-border bg-white"
+        />
+      )}
 
       {detail.attachments.length > 0 ? (
         <div className="flex flex-col gap-2">
@@ -366,7 +392,7 @@ async function MessageView({
               <li key={a.id}>
                 {a.downloadable ? (
                   <a
-                    href={`/api/email/microsoft/attachment?${new URLSearchParams({ m: detail.id, a: a.id }).toString()}`}
+                    href={`/api/email/${channel}/attachment?${new URLSearchParams({ m: detail.id, a: a.id }).toString()}`}
                     download
                     className="inline-flex h-10 max-w-full items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm transition-colors hover:bg-muted"
                   >
@@ -389,7 +415,7 @@ async function MessageView({
         </div>
       ) : null}
 
-      <InboxReply messageId={detail.id} recipient={who} mailbox={mailbox} webLink={detail.webLink} />
+      <InboxReply channel={channel} messageId={detail.id} recipient={who} mailbox={mailbox} webLink={detail.webLink} />
     </article>
   );
 }

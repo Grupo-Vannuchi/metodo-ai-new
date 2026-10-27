@@ -10,6 +10,7 @@ import {
   SEARCH_MIN_CHARS,
   inboxHref,
   type InboxFilter,
+  type MailboxChannel,
 } from "@/lib/email-broadcast/microsoft/inbox-core";
 import { cn } from "@/lib/utils";
 
@@ -22,10 +23,12 @@ const TYPE_DEBOUNCE_MS = 400;
  * the whole list back. An open e-mail stays open.
  */
 export function InboxSearch({
+  channel,
   search,
   filter,
   messageId,
 }: {
+  channel: MailboxChannel;
   search: string;
   filter: InboxFilter;
   messageId: string | null;
@@ -43,11 +46,11 @@ export function InboxSearch({
   const [searching, startSearch] = useTransition();
   const [refreshing, startRefresh] = useTransition();
 
-  // The search runs at Microsoft (1–3 s): the transition keeps the spinner up until the page lands.
+  // The search runs at the mailbox's server (1–3 s): the transition keeps the spinner up until the page lands.
   // replace, not push: each keystroke must not become a history entry.
   function go(q: string) {
     setAsked(q);
-    startSearch(() => router.replace(inboxHref({ filtro: filter, q, msg: messageId ?? undefined })));
+    startSearch(() => router.replace(inboxHref({ canal: channel, filtro: filter, q, msg: messageId ?? undefined })));
   }
 
   useEffect(() => {

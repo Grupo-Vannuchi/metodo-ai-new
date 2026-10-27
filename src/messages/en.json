@@ -2031,6 +2031,25 @@
         "not_found": "This e-mail is no longer in the inbox.",
         "uncertain": "Microsoft didn't confirm the reply. Check Sent Items before replying again.",
         "unknown": "The reply couldn't be sent. Try again."
+      },
+      "filterFailed": "The mail server didn't accept the “Unread” filter right now. See all messages.",
+      "showAll": "See all",
+      "smtp": {
+        "tabsLabel": "SMTP account",
+        "replyHint": "Goes out from {email} and a copy is kept in Sent.",
+        "replySentHint": "Went out from {email} and a copy was kept in Sent.",
+        "sendingHint": "Sending the reply and saving a copy in Sent. It can take a few seconds; don't close this page.",
+        "noticeTooBig": "This e-mail is over {mb} MB and is not opened here. Open it in your mailbox's webmail.",
+        "noticeUnreadable": "This e-mail can't be shown here. Open it in your mailbox's webmail.",
+        "replyError": {
+          "unauthorized": "Your session expired. Sign in again.",
+          "forbidden": "You don't have access to the e-mail inbox.",
+          "invalid": "Write the reply (up to 10,000 characters).",
+          "reconnect": "The SMTP account needs to be reconnected before replying.",
+          "not_found": "The reply couldn't be sent: this e-mail is no longer in the inbox or has no address to reply to.",
+          "uncertain": "Reply uncertain: check Sent before trying again.",
+          "unknown": "The reply couldn't be sent. Try again."
+        }
       }
     },
     "fromMicrosoft": "From",

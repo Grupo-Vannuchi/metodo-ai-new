@@ -83,8 +83,10 @@ Não existe um terceiro lugar gateando alguma coisa. É sempre um destes três a
   O módulo `marketing` libera as telas `campaigns`, `email`, `emailInbox` e `prospecting`. A tela `email` (submenu
   E-mail, envio em massa via Resend) precisa ser marcada nos modelos de acesso para que membros a
   vejam; owner e admin veem direto. `emailInbox` ("Caixa de entrada do e-mail") não tem item de menu:
-  é a aba "Caixa de entrada" dentro de E-mail › Pela conta Microsoft, e libera ler e responder a caixa
-  Microsoft conectada da empresa. É separada de `email` para que um modelo de acesso possa liberar o
+  é a aba "Caixa de entrada" dentro de E-mail › Pela conta Microsoft e de E-mail › Por SMTP (esta só
+  quando a conta SMTP está ativa e tem IMAP configurado), e libera ler e responder a caixa conectada
+  da empresa nos dois canais. A página resolve o acesso no servidor (`canAccessScreen`) e passa o
+  resultado aos componentes. É separada de `email` para que um modelo de acesso possa liberar o
   envio sem liberar a leitura da caixa; quem tem modelo de acesso só vê a aba se o modelo marcar as
   duas telas. `emailInbox` também está em `OPT_IN_SCREENS` (mesmo arquivo): ler a caixa expõe
   redefinição de senha, código de 2FA e e-mail pessoal do dono da caixa, então MEMBER **sem**
@@ -160,7 +162,7 @@ para o tipo mas sem dono ainda — não gatear nada por elas por engano.
 
 ## Paridade de i18n
 
-`src/messages/pt.json` e `src/messages/en.json` têm **3190 chaves-folha cada um** (contagem
+`src/messages/pt.json` e `src/messages/en.json` têm **3205 chaves-folha cada um** (contagem
 própria, recursiva sobre os dois arquivos — batem exatamente). Não existe script no repositório
 que verifique a paridade inteira automaticamente: o único arquivo em `scripts/` que lê
 `pt.json`/`en.json` é o `check-email-broadcast.ts` (`npm run check:email`), e ele só confere que os

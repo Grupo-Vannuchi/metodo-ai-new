@@ -2031,6 +2031,25 @@
         "not_found": "Este e-mail não está mais na caixa de entrada.",
         "uncertain": "A Microsoft não confirmou o envio. Confira em Itens enviados antes de responder de novo.",
         "unknown": "Não foi possível enviar a resposta. Tente de novo."
+      },
+      "filterFailed": "O servidor de e-mail não aceitou o filtro “Não lidas” agora. Veja todas as mensagens.",
+      "showAll": "Ver todas",
+      "smtp": {
+        "tabsLabel": "Conta SMTP",
+        "replyHint": "Sai de {email} e uma cópia fica em Enviados.",
+        "replySentHint": "Saiu de {email} e uma cópia ficou em Enviados.",
+        "sendingHint": "Enviando a resposta e guardando uma cópia em Enviados. Pode levar alguns segundos; não feche esta página.",
+        "noticeTooBig": "Este e-mail tem mais de {mb} MB e não é aberto aqui. Abra-o no webmail da sua caixa.",
+        "noticeUnreadable": "Não foi possível mostrar este e-mail aqui. Abra-o no webmail da sua caixa.",
+        "replyError": {
+          "unauthorized": "Sua sessão expirou. Entre de novo.",
+          "forbidden": "Você não tem acesso à caixa de entrada do e-mail.",
+          "invalid": "Escreva a resposta (até 10.000 caracteres).",
+          "reconnect": "A conta SMTP precisa ser reconectada antes de responder.",
+          "not_found": "Não foi possível responder: este e-mail não está mais na caixa de entrada ou não tem um endereço para responder.",
+          "uncertain": "Resposta incerta: confira em Enviados antes de tentar de novo.",
+          "unknown": "Não foi possível enviar a resposta. Tente de novo."
+        }
       }
     },
     "fromMicrosoft": "De",

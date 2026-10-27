@@ -94,15 +94,6 @@ export const imapRequest = {
 const NOT_FOUND: MailboxFailure = Object.freeze({ ok: false, reason: "not_found" } as const);
 const TEMPORARY: MailboxFailure = Object.freeze({ ok: false, reason: "temporary" } as const);
 
-const MAX_MESSAGE_MB = IMAP_MAX_MESSAGE_BYTES / (1024 * 1024);
-/** In the body pane of an e-mail that is not opened here. There is no locale at this depth, so it says it in both languages. */
-const TOO_BIG_NOTICE =
-  `Este e-mail tem mais de ${MAX_MESSAGE_MB} MB e não é aberto aqui. Abra-o no webmail da sua caixa.\n\n` +
-  `This e-mail is over ${MAX_MESSAGE_MB} MB and is not opened here. Open it in your mailbox's webmail.`;
-const UNREADABLE_NOTICE =
-  "Não foi possível mostrar este e-mail aqui. Abra-o no webmail da sua caixa.\n\n" +
-  "This e-mail can't be shown here. Open it in your mailbox's webmail.";
-
 const BASE_QUERY: FetchQueryObject = { uid: true, flags: true, envelope: true, internalDate: true };
 /** What the list needs of each message: envelope, flags, internal date and body structure; never a body. */
 const LIST_QUERY: FetchQueryObject = { ...BASE_QUERY, bodyStructure: true };
@@ -441,12 +432,14 @@ function envelopeAddresses(list: { name?: string; address?: string }[] | undefin
 }
 
 /** An e-mail that isn't read whole: what the envelope says, and a notice in place of the body. */
-function headersOnly(summary: InboxMessageSummary, m: ListRow, notice: string): InboxMessageDetail {
+function headersOnly(summary: InboxMessageSummary, m: ListRow, notice: "tooBig" | "unreadable"): InboxMessageDetail {
   return {
     ...summary,
     to: envelopeAddresses(m.envelope.to),
     cc: envelopeAddresses(m.envelope.cc),
-    bodyDocument: inboxBodyDocument({ contentType: "text", content: notice }),
+    // The words come from the screen (pt/en): there is no locale at this depth.
+    bodyDocument: inboxBodyDocument({ contentType: "text", content: "" }),
+    notice,
     webLink: null,
     attachments: [],
   };
@@ -484,12 +477,12 @@ export async function openMessage(
   if (!isListRow(meta)) return { ok: false, reason: "not_found" };
   const summary = summaryOf(meta, uidValidity);
   if (meta.size === undefined || meta.size > maxBytes) {
-    return { ok: true, data: headersOnly(summary, meta, TOO_BIG_NOTICE) };
+    return { ok: true, data: headersOnly(summary, meta, "tooBig") };
   }
   const parsed = await readParsed(client, uid);
   if (parsed.ok) return { ok: true, data: detailFromParsed(summary, parsed.email) };
   if (parsed.why === "gone") return { ok: false, reason: "not_found" };
-  return { ok: true, data: headersOnly(summary, meta, UNREADABLE_NOTICE) };
+  return { ok: true, data: headersOnly(summary, meta, "unreadable") };
 }
 
 /**

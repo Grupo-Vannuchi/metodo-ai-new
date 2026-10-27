@@ -12,12 +12,14 @@ import { googleMailEnabledFor } from "@/lib/email-broadcast/google/oauth";
 import { microsoftMailConfigured } from "@/lib/email-broadcast/microsoft/oauth";
 import { deliveryTrackingConfigured } from "@/lib/email-broadcast/platform";
 import { inboxUnreadCount } from "@/lib/email-broadcast/microsoft/inbox";
+import { imapUnreadCount } from "@/lib/email-broadcast/imap/inbox";
+import { parseImapMessageRef } from "@/lib/email-broadcast/imap/core";
 import {
   inboxFilterFromParam,
   inboxHref,
   inboxSearchFromParam,
   isGraphId,
-  microsoftTabFromParam,
+  mailboxTabFromParam,
 } from "@/lib/email-broadcast/microsoft/inbox-core";
 import { listSenderDomains } from "@/lib/queries/email-sender-domains";
 import { BackButton } from "@/components/app/back-bar";
@@ -28,7 +30,7 @@ import { ChannelIcon } from "@/components/email/channel-icon";
 import { SenderAccountPanel } from "@/components/email/sender-account-panel";
 import { StatusBadge } from "@/components/email/status-badge";
 import { EmailInbox } from "@/components/email/inbox/email-inbox";
-import { MicrosoftTabs } from "@/components/email/inbox/microsoft-tabs";
+import { MailboxTabs } from "@/components/email/inbox/mailbox-tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { buttonVariants } from "@/components/ui/button";
 import { LIMITS } from "@/config/limits";
@@ -61,11 +63,17 @@ export default async function EmailPage({
   // Entering E-mail always asks the channel first (no remembered choice). SMTP has no pilot: every company
   // with E-mail may connect one, so there is always a channel to choose besides the platform.
   const view = listChannelFromParam(sp.canal, { microsoft: microsoftEnabled, google: googleEnabled, smtp: true });
-  // The Microsoft Inbox has its own screen key: a template can grant sending without reading.
-  const inboxAllowed = microsoftEnabled && canAccessScreen(ctx, "emailInbox");
-  /** Unread count for the badges (channel card, "Envios" tab), streamed so a slow Microsoft never holds the page. */
+  // The Inbox has its own screen key (Microsoft and the SMTP account's IMAP alike): a template can grant sending without reading.
+  const inboxScreen = canAccessScreen(ctx, "emailInbox");
+  const inboxAllowed = microsoftEnabled && inboxScreen;
+  /** Unread count for the badges (channel card, "Envios" tab), streamed so a slow mailbox never holds the page. */
   const unreadFor = (account: { status: string } | null) =>
     inboxAllowed && account?.status === "ACTIVE" ? inboxUnreadCount(ctx.organizationId).catch(() => null) : null;
+  /** The SMTP account has an Inbox only when it is active and has IMAP set up. */
+  const smtpInboxOf = (account: { status: string; imapHost: string | null } | null) =>
+    inboxScreen && account?.status === "ACTIVE" && account.imapHost ? account : null;
+  const smtpUnreadFor = (account: { status: string; imapHost: string | null } | null) =>
+    smtpInboxOf(account) ? imapUnreadCount(ctx.organizationId).catch(() => null) : null;
   const limit = LIMITS.emailBroadcastQuotaPerMonth;
 
   const header = (newHref: string) => (
@@ -103,6 +111,9 @@ export default async function EmailPage({
               ? { href: inboxHref(), unread: unreadFor(microsoftAccount) }
               : null
           }
+          smtpInbox={
+            smtpInboxOf(smtpAccount) ? { href: inboxHref({ canal: "smtp" }), unread: smtpUnreadFor(smtpAccount) } : null
+          }
         />
       </div>
     );
@@ -112,7 +123,12 @@ export default async function EmailPage({
   const provider = view === "microsoft" ? "MICROSOFT" : view === "google" ? "GOOGLE" : view === "smtp" ? "SMTP" : null;
   const mailbox = provider !== null;
   const microsoft = view === "microsoft";
-  const tab = microsoft && inboxAllowed ? microsoftTabFromParam(sp.aba) : "envios";
+  const smtp = view === "smtp";
+  // SMTP's tabs depend on its account, read below; Microsoft's only on the screen.
+  const smtpAccount = smtp ? await getSenderAccountView(ctx.organizationId, "SMTP") : null;
+  const smtpHasInbox = smtpInboxOf(smtpAccount) !== null;
+  const tabsChannel = microsoft && inboxAllowed ? "microsoft" : smtpHasInbox ? "smtp" : null;
+  const tab = tabsChannel ? mailboxTabFromParam(sp.aba) : "envios";
 
   const channelTitle = (
     <div className="flex flex-wrap items-center gap-3">
@@ -126,32 +142,34 @@ export default async function EmailPage({
     </div>
   );
 
-  if (microsoft && tab === "caixa") {
-    const account = await getSenderAccountView(ctx.organizationId, "MICROSOFT");
-    const msg = Array.isArray(sp.msg) ? sp.msg[0] : sp.msg;
+  if (tabsChannel && tab === "caixa") {
+    const account = smtp ? smtpAccount : await getSenderAccountView(ctx.organizationId, "MICROSOFT");
+    const rawMsg = Array.isArray(sp.msg) ? sp.msg[0] : sp.msg;
+    const msg = tabsChannel === "smtp" ? (parseImapMessageRef(rawMsg ?? "") ? rawMsg : null) : isGraphId(rawMsg) ? rawMsg : null;
     return (
       <>
         <BackButton fallback={emailListHref(null)} />
         <div className="flex flex-col gap-6">
-          {header("/app/email/new?via=microsoft")}
+          {header(`/app/email/new?via=${tabsChannel}`)}
           {channelTitle}
           {/* No badge here: the list header shows the unread count, and one Graph call less keeps
               the mailbox under Outlook's concurrency limit (and out of a race with the "read" mark). */}
-          <MicrosoftTabs active="caixa" unread={null} />
+          <MailboxTabs channel={tabsChannel} active="caixa" unread={null} />
           {account?.status === "ACTIVE" ? (
             <Suspense fallback={<InboxSkeleton label={t("inbox.loading")} />}>
               <EmailInbox
+                channel={tabsChannel}
                 organizationId={ctx.organizationId}
                 account={account}
                 filter={inboxFilterFromParam(sp.filtro)}
                 search={inboxSearchFromParam(sp.q)}
-                messageId={isGraphId(msg) ? msg : null}
+                messageId={msg ?? null}
                 showCrm={hasModule(ctx.modules, "crm") && canAccessScreen(ctx, "contacts")}
               />
             </Suspense>
           ) : (
             <div className="max-w-2xl">
-              <SenderAccountPanel provider="MICROSOFT" account={account} />
+              <SenderAccountPanel provider={smtp ? "SMTP" : "MICROSOFT"} account={account} />
             </div>
           )}
         </div>
@@ -177,7 +195,13 @@ export default async function EmailPage({
         {header(`/app/email/new?via=${view === "plataforma" ? "platform" : view}`)}
 
         {channelTitle}
-        {microsoft && inboxAllowed ? <MicrosoftTabs active="envios" unread={unreadFor(account)} /> : null}
+        {tabsChannel ? (
+          <MailboxTabs
+            channel={tabsChannel}
+            active="envios"
+            unread={tabsChannel === "smtp" ? smtpUnreadFor(account) : unreadFor(account)}
+          />
+        ) : null}
 
         {provider ? (
           <div className="max-w-2xl">
