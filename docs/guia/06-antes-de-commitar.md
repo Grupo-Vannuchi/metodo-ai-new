@@ -37,7 +37,8 @@ o card ao concluir, reabrir ou arrastar para a coluna de concluídas). Rode semp
 
 `npm run check:automation` cobre as regras puras da automação de WhatsApp. Em
 [src/lib/automation/types.ts](../../src/lib/automation/types.ts), confere a leitura e a validação da regra:
-início por palavra ou por qualquer mensagem, menu de opções e regras salvas antes do menu. Em
+início por palavra ou por qualquer mensagem, menu de opções, regras salvas antes do menu e a troca entre
+"Fazer perguntas" e "Menu de opções" no editor. Em
 [src/lib/automation/menu.ts](../../src/lib/automation/menu.ts), confere o texto do menu e qual opção cada
 resposta escolhe. Em [src/lib/automation/flow-core.ts](../../src/lib/automation/flow-core.ts), confere o
 caminho ativo, quando "qualquer mensagem" começa, e as notas e o título da oportunidade. Não usa banco nem

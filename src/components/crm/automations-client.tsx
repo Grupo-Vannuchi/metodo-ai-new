@@ -20,6 +20,8 @@ import {
   isWhatsappTrigger,
   isFlowStep,
   ruleProblem,
+  toMenuStep,
+  toQuestionsStep,
   type RuleAction,
   type RuleConfig,
   type TriggerType,
@@ -289,6 +291,29 @@ export function AutomationsClient({
       };
     });
     setSelected("trigger");
+  }
+
+  /** "Fazer perguntas" ↔ "Menu de opções" in place, keeping what fits in the
+   *  other shape; the canvas re-lays out around the new first step. */
+  function swapFirstStep() {
+    const first = draft?.actions[0];
+    if (!isFlowStep(first)) return;
+    const apply = () =>
+      setDraft((d) => {
+        const f = d?.actions[0];
+        if (!d || !isFlowStep(f)) return d;
+        const next = f.type === "ask_questions" ? toMenuStep(f) : toQuestionsStep(f);
+        return { ...d, actions: [next, ...d.actions.slice(1)], layout: { trigger: d.layout.trigger } };
+      });
+    // Back to questions keeps only option 1's questions: ask before dropping the rest.
+    const loses =
+      first.type === "ask_menu" &&
+      (!!first.question.trim() ||
+        first.options.some((o, i) => !!o.label.trim() || (i > 0 && (o.questions.length > 0 || !!o.finalMessage?.trim()))));
+    if (!loses) return apply();
+    confirm({ description: t("useQuestionsConfirm"), confirmLabel: t("swapStep") }).then((ok) => {
+      if (ok) apply();
+    });
   }
 
   // ── Menu options: each one is also a canvas node, so its position follows it ──
@@ -618,6 +643,7 @@ export function AutomationsClient({
                   onChange={(next) => patchAction(selected, next)}
                   onRemoveOption={removeOption}
                   onMoveOption={moveOption}
+                  onSwapStep={swapFirstStep}
                   templates={templates}
                   stages={stages}
                   members={members}
@@ -728,12 +754,31 @@ function CanvasNode({
   );
 }
 
+/** Turns the WhatsApp flow's first step into the other kind, right where it's edited. */
+function SwapStepButton({ icon: Icon, label, hint, onClick }: { icon: typeof Zap; label: string; hint?: string; onClick: () => void }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={onClick}
+        className="inline-flex items-center gap-1.5 self-start rounded-lg border border-dashed border-brand/50 px-2 py-1 text-xs font-medium text-brand transition-colors hover:border-brand hover:bg-brand/5"
+      >
+        <Icon className="size-3.5" />
+        {label}
+      </button>
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
+
 function ActionInspector({
-  action, onChange, onRemoveOption, onMoveOption, templates, stages, members, t,
+  action, onChange, onRemoveOption, onMoveOption, onSwapStep, templates, stages, members, t,
 }: {
   action: RuleAction; onChange: (a: RuleAction) => void;
   /** Menu options are canvas nodes too, so removing/reordering one goes through the editor. */
   onRemoveOption: (i: number) => void; onMoveOption: (i: number, delta: -1 | 1) => void;
+  /** Turns the first step into the other kind ("Fazer perguntas" ↔ "Menu de opções"). */
+  onSwapStep: () => void;
   templates: Template[]; stages: Stage[]; members: Member[];
   t: ReturnType<typeof useTranslations>;
 }) {
@@ -743,6 +788,7 @@ function ActionInspector({
 
       {action.type === "ask_questions" ? (
         <>
+          <SwapStepButton icon={ListOrdered} label={t("useMenu")} hint={t("useMenuHint")} onClick={onSwapStep} />
           <Field label={t("welcomeMessage")}>
             <textarea value={action.firstMessage ?? ""} onChange={(e) => onChange({ ...action, firstMessage: e.target.value })} rows={3} placeholder={t("welcomeMessagePlaceholder")} className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm focus-visible:border-brand focus-visible:outline-none" />
           </Field>
@@ -754,7 +800,10 @@ function ActionInspector({
       ) : null}
 
       {action.type === "ask_menu" ? (
-        <MenuInspector step={action} onChange={onChange} onRemoveOption={onRemoveOption} onMoveOption={onMoveOption} t={t} />
+        <>
+          <SwapStepButton icon={MessagesSquare} label={t("useQuestions")} onClick={onSwapStep} />
+          <MenuInspector step={action} onChange={onChange} onRemoveOption={onRemoveOption} onMoveOption={onMoveOption} t={t} />
+        </>
       ) : null}
 
       {action.type === "create_opportunity" ? <p className="text-xs text-muted-foreground">{t("createOppHint")}</p> : null}
