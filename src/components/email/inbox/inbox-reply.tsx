@@ -6,7 +6,7 @@ import { AlertTriangle, Check, ExternalLink, Reply, Send } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Label, Textarea } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
-import { replyToInboxMessage, replyToSmtpInboxMessage } from "@/app/actions/email-inbox";
+import { replyToInboxMessage, replyToSmtpInboxMessage, type InboxReplyResult } from "@/app/actions/email-inbox";
 import { REPLY_MAX_CHARS, type MailboxChannel } from "@/lib/email-broadcast/microsoft/inbox-core";
 
 /**
@@ -32,7 +32,8 @@ export function InboxReply({
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [sent, setSent] = useState<string | null>(null);
-  // SMTP only: the hand-over may have reached the server, so there is no second "Enviar" until the member checks Sent.
+  // SMTP only: the hand-over may have reached the server (it said so, or the call died before saying anything), so there is
+  // no second "Enviar" until the member checks Sent.
   const [uncertain, setUncertain] = useState(false);
   const smtp = channel === "smtp";
   const [busy, start] = useTransition();
@@ -41,7 +42,15 @@ export function InboxReply({
   function onSend() {
     if (empty) return;
     start(async () => {
-      const res = smtp ? await replyToSmtpInboxMessage(messageId, text) : await replyToInboxMessage(messageId, text);
+      let res: InboxReplyResult;
+      try {
+        res = smtp ? await replyToSmtpInboxMessage(messageId, text) : await replyToInboxMessage(messageId, text);
+      } catch {
+        // The call died (a proxy cut it, the connection dropped, the computer slept) and the page can't know whether the server had
+        // handed the e-mail over by then. Like an answer of "uncertain", it must not leave "Enviar" live for a second go: the SMTP
+        // channel shows the alert below; the Microsoft one, its own "uncertain" toast.
+        res = { ok: false, error: "uncertain" };
+      }
       if (res.ok) {
         setSent(text.trim());
         setText("");
