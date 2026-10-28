@@ -891,6 +891,46 @@ check("a request that takes in more than its byte cap is cut off", async (ctx) =
   assert.ok(cut.logged.includes("more than"), cut.logged);
 });
 
+check("a watchdog that fails cuts the request as temporary at once; it is not an uncaught exception in the shared process", async (ctx) => {
+  // The watchdog is a timer, so what throws in it belongs to no try of the request: in the server that is an uncaught
+  // exception, which takes down every company's requests. Here the connection's byte counter breaks (with a listener,
+  // the exception is only recorded, as the check must go on).
+  const uncaught: unknown[] = [];
+  const onUncaught = (e: unknown) => void uncaught.push(e);
+  process.on("uncaughtException", onUncaught);
+  try {
+    const startedAt = Date.now();
+    let result!: Awaited<ReturnType<typeof loadImapInboxView>>;
+    const logged = await errorsLoggedBy(async () => {
+      result = await againstFake(
+        // The STATUS never answers, so the request is alive when the watchdog looks.
+        { on: hangOn("STATUS") },
+        async () => {
+          const dial = imapRequest.open;
+          imapRequest.open = async (...args) => {
+            const opened = await dial(...args);
+            if (opened.ok) {
+              opened.client.stats = () => {
+                throw new Error("the counter broke");
+              };
+            }
+            return opened;
+          };
+          return loadImapInboxView(ctx.orgId, { search: "", unreadOnly: false, messageId: null });
+        },
+        // The budget is the stop the request would meet if the watchdog just died: 3 s, far past the first look (100 ms).
+        { budgetMs: 3_000 },
+      );
+    });
+    assert.deepEqual(uncaught, [], "the watchdog's failure reached the process");
+    assert.equal(reason(result), "temporary", JSON.stringify(result));
+    assert.ok(Date.now() - startedAt < 2_000, `${Date.now() - startedAt} ms: cut at the first look, not by the budget`);
+    assert.ok(logged.includes("IMAP request cut: its watchdog failed (the counter broke)"), logged);
+  } finally {
+    process.off("uncaughtException", onUncaught);
+  }
+});
+
 check("rows nobody asked for, split in two or repeated don't turn into blank or doubled e-mails", async (ctx) => {
   const noisy: FakeOn = ({ name, tag, rows }, socket) => {
     if (name !== "FETCH") return false;

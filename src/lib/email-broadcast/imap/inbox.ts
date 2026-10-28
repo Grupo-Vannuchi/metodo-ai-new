@@ -168,11 +168,11 @@ type MailAccount = { id: string; email: string; displayName: string | null; smtp
  * logged without the password.
  *
  * A request is watched while it runs (imapRequest): past its time or the bytes it
- * may take in, the connection is cut. A cut or lost connection makes imapflow
- * answer search() and status() with `false` and the FETCH calls with nothing,
- * instead of an error, so once `run` is done a connection that is no longer usable
- * turns whatever it came to into "temporary": never an empty inbox, a "no
- * results" or a 404.
+ * may take in, or when the watchdog itself fails, the connection is cut. A cut or
+ * lost connection makes imapflow answer search() and status() with `false` and the
+ * FETCH calls with nothing, instead of an error, so once `run` is done a connection
+ * that is no longer usable turns whatever it came to into "temporary": never an
+ * empty inbox, a "no results" or a 404.
  */
 async function withImap<T>(
   organizationId: string,
@@ -204,10 +204,16 @@ async function withImap<T>(
   const { client } = opened;
   const watch: { startedAt: number; cutFor: string | null } = { startedAt: Date.now(), cutFor: null };
   const guard = setInterval(() => {
-    if (Date.now() - watch.startedAt > imapRequest.budgetMs) {
-      watch.cutFor = `it took more than ${imapRequest.budgetMs / 1000} s`;
-    } else if (client.stats().received > imapRequest.maxReceivedBytes) {
-      watch.cutFor = `it took in more than ${imapRequest.maxReceivedBytes} bytes`;
+    // A timer runs outside the request's own try: whatever throws here is an uncaught exception, and the process is
+    // every company's. A watchdog that can't look is no watchdog, so the request is cut like one that ran out of time.
+    try {
+      if (Date.now() - watch.startedAt > imapRequest.budgetMs) {
+        watch.cutFor = `it took more than ${imapRequest.budgetMs / 1000} s`;
+      } else if (client.stats().received > imapRequest.maxReceivedBytes) {
+        watch.cutFor = `it took in more than ${imapRequest.maxReceivedBytes} bytes`;
+      }
+    } catch (e) {
+      watch.cutFor = `its watchdog failed (${failureText(e, auth)})`;
     }
     if (watch.cutFor !== null) {
       clearInterval(guard);
