@@ -90,6 +90,63 @@ check("planGroupAdd: opt-out is skipped even when the number is in the group", (
   ]);
 });
 
+check("planGroupAdd: an opt-out blocks every record of the same number, the opted-out one first", () => {
+  const plan = planGroupAdd(
+    [
+      contact("c1", "(11) 98765-4321", true),
+      contact("c2", "5511987654321"),
+      contact("c3", "(11) 8765-4321"), // the older 8-digit form of the same number
+      contact("c4", "(11) 91111-2222"), // someone else
+    ],
+    new Set(["11987654321"]), // the number is even in the group: the opt-out still comes first
+    [],
+  );
+  assert.deepEqual(plan.map(verdict), [
+    { status: "SKIPPED", reason: "opted_out" },
+    { status: "SKIPPED", reason: "opted_out" },
+    { status: "SKIPPED", reason: "opted_out" },
+    { status: "PENDING", reason: null },
+  ]);
+});
+
+check("planGroupAdd: an opt-out blocks every record of the same number, the opted-out one last", () => {
+  const plan = planGroupAdd(
+    [
+      contact("c1", "5511987654321"),
+      contact("c2", "(11) 91111-2222"), // someone else
+      contact("c3", "+55 11 98765-4321"),
+      contact("c4", "(11) 98765-4321", true),
+    ],
+    new Set(),
+    [],
+  );
+  assert.deepEqual(plan.map(verdict), [
+    { status: "SKIPPED", reason: "opted_out" },
+    { status: "PENDING", reason: null },
+    { status: "SKIPPED", reason: "opted_out" },
+    { status: "SKIPPED", reason: "opted_out" },
+  ]);
+});
+
+check("planGroupAdd: an opt-out with no usable number blocks nobody else", () => {
+  const plan = planGroupAdd(
+    [
+      contact("c1", null, true), // opted out, no phone
+      contact("c2", null), // no phone: not touched by c1
+      contact("c3", "12345", true), // opted out, digits that make no number
+      contact("c4", "12345"), // same digits: still just not a mobile
+    ],
+    new Set(),
+    [],
+  );
+  assert.deepEqual(plan.map(verdict), [
+    { status: "SKIPPED", reason: "opted_out" },
+    { status: "SKIPPED", reason: "no_phone" },
+    { status: "SKIPPED", reason: "opted_out" },
+    { status: "NO_WHATSAPP", reason: "not_mobile" },
+  ]);
+});
+
 check("planGroupAdd: no phone is skipped as no_phone", () => {
   // A phone field with no digits at all (a dash, a note) counts as empty.
   const blanks = [contact("c1", null), contact("c2", ""), contact("c3", "   "), contact("c4", "-")];
@@ -111,6 +168,35 @@ check("planGroupAdd: a landline or a malformed number is NO_WHATSAPP / not_mobil
   assert.deepEqual(
     plan.map((i) => i.phoneKey),
     ["1133334444", null],
+  );
+});
+
+check("planGroupAdd: the older 8-digit mobile is a mobile, dialed with the 9", () => {
+  const [pending] = planGroupAdd([contact("c1", "(11) 8765-4321")], new Set(), []);
+  assert.deepEqual(verdict(pending), { status: "PENDING", reason: null });
+  assert.equal(pending.phone, "5511987654321");
+  assert.equal(pending.phoneKey, "11987654321");
+  // The same number when it is in the group, whichever form the group lists it in.
+  for (const listed of ["5511987654321", "551187654321"]) {
+    const [inGroup] = planGroupAdd([contact("c1", "(11) 8765-4321")], new Set([keyOf(listed)]), []);
+    assert.deepEqual(verdict(inGroup), { status: "ALREADY_IN", reason: null });
+  }
+  // A landline (it starts with 2 to 5) gets no 9 and is still not a mobile.
+  const [landline] = planGroupAdd([contact("c2", "(11) 3333-4444")], new Set(), []);
+  assert.deepEqual(verdict(landline), { status: "NO_WHATSAPP", reason: "not_mobile" });
+  assert.equal(landline.phone, "551133334444");
+});
+
+check("planGroupAdd: phone is the number to dial when there is one, the typed value otherwise", () => {
+  const typed = ["(11) 98765-4321", "+55 11 98765-4321", "(11) 3333-4444", "+44 7911 123456", "12345", "-", "", null];
+  const plan = planGroupAdd(
+    typed.map((phone, i) => contact(`c${i}`, phone)),
+    new Set(),
+    [],
+  );
+  assert.deepEqual(
+    plan.map((i) => i.phone),
+    ["5511987654321", "5511987654321", "551133334444", "447911123456", "12345", "-", "", null],
   );
 });
 
@@ -234,7 +320,7 @@ check("planGroupAdd keeps the input order and the shape of each item", () => {
   assert.deepEqual(plan[3], {
     contactId: "c04",
     name: "Contato c04",
-    phone: "(11) 99999-0001",
+    phone: "5511999990001", // the number to dial, not the typed "(11) 99999-0001"
     phoneKey: "11999990001",
     status: "ALREADY_IN",
     reason: null,

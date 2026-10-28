@@ -49,20 +49,29 @@ export const CAP_COUNTED: readonly GroupAddItemStatus[] = ["ADDED", "INVITED", "
 export type SkipReason = "no_phone" | "opted_out" | "not_mobile" | "duplicate";
 
 /**
- * Key that is the same for one number in any format: with or without 55, with
- * or without the 9 of older BR mobiles, masked or not. It chains the steps of
- * the group import (normalize, add the 9, last 11 digits), so a participant of
- * the group and a contact of the CRM meet. Null when a step yields no number.
+ * The number to dial for a phone typed in the CRM: country-coded digits, with
+ * the 9 added to the older 12-digit BR mobiles, as the group import does.
+ * Null when no number comes out of it.
  */
-export function phoneMatchKey(raw: string | null | undefined): string | null {
+function dialingNumber(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const normalized = normalizeWhatsappNumber(raw);
-  if (!normalized) return null;
-  const digits = normalizeGroupNumber(normalized);
-  if (!digits) return null;
-  return brPhoneKey(digits) || null;
+  return normalized ? normalizeGroupNumber(normalized) : null;
 }
 
+/**
+ * Key that is the same for one number in any format: with or without 55, with
+ * or without the 9 of older BR mobiles, masked or not. It is the number to dial
+ * without the BR country code, at most 11 digits (`brPhoneKey`), so a
+ * participant of the group and a contact of the CRM meet. Null when no number
+ * comes out of the phone.
+ */
+export function phoneMatchKey(raw: string | null | undefined): string | null {
+  const digits = dialingNumber(raw);
+  return digits ? brPhoneKey(digits) || null : null;
+}
+
+/** `phone` is as typed in the CRM. */
 export type CandidateInput = { contactId: string; name: string; phone: string | null; optedOut: boolean };
 
 /** A number an earlier round for the same group added or sent the link to, as `phoneMatchKey`. */
@@ -71,6 +80,7 @@ export type PreviousOutcome = { phoneKey: string; status: "ADDED" | "INVITED" };
 export type PlannedItem = {
   contactId: string;
   name: string;
+  /** The number to dial (country-coded digits) when the typed phone yields one, otherwise the phone as typed. */
   phone: string | null;
   phoneKey: string | null;
   status: "PENDING" | "ALREADY_IN" | "NO_WHATSAPP" | "SKIPPED" | "LEFT_GROUP" | "ALREADY_INVITED";
@@ -79,11 +89,12 @@ export type PlannedItem = {
 
 /**
  * What a round does with each contact, in the input order. The first rule that
- * matches wins: opt-out; no phone (no digits at all); not a mobile; already in
- * the group (`participantKeys`); added by an earlier round, so left the group;
- * invited by an earlier round, so did not join; the same number as an earlier
- * contact; otherwise pending. `participantKeys` and `previous` hold
- * `phoneMatchKey` values.
+ * matches wins: opt-out (the contact's own, or that of any contact of the
+ * selection with the same number); no phone (no digits at all); not a mobile
+ * (judged on the number to dial); already in the group (`participantKeys`);
+ * added by an earlier round, so left the group; invited by an earlier round, so
+ * did not join; the same number as an earlier contact; otherwise pending.
+ * `participantKeys` and `previous` hold `phoneMatchKey` values.
  */
 export function planGroupAdd(
   contacts: readonly CandidateInput[],
@@ -96,22 +107,29 @@ export function planGroupAdd(
     if (outcome.status === "ADDED") addedBefore.add(outcome.phoneKey);
     else if (outcome.status === "INVITED") invitedBefore.add(outcome.phoneKey);
   }
+  // An opt-out belongs to the person: it blocks every contact of the selection with the same number.
+  const optedOutKeys = new Set<string>();
+  for (const c of contacts) {
+    const key = c.optedOut ? phoneMatchKey(c.phone) : null;
+    if (key !== null) optedOutKeys.add(key);
+  }
   const seen = new Set<string>();
   return contacts.map((c) => {
+    const dialing = dialingNumber(c.phone);
     const phoneKey = phoneMatchKey(c.phone);
     const item = (status: PlannedItem["status"], reason: SkipReason | null = null): PlannedItem => ({
       contactId: c.contactId,
       name: c.name,
-      phone: c.phone,
+      phone: dialing ?? c.phone,
       phoneKey,
       status,
       reason,
     });
-    if (c.optedOut) return item("SKIPPED", "opted_out");
-    const normalized = normalizeWhatsappNumber(c.phone ?? "");
-    if (!normalized) return item("SKIPPED", "no_phone");
+    if (c.optedOut || (phoneKey !== null && optedOutKeys.has(phoneKey))) return item("SKIPPED", "opted_out");
+    if (!normalizeWhatsappNumber(c.phone ?? "")) return item("SKIPPED", "no_phone");
     // A mobile always has a key; the null test only narrows the type for the rules below.
-    if (phoneKey === null || !looksLikeWhatsappMobile(normalized)) return item("NO_WHATSAPP", "not_mobile");
+    const mobile = dialing !== null && looksLikeWhatsappMobile(dialing);
+    if (!mobile || phoneKey === null) return item("NO_WHATSAPP", "not_mobile");
     if (participantKeys.has(phoneKey)) return item("ALREADY_IN");
     if (addedBefore.has(phoneKey)) return item("LEFT_GROUP");
     if (invitedBefore.has(phoneKey)) return item("ALREADY_INVITED");
