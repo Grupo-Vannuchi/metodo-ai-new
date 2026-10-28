@@ -80,9 +80,10 @@ export async function EmailInbox({
         </div>
       );
     }
-    // A search the server refused. Without text it was the "Não lidas" filter (SMTP only): there are no words to change.
+    // A search the server refused. Without text it was the "Não lidas" filter (SMTP only): there are no words to change. The
+    // filter is named here too, so this doesn't rest on that being the only search the server can refuse with no text.
     const refused = view.reason === "not_found";
-    const filterRefused = refused && !search;
+    const filterRefused = refused && !search && filter === "nao-lidas";
     return (
       <div className="flex flex-col items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-5 py-4 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
         <p className="text-sm">
