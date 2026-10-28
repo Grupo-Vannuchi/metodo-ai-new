@@ -35,6 +35,30 @@ banco nem rede. Rode sempre que mexer em `src/lib/email-broadcast/`.
 horário de Brasília, posição entre cards, nome de coluna, coluna da tarefa nova pela data, para onde vai
 o card ao concluir, reabrir ou arrastar para a coluna de concluídas). Rode sempre que mexer nesse arquivo.
 
+`npm run check:automation` cobre as regras puras da automação de WhatsApp. Em
+[src/lib/automation/types.ts](../../src/lib/automation/types.ts), confere a leitura e a validação da regra:
+início por palavra ou por qualquer mensagem, menu de opções, regras salvas antes do menu e a troca entre
+"Fazer perguntas" e "Menu de opções" no editor. Em
+[src/lib/automation/menu.ts](../../src/lib/automation/menu.ts), confere o texto do menu e qual opção cada
+resposta escolhe. Em [src/lib/automation/flow-core.ts](../../src/lib/automation/flow-core.ts), confere o
+caminho ativo, quando "qualquer mensagem" começa, e as notas e o título da oportunidade. Não usa banco nem
+rede. Rode sempre que mexer em `src/lib/automation/`.
+
+`npm run check:automation:e2e` testa a conversa inteira da automação de WhatsApp contra o `next dev` em
+:3000 ([scripts/check-automation-e2e.ts](../../scripts/check-automation-e2e.ts)). O lead escreve pelo
+webhook da Evolution e o bot responde para uma Evolution falsa em :4999, então nenhuma mensagem sai de
+verdade. Os casos cobrem:
+- menu por palavra-chave e por qualquer mensagem, resposta inválida, opção sem perguntas, regra antiga;
+- conversa recente, atribuída ou parada há 8 dias;
+- lead que some 25 h, com e sem resposta da equipe depois;
+- equipe que assume no meio do menu (mensagem, atribuição ou resposta durante a espera de 8 s), e o fluxo de palavra-chave que continua;
+- fluxo de palavra-chave terminado que não reabre um menu antigo abandonado;
+- "Oi" + "tudo bem?" seguidos e quase ao mesmo tempo, e regra editada no meio da conversa.
+
+Cria uma organização de teste e apaga tudo o que criou, inclusive sobras de uma rodada interrompida.
+Precisa do Postgres do Docker e do `next dev` no ar; se o Turbopack responder 404 nas rotas de API, suba
+com `npx next dev --webpack`. Cada turno espera o debounce de 8 s, então leva uns dois minutos.
+
 `npm run check:search` cobre o filtro da busca ao digitar
 ([src/lib/search-options.ts](../../src/lib/search-options.ts): sem acento e sem maiúscula, quem começa
 com o texto vem primeiro, limite da lista). Ele é usado pelo `SearchSelect`

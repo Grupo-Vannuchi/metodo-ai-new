@@ -27,6 +27,7 @@ export function isWhatsappTrigger(t: TriggerType): boolean {
 
 export const ACTION_TYPES = [
   "ask_questions",
+  "ask_menu",
   "create_opportunity",
   "create_task",
   "notify_owner",
@@ -43,7 +44,7 @@ export const ACTION_TYPES = [
 export type ActionType = (typeof ACTION_TYPES)[number];
 
 /** Actions that only make sense under the WhatsApp trigger. */
-export const WHATSAPP_ONLY_ACTIONS: readonly ActionType[] = ["ask_questions", "create_opportunity"];
+export const WHATSAPP_ONLY_ACTIONS: readonly ActionType[] = ["ask_questions", "ask_menu", "create_opportunity"];
 
 export type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
 
@@ -52,8 +53,15 @@ export const QUESTION_FIELDS = ["name", "email", "notes"] as const;
 export type QuestionField = (typeof QUESTION_FIELDS)[number];
 export type FlowQuestion = { label: string; field: QuestionField };
 
+export const MIN_MENU_OPTIONS = 2;
+/** One digit per option, so the lead answers with a single number. */
+export const MAX_MENU_OPTIONS = 9;
+/** One numbered option of the menu: its own questions and closing message. */
+export type MenuOption = { label: string; questions: FlowQuestion[]; finalMessage?: string };
+
 export type RuleAction =
   | { type: "ask_questions"; questions: FlowQuestion[]; firstMessage?: string; finalMessage?: string }
+  | { type: "ask_menu"; firstMessage?: string; question: string; options: MenuOption[] }
   | { type: "create_opportunity" }
   | { type: "create_task"; title: string; description?: string; priority?: TaskPriority; dueInDays?: number }
   | { type: "notify_owner"; message?: string }
@@ -67,11 +75,52 @@ export type RuleAction =
   | { type: "create_finance_entry"; description: string; useOppValue?: boolean; amount?: number; dueInDays?: number }
   | { type: "webhook"; url: string };
 
+/** The step a WhatsApp flow opens with: fixed questions, or a menu of paths. */
+export type FlowStep = Extract<RuleAction, { type: "ask_questions" | "ask_menu" }>;
+export function isFlowStep(a: RuleAction | undefined): a is FlowStep {
+  return a?.type === "ask_questions" || a?.type === "ask_menu";
+}
+
+type QuestionsStep = Extract<RuleAction, { type: "ask_questions" }>;
+type MenuStep = Extract<RuleAction, { type: "ask_menu" }>;
+
+/** "Fazer perguntas" → "Menu de opções" in the editor: the welcome stays, and
+ *  the questions already written (with the final message) become option 1. */
+export function toMenuStep(step: QuestionsStep): MenuStep {
+  const questions = step.questions.filter((q) => q.label.trim());
+  return {
+    type: "ask_menu",
+    ...(step.firstMessage ? { firstMessage: step.firstMessage } : {}),
+    question: "",
+    options: [
+      { label: "", questions, ...(step.finalMessage ? { finalMessage: step.finalMessage } : {}) },
+      { label: "", questions: [] },
+    ],
+  };
+}
+
+/** "Menu de opções" → "Fazer perguntas": the welcome and option 1's questions
+ *  and final message stay; the other options go. */
+export function toQuestionsStep(step: MenuStep): QuestionsStep {
+  const first = step.options[0];
+  const questions = first?.questions.length ? first.questions : [{ label: "", field: "notes" as const }];
+  return {
+    type: "ask_questions",
+    ...(step.firstMessage ? { firstMessage: step.firstMessage } : {}),
+    questions,
+    ...(first?.finalMessage ? { finalMessage: first.finalMessage } : {}),
+  };
+}
+
 export type KeywordMatch = "contains" | "exact";
+/** "keyword": the message must carry the keyword; "any": any message on a
+ *  new or quiet conversation starts the flow. */
+export type WhatsappStart = "keyword" | "any";
 export type WhatsappTriggerConfig = {
   /** The Evolution connection (WhatsApp number) that receives the messages. */
   connectionId: string;
-  /** Any sender who writes it starts the flow. */
+  start: WhatsappStart;
+  /** Any sender who writes it starts the flow (only with start = "keyword"). */
   keyword: string;
   match: KeywordMatch;
 };
@@ -82,8 +131,8 @@ export type RuleConfig = {
   minValue?: number;
   /** Only fire when the opportunity's value is at most this. */
   maxValue?: number;
-  /** Canvas positions so the layout persists. */
-  layout?: { trigger?: NodePos; actions?: NodePos[] };
+  /** Canvas positions so the layout persists; branches[i] is menu option i. */
+  layout?: { trigger?: NodePos; actions?: NodePos[]; branches?: NodePos[] };
   /** Filters of the "whatsapp_message" trigger. */
   whatsapp?: WhatsappTriggerConfig;
 };
@@ -94,7 +143,17 @@ export function isTrigger(v: string): v is TriggerType {
 
 export const MAX_FLOW_QUESTIONS = 15;
 
-export type RuleProblem = "name" | "actions" | "stage" | "connection" | "keyword" | "questionsFirst" | "questions" | "whatsappOnly";
+export type RuleProblem =
+  | "name"
+  | "actions"
+  | "stage"
+  | "connection"
+  | "keyword"
+  | "questionsFirst"
+  | "questions"
+  | "menuQuestion"
+  | "menuOptions"
+  | "whatsappOnly";
 
 /** Why a rule can't be saved, or null. Shared by the editor and the server action. */
 export function ruleProblem(rule: {
@@ -112,10 +171,16 @@ export function ruleProblem(rule: {
   }
   const wa = rule.config.whatsapp;
   if (!wa?.connectionId) return "connection";
-  if (!wa.keyword.trim()) return "keyword";
+  if (wa.start === "keyword" && !wa.keyword.trim()) return "keyword";
   const [first, ...rest] = rule.actions;
-  if (first.type !== "ask_questions" || rest.some((a) => a.type === "ask_questions")) return "questionsFirst";
-  if (first.questions.length === 0 || first.questions.some((q) => !q.label.trim())) return "questions";
+  if (!isFlowStep(first) || rest.some(isFlowStep)) return "questionsFirst";
+  const blank = (qs: FlowQuestion[]) => qs.some((q) => !q.label.trim());
+  if (first.type === "ask_questions") {
+    return first.questions.length === 0 || blank(first.questions) ? "questions" : null;
+  }
+  if (!first.question.trim()) return "menuQuestion";
+  if (first.options.length < MIN_MENU_OPTIONS || first.options.some((o) => !o.label.trim())) return "menuOptions";
+  if (first.options.some((o) => blank(o.questions))) return "questions";
   return null;
 }
 
@@ -130,6 +195,16 @@ const days = (v: unknown): number | undefined => {
   return n !== undefined ? Math.max(0, Math.min(365, Math.round(n))) : undefined;
 };
 
+function parseQuestions(raw: unknown): FlowQuestion[] {
+  return (Array.isArray(raw) ? raw : [])
+    .filter((q): q is Record<string, unknown> => !!q && typeof q === "object")
+    .map((q) => ({
+      label: str(q.label, 300),
+      field: QUESTION_FIELDS.includes(q.field as QuestionField) ? (q.field as QuestionField) : "notes",
+    }))
+    .slice(0, MAX_FLOW_QUESTIONS);
+}
+
 /** Validate + normalize a raw actions array (from the form or the DB JSON). */
 export function parseActions(raw: unknown): RuleAction[] {
   if (!Array.isArray(raw)) return [];
@@ -141,18 +216,28 @@ export function parseActions(raw: unknown): RuleAction[] {
       // "ai_collect" is the name rules were saved with while this step used the AI.
       case "ai_collect":
       case "ask_questions": {
-        const questions: FlowQuestion[] = (Array.isArray(o.questions) ? o.questions : [])
-          .filter((q): q is Record<string, unknown> => !!q && typeof q === "object")
-          .map((q) => ({
-            label: str(q.label, 300),
-            field: QUESTION_FIELDS.includes(q.field as QuestionField) ? (q.field as QuestionField) : "notes",
-          }))
-          .slice(0, MAX_FLOW_QUESTIONS);
         out.push({
           type: "ask_questions",
-          questions,
+          questions: parseQuestions(o.questions),
           firstMessage: str(o.firstMessage, 1000) || undefined,
           finalMessage: str(o.finalMessage, 1000) || undefined,
+        });
+        break;
+      }
+      case "ask_menu": {
+        const options: MenuOption[] = (Array.isArray(o.options) ? o.options : [])
+          .filter((p): p is Record<string, unknown> => !!p && typeof p === "object")
+          .map((p) => ({
+            label: str(p.label, 500).trim().slice(0, 60),
+            questions: parseQuestions(p.questions),
+            finalMessage: str(p.finalMessage, 1000) || undefined,
+          }))
+          .slice(0, MAX_MENU_OPTIONS);
+        out.push({
+          type: "ask_menu",
+          firstMessage: str(o.firstMessage, 1000) || undefined,
+          question: str(o.question, 300),
+          options,
         });
         break;
       }
@@ -231,15 +316,19 @@ export function parseConfig(raw: unknown): RuleConfig {
       const y = num((p as NodePos).y);
       return x !== undefined && y !== undefined ? { x, y } : undefined;
     };
+    const list = (v: unknown) => (Array.isArray(v) ? (v.map(pos).filter(Boolean) as NodePos[]) : undefined);
     const trigger = pos(layout.trigger);
-    const actions = Array.isArray(layout.actions) ? (layout.actions.map(pos).filter(Boolean) as NodePos[]) : undefined;
-    cfg.layout = { trigger, actions };
+    const actions = list(layout.actions);
+    const branches = list(layout.branches);
+    cfg.layout = { trigger, actions, ...(branches ? { branches } : {}) };
   }
   const wa = o.whatsapp as Record<string, unknown> | undefined;
   if (wa && typeof wa === "object") {
     // Rules saved before any number was accepted still carry `numbers`; it's dropped here.
+    // Rules saved before `start` existed always needed the keyword.
     cfg.whatsapp = {
       connectionId: str(wa.connectionId, 64),
+      start: wa.start === "any" ? "any" : "keyword",
       keyword: str(wa.keyword, 60).trim(),
       match: wa.match === "exact" ? "exact" : "contains",
     };

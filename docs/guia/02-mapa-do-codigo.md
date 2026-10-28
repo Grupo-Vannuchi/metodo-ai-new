@@ -20,7 +20,7 @@ aponta para onde ir.
 | escrever um **dado** | `src/app/actions/<domínio>.ts` — 52 arquivos, um por domínio (server actions) | Trabalho por id usa `findFirst`/`updateMany` com `{ id }`, nunca `findUnique`/`update`. Ex.: [src/app/actions/companies.ts](../../src/app/actions/companies.ts). Ver [guia 03](03-multi-tenancy.md). |
 | mudar uma regra de **módulo** (o que cada módulo dá, preço, telas que libera) | [src/config/modules.ts](../../src/config/modules.ts) | Fonte única — não espalhe `if` de módulo pelo código. |
 | mudar uma regra de **permissão/tela** | [src/config/screens.ts](../../src/config/screens.ts) (quais telas são gateáveis) + [src/lib/access.ts](../../src/lib/access.ts) (resolve por membro) | Nav final = telas permitidas do membro ∩ telas do módulo instalado. |
-| mudar um **texto de interface** | `src/messages/pt.json` **e** `src/messages/en.json`, mesma chave nos dois | 3.206 chaves hoje nos dois arquivos (contagem própria, recursiva — bate com a regra 3 do `CLAUDE.md`). Mudou de um lado, muda do outro. |
+| mudar um **texto de interface** | `src/messages/pt.json` **e** `src/messages/en.json`, mesma chave nos dois | 3.236 chaves hoje nos dois arquivos (contagem própria, recursiva — bate com a regra 3 do `CLAUDE.md`). Mudou de um lado, muda do outro. |
 | mudar um **job** de fila (background) | [src/lib/jobs/index.ts](../../src/lib/jobs/index.ts) (registro `JOB_HANDLERS`), disparado por `src/app/api/jobs/[job]/route.ts` | Handler precisa ser idempotente — QStash pode entregar o mesmo job duas vezes. Ver [guia 05](05-rotas-e-jobs.md). |
 | criar ou mudar uma **rota de API** | `src/app/api/<algo>/route.ts` — 43 rotas hoje | Nasce pública, sem middleware protegendo. **Pare e leia o [guia 05](05-rotas-e-jobs.md) antes.** |
 | rodar um **comando de manutenção** | [scripts/](../../scripts/) — 5 arquivos; só 3 têm alias de `npm run` (ver [package.json](../../package.json)) — os outros dois rodam direto via `tsx scripts/<nome>.ts` | `check-isolation`, `check-node` e `backfill-pipelines` são operacionais deste app; `create-project-task` e `inspect-project` automatizam o GitHub Projects e não tocam o app. |
@@ -35,7 +35,7 @@ aponta para onde ir.
 | `config/` | 5 | 650 | As fontes de verdade: [modules.ts](../../src/config/modules.ts) (384L), [screens.ts](../../src/config/screens.ts) (34L), `limits.ts` (36L), mais `site.ts` e `audit.ts`. |
 | `i18n/` | 3 | 57 | `routing.ts` define os locales (`pt`, `en`) e o prefixo de URL (`as-needed` — o locale padrão não aparece na URL). |
 | `lib/` | 163 | 15.436 | Tudo que não é rota nem componente: `queries/` (a DAL), `tenant.ts`/`tenant-db.ts` (isolamento — [guia 03](03-multi-tenancy.md)), `access.ts` (permissão), `integrations/` (Evolution/WhatsApp), `downloader/`, `assistant/` (copiloto de IA), `whatsapp/`, `jobs/` (registro de fila), `email/`, `auth*`. |
-| `messages/` | 2 (não contam acima — são `.json`) | — | `pt.json` e `en.json`, 3.206 chaves cada. |
+| `messages/` | 2 (não contam acima — são `.json`) | — | `pt.json` e `en.json`, 3.236 chaves cada. |
 
 ## Os arquivos grandes — herança, não padrão
 

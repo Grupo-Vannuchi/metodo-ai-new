@@ -1150,7 +1150,35 @@
         "exact": "The whole message"
       },
       "waMatchHint": "Any number that sends the keyword starts the flow. Case and accents don't matter. Once the flow opens, replies continue without the keyword; the conversation leaves the flow after 24 h without a reply.",
+      "waStart": "The flow starts",
+      "waStartMode": {
+        "keyword": "With a keyword",
+        "any": "With any message"
+      },
+      "waStartAnyHint": "Anyone who writes to this number gets the flow when the conversation is new or has been quiet for 7 days. Conversations assigned to someone are left out, and keyword rules on this number take priority. The bot stops once someone on the team takes over the conversation.",
+      "waStartAnyShort": "any message",
       "questionsCount": "{count, plural, one {# question} other {# questions}}",
+      "optionsCount": "{count, plural, one {# option} other {# options}}",
+      "menuQuestion": "Menu question",
+      "menuQuestionPlaceholder": "e.g. Which event would you like to talk about?",
+      "menuOptions": "Options, in this order",
+      "menuOptionPlaceholder": "e.g. Event X",
+      "addOption": "Add option",
+      "removeOption": "Remove option",
+      "moveOptionUp": "Move up",
+      "moveOptionDown": "Move down",
+      "menuOptionsHint": "From 2 to 9 options. Each option's questions live in its own block.",
+      "menuPreview": "What the lead sees",
+      "menuInvalidHint": "If the reply isn't one of the options, the menu is sent again.",
+      "optionLabel": "Option name",
+      "optionTitle": "Option {n}",
+      "optionNoQuestions": "No questions. The lead gets the final message right after choosing.",
+      "optionFinalOnly": "final message only",
+      "useMenu": "Use an options menu",
+      "useMenuHint": "The lead picks a number and each option goes on with its own questions. The questions here move to option 1.",
+      "useQuestions": "Use questions in sequence",
+      "useQuestionsConfirm": "Switch the menu to questions in sequence? Option 1 keeps its questions; the menu question and the other options are dropped.",
+      "swapStep": "Switch",
       "welcomeMessage": "Welcome message",
       "welcomeMessagePlaceholder": "e.g. Hi! Great to hear from you. I'll ask a few quick questions.",
       "questions": "Questions, in this order",
@@ -1171,10 +1199,12 @@
         "actions": "Add at least one action.",
         "stage": "Choose the trigger's stage.",
         "connection": "Choose the number that receives the messages.",
-        "keyword": "Set the keyword that starts the flow.",
-        "questionsFirst": "With the WhatsApp trigger, the first action must be \"Ask questions\", and only one.",
+        "keyword": "Set the keyword that starts the flow, or choose \"With any message\" under \"The flow starts\".",
+        "questionsFirst": "With the WhatsApp trigger, the first step must be \"Ask questions\" or \"Options menu\", and only one of them.",
         "questions": "Fill in every question.",
-        "whatsappOnly": "\"Ask questions\" and \"Create opportunity\" only work with the WhatsApp trigger."
+        "menuQuestion": "Write the menu question.",
+        "menuOptions": "The menu needs at least 2 options, all named.",
+        "whatsappOnly": "\"Ask questions\", \"Options menu\" and \"Create opportunity\" only work with the WhatsApp trigger."
       },
       "trigger": {
         "opportunity_created": "Opportunity created",
@@ -1188,6 +1218,7 @@
       },
       "action": {
         "ask_questions": "Ask questions",
+        "ask_menu": "Options menu",
         "create_opportunity": "Create opportunity",
         "create_task": "Create task",
         "notify_owner": "Notify owner",
@@ -1205,7 +1236,8 @@
         "invalid": "Fill in the name, trigger and at least one action.",
         "forbidden": "Not allowed.",
         "unauthorized": "Session expired.",
-        "unknown": "Something went wrong."
+        "unknown": "Something went wrong.",
+        "anyTaken": "This number already has an active rule that starts with any message. Turn the other one off first."
       }
     },
     "goals": {
