@@ -76,18 +76,29 @@ const IMAP_REQUEST_BUDGET_MS = 60_000;
 const IMAP_MAX_REQUEST_BYTES = IMAP_MAX_MESSAGE_BYTES + 8 * 1024 * 1024;
 /** How often a request looks at its clock and at what it has received. */
 const IMAP_GUARD_TICK_MS = 100;
+/**
+ * The limits of the request that follows a reply's hand-over, which keeps the copy in Sent and sets \Answered (see
+ * replyToImapMessage): opening the connection (connect, greeting and login) and, after the login, the work. Far shorter than
+ * the usual ones, because the reply has gone out by then and the person is waiting for this request to answer: the worst case
+ * is 10 + 10 s and the goodbye (closeImap's 5 s), about 25 s, where any other request may take about 95 s.
+ */
+const IMAP_POST_SEND_OPEN_MS = 10_000;
+const IMAP_POST_SEND_BUDGET_MS = 10_000;
 
 /**
  * How a request reaches the server and what it may cost: fixed in production. check:imap swaps these to run this code
  * against a server of its own on loopback (openImap refuses internal addresses on purpose), to count the connections a
  * request makes, to reach the budget and the byte cap in a fraction of a second, and, for a reply, to see what is handed
- * to the SMTP server (`send`) and to make that hand-over fail the ways a server does.
+ * to the SMTP server (`send`), to make that hand-over fail the ways a server does and to shrink the limits of the request
+ * that follows it (`postSendOpenMs`, `postSendBudgetMs`) apart from the usual ones.
  */
 export const imapRequest = {
   open: openImap,
   send: sendSmtpMime,
   budgetMs: IMAP_REQUEST_BUDGET_MS,
   maxReceivedBytes: IMAP_MAX_REQUEST_BYTES,
+  postSendOpenMs: IMAP_POST_SEND_OPEN_MS,
+  postSendBudgetMs: IMAP_POST_SEND_BUDGET_MS,
 };
 
 /** Shared by every call, so frozen: no caller can change what the next one gets. */
@@ -159,6 +170,13 @@ async function pauseAccount(organizationId: string, accountId: string, technical
 type MailAccount = { id: string; email: string; displayName: string | null; smtp: SmtpSettings };
 
 /**
+ * What one request may cost when it is not the usual: the most the opening of the connection takes (connect, greeting and
+ * login; connect.ts's own limit when absent) and the most the work after the login takes (imapRequest.budgetMs when absent).
+ * Only the request that follows a reply's hand-over asks for less (replyToImapMessage).
+ */
+type RequestLimits = { openMs?: number; budgetMs?: number };
+
+/**
  * Runs `run` on a connection to the company's mailbox, logged in and closed
  * again whatever happens. The account is the company's own (tenantDb): none, or
  * one that doesn't read an inbox, is "no_account"; one that was disconnected,
@@ -172,11 +190,13 @@ type MailAccount = { id: string; email: string; displayName: string | null; smtp
  * lost connection makes imapflow answer search() and status() with `false` and the
  * FETCH calls with nothing, instead of an error, so once `run` is done a connection
  * that is no longer usable turns whatever it came to into "temporary": never an
- * empty inbox, a "no results" or a 404.
+ * empty inbox, a "no results" or a 404. The time it may take is the usual one unless
+ * `limits` asks for less (RequestLimits).
  */
 async function withImap<T>(
   organizationId: string,
   run: (client: ImapFlow, account: MailAccount) => Promise<MailboxResult<T>>,
+  limits: RequestLimits = {},
 ): Promise<MailboxResult<T>> {
   // Filter by provider: a company may connect one account of each.
   const account = await tenantDb(organizationId).emailSenderAccount.findFirst({
@@ -191,7 +211,7 @@ async function withImap<T>(
   if (account.status !== "ACTIVE") return { ok: false, reason: "reconnect" };
 
   const auth: ImapAuth = { user: settings.username, pass: settings.password };
-  const opened = await imapRequest.open(settings.imap, auth);
+  const opened = await imapRequest.open(settings.imap, auth, limits.openMs);
   if (!opened.ok) {
     if (opened.error === "auth_failed" && !LOGIN_REFUSED_FOR_NOW.test(opened.technical)) {
       await pauseAccount(organizationId, account.id, opened.technical);
@@ -203,12 +223,13 @@ async function withImap<T>(
 
   const { client } = opened;
   const watch: { startedAt: number; cutFor: string | null } = { startedAt: Date.now(), cutFor: null };
+  const budgetMs = limits.budgetMs ?? imapRequest.budgetMs;
   const guard = setInterval(() => {
     // A timer runs outside the request's own try: whatever throws here is an uncaught exception, and the process is
     // every company's. A watchdog that can't look is no watchdog, so the request is cut like one that ran out of time.
     try {
-      if (Date.now() - watch.startedAt > imapRequest.budgetMs) {
-        watch.cutFor = `it took more than ${imapRequest.budgetMs / 1000} s`;
+      if (Date.now() - watch.startedAt > budgetMs) {
+        watch.cutFor = `it took more than ${budgetMs / 1000} s`;
       } else if (client.stats().received > imapRequest.maxReceivedBytes) {
         watch.cutFor = `it took in more than ${imapRequest.maxReceivedBytes} bytes`;
       }
@@ -240,17 +261,22 @@ async function withImap<T>(
 function withInbox<T>(
   organizationId: string,
   run: (client: ImapFlow, mailbox: MailboxObject, account: MailAccount) => Promise<MailboxResult<T>>,
+  limits?: RequestLimits,
 ): Promise<MailboxResult<T>> {
-  return withImap(organizationId, async (client, account) => {
-    const lock = await client.getMailboxLock(INBOX);
-    try {
-      const mailbox = client.mailbox;
-      if (!mailbox) return TEMPORARY;
-      return await run(client, mailbox, account);
-    } finally {
-      lock.release();
-    }
-  });
+  return withImap(
+    organizationId,
+    async (client, account) => {
+      const lock = await client.getMailboxLock(INBOX);
+      try {
+        const mailbox = client.mailbox;
+        if (!mailbox) return TEMPORARY;
+        return await run(client, mailbox, account);
+      } finally {
+        lock.release();
+      }
+    },
+    limits,
+  );
 }
 
 /** The search text as it goes to the server: control characters (a line break would end the command) are spaces, spaces collapse, capped. */
@@ -683,8 +709,12 @@ async function keepCopyInSent(client: ImapFlow, mime: Buffer, auth: ImapAuth): P
  * Three steps, never inside one connection: the hand-over to the SMTP server can take a minute, an IMAP connection left idle
  * that long is dropped, and withImap turns any answer over a dropped connection into "temporary", which here would be a reply
  * that has gone out reported as one that has not (and sent twice). So the e-mail is read in a request of its own, the reply
- * is sent with no IMAP connection open, and a second short request keeps the copy and the mark. What happened before decides
- * what the caller may do:
+ * is sent with no IMAP connection open, and a second short request keeps the copy and the mark. That one has limits of its
+ * own, 10 s to open the connection and 10 s of work after the login (imapRequest.postSendOpenMs and postSendBudgetMs), so the
+ * answer is back in about 25 s at the very worst, the goodbye included, and not in the ~95 s any other request may take: the
+ * person is waiting for it, and a browser or a proxy that gives up first would leave a reply that went out looking unsent. A
+ * request cut by those limits only costs the copy (`savedToSent` false) and is logged. What happened before decides what the
+ * caller may do:
  *  - before the hand-over (the e-mail is gone or has no address to answer, the account asks to reconnect, the MIME can't be
  *    built, the SMTP server says no): nothing left. `not_found`, `no_account`, `reconnect` or `temporary`; trying again is safe;
  *  - the hand-over may have reached the server (a network failure or a timeout while handing it over, replyOutcome):
@@ -745,14 +775,18 @@ export async function replyToImapMessage(
   // Sent. From here nothing may fail the answer, or the person would send it again.
   let savedToSent = false;
   try {
-    await withInbox<null>(organizationId, async (client, mailbox, again) => {
-      // The company may have connected another address since the reply left: the copy belongs to the mailbox it left from.
-      if (again.id !== account.id) return NOT_FOUND;
-      savedToSent = await keepCopyInSent(client, mime, auth);
-      // The UID names this e-mail only in the numbering the id was made in.
-      if (ref.uidValidity === Number(mailbox.uidValidity)) await addFlag(client, ref.uid, ANSWERED);
-      return { ok: true, data: null };
-    });
+    await withInbox<null>(
+      organizationId,
+      async (client, mailbox, again) => {
+        // The company may have connected another address since the reply left: the copy belongs to the mailbox it left from.
+        if (again.id !== account.id) return NOT_FOUND;
+        savedToSent = await keepCopyInSent(client, mime, auth);
+        // The UID names this e-mail only in the numbering the id was made in.
+        if (ref.uidValidity === Number(mailbox.uidValidity)) await addFlag(client, ref.uid, ANSWERED);
+        return { ok: true, data: null };
+      },
+      { openMs: imapRequest.postSendOpenMs, budgetMs: imapRequest.postSendBudgetMs },
+    );
   } catch (e) {
     console.error("IMAP reply: the copy and the mark could not be made:", failureText(e, auth));
   }

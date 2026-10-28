@@ -31,7 +31,7 @@ const IMAP_MAX_LITERAL_BYTES = IMAP_MAX_MESSAGE_BYTES + 1024 * 1024;
 const IMAP_MAX_RESPONSE_BYTES = IMAP_MAX_LITERAL_BYTES + IMAP_MAX_LINE_BYTES;
 /** A failure's `technical` text reaches the screen and the log: at most this long, like the SMTP channel's. */
 const IMAP_TECHNICAL_MAX_CHARS = 400;
-/** Opening, from the name lookup to the end of the login, never takes longer than this. */
+/** Opening, from the name lookup to the end of the login, never takes longer than this (or than the caller asks, see openImap). */
 const IMAP_OPEN_BUDGET_MS = 30_000;
 /** How long the goodbye (LOGOUT) is waited for before the connection is cut. */
 const IMAP_LOGOUT_WAIT_MS = 5_000;
@@ -159,13 +159,16 @@ function closeNow(client: ImapFlow): void {
  * connection is made to the address it approved. A failure comes back named by
  * imapConnectError, with the library's words as `technical`, redacted; the guard's
  * refusals ("host_not_found", "host_not_allowed") come back as they are. Never
- * throws and never takes more than IMAP_OPEN_BUDGET_MS: a server that goes quiet in
- * the middle of the login, or feeds it a byte at a time, is cut off there. On
- * success the caller owns the client and ends it with closeImap.
+ * throws and never takes more than IMAP_OPEN_BUDGET_MS, or than `openBudgetMs` when
+ * the caller asks for a shorter one (the request after a reply's hand-over does,
+ * see replyToImapMessage): a server that goes quiet in the middle of the login, or
+ * feeds it a byte at a time, is cut off there. On success the caller owns the
+ * client and ends it with closeImap.
  */
 export async function openImap(
   settings: ImapSettings,
   auth: ImapAuth,
+  openBudgetMs: number = IMAP_OPEN_BUDGET_MS,
 ): Promise<{ ok: true; client: ImapFlow } | { ok: false; error: ImapConnectError; technical: string }> {
   const startedAt = Date.now();
   const target = await resolveSmtpHost(settings.host);
@@ -186,7 +189,7 @@ export async function openImap(
       expired = true;
       closeNow(client);
     },
-    Math.max(0, startedAt + IMAP_OPEN_BUDGET_MS - Date.now()),
+    Math.max(0, startedAt + openBudgetMs - Date.now()),
   );
   try {
     await client.connect();
@@ -195,7 +198,7 @@ export async function openImap(
     closeNow(client);
     // Out of time, the step only failed because the budget closed the client: the timeout is the real cause.
     const failure = expired
-      ? { code: "ETIMEDOUT", message: `The connection did not finish in ${IMAP_OPEN_BUDGET_MS / 1000} s` }
+      ? { code: "ETIMEDOUT", message: `The connection did not finish in ${openBudgetMs / 1000} s` }
       : e;
     return { ok: false, ...imapFailureOf(failure, auth) };
   } finally {

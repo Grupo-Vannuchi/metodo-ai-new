@@ -390,6 +390,18 @@ check("verifyImapSettings logs in to a real server over TLS", async (ctx) => {
   assert.deepEqual(await verifyImapSettings(etherealImap(ctx), etherealAuth(ctx)), { ok: true });
 });
 
+check("openImap takes the time it may spend opening as an argument: a login that doesn't finish in it fails as a timeout that says how long", async (ctx) => {
+  // 1 ms: a TLS connection to a real server can't be up by then (the name lookup has used it already). The request after a
+  // reply's hand-over asks for 10 s this way (imapRequest.postSendOpenMs); the connection that is made in time is the control.
+  const cut = await openImap(etherealImap(ctx), etherealAuth(ctx), 1);
+  assert.equal(cut.ok, false);
+  if (cut.ok) return;
+  assert.deepEqual([cut.error, cut.technical], ["connection_failed", "ETIMEDOUT: The connection did not finish in 0.001 s"]);
+  const opened = await openImap(etherealImap(ctx), etherealAuth(ctx), 20_000);
+  assert.ok(opened.ok, "a login that has time for it goes through");
+  if (opened.ok) await closeImap(opened.client);
+});
+
 check("a wrong password is auth_failed, and no text of the failure holds a password", async (ctx) => {
   const wrong = `senha-errada-${ctx.stamp}`;
   const result = await verifyImapSettings(etherealImap(ctx), { user: ctx.ethereal.user, pass: wrong });
@@ -670,25 +682,42 @@ const reason = (res: { ok: true } | { ok: false; reason: string }): string => (r
 /**
  * Runs `fn` (a view, a count or a download of the code under test) against a fake mailbox of its own instead of the
  * account's server: openImap refuses loopback on purpose, so the connector is swapped for one that dials the fake
- * with the options a real connection would have. `tuning` also lowers the budget and the byte cap.
+ * with the options a real connection would have. `tuning` also lowers the budget and the byte cap (and, for a reply,
+ * the limits of the request after the hand-over). The connector takes openImap's third argument, the time to open the
+ * connection, and does what openImap does with it: a login that doesn't finish in that time fails as a timeout.
+ * `openedWith` collects the time each connection asked for (undefined: the usual one), in the order they were made.
  */
 async function againstFake<T>(
   options: FakeMailboxOptions,
   fn: () => Promise<T>,
   tuning: Partial<Omit<typeof imapRequest, "open">> = {},
+  openedWith: (number | undefined)[] = [],
 ): Promise<T> {
   const fake = await listenFakeMailbox(options);
   const saved = { ...imapRequest };
-  imapRequest.open = async (): ReturnType<typeof openImap> => {
+  imapRequest.open = async (_settings, _auth, openMs): ReturnType<typeof openImap> => {
+    openedWith.push(openMs);
     const client = new ImapFlow(loopbackOptions(fake.port));
     client.on("error", () => {});
+    let expired = false;
+    const budget =
+      openMs === undefined
+        ? undefined
+        : setTimeout(() => {
+            expired = true;
+            client.close();
+          }, openMs);
     try {
       await client.connect();
       return { ok: true, client };
     } catch (e) {
       client.close();
+      // Out of time, the login only failed because the budget closed the client: the timeout is the cause (as in openImap).
+      const failure = expired ? { code: "ETIMEDOUT", message: `The connection did not finish in ${(openMs ?? 0) / 1000} s` } : e;
       // What it refuses is named the way a real server's refusal is (the fake's login uses these credentials).
-      return { ok: false, ...imapFailureOf(e, { user: "u", pass: "senha-ficticia" }) };
+      return { ok: false, ...imapFailureOf(failure, { user: "u", pass: "senha-ficticia" }) };
+    } finally {
+      clearTimeout(budget);
     }
   };
   Object.assign(imapRequest, tuning);
@@ -1354,9 +1383,9 @@ check("a password the server refuses is reconnect and pauses the account: the ne
   // Counts the connections the requests make (the real connector underneath).
   const real = imapRequest.open;
   let opens = 0;
-  imapRequest.open = (settings, auth) => {
+  imapRequest.open = (settings, auth, openMs) => {
     opens++;
-    return real(settings, auth);
+    return real(settings, auth, openMs);
   };
   try {
     await updateAccount(ctx, { credentials: etherealCredentials(ctx, etherealImap(ctx), wrong) });
@@ -1465,27 +1494,37 @@ async function withHandOver<T>(
 
 /**
  * A reply to the fake mailbox's first e-mail (m1, from Fulano) by the test organization's account, with the hand-over stubbed:
- * what it answered, what was handed over, what the fake mailbox was asked, and what the code logged (collected, not printed).
+ * what it answered, what was handed over, what the fake mailbox was asked, what time to open each connection was asked for
+ * (`openedWith`, see againstFake) and what the code logged (collected, not printed). `limits` shrinks the limits of the request
+ * after the hand-over (imapRequest.postSendOpenMs, postSendBudgetMs) and nothing else.
  */
 async function replyAgainstFake(
   ctx: ImapCtx,
   options: FakeMailboxOptions,
   answer: (handed: HandedOver) => Promise<MailboxSendOutcome> | MailboxSendOutcome = () => HAND_OVER_OK,
   messageId = "1000.1",
+  limits: Pick<Partial<typeof imapRequest>, "postSendOpenMs" | "postSendBudgetMs"> = {},
 ) {
   const record = newFakeRecord();
   const handedOver: HandedOver[] = [];
+  const openedWith: (number | undefined)[] = [];
   let result!: Awaited<ReturnType<typeof replyToImapMessage>>;
   const logged = await errorsLoggedBy(async () => {
-    result = await againstFake({ ...options, record }, () => replyToImapMessage(ctx.orgId, messageId, REPLY_TEXT), {
-      send: async (settings, envelope, mime) => {
-        const handed = { settings, envelope, mime };
-        handedOver.push(handed);
-        return answer(handed);
+    result = await againstFake(
+      { ...options, record },
+      () => replyToImapMessage(ctx.orgId, messageId, REPLY_TEXT),
+      {
+        ...limits,
+        send: async (settings, envelope, mime) => {
+          const handed = { settings, envelope, mime };
+          handedOver.push(handed);
+          return answer(handed);
+        },
       },
-    });
+      openedWith,
+    );
   });
-  return { result, handedOver, record, logged };
+  return { result, handedOver, record, logged, openedWith };
 }
 
 /** `fn` on a connection to the Ethereal mailbox itself, no folder open. */
@@ -1615,13 +1654,31 @@ check("sendSmtpMail still delivers through the account's SMTP server; sendSmtpMi
 
 const replyBox = { account: "" };
 
+/**
+ * `fn` with the request after a reply's hand-over given the time the other requests have (30 s to open, the usual budget). The
+ * replies that go to Ethereal over the internet look for the copy in Sent, and a test server that is slow for a moment (a greeting
+ * that takes 10 s, say) would cost them the copy for no fault of the code. The short limits themselves are checked against fake
+ * servers, in "the request after the hand-over has limits of its own".
+ */
+async function withUsualPostSendLimits<T>(fn: () => Promise<T>): Promise<T> {
+  const saved = { openMs: imapRequest.postSendOpenMs, budgetMs: imapRequest.postSendBudgetMs };
+  imapRequest.postSendOpenMs = 30_000;
+  imapRequest.postSendBudgetMs = imapRequest.budgetMs;
+  try {
+    return await fn();
+  } finally {
+    imapRequest.postSendOpenMs = saved.openMs;
+    imapRequest.postSendBudgetMs = saved.budgetMs;
+  }
+}
+
 check("replying to M1 sends the answer by the account's SMTP in the same conversation, keeps a copy in Sent and marks M1 answered", async (ctx) => {
   replyBox.account = (await smtpAccountRow(ctx)).id;
   const before = await withEtherealClient(ctx, readState);
   assert.deepEqual(before.answered, [], "nothing is answered yet");
   assert.equal(before.sentCount, 0, "Ethereal keeps no copy in Sent by itself");
 
-  const res = await untilAnswered(() => replyToImapMessage(ctx.orgId, box.m1, REPLY_TEXT));
+  const res = await withUsualPostSendLimits(() => untilAnswered(() => replyToImapMessage(ctx.orgId, box.m1, REPLY_TEXT)));
   assert.ok(res.ok, `the reply: ${reason(res)}`);
   assert.deepEqual(res.data, { accountId: replyBox.account, to: "cliente@exemplo.com.br", uncertain: false, savedToSent: true });
 
@@ -1708,8 +1765,10 @@ check("a reply goes to the Reply-To, with the subject on one line and the origin
   const { answers, handedOver } = await withHandOver(
     () => HAND_OVER_OK,
     async (handed) => {
-      const answers = await Promise.all(
-        (["reply", "lineBreak", "hostile", "nobody"] as const).map((key) => untilAnswered(() => replyToImapMessage(ctx.orgId, refs[key], REPLY_TEXT))),
+      const answers = await withUsualPostSendLimits(() =>
+        Promise.all(
+          (["reply", "lineBreak", "hostile", "nobody"] as const).map((key) => untilAnswered(() => replyToImapMessage(ctx.orgId, refs[key], REPLY_TEXT))),
+        ),
       );
       return { answers, handedOver: [...handed] };
     },
@@ -1880,6 +1939,72 @@ check("once the reply is sent nothing the mailbox does turns it into a failure: 
   } finally {
     await updateAccount(ctx, { status: "ACTIVE", lastError: null });
   }
+});
+
+check("the request after the hand-over has limits of its own: a mailbox that stalls it costs the reply its copy, not a minute, and nothing is sent twice", async (ctx) => {
+  const sentFolder = [{ path: "INBOX.Sent" }];
+  const marksAnswered = (lines: string[]) => lines.some((line) => /\bUID STORE 1 \+FLAGS \(\\Answered\)$/.test(line));
+  // The values in production: any request is allowed 60 s; the one after a reply, 10 s to open and 10 s of work after the login.
+  assert.deepEqual([imapRequest.budgetMs, imapRequest.postSendOpenMs, imapRequest.postSendBudgetMs], [60_000, 10_000, 10_000]);
+
+  // The control: asked for nothing special, the read request is opened with the usual time and the one after the hand-over with the short one.
+  const normal = await replyAgainstFake(ctx, { folders: sentFolder });
+  assert.ok(normal.result.ok && normal.result.data.savedToSent, JSON.stringify(normal.result));
+  assert.deepEqual(normal.openedWith, [undefined, 10_000]);
+  assert.equal(normal.logged, "");
+
+  // The mailbox answers the reading and then goes quiet on the folders, or on the copy itself. The general budget stays at its
+  // 60 s; only the limit of the request after the hand-over is lowered, and that is what ends it. The reply left, once.
+  const stallFolderList: FakeOn = ({ name, line }) => name === "LIST" && line.endsWith('"*"');
+  const stallCopy: FakeOn = ({ name }) => name === "APPEND";
+  for (const [label, on] of [
+    ["quiet on the folder list", stallFolderList],
+    ["quiet on the copy", stallCopy],
+  ] as const) {
+    const startedAt = Date.now();
+    const run = await replyAgainstFake(ctx, { folders: sentFolder, on }, undefined, "1000.1", { postSendBudgetMs: 400 });
+    const took = Date.now() - startedAt;
+    assert.ok(run.result.ok, `${label}: ${JSON.stringify(run.result)}`);
+    assert.deepEqual([run.result.data.uncertain, run.result.data.savedToSent], [false, false], label);
+    assert.ok(took < 8_000, `${label}: ${took} ms; only the limit of its own ends a stall this soon`);
+    assert.ok(run.logged.includes("IMAP request cut: it took more than 0.4 s"), `${label}: ${run.logged}`);
+    assert.equal(run.handedOver.length, 1, `${label}: handed over once`);
+    assert.equal(run.record.connections, 2, `${label}: the read and the cut request, no third`);
+    assert.equal(run.record.appended.length, 0, `${label}: no copy`);
+    assert.equal(marksAnswered(run.record.lines), false, `${label}: cut before the mark`);
+  }
+
+  // The same short limit does not touch the request that reads: it takes longer than that to answer here and is not cut.
+  const slowRead: FakeOn = ({ name, tag, set, rows }, socket) => {
+    if (name !== "UID FETCH") return false;
+    setTimeout(() => {
+      if (!socket.destroyed) socket.write(`${rows(set)}${tag} OK done\r\n`);
+    }, 1_500);
+    return true;
+  };
+  const slow = await replyAgainstFake(ctx, { folders: sentFolder, on: slowRead }, undefined, "1000.1", { postSendBudgetMs: 1_000 });
+  assert.ok(slow.result.ok && slow.result.data.savedToSent, JSON.stringify(slow.result));
+  assert.equal(slow.handedOver.length, 1);
+  assert.ok(marksAnswered(slow.record.lines), "the request after the hand-over, quick, did its work");
+  assert.equal(slow.logged, "", "the slow reading was not cut");
+
+  // Its opening has a limit of its own too: the second login is never answered, and the reply is back at that limit, not at 30 s.
+  let logins = 0;
+  const stallSecondLogin: FakeOn = ({ name }) => (name === "AUTHENTICATE" || name === "LOGIN") && ++logins === 2;
+  const startedAt = Date.now();
+  const stalledOpen = await replyAgainstFake(ctx, { folders: sentFolder, on: stallSecondLogin }, undefined, "1000.1", { postSendOpenMs: 400 });
+  const took = Date.now() - startedAt;
+  assert.deepEqual(stalledOpen.openedWith, [undefined, 400], "only the request after the hand-over asked for a shorter opening");
+  assert.ok(stalledOpen.result.ok, JSON.stringify(stalledOpen.result));
+  assert.deepEqual([stalledOpen.result.data.uncertain, stalledOpen.result.data.savedToSent], [false, false]);
+  assert.ok(took < 8_000, `${took} ms`);
+  assert.ok(
+    stalledOpen.logged.includes("IMAP inbox connection failed connection_failed ETIMEDOUT: The connection did not finish in 0.4 s"),
+    stalledOpen.logged,
+  );
+  assert.equal(stalledOpen.handedOver.length, 1, "handed over once");
+  assert.equal(stalledOpen.record.appended.length, 0);
+  assert.equal(marksAnswered(stalledOpen.record.lines), false);
 });
 
 check("the copy belongs to the mailbox the reply left from: another address connected meanwhile gets no copy and no mark", async (ctx) => {
