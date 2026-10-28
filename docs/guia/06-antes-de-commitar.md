@@ -82,7 +82,42 @@ rodada anterior, já recebeu o convite e número repetido na pasta) e as contage
 da resposta de cada adição virando adicionado, convite ou já estava; o horário das 8h às 20h de São Paulo, a
 próxima tentativa depois da pausa de 30 a 90 s e a retomada às 8h do dia seguinte quando o teto de 100 por dia
 acaba; o texto do convite com `{{nome}}` e `{{grupo}}` e o link sempre no fim; e a previsão de término).
-Não usa banco nem rede. Rode sempre que mexer em `src/lib/whatsapp/group-add/core.ts` ou em `src/lib/integrations/evolution-groups.ts`.
+Cobre também como as respostas da Evolution são lidas em
+[src/lib/integrations/evolution-groups.ts](../../src/lib/integrations/evolution-groups.ts): a lista de grupos, com os
+participantes `@lid` resolvidos pelo `phoneNumber` e a contagem dos que ficaram sem número; se o número da pessoa é admin
+do grupo (`null`, e não `false`, quando um membro sem número poderia ser ele); os dígitos de um JID sem o `:device`; o JID
+do próprio número, nas respostas v2 e v1 do `fetchInstances` e só o da instância pedida; o código de cada adição, que vem
+como texto ou como número; se o número tem WhatsApp; e o link do grupo, que só vale se for `https://chat.whatsapp.com/…`.
+E tem uma guarda estática, porque as únicas escritas no WhatsApp são adicionar um participante e mandar o texto do
+convite: ela falha se algum arquivo de `src/lib/whatsapp/group-add/` citar `sendInvite` ou `updateSetting` ou escrever
+`"remove"`, `"promote"` ou `"demote"` (comentários também contam), se o `evolution-client.ts` citar `sendInvite` ou
+`updateSetting` ou mandar `action` `remove`, `promote` ou `demote`, ou se ela não achar o `core.ts` para varrer.
+Não usa banco nem rede. Rode sempre que mexer em `src/lib/whatsapp/group-add/`, em `src/lib/integrations/evolution-groups.ts` ou em `src/lib/integrations/evolution-client.ts`.
+
+`npm run check:group-add:e2e` testa o código de servidor que fala com a Evolution no "Adicionar a grupo do WhatsApp"
+([scripts/check-whatsapp-group-add-e2e.ts](../../scripts/check-whatsapp-group-add-e2e.ts)) contra uma Evolution
+falsa em loopback ([scripts/shims/fake-evolution.ts](../../scripts/shims/fake-evolution.ts)), então nada chega ao
+WhatsApp. Hoje cobre as chamadas novas de
+[src/lib/integrations/evolution-client.ts](../../src/lib/integrations/evolution-client.ts): a lista de grupos do número
+(`fetchAllGroups`), um grupo pelo JID (`fetchGroupSummary`, em todos os formatos de resposta que o `findGroupInfo` já
+aceita), o JID do próprio número (`fetchOwnerJid`, respostas v2 e v1), a adição (`addGroupParticipant`), a conferência de
+que o número tem WhatsApp (`checkOnWhatsapp`), o link do grupo (`fetchGroupInviteUrl`) e o envio do texto
+(`sendPlainText`). De cada uma confere o método, o caminho, a query e o corpo exatos que saem (o nome da instância vai
+codificado, mesmo com espaço ou barra, e o `apikey` vai no cabeçalho), o tempo limite próprio (30, 20, 15, 30, 15, 15 e
+30 s) e a resposta lida: a lista de grupos com os participantes, o código de cada adição (200, 403 pela privacidade da
+pessoa, 409, qualquer outro, ou nenhum) e o texto do convite, que sai sem mudar um espaço. Confere também o que acontece
+quando a Evolution falha: uma conexão fechada sem resposta, ou um servidor fora do ar, dá `httpStatus` 0 e nenhum código
+na adição, `ok` falso no envio e `null` nas leituras; um status de erro vale como erro mesmo com um corpo que parece
+certo, e uma resposta que não é uma lista de grupos não vira lista vazia; e um erro 500 que repete o número e o texto,
+como a Evolution faz, não deixa nenhum dos dois em nenhuma linha do console. Só duas escritas chegam à Evolution falsa: a
+adição (sempre `action: "add"`) e o texto, e nenhuma chamada cai fora das rotas que ela serve.
+Precisa de um `.env` (o comando o carrega; esta parte ainda não lê nada dele). Não usa banco nem internet: a Evolution
+falsa roda em loopback e o script leva alguns segundos. Roda com `tsx --tsconfig scripts/tsconfig.server.json`, como o
+`check:imap`: o shim `scripts/shims/server-only.ts` deixa os módulos `server-only` carregarem fora do Next, e o tsconfig
+traz o alias `@/`. A falsa serve também `connectionState` (padrão `open`) e `fetchInstances`, que o executor da rodada vai
+usar; cada rota tem uma resposta padrão, o teste troca a que quiser (`set`) e a falsa guarda método, caminho, query e
+corpo de toda chamada. Rode sempre que mexer em `src/lib/integrations/evolution-client.ts` ou em
+`scripts/shims/fake-evolution.ts`.
 
 `npm run check:mcp` cobre as regras puras do servidor MCP de leitura
 ([src/lib/mcp/core.ts](../../src/lib/mcp/core.ts): comparação da chave com espaço ou quebra de linha

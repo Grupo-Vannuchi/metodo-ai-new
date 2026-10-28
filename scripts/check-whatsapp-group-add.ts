@@ -1,9 +1,23 @@
 /**
  * Self-check for the pure rules of "Adicionar a grupo do WhatsApp" (no DB, no
- * network, no env). Run with `npm run check:group-add`; exits non-zero on the
- * first failure.
+ * network, no env): the rules in src/lib/whatsapp/group-add/core.ts, how
+ * Evolution's answers are read (src/lib/integrations/evolution-groups.ts) and a
+ * static guard on what the feature may write to WhatsApp. Run with
+ * `npm run check:group-add`; exits non-zero on the first failure.
  */
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
+import {
+  existsOnWhatsapp,
+  inviteUrlFrom,
+  isAdminOf,
+  jidDigits,
+  ownerJidFrom,
+  parseGroupList,
+  participantUpdateCode,
+  type EvoGroupSummary,
+} from "../src/lib/integrations/evolution-groups";
 import {
   CAP_COUNTED,
   capResumeAt,
@@ -495,6 +509,291 @@ check("forecastFinish with nobody left is now", () => {
   const now = at("2026-10-28T12:00:00Z");
   assert.equal(iso(forecastFinish(now, 0, 0)), iso(now));
   assert.equal(iso(forecastFinish(now, 0, 100)), iso(now));
+});
+
+// ── How Evolution's answers are read (evolution-groups.ts) ───────────────────
+
+const GROUP_JID = "120363000000000001@g.us";
+
+/** `GET /group/fetchAllGroups` of Evolution v2: a group of 3 (one member is a LID with no number) and a chat that is not a group. */
+const GROUPS_V2 = [
+  {
+    id: GROUP_JID,
+    subject: "Ofertas",
+    size: 3,
+    announce: true,
+    participants: [
+      { id: "5511987654321@s.whatsapp.net", admin: "superadmin" },
+      { id: "1@lid", phoneNumber: "5511912345678@s.whatsapp.net", admin: null },
+      { id: "2@lid", admin: null },
+    ],
+  },
+  { id: "x@s.whatsapp.net" },
+];
+
+function sampleGroup(): EvoGroupSummary {
+  const [group] = parseGroupList(GROUPS_V2);
+  assert.ok(group, "the sample group was not parsed");
+  return group;
+}
+
+check("parseGroupList keeps the groups, resolves @lid members through phoneNumber and counts the ones it can't", () => {
+  assert.deepEqual(parseGroupList(GROUPS_V2), [
+    {
+      jid: GROUP_JID,
+      subject: "Ofertas",
+      size: 3,
+      announce: true,
+      participants: [
+        { number: "5511987654321", admin: true },
+        { number: "5511912345678", admin: false },
+      ],
+      unresolved: 1,
+    },
+  ]);
+});
+
+check("parseGroupList takes { groups: [...] } as well, and gives [] for an answer that is not a list of groups", () => {
+  assert.deepEqual(parseGroupList({ groups: GROUPS_V2 }), parseGroupList(GROUPS_V2));
+  const notGroups: unknown[] = [
+    undefined,
+    null,
+    "x",
+    3,
+    {},
+    { groups: "x" },
+    [null, "x", 3, [], {}, { id: 5 }, { id: "@g.us" }, { id: "1@lid" }, { id: "5511987654321@s.whatsapp.net" }],
+  ];
+  for (const data of notGroups) assert.deepEqual(parseGroupList(data), [], JSON.stringify(data));
+});
+
+check("parseGroupList fills in what the group doesn't say, and reads subject, size and announce only as the right type", () => {
+  assert.deepEqual(parseGroupList([{ id: GROUP_JID }]), [
+    { jid: GROUP_JID, subject: "", size: 0, announce: null, participants: [], unresolved: 0 },
+  ]);
+  const [odd] = parseGroupList([
+    {
+      id: GROUP_JID,
+      subject: "  Ofertas  ",
+      size: "3",
+      announce: "yes",
+      participants: [{ id: "5511987654321@s.whatsapp.net" }, null, "x"],
+    },
+  ]);
+  // A size that is not a number is unknown (the members listed stand in for it), and so is an announce that is not a boolean.
+  assert.deepEqual(odd, {
+    jid: GROUP_JID,
+    subject: "Ofertas",
+    size: 3,
+    announce: null,
+    participants: [{ number: "5511987654321", admin: false }],
+    unresolved: 2,
+  });
+  assert.equal(parseGroupList([{ id: GROUP_JID, announce: false }])[0]?.announce, false);
+});
+
+check("isAdminOf: true for an admin, false for a member, null when the number could be a member it couldn't read", () => {
+  const group = sampleGroup();
+  assert.equal(isAdminOf(group, "5511987654321"), true); // the superadmin
+  assert.equal(isAdminOf(group, "5511912345678"), false); // listed and not an admin: the answer holds with 1 member unread
+  assert.equal(isAdminOf(group, "5511900000000"), null); // not listed, and 1 member has no number: it may be that one
+  assert.equal(isAdminOf({ ...group, unresolved: 0 }, "5511900000000"), false); // everybody has a number: not in the group
+});
+
+check("isAdminOf: a plain admin counts, and a number of our own that is unknown is never an answer", () => {
+  const group = { participants: [{ number: "5511900000000", admin: true }], unresolved: 0 };
+  assert.equal(isAdminOf(group, "5511900000000"), true);
+  // No digits (a @lid owner, no owner at all): can't be placed, whatever the list says.
+  assert.equal(isAdminOf(group, ""), null);
+  assert.equal(isAdminOf({ participants: [], unresolved: 0 }, ""), null);
+  // The owner JID of an instance carries ":device"; its digits are still the member's number.
+  assert.equal(isAdminOf(sampleGroup(), jidDigits("5511987654321:12@s.whatsapp.net")), true);
+  assert.equal(isAdminOf(sampleGroup(), jidDigits("123456789012345@lid")), null);
+});
+
+check("jidDigits keeps the digits of a phone JID, without the device or the domain, and nothing for any other JID", () => {
+  assert.equal(jidDigits("5511987654321:12@s.whatsapp.net"), "5511987654321");
+  assert.equal(jidDigits("5511987654321@s.whatsapp.net"), "5511987654321");
+  assert.equal(jidDigits("5511987654321@c.us"), "5511987654321");
+  assert.equal(jidDigits("5511987654321"), "5511987654321");
+  for (const jid of ["123456789012345@lid", "123456789012345:3@lid", GROUP_JID, "abc@s.whatsapp.net", "@s.whatsapp.net", ""]) {
+    assert.equal(jidDigits(jid), "", jid);
+  }
+});
+
+check("ownerJidFrom reads the JID of the instance's own number from the v2 and the v1 answer, and only for that instance", () => {
+  const jid = "5511987654321@s.whatsapp.net";
+  const other = "5511911112222@s.whatsapp.net";
+  const v2 = [{ name: "inst", ownerJid: jid }];
+  const v1 = [{ instance: { instanceName: "inst", owner: jid } }];
+  assert.equal(ownerJidFrom(v2, "inst"), jid);
+  assert.equal(ownerJidFrom(v1, "inst"), jid);
+  // Another instance's number is never ours.
+  assert.equal(ownerJidFrom(v2, "other"), null);
+  assert.equal(ownerJidFrom(v1, "other"), null);
+  // An answer that lists several instances: the one asked for.
+  assert.equal(ownerJidFrom([{ name: "other", ownerJid: other }, ...v2], "inst"), jid);
+  assert.equal(ownerJidFrom([{ instance: { instanceName: "other", owner: other } }, ...v1], "inst"), jid);
+  // An instance that isn't linked to a number has no owner, and anything else is not an answer.
+  const noOwner: unknown[] = [
+    [{ name: "inst", ownerJid: null }],
+    [{ name: "inst", ownerJid: "  " }],
+    [{ name: "inst" }],
+    [{ instance: { instanceName: "inst" } }],
+    [],
+    {},
+    null,
+    undefined,
+    "x",
+  ];
+  for (const data of noOwner) assert.equal(ownerJidFrom(data, "inst"), null, JSON.stringify(data));
+});
+
+check("participantUpdateCode reads the status of the first update, as text", () => {
+  assert.equal(participantUpdateCode({ updateParticipants: [{ status: "403" }] }), "403");
+  assert.equal(participantUpdateCode({ updateParticipants: [{ status: 200 }] }), "200");
+  // The answer for a number whose privacy settings ask for the link.
+  const privacy = {
+    updateParticipants: [
+      {
+        status: "403",
+        jid: "5511987654321@s.whatsapp.net",
+        content: { tag: "add_request", attrs: { code: "XyZ", expiration: "1700000000" } },
+      },
+    ],
+  };
+  assert.equal(participantUpdateCode(privacy), "403");
+  // One person per call, so there is one update; if more ever come, the first is the one.
+  assert.equal(participantUpdateCode({ updateParticipants: [{ status: "403" }, { status: "200" }] }), "403");
+  const noCode: unknown[] = [
+    {},
+    null,
+    undefined,
+    "x",
+    [],
+    [{ status: "200" }],
+    { updateParticipants: [] },
+    { updateParticipants: "x" },
+    { updateParticipants: [null] },
+    { updateParticipants: [{}] },
+    { updateParticipants: [{ status: null }] },
+    { updateParticipants: [{ status: "" }] },
+    { updateParticipants: [{ status: {} }] },
+  ];
+  for (const data of noCode) assert.equal(participantUpdateCode(data), null, JSON.stringify(data));
+});
+
+check("existsOnWhatsapp reads the first answer of whatsappNumbers", () => {
+  assert.equal(existsOnWhatsapp([{ exists: false }]), false);
+  assert.equal(existsOnWhatsapp([{ exists: true, jid: "5511987654321@s.whatsapp.net", number: "5511987654321" }]), true);
+  const noAnswer: unknown[] = [{}, null, undefined, [], [null], [{}], [{ exists: "true" }], [{ exists: 1 }], { exists: true }];
+  for (const data of noAnswer) assert.equal(existsOnWhatsapp(data), null, JSON.stringify(data));
+});
+
+check("inviteUrlFrom accepts only a https://chat.whatsapp.com/ link, and builds it from the code", () => {
+  assert.equal(inviteUrlFrom({ inviteUrl: "https://chat.whatsapp.com/AbC" }), "https://chat.whatsapp.com/AbC");
+  assert.equal(inviteUrlFrom({ inviteCode: "AbC" }), "https://chat.whatsapp.com/AbC");
+  // What Evolution sends: both, agreeing.
+  assert.equal(inviteUrlFrom({ inviteUrl: "https://chat.whatsapp.com/AbC", inviteCode: "AbC" }), "https://chat.whatsapp.com/AbC");
+  assert.equal(inviteUrlFrom({ inviteUrl: "http://evil.example/x" }), null);
+  const notOurs = [
+    "http://chat.whatsapp.com/AbC",
+    "https://chat.whatsapp.com/",
+    "https://chat.whatsapp.com",
+    "https://chat.whatsapp.com.evil.example/AbC",
+    "https://evil.example/https://chat.whatsapp.com/AbC",
+    "https://chat.whatsapp.com/AbC extra",
+    "https://chat.whatsapp.com/AbC\nhttp://evil.example/x",
+    "javascript:alert(1)",
+    "AbC",
+  ];
+  for (const inviteUrl of notOurs) assert.equal(inviteUrlFrom({ inviteUrl }), null, inviteUrl);
+  // A link that is not ours is not rescued by the code beside it.
+  assert.equal(inviteUrlFrom({ inviteUrl: "http://evil.example/x", inviteCode: "AbC" }), null);
+  for (const inviteCode of ["", "  ", "A b", "AbC/../x", "AbC?x=1", 5, null]) {
+    assert.equal(inviteUrlFrom({ inviteCode }), null, String(inviteCode));
+  }
+  const noLink: unknown[] = [{}, null, undefined, "x", [], [{ inviteCode: "AbC" }]];
+  for (const data of noLink) assert.equal(inviteUrlFrom(data), null, JSON.stringify(data));
+});
+
+// ── What the feature may write to WhatsApp ───────────────────────────────────
+//
+// Two writes only: add one participant and send the invite text. The link goes out with the text, one person at a time, so
+// the call that sends it to a whole list at once is out, and so is any other action on the group or on its settings.
+
+/** Every .ts file under `dir`, recursively. A folder that isn't there throws: a scan that finds nothing must not pass. */
+function sourcesUnder(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return sourcesUnder(path);
+    return /\.tsx?$/.test(entry.name) ? [path] : [];
+  });
+}
+
+type Rule = { rule: string; re: RegExp; trips: string[] };
+
+const NO_SEND_INVITE: Rule = {
+  rule: "name sendInvite",
+  re: /sendInvite/i,
+  trips: ["POST /group/sendInvite/e2e", "evo.sendInvite(1)", "// not sendinvite"],
+};
+const NO_UPDATE_SETTING: Rule = {
+  rule: "name updateSetting",
+  re: /updateSetting/i,
+  trips: ["POST /group/updateSetting/e2e", "// no updatesetting"],
+};
+const NO_MEMBER_ACTION_STRING: Rule = {
+  rule: 'write "remove", "promote" or "demote" as a string',
+  re: /["'`](?:remove|promote|demote)["'`]/,
+  trips: ['action: "remove"', "action: 'promote'", "const A = `demote`", '["add", "remove"]'],
+};
+const NO_MEMBER_ACTION_FIELD: Rule = {
+  rule: 'send action: "remove", "promote" or "demote"',
+  re: /\baction["']?\s*:\s*["'`](?:remove|promote|demote)["'`]/,
+  trips: ['{ action: "remove", participants: [number] }', "{action:'promote'}", "action : `demote`", '{ "action": "remove" }'],
+};
+/** What the code is allowed to say, so a rule can't be loosened into tripping on it. */
+const ALLOWED_CODE = [
+  '{ action: "add", participants: [number] }',
+  "// remove the item from the plan",
+  "const removed = items.filter(Boolean)",
+  "participants: [number]",
+  "await sendPlainText(creds, number, text)",
+];
+
+/** The patterns themselves, so a typo in one can't turn a scan below into a silent pass. */
+function assertRulesWork(rules: Rule[]): void {
+  for (const { rule, re, trips } of rules) {
+    for (const sample of trips) assert.ok(re.test(sample), `${rule}: ${sample}`);
+  }
+  for (const sample of ALLOWED_CODE) {
+    for (const { rule, re } of rules) assert.ok(!re.test(sample), `${rule} wrongly trips on ${sample}`);
+  }
+}
+
+check("nothing in group-add/ names sendInvite or updateSetting, or writes remove, promote or demote (comments included)", () => {
+  const rules = [NO_SEND_INVITE, NO_UPDATE_SETTING, NO_MEMBER_ACTION_STRING];
+  assertRulesWork(rules);
+  const dir = join(__dirname, "..", "src", "lib", "whatsapp", "group-add");
+  const files = sourcesUnder(dir);
+  // Not a silent pass: the module this folder is known to hold has to be among the files read.
+  const read = files.map((file) => relative(dir, file));
+  assert.ok(read.includes("core.ts"), `core.ts was not read (read: ${read.join(", ") || "nothing"})`);
+  for (const file of files) {
+    const text = readFileSync(file, "utf8");
+    for (const { rule, re } of rules) assert.ok(!re.test(text), `${relative(dir, file)} must not ${rule}`);
+  }
+});
+
+check("the Evolution client sends no member action but add, and never names sendInvite or updateSetting", () => {
+  const rules = [NO_SEND_INVITE, NO_UPDATE_SETTING, NO_MEMBER_ACTION_FIELD];
+  assertRulesWork(rules);
+  const text = readFileSync(join(__dirname, "..", "src", "lib", "integrations", "evolution-client.ts"), "utf8");
+  // It has to be the file with the group calls, or this scan proves nothing. (Not assert.match: its message would print the file.)
+  assert.ok(/\/group\/updateParticipant\//.test(text), "evolution-client.ts has no add call to scan");
+  assert.ok(/\baction: "add"/.test(text), "evolution-client.ts does not send action add");
+  for (const { rule, re } of rules) assert.ok(!re.test(text), `evolution-client.ts must not ${rule}`);
 });
 
 console.log(`\n✅ group-add: ${passed} checks passed.`);
