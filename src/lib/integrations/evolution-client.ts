@@ -270,6 +270,8 @@ export async function fetchAllGroups(creds: EvoCreds): Promise<EvoGroupSummary[]
     30000,
   );
   if (!ok) return null;
+  // `req` only replaces a body that fails to parse: a JSON null comes through as the data, and has no `groups` to read.
+  if (data === null || typeof data !== "object") return null;
   // The list is an array (cast to Json by `req`) or `{ groups }`. Anything else, an empty body included, is not a list.
   if (!Array.isArray(data) && !Array.isArray(data.groups)) return null;
   return parseGroupList(data);
@@ -285,6 +287,8 @@ export async function fetchGroupSummary(creds: EvoCreds, groupJid: string): Prom
     20000,
   );
   if (!ok) return null;
+  // As in fetchAllGroups: a JSON null comes through `req` as the data, and has no `group` to read.
+  if (data === null || typeof data !== "object") return null;
   // The envelopes findGroupInfo accepts: the group alone, in an array, or under `group` / `groupInfo`.
   const g: unknown = Array.isArray(data) ? data[0] : (data.group ?? data.groupInfo ?? data);
   return parseGroupList([g])[0] ?? null;

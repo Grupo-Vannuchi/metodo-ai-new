@@ -108,9 +108,10 @@ codificado, mesmo com espaço ou barra, e o `apikey` vai no cabeçalho), o tempo
 pessoa, 409, qualquer outro, ou nenhum) e o texto do convite, que sai sem mudar um espaço. Confere também o que acontece
 quando a Evolution falha: uma conexão fechada sem resposta, ou um servidor fora do ar, dá `httpStatus` 0 e nenhum código
 na adição, `ok` falso no envio e `null` nas leituras; um status de erro vale como erro mesmo com um corpo que parece
-certo, e uma resposta que não é uma lista de grupos não vira lista vazia; e um erro 500 que repete o número e o texto,
-como a Evolution faz, não deixa nenhum dos dois em nenhuma linha do console. Só duas escritas chegam à Evolution falsa: a
-adição (sempre `action: "add"`) e o texto, e nenhuma chamada cai fora das rotas que ela serve.
+certo, e uma resposta que não é uma lista de grupos não vira lista vazia; um 200 cujo corpo é só `null` não derruba
+nenhuma das sete chamadas; e um erro 500 que repete o número e o texto, como a Evolution faz, não deixa nenhum dos dois
+em nenhuma linha do console. Só duas escritas chegam à Evolution falsa: a adição (sempre `action: "add"`) e o texto, e
+nenhuma chamada cai fora das rotas que ela serve.
 Precisa de um `.env` (o comando o carrega; esta parte ainda não lê nada dele). Não usa banco nem internet: a Evolution
 falsa roda em loopback e o script leva alguns segundos. Roda com `tsx --tsconfig scripts/tsconfig.server.json`, como o
 `check:imap`: o shim `scripts/shims/server-only.ts` deixa os módulos `server-only` carregarem fora do Next, e o tsconfig

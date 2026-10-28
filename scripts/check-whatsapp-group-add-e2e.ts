@@ -125,6 +125,7 @@ check("fetchAllGroups: an error, or an answer that is not a list of groups, is n
     ["500 that carries a list", { status: 500, json: [FAKE_EVO_GROUP] }],
     ["200 with an object that holds no list", { status: 200, json: {} }],
     ["200 with something that is not JSON", { status: 200 }],
+    ["200 with null", { status: 200, json: null }],
     ["200 with a list of something else", { status: 200, json: { groups: "x" } }],
   ] as const) {
     fake.set("fetchAllGroups", reply);
@@ -157,6 +158,7 @@ check("fetchGroupSummary: a group that isn't there, an error, or an answer with 
     ["200 with []", { status: 200, json: [] }],
     ["200 with a chat that is not a group", { status: 200, json: { id: "5511987654321@s.whatsapp.net", subject: "x" } }],
     ["200 with no JSON", { status: 200 }],
+    ["200 with null", { status: 200, json: null }],
   ] as const) {
     fake.set("findGroupInfos", reply);
     assert.equal(await fetchGroupSummary(fake.creds, GROUP), null, label);
@@ -189,6 +191,7 @@ check("fetchOwnerJid: another instance's number, an instance with no number, or 
     ["only another instance", { status: 200, json: [{ name: "outra", ownerJid: "5511911112222@s.whatsapp.net" }] }],
     ["not linked yet", { status: 200, json: [{ name: "e2e", ownerJid: null }] }],
     ["an empty list", { status: 200, json: [] }],
+    ["200 with null", { status: 200, json: null }],
     ["500", { status: 500, json: { error: "boom" } }],
     ["500 that carries the owner", { status: 500, json: [{ name: "e2e", ownerJid: FAKE_EVO_OWNER_JID }] }],
     ["404", { status: 404, json: { error: "Not Found" } }],
@@ -220,6 +223,7 @@ check("checkOnWhatsapp: POST /chat/whatsappNumbers/{instance} with { numbers: [n
   for (const [label, reply] of [
     ["200 with no answer for the number", { status: 200, json: [] }],
     ["200 with an object", { status: 200, json: {} }],
+    ["200 with null", { status: 200, json: null }],
     ["500", { status: 500, json: { error: "boom" } }],
     ["500 that carries an answer", { status: 500, json: [{ exists: true, jid: `${PERSON}@s.whatsapp.net`, number: PERSON }] }],
   ] as const) {
@@ -240,6 +244,7 @@ check("fetchGroupInviteUrl: GET /group/inviteCode/{instance}?groupJid=…, only 
   for (const [label, reply] of [
     ["a link that is not WhatsApp's", { status: 200, json: { inviteUrl: "http://evil.example/x", inviteCode: "AbC" } }],
     ["no link and no code", { status: 200, json: {} }],
+    ["200 with null", { status: 200, json: null }],
     ["404", { status: 404, json: { error: "No invite code" } }],
     ["500", { status: 500, json: { error: "boom" } }],
     ["500 that carries the link", { status: 500, json: { inviteUrl: INVITE_LINK, inviteCode: "AbC" } }],
@@ -294,6 +299,7 @@ check("addGroupParticipant: the code of the number is read whatever its type, an
     ["201 with no updateParticipants", { status: 201, json: {} }, { httpStatus: 201, code: null }],
     ["201 with an empty list", { status: 201, json: { updateParticipants: [] } }, { httpStatus: 201, code: null }],
     ["201 with no JSON", { status: 201 }, { httpStatus: 201, code: null }],
+    ["201 with null", { status: 201, json: null }, { httpStatus: 201, code: null }],
     ["a refusal of the request", { status: 400, json: { status: 400, error: "Bad Request" } }, { httpStatus: 400, code: null }],
     ["500", { status: 500, json: { error: "boom" } }, { httpStatus: 500, code: null }],
     ["502 from a proxy, with no JSON", { status: 502 }, { httpStatus: 502, code: null }],
@@ -314,6 +320,10 @@ check("sendPlainText: POST /message/sendText/{instance} with the number and the 
   const padded = "  Oi, tudo bem?\r\n\n";
   assert.deepEqual(await sendPlainText(fake.creds, PERSON, padded), { ok: true, httpStatus: 201 });
   assert.deepEqual(fake.calls[1]?.body, { number: PERSON, text: padded });
+
+  // A success whose body is a bare null is still a success: the status is the answer, and nothing reads the body.
+  fake.set("sendText", { status: 201, json: null });
+  assert.deepEqual(await sendPlainText(fake.creds, PERSON, INVITE_TEXT), { ok: true, httpStatus: 201 });
 
   fake.set("sendText", { status: 400, json: { status: 400, error: "Bad Request" } });
   assert.deepEqual(await sendPlainText(fake.creds, PERSON, INVITE_TEXT), { ok: false, httpStatus: 400 });
@@ -422,6 +432,23 @@ check("a server that isn't there gives the same answers", async ({ startFake }) 
   assert.equal(await fetchAllGroups(fake.creds), null);
   assert.equal(await fetchOwnerJid(fake.creds), null);
   assert.equal(fake.calls.length, 0);
+});
+
+check("a 2xx whose JSON body is null throws in none of the seven calls: the reads are null, the add has no code, the text went", async ({ startFake }) => {
+  const fake = await startFake();
+  // `req()` hands a bare null over as the body (its catch only covers a body that doesn't parse), so a call that reads
+  // `.groups` or `.group` off it would throw a TypeError at its caller instead of answering null.
+  for (const route of FAKE_EVO_ROUTES) fake.set(route, { status: 200, json: null });
+  assert.deepEqual(await tour(fake.creds), {
+    groups: null,
+    summary: null,
+    owner: null,
+    add: { httpStatus: 200, code: null },
+    exists: null,
+    invite: null,
+    sent: { ok: true, httpStatus: 200 },
+  });
+  assert.equal(fake.calls.length, 7);
 });
 
 check("a call that fails writes nothing to the console that holds the number or the text, even when Evolution's own error does", async ({ startFake }) => {
