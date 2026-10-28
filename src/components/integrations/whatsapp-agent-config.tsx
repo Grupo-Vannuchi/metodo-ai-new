@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 import { saveWhatsappAgent } from "@/app/actions/whatsapp-agent";
-import { AGENT_MODELS } from "@/lib/validations/whatsapp-agent";
+import { AGENT_MODELS, AGENT_PROMPT_MAX } from "@/lib/validations/whatsapp-agent";
 import type { WhatsappAgentRow } from "@/lib/queries/whatsapp-agent";
 
 const selectCls = cn(
@@ -139,7 +139,7 @@ export function WhatsappAgentConfig({
           name="prompt"
           defaultValue={initial?.prompt ?? ""}
           rows={8}
-          maxLength={8000}
+          maxLength={AGENT_PROMPT_MAX}
           placeholder={t("promptPlaceholder")}
         />
         <p className="mt-1 text-xs text-muted-foreground">{t("promptHint")}</p>
