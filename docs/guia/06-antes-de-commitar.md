@@ -134,7 +134,12 @@ Ethereal na mesma conversa (`In-Reply-To`, `References`, `Re:`), grava a cópia 
 (`scripts/shims/fake-imap.ts`, que agora também aceita `APPEND` e `LIST` com pastas), que o envio recusado é
 `temporary`, o que pode ter saído é `uncertain` (sem cópia, sem marca, sem segundo pedido) e que, depois de
 enviada, nada do IMAP (pasta sem marca, cópia recusada, conexão caída, UIDVALIDITY trocada, outra conta) a
-transforma em falha nem a envia duas vezes. Precisa de **internet** (a API da Ethereal e o IMAP dela, porta 993), do
+transforma em falha nem a envia duas vezes. O vigia do pedido que falha corta o pedido como `temporary` em vez de
+virar exceção solta no processo; `openImap` aceita o tempo máximo de abertura como argumento, e o pedido que guarda a
+cópia depois do envio tem limites só dele (10 s para abrir e 10 s de trabalho, `imapRequest.postSendOpenMs` e
+`postSendBudgetMs`, em vez dos 30 s e 60 s dos outros pedidos): uma caixa muda nele custa só a cópia (`savedToSent`
+falso), sem esperar esses outros limites, e a resposta sai uma vez só.
+Precisa de **internet** (a API da Ethereal e o IMAP dela, porta 993), do
 Postgres do Docker e de um `.env` válido, e **recusa rodar** se o `DATABASE_URL` não for local. Cada pedido à
 caixa é uma conexão nova (uma dúzia de idas e vindas): com a rede daqui o script leva uns 3 minutos (a
 Ethereal fica longe), e a linha de cada check lento mostra o tempo dele. Cria uma organização `IMAP-E2E-<carimbo>` (e outra, para
