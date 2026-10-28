@@ -2038,6 +2038,7 @@
         "tabsLabel": "Conta SMTP",
         "replyHint": "Sai de {email} e uma cópia fica em Enviados.",
         "replySentHint": "Saiu de {email} e uma cópia ficou em Enviados.",
+        "replySentNoCopyHint": "Saiu de {email}, mas não foi possível guardar uma cópia em Enviados.",
         "sendingHint": "Enviando a resposta e guardando uma cópia em Enviados. Pode levar alguns segundos; não feche esta página.",
         "noticeTooBig": "Este e-mail tem mais de {mb} MB e não é aberto aqui. Abra-o no webmail da sua caixa.",
         "noticeUnreadable": "Não foi possível mostrar este e-mail aqui. Abra-o no webmail da sua caixa.",

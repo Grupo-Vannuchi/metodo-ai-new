@@ -31,7 +31,8 @@ export function InboxReply({
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
-  const [sent, setSent] = useState<string | null>(null);
+  // The reply that went out and, SMTP only, whether the mailbox kept a copy in Sent (the hint says so only when it did).
+  const [sent, setSent] = useState<{ text: string; copyKept: boolean } | null>(null);
   // SMTP only: the hand-over may have reached the server (it said so, or the call died before saying anything), so there is
   // no second "Enviar" until the member checks Sent.
   const [uncertain, setUncertain] = useState(false);
@@ -52,7 +53,7 @@ export function InboxReply({
         res = { ok: false, error: "uncertain" };
       }
       if (res.ok) {
-        setSent(text.trim());
+        setSent({ text: text.trim(), copyKept: res.savedToSent !== false });
         setText("");
         setOpen(false);
         toast(t("replySent"));
@@ -73,8 +74,10 @@ export function InboxReply({
             <Check aria-hidden="true" className="size-4" />
             {t("youReplied")}
           </p>
-          <p className="whitespace-pre-line text-sm [overflow-wrap:anywhere]">{sent}</p>
-          <p className="text-xs opacity-80">{t(smtp ? "smtp.replySentHint" : "replySentHint", { email: mailbox })}</p>
+          <p className="whitespace-pre-line text-sm [overflow-wrap:anywhere]">{sent.text}</p>
+          <p className="text-xs opacity-80">
+            {t(smtp ? (sent.copyKept ? "smtp.replySentHint" : "smtp.replySentNoCopyHint") : "replySentHint", { email: mailbox })}
+          </p>
         </div>
       ) : null}
 

@@ -2038,6 +2038,7 @@
         "tabsLabel": "SMTP account",
         "replyHint": "Goes out from {email} and a copy is kept in Sent.",
         "replySentHint": "Went out from {email} and a copy was kept in Sent.",
+        "replySentNoCopyHint": "Went out from {email}, but a copy couldn't be saved in Sent.",
         "sendingHint": "Sending the reply and saving a copy in Sent. It can take a few seconds; don't close this page.",
         "noticeTooBig": "This e-mail is over {mb} MB and is not opened here. Open it in your mailbox's webmail.",
         "noticeUnreadable": "This e-mail can't be shown here. Open it in your mailbox's webmail.",
