@@ -72,6 +72,16 @@ membro vem de `phoneNumber` quando o id é um LID; [src/lib/whatsapp/group-impor
 o 9 nos celulares antigos de 12 dígitos, o nome "Contato #N" continuando a numeração da pasta do grupo e os
 números que já estão no CRM sendo pulados). Rode sempre que mexer nesses dois arquivos.
 
+`npm run check:group-add` cobre as regras puras do "Adicionar a grupo do WhatsApp"
+([src/lib/whatsapp/group-add/core.ts](../../src/lib/whatsapp/group-add/core.ts): o mesmo telefone em formatos
+diferentes (com ou sem 55, com ou sem o 9, com máscara) dando a mesma chave; quem entra na rodada e quem fica de
+fora, na ordem das regras (opt-out, sem telefone, número que não é de celular, já no grupo, saiu do grupo depois
+de uma rodada anterior, já recebeu o convite e número repetido na pasta) e as contagens da conferência; o código
+da resposta de cada adição virando adicionado, convite ou já estava; o horário das 8h às 20h de São Paulo, a
+próxima tentativa depois da pausa de 30 a 90 s e a retomada às 8h do dia seguinte quando o teto de 100 por dia
+acaba; o texto do convite com `{{nome}}` e `{{grupo}}` e o link sempre no fim; e a previsão de término).
+Não usa banco nem rede. Rode sempre que mexer em `src/lib/whatsapp/group-add/core.ts` ou em `src/lib/integrations/evolution-groups.ts`.
+
 `npm run check:mcp` cobre as regras puras do servidor MCP de leitura
 ([src/lib/mcp/core.ts](../../src/lib/mcp/core.ts): comparação da chave com espaço ou quebra de linha
 colados, datas `AAAA-MM-DD` como dias UTC com o fim inclusivo, período invertido ou longo demais,
