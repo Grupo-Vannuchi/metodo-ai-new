@@ -34,6 +34,7 @@ export function ChannelChoice({
   notice = null,
   mode = "compose",
   inbox = null,
+  smtpInbox = null,
 }: {
   microsoft: SenderAccountView | null;
   microsoftEnabled: boolean;
@@ -45,6 +46,8 @@ export function ChannelChoice({
   mode?: "compose" | "browse";
   /** Browse mode, when the member may read the connected mailbox's Inbox. */
   inbox?: { href: string; unread: Promise<number | null> | null } | null;
+  /** Browse mode, when the member may read the Inbox of the SMTP account (it has IMAP set up). */
+  smtpInbox?: { href: string; unread: Promise<number | null> | null } | null;
 }) {
   const t = useTranslations("emailBroadcast");
   const format = useFormatter();
@@ -187,7 +190,18 @@ export function ChannelChoice({
             }
           />
           {browse ? (
-            <div className="mt-auto">
+            <div className="mt-auto flex flex-wrap gap-2">
+              {smtpInbox ? (
+                <Link href={smtpInbox.href} className={buttonVariants()}>
+                  <Inbox aria-hidden="true" className="size-4" />
+                  {t("inbox.open")}
+                  {smtpInbox.unread ? (
+                    <Suspense fallback={null}>
+                      <UnreadBadge count={smtpInbox.unread} className="bg-brand-foreground text-brand" />
+                    </Suspense>
+                  ) : null}
+                </Link>
+              ) : null}
               <Link href={emailListHref("smtp")} className={buttonVariants({ variant: "outline" })}>
                 {t("channel.smtpBrowse")}
               </Link>

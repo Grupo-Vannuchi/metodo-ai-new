@@ -1,6 +1,7 @@
 import type { AudienceStats, CandidateSource } from "./audience-core";
 import type { AudienceSelection } from "@/lib/validations/email-broadcast";
 import type { EmailAttachment } from "./attachments";
+import type { ImapSettings } from "./imap/core";
 import type { SmtpPort, SmtpSecurity } from "./smtp/core";
 
 /** Shapes shared by the E-mail pages, actions and client components. Types only. */
@@ -60,6 +61,8 @@ export type SenderAccountView = {
   hourlyLimit: number | null;
   /** The SMTP server's name, never its password; null for Microsoft and Google. */
   host: string | null;
+  /** The IMAP server the inbox is read from (spec 2026-10-23); null for Microsoft and Google, and for an SMTP account that only sends. */
+  imapHost: string | null;
   sentLast24h: number;
   remaining: number;
 };
@@ -74,6 +77,8 @@ export type SmtpAccountFormView = {
   security: SmtpSecurity;
   /** "" for the same reason as `host`. */
   username: string;
+  /** Where the inbox is read from; null when the account only sends (or the stored credentials can't be opened). */
+  imap: ImapSettings | null;
   hourlyLimit: number;
   dailyLimit: number;
   status: "ACTIVE" | "NEEDS_RECONNECT";

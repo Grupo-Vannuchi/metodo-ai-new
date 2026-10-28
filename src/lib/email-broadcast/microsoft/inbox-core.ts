@@ -26,10 +26,13 @@ export function cleanPreview(text: string): string {
   return text.replace(INVISIBLE_RE, "").replace(/\s+/g, " ").trim();
 }
 
-/** Which tab of the Microsoft channel page is open (`?aba=`). */
-export type MicrosoftTab = "envios" | "caixa";
+/** Which mailbox channel an inbox belongs to: the Microsoft mailbox (Graph) or the SMTP account (IMAP). */
+export type MailboxChannel = "microsoft" | "smtp";
 
-export function microsoftTabFromParam(param: string | string[] | undefined): MicrosoftTab {
+/** Which tab of a mailbox channel page is open (`?aba=`). */
+export type MailboxTab = "envios" | "caixa";
+
+export function mailboxTabFromParam(param: string | string[] | undefined): MailboxTab {
   const value = Array.isArray(param) ? param[0] : param;
   return value === "caixa" ? "caixa" : "envios";
 }
@@ -59,8 +62,10 @@ export function isGraphId(value: unknown): value is string {
 }
 
 /** The inbox tab's URL with its state; defaults are left out so links stay short. */
-export function inboxHref(state: { filtro?: InboxFilter; q?: string; msg?: string } = {}): string {
-  const params = new URLSearchParams({ canal: "microsoft", aba: "caixa" });
+export function inboxHref(
+  state: { canal?: MailboxChannel; filtro?: InboxFilter; q?: string; msg?: string } = {},
+): string {
+  const params = new URLSearchParams({ canal: state.canal ?? "microsoft", aba: "caixa" });
   if (state.filtro && state.filtro !== "todas") params.set("filtro", state.filtro);
   if (state.q) params.set("q", state.q);
   if (state.msg) params.set("msg", state.msg);
@@ -100,6 +105,8 @@ export type InboxMessageDetail = InboxMessageSummary & {
   cc: InboxAddress[];
   /** The body as a whole HTML document for a sandboxed iframe. */
   bodyDocument: string;
+  /** Set when the body isn't shown (IMAP only): the screen words the notice in the member's language, in place of the iframe. */
+  notice?: "tooBig" | "unreadable";
   webLink: string | null;
   attachments: InboxAttachment[];
 };
@@ -165,9 +172,13 @@ export function attachmentsFromGraph(value: unknown, embedded: ReadonlySet<strin
 /**
  * Leading reply/forward/auto-reply markers ("Re:", "RES:", "Fwd:", "Resposta
  * automática:", "Automatic reply:"…), repeated or with a counter ("RE[2]:").
+ * The subject is the sender's, so the pattern must not backtrack badly: each
+ * run of spaces is read by exactly one `\s*`. Two of them side by side (even
+ * with an optional group between) split a run in every possible way when the
+ * colon is missing, and the work grows with the square of the run's length.
  */
 const SUBJECT_PREFIX_RE =
-  /^(\s*((re|res|enc|fw|fwd|tr|aw|wg|sv|antw|resposta autom[aá]tica|automatic reply|auto[- ]?reply|out of office|ausente)\s*(\[\d+\])?\s*:|\[[^\]]{1,40}\]|\*[^*]{1,40}\*)\s*)+/i;
+  /^\s*(?:(?:(?:re|res|enc|fw|fwd|tr|aw|wg|sv|antw|resposta autom[aá]tica|automatic reply|auto[- ]?reply|out of office|ausente)\s*(?:\[\d+\]\s*)?:|\[[^\]]{1,40}\]|\*[^*]{1,40}\*)\s*)+/i;
 
 /** A subject for comparison: markers removed, spaces collapsed, lower case. */
 export function normalizeSubject(subject: string): string {

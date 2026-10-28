@@ -26,8 +26,8 @@ de minutos depois, na fila do CI.
 **Checagem de módulo (fora das cinco):** `npm run check:email` roda as asserções das funções puras do
 submenu E-mail (normalização, deduplicação, renderização, assinatura Svix, transições de status, domínio do remetente,
 espera da nova tentativa do e-mail transacional, as regras do envio pela conta Microsoft (tipo de conta, limite diário,
-caminho direto ou rascunho, faixas do upload, decisão sobre falhas do Graph), as regras do envio pela conta Google (tipo de conta pelo `hd`, conta sem Gmail, permissão parcial, limite diário, upload simples ou retomável, decisão sobre falhas do Gmail, recusas que pedem reconexão e piloto por empresa), as regras do envio por SMTP (ritmo a partir do limite por hora, decisão sobre as respostas do servidor, preparação separada da entrega, regra de endereços internos e portas, validação do formulário da conta e reaproveitamento da senha guardada), a montagem do MIME e os motivos de
-falha em português, conferindo que o texto de cada motivo de pausa e de falha existe em `pt.json` e `en.json`). Não usa
+caminho direto ou rascunho, faixas do upload, decisão sobre falhas do Graph), as regras do envio pela conta Google (tipo de conta pelo `hd`, conta sem Gmail, permissão parcial, limite diário, upload simples ou retomável, decisão sobre falhas do Gmail, recusas que pedem reconexão e piloto por empresa), as regras do envio por SMTP (ritmo a partir do limite por hora, decisão sobre as respostas do servidor, preparação separada da entrega, regra de endereços internos e portas, validação do formulário da conta, inclusive o servidor e a porta da caixa de entrada (a segurança vem da porta), e reaproveitamento da senha guardada, que também olha o servidor, a porta e a segurança do IMAP: ligar a caixa ou trocar um deles exige digitar a senha, e salvar de novo leva a caixa que o formulário mandou, mantendo-a ou tirando-a), as regras puras da caixa de entrada por IMAP (servidor sugerido a partir do SMTP, id do e-mail e do anexo na URL, nome do erro de conexão, pasta de Enviados, assunto e cabeçalhos da resposta e se ela saiu, linha da lista a partir do envelope, anexos de uma mensagem pela estrutura, e o e-mail aberto a partir da leitura do `postal-mime`: imagens `cid:` dentro do corpo, anexos pelo índice original e destinatários; mais uma guarda que falha se algum arquivo de `src/lib/email-broadcast/imap/` apagar, mover, copiar ou expurgar e-mails, fechar a caixa (o `CLOSE` apaga de vez o que está marcado `\Deleted`), trocar ou tirar marcas, citar a marca `\Deleted` ou mexer em pastas, ou se não achar `core.ts` e `parse.ts` para varrer; e a prova de que as regex do `Re:` do assunto, a da resposta pelo IMAP e a do `normalizeSubject`, respondem em milissegundos a um assunto de 200 mil espaços, onde uma regex quadrática levaria um minuto), a montagem do MIME e os motivos de
+falha em português, conferindo que o texto de cada motivo de pausa e de falha, e de cada erro da caixa de entrada no formulário da conta, existe em `pt.json` e `en.json`). Não usa
 banco nem rede. Rode sempre que mexer em `src/lib/email-broadcast/`.
 
 `npm run check:tasks` faz o mesmo para as regras puras do kanban de Tarefas
@@ -92,6 +92,67 @@ organizações de teste e apaga tudo o que criou, mesmo quando falha; erros nunc
 `next dev` com Turbopack responder 404 em todas as rotas de API, suba com `npx next dev --webpack`.
 Com o Redis configurado, duas rodadas seguidas podem bater no limite de 120 chamadas por minuto —
 espere um minuto.
+
+`npm run check:imap` testa o código de servidor da caixa de entrada por IMAP da conta SMTP
+([scripts/check-email-imap.ts](../../scripts/check-email-imap.ts)) contra uma caixa descartável da
+Ethereal (um servidor SMTP e IMAP de verdade, que não entrega nada para fora) e o Postgres local. Hoje
+cobre as credenciais da conta (`sealSmtpSettings` → `openSmtpSettings` devolve o IMAP igual; conta
+antiga, sem as chaves do IMAP, ou com chaves que não servem, abre com `imap: null` e o SMTP intacto) e a
+conexão de [src/lib/email-broadcast/imap/connect.ts](../../src/lib/email-broadcast/imap/connect.ts): login
+real em TLS, senha errada, certificado sempre conferido, nome que não resolve, endereço interno recusado
+antes de qualquer conexão, e a porta 143 só com STARTTLS (um servidor de mentira em loopback prova que
+nenhum login sai em texto puro; outros, que um servidor hostil não alcança: linha, literal e resposta têm
+teto (por resposta; o teto do pedido inteiro é do `inbox.ts`, mais abaixo), não há `COMPRESS=DEFLATE`, e o
+texto de falha é cortado em 400 caracteres depois de redigido).
+Nenhum texto de falha leva a senha. Cobre também a leitura da caixa de
+[src/lib/email-broadcast/imap/inbox.ts](../../src/lib/email-broadcast/imap/inbox.ts): dois e-mails reais
+entram pelo SMTP da própria Ethereal (um texto em ISO-8859-1 e um HTML com imagem `cid:` e `tabela.pdf`) e o
+script confere a lista (mais recente primeiro, não lidas, anexo, no máximo 50 e a contagem de todas), o
+filtro e a busca (acento, aspas, barra invertida, quebra de linha), abrir (corpo com a imagem embutida,
+marcado como lido na mesma resposta e no servidor, sem marcar os outros), o anexo (os mesmos bytes; fora da
+lista do e-mail é "não encontrado"), a UIDVALIDITY trocada, o limite de tamanho (a mensagem acima dele só
+mostra cabeçalhos e um aviso), uma mensagem que o parser recusa, outra empresa, conta sem IMAP, desconectada
+ou com credencial que não abre, senha recusada (`reconnect`, e a conta fica `NEEDS_RECONNECT`: o pedido
+seguinte responde `reconnect` sem abrir conexão nenhuma; um login recusado com `[UNAVAILABLE]`, `[LIMIT]` ou
+`[INUSE]` é `temporary` e deixa a conta como está) e servidor fora do ar (`temporary`, sem a senha no log e com a
+conta intacta). Servidores de mentira em loopback provam o que o imapflow esconde, porque ele responde
+`false`, `undefined` ou `[]` quando a conexão cai, sem erro. O `inbox.ts` roda de verdade contra eles
+(`openImap` recusa loopback de propósito, então o check troca o `imapRequest` que o `inbox.ts` exporta, o mesmo
+que baixa o teto de tempo e de bytes para caberem em frações de segundo): busca recusada é `not_found`; lista,
+contagem ou STATUS recusados, conexão perdida ou cortada no meio do pedido (no STATUS, na busca, na lista, ao
+abrir, entre o tamanho e o arquivo de um download, antes da marca de lido) e estouro do tempo são `temporary`,
+nunca uma caixa vazia, um 404 ou um zero; um servidor que despeja linhas que ninguém pediu é cortado depois de
+poucas, e o pedido que passa do teto de bytes também; linhas de e-mails que ninguém pediu, partidas em duas ou
+repetidas não viram e-mail em branco nem em dobro; a linha guarda só o que a lista pediu (um literal pendurado
+nela, de 16 MB na vida real, não fica na memória); e o e-mail com a estrutura mais funda do que o imapflow lê
+(ele larga o e-mail sem avisar) não some da lista, e a segunda consulta recusada só tira esse e-mail da
+página. Cobre também a resposta (`replyToImapMessage`, `smtp/send.ts`): `sendSmtpMail` continua entregando e
+`sendSmtpMime` recusa servidor interno e senha errada sem repetir a senha; responder ao M1 sai pelo SMTP da
+Ethereal na mesma conversa (`In-Reply-To`, `References`, `Re:`), grava a cópia na pasta `\Sent` e deixa só o M1
+`\Answered`; Reply-To, assunto numa linha só e cadeia de `References` cortada; remetente sem endereço simples
+(inclusive um que fecharia o `RCPT TO`) não recebe nada; e, contra o servidor de mentira
+(`scripts/shims/fake-imap.ts`, que agora também aceita `APPEND` e `LIST` com pastas), que o envio recusado é
+`temporary`, o que pode ter saído é `uncertain` (sem cópia, sem marca, sem segundo pedido) e que, depois de
+enviada, nada do IMAP (pasta sem marca, cópia recusada, conexão caída, UIDVALIDITY trocada, outra conta) a
+transforma em falha nem a envia duas vezes. O vigia do pedido que falha corta o pedido como `temporary` em vez de
+virar exceção solta no processo; `openImap` aceita o tempo máximo de abertura como argumento, e o pedido que guarda a
+cópia depois do envio tem limites só dele (10 s para abrir e 10 s de trabalho, `imapRequest.postSendOpenMs` e
+`postSendBudgetMs`, em vez dos 30 s e 60 s dos outros pedidos): uma caixa muda nele custa só a cópia (`savedToSent`
+falso), sem esperar esses outros limites, e a resposta sai uma vez só.
+Precisa de **internet** (a API da Ethereal e o IMAP dela, porta 993), do
+Postgres do Docker e de um `.env` válido, e **recusa rodar** se o `DATABASE_URL` não for local. Cada pedido à
+caixa é uma conexão nova (uma dúzia de idas e vindas): com a rede daqui o script leva uns 3 minutos (a
+Ethereal fica longe), e a linha de cada check lento mostra o tempo dele. Cria uma organização `IMAP-E2E-<carimbo>` (e outra, para
+provar o isolamento) e apaga o que criou, mesmo quando falha; **se você matar o script no meio** (Ctrl+C,
+tempo esgotado), o que ele criou fica no banco e é preciso apagar a mão (`organizations` com nome
+`IMAP-E2E-%` e as linhas de `email_sender_accounts` delas). A caixa da Ethereal não tem como ser apagada
+(expira sozinha) e a senha dela nunca vai para a saída. Roda com
+`tsx --tsconfig scripts/tsconfig.server.json`: o shim `scripts/shims/server-only.ts` deixa os módulos
+`server-only` carregarem fora do Next, e o tsconfig traz o alias `@/` e o `env.ts`. A rede instável derruba a
+criação da conta na Ethereal de vez em quando: o script tenta 3 vezes antes de desistir; se o erro for de
+rede, rode de novo (os pedidos à caixa que devem ter resposta de verdade repetem até 2 vezes se vier
+`temporary`). Rode sempre que mexer em `src/lib/email-broadcast/imap/` ou em
+`src/lib/email-broadcast/smtp/credentials.ts` ou `smtp/send.ts`.
 
 ## `check:isolation`
 

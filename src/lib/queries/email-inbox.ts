@@ -35,8 +35,12 @@ export async function crmContactsByEmail(
   return out;
 }
 
-/** Microsoft-channel sends that went (or may have gone) to these addresses, newest first. */
-export async function microsoftSendsTo(organizationId: string, emails: (string | null)[]): Promise<SentToAddress[]> {
+/** Sends of this mailbox channel that went (or may have gone) to these addresses, newest first. */
+export async function mailboxSendsTo(
+  organizationId: string,
+  channel: "MICROSOFT" | "SMTP",
+  emails: (string | null)[],
+): Promise<SentToAddress[]> {
   const list = distinctEmails(emails);
   if (list.length === 0) return [];
   const rows = await tenantDb(organizationId).emailBroadcastRecipient.findMany({
@@ -44,7 +48,7 @@ export async function microsoftSendsTo(organizationId: string, emails: (string |
       email: { in: list },
       status: { in: ["SENT", "UNCERTAIN"] },
       sentAt: { not: null },
-      broadcast: { channel: "MICROSOFT" },
+      broadcast: { channel },
     },
     select: { email: true, sentAt: true, broadcast: { select: { id: true, subject: true } } },
     orderBy: { sentAt: "desc" },

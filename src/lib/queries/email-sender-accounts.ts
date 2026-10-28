@@ -9,8 +9,9 @@ import type { SenderAccountView, SmtpAccountFormView } from "@/lib/email-broadca
 
 /**
  * The org's connected mailbox for a provider, with today's estimate, or null.
- * The SMTP account carries the company's own limits and its server name; its
- * credentials are opened only for that name, and the password stays here.
+ * The SMTP account carries the company's own limits, its server name and, when
+ * it reads its inbox, the IMAP server's; its credentials are opened only for
+ * those names, and the password stays here.
  * Credentials that no longer open can't send anything, so that account reads
  * NEEDS_RECONNECT (the same as getSmtpAccountForm, so the panel and the form agree).
  */
@@ -46,6 +47,7 @@ export async function getSenderAccountView(
       dailyLimit,
       hourlyLimit: smtpHourlyLimit(row),
       host: settings?.host ?? null,
+      imapHost: settings?.imap?.host ?? null,
       sentLast24h,
       remaining: remainingToday(dailyLimit, sentLast24h),
     };
@@ -60,6 +62,7 @@ export async function getSenderAccountView(
     dailyLimit,
     hourlyLimit: null,
     host: null,
+    imapHost: null,
     sentLast24h,
     remaining: remainingToday(dailyLimit, sentLast24h),
   };
@@ -68,10 +71,11 @@ export async function getSenderAccountView(
 /**
  * The org's SMTP account as its form is filled (edit or reconnect), or null
  * when there is none. The credentials are opened here and only the server,
- * port, security and user leave: never the password. Credentials that no
- * longer open (a changed key, a damaged row) can't send anything, so the
- * account reads as NEEDS_RECONNECT, with the server and the user to be typed
- * again (and the form's defaults for port and security).
+ * port, security, user and inbox (IMAP) settings leave: never the password.
+ * Credentials that no longer open (a changed key, a damaged row) can't send
+ * anything, so the account reads as NEEDS_RECONNECT, with the server and the
+ * user to be typed again (and the form's defaults for port and security, and
+ * no inbox).
  */
 export async function getSmtpAccountForm(organizationId: string): Promise<SmtpAccountFormView | null> {
   const row = await tenantDb(organizationId).emailSenderAccount.findFirst({
@@ -88,6 +92,7 @@ export async function getSmtpAccountForm(organizationId: string): Promise<SmtpAc
     port,
     security: settings?.security ?? defaultSmtpSecurity(port),
     username: settings?.username ?? "",
+    imap: settings?.imap ?? null,
     hourlyLimit: smtpHourlyLimit(row),
     dailyLimit: smtpDailyLimit(row),
     status: settings ? row.status : "NEEDS_RECONNECT",

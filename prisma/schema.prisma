@@ -2680,7 +2680,8 @@ model EmailSenderAccount {
   /// "personal" | "work" (Microsoft, Google: sets the estimated daily limit, microsoft/core.ts, google/core.ts) or "smtp".
   accountKind    String
   /// encryptCredentials(...); never leaves the server. Microsoft, Google: { accessToken, refreshToken, expiresAt }.
-  /// SMTP: { host, port, security, username, password } (smtp/credentials.ts).
+  /// SMTP: { host, port, security, username, password } and, when the inbox is read over IMAP (spec 2026-10-23),
+  /// { imapHost, imapPort, imapSecurity } too (smtp/credentials.ts). The IMAP login is the SMTP username and password.
   credentials    String                   @db.Text
   /// Só SMTP: limites informados pela empresa.
   hourlyLimit    Int?

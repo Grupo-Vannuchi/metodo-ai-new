@@ -11,6 +11,13 @@ import { Link, useRouter } from "@/i18n/navigation";
 import { saveSmtpAccount, type SmtpSaveResult } from "@/app/actions/email-sender-accounts";
 import { LIMITS } from "@/config/limits";
 import {
+  IMAP_PORTS,
+  defaultImapSecurity,
+  suggestImapHost,
+  type ImapPort,
+  type ImapSettings,
+} from "@/lib/email-broadcast/imap/core";
+import {
   canKeepSmtpPassword,
   defaultSmtpSecurity,
   SMTP_PORTS,
@@ -28,6 +35,8 @@ export type SmtpFormInitial = {
   port: SmtpPort;
   security: SmtpSecurity;
   username: string;
+  /** Where the inbox is read from; null when the account only sends. */
+  imap: ImapSettings | null;
   hourlyLimit: number;
   dailyLimit: number;
 };
@@ -40,10 +49,10 @@ export type SmtpFormInitial = {
 export type SmtpFormMode = "new" | "edit" | "reconnect";
 
 /** The fields whose problems the form names next to them. */
-type FieldKey = "email" | "host" | "port" | "hourlyLimit";
+type FieldKey = "email" | "host" | "port" | "imapHost" | "imapPort" | "hourlyLimit";
 
 /** The same fields in the order they are on the page: the first one with a problem gets the focus. */
-const FIELD_ORDER: readonly FieldKey[] = ["email", "host", "port", "hourlyLimit"];
+const FIELD_ORDER: readonly FieldKey[] = ["email", "host", "port", "imapHost", "imapPort", "hourlyLimit"];
 
 /** A refusal shown above the button. `focus`: the alert takes the focus (nothing else on the page has a better claim to it). */
 type FormError = { message: string; technical?: string; focus: boolean };
@@ -57,6 +66,10 @@ function fieldOfIssue(message: string): FieldKey | null {
       return "host";
     case "invalid_port":
       return "port";
+    case "invalid_imap_host":
+      return "imapHost";
+    case "invalid_imap_port":
+      return "imapPort";
     case "hourly_over_daily":
       return "hourlyLimit";
     default:
@@ -75,9 +88,12 @@ const selectCls = cn(
  * is saved, so a wrong server, port or password is told here and nothing is
  * stored. The password is never filled in: in an edit it can stay blank only
  * while the server, port, security and user are the ones it was typed for (the
- * same rule the server applies, canKeepSmtpPassword). Changing the sender's
- * address in an edit or a reconnect replaces the account (the server saves
- * another row), so that asks first.
+ * same rule the server applies, canKeepSmtpPassword), and the inbox's server,
+ * port and security too when it is on. The inbox (spec 2026-10-23) is optional:
+ * the same user and password read it, and the form sends what it shows, so an
+ * edit that leaves it alone keeps it and unticking it removes it. Changing the
+ * sender's address in an edit or a reconnect replaces the account (the server
+ * saves another row), so that asks first.
  */
 export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { initial: SmtpFormInitial; mode: SmtpFormMode }) {
   const t = useTranslations("emailBroadcast");
@@ -99,6 +115,10 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
     initial.username === "" || initial.username === initial.email ? null : initial.username,
   );
   const [password, setPassword] = useState("");
+  // The inbox: ticked when the account already reads one; the server and port keep their values while it is unticked.
+  const [imapOn, setImapOn] = useState(initial.imap !== null);
+  const [imapHost, setImapHost] = useState(initial.imap?.host ?? "");
+  const [imapPort, setImapPort] = useState<ImapPort>(initial.imap?.port ?? IMAP_PORTS[0]);
   const [hourly, setHourly] = useState(String(initial.hourlyLimit));
   const [daily, setDaily] = useState(String(initial.dailyLimit));
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
@@ -108,6 +128,8 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
   const emailRef = useRef<HTMLInputElement>(null);
   const hostRef = useRef<HTMLInputElement>(null);
   const portRef = useRef<HTMLSelectElement>(null);
+  const imapHostRef = useRef<HTMLInputElement>(null);
+  const imapPortRef = useRef<HTMLSelectElement>(null);
   const hourlyRef = useRef<HTMLInputElement>(null);
   const alertRef = useRef<HTMLParagraphElement>(null);
   // The "change the e-mail?" question is open: a second submit has to wait for the answer.
@@ -120,6 +142,10 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
 
   const emailNorm = email.trim().toLowerCase();
   const hostNorm = host.trim().toLowerCase();
+  const imapHostNorm = imapHost.trim().toLowerCase();
+  // The inbox as the server will read it from this form: unticked, or ticked with no server, is no inbox.
+  const imapNext: ImapSettings | null =
+    imapOn && imapHostNorm !== "" ? { host: imapHostNorm, port: imapPort, security: defaultImapSecurity(imapPort) } : null;
   const shownUsername = typedUsername ?? emailNorm;
   const username = shownUsername.trim() || emailNorm;
   const maxHourly = format.number(LIMITS.smtpHourlyMax);
@@ -128,12 +154,20 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
   // and in a reconnect alike.
   const emailChanged =
     (mode === "edit" || mode === "reconnect") && initial.email !== "" && emailNorm !== "" && emailNorm !== initial.email;
-  // Blank is "keep the saved password" only for an edit that still points where the password was typed.
+  // Blank is "keep the saved password" only for an edit that still points where the password was typed: the sending
+  // server and, with an inbox, its server too.
   const keepPassword =
     mode === "edit" &&
     canKeepSmtpPassword(
-      { host: initial.host, port: initial.port, security: initial.security, username: initial.username, status: "ACTIVE" },
-      { host: hostNorm, port, security, username },
+      {
+        host: initial.host,
+        port: initial.port,
+        security: initial.security,
+        username: initial.username,
+        imap: initial.imap,
+        status: "ACTIVE",
+      },
+      { host: hostNorm, port, security, username, imap: imapNext },
     );
   const passwordHint =
     mode !== "edit"
@@ -147,8 +181,15 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
   }
 
   function focusField(key: FieldKey) {
-    const ref = key === "email" ? emailRef : key === "host" ? hostRef : key === "port" ? portRef : hourlyRef;
-    ref.current?.focus();
+    const refs = {
+      email: emailRef,
+      host: hostRef,
+      port: portRef,
+      imapHost: imapHostRef,
+      imapPort: imapPortRef,
+      hourlyLimit: hourlyRef,
+    };
+    refs[key].current?.focus();
   }
 
   function onPort(value: string) {
@@ -160,8 +201,26 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
     clearField("port");
   }
 
+  function onImapToggle(on: boolean) {
+    setImapOn(on);
+    // Ticked with no server yet: the one the sending server suggests (smtpi.kinghost.net → imap.kinghost.net). It is
+    // only a suggestion, the field stays the person's to change.
+    if (on && imapHostNorm === "") setImapHost(suggestImapHost(hostNorm));
+    clearField("imapHost");
+    clearField("imapPort");
+  }
+
+  function onImapPort(value: string) {
+    const next = IMAP_PORTS.find((p) => String(p) === value);
+    if (next === undefined) return;
+    setImapPort(next);
+    clearField("imapPort");
+  }
+
   function errorMessage(code: Extract<SmtpSaveResult, { ok: false }>["error"]): string {
     if (code === "unauthorized" || code === "forbidden" || code === "unknown") return t(`error.${code}`);
+    // The inbox's own refusals name the inbox's server and port, not the sending ones.
+    if (code.startsWith("imap_")) return t(`smtp.error.${code}`, { host: imapHostNorm, port: imapPort });
     return t(`smtp.error.${code}`, { host: hostNorm, port });
   }
 
@@ -177,6 +236,9 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
       security,
       username,
       password,
+      // Unticked is a blank server: no inbox (the server keeps none of the saved one).
+      imapHost: imapOn ? imapHost : "",
+      imapPort,
       hourlyLimit: Number(hourly),
       dailyLimit: Number(daily),
     };
@@ -412,6 +474,77 @@ export function SmtpAccountForm({ initial: initialProp, mode: modeProp }: { init
               </p>
             </div>
           </div>
+        </section>
+
+        <section aria-labelledby="smtpImapTitle" className="flex flex-col gap-4">
+          <h2 id="smtpImapTitle" className="text-sm font-semibold">
+            {t("smtp.form.imapSection")}
+          </h2>
+          <p className="text-xs text-muted-foreground">{t("smtp.form.imapIntro")}</p>
+          <label className="flex items-start gap-2.5 text-sm">
+            <input
+              type="checkbox"
+              checked={imapOn}
+              onChange={(e) => onImapToggle(e.target.checked)}
+              className="mt-0.5 size-4 accent-[var(--color-brand)]"
+            />
+            <span className="font-medium">{t("smtp.form.imapEnable")}</span>
+          </label>
+          {imapOn ? (
+            <>
+              {/* Same columns as the sending server's row, with the port's choices spelled out (993 or 143 says the security). */}
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_11rem]">
+                <div className="sm:col-span-2 lg:col-span-1">
+                  <Label htmlFor="smtpImapHost">{t("smtp.form.imapHost")}</Label>
+                  <Input
+                    id="smtpImapHost"
+                    ref={imapHostRef}
+                    value={imapHost}
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    maxLength={253}
+                    required
+                    placeholder={suggestImapHost(hostNorm) || t("smtp.form.imapHostPlaceholder")}
+                    aria-invalid={Boolean(fieldErrors.imapHost)}
+                    aria-describedby="smtpImapHostHint smtpImapHostError"
+                    onChange={(e) => {
+                      setImapHost(e.target.value);
+                      clearField("imapHost");
+                    }}
+                  />
+                  <p id="smtpImapHostHint" className="mt-1 text-xs text-muted-foreground">
+                    {t("smtp.form.imapHostHint")}
+                  </p>
+                  <div id="smtpImapHostError">
+                    <FieldError>{fieldErrors.imapHost}</FieldError>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="smtpImapPort">{t("smtp.form.imapPort")}</Label>
+                  <select
+                    id="smtpImapPort"
+                    ref={imapPortRef}
+                    className={selectCls}
+                    value={imapPort}
+                    aria-invalid={Boolean(fieldErrors.imapPort)}
+                    aria-describedby="smtpImapPortError"
+                    onChange={(e) => onImapPort(e.target.value)}
+                  >
+                    {IMAP_PORTS.map((p) => (
+                      <option key={p} value={p}>
+                        {`${p} (${t(defaultImapSecurity(p) === "ssl" ? "smtp.form.securitySsl" : "smtp.form.securityStarttls")})`}
+                      </option>
+                    ))}
+                  </select>
+                  <div id="smtpImapPortError">
+                    <FieldError>{fieldErrors.imapPort}</FieldError>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">{t("smtp.form.imapPasswordHint")}</p>
+            </>
+          ) : null}
         </section>
 
         <section aria-labelledby="smtpLimitsTitle" className="flex flex-col gap-4">
