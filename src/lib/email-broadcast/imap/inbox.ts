@@ -91,6 +91,8 @@ const IMAP_POST_SEND_BUDGET_MS = 10_000;
  * request makes, to reach the budget and the byte cap in a fraction of a second, and, for a reply, to see what is handed
  * to the SMTP server (`send`), to make that hand-over fail the ways a server does and to shrink the limits of the request
  * that follows it (`postSendOpenMs`, `postSendBudgetMs`) apart from the usual ones.
+ *
+ * @internal Test seams, not an API: nothing but check:imap changes them.
  */
 export const imapRequest = {
   open: openImap,
@@ -395,8 +397,9 @@ async function fetchOneRow(client: ImapFlow, uid: number, query: FetchQueryObjec
  * answer and drops, without a word, the answer that goes deeper: an e-mail whose body
  * structure is that deep (a sender can make one on purpose, and a server may report it as it
  * is) would vanish from the page. Whatever `expected` names and didn't come back complete is
- * asked for once more without the structure and shows with no attachment mark. Exported for
- * check:imap.
+ * asked for once more without the structure and shows with no attachment mark.
+ *
+ * @internal Test seam, not an API: exported only for check:imap.
  */
 export async function fetchListRows(
   client: ImapFlow,
@@ -494,8 +497,10 @@ async function readParsed(client: ImapFlow, uid: number): Promise<ParsedSource> 
 /**
  * The e-mail as the reading pane shows it. One FETCH says what it is and how
  * big; only up to `maxBytes` is downloaded and parsed, anything else (or a
- * message the parser refuses) shows its envelope and a notice. Exported for
- * check:imap, which runs it against a server of its own.
+ * message the parser refuses) shows its envelope and a notice.
+ *
+ * @internal Test seam, not an API: exported only for check:imap, which runs it
+ * against a server of its own.
  */
 export async function openMessage(
   client: ImapFlow,
@@ -547,7 +552,13 @@ async function addFlag(client: ImapFlow, uid: number, flag: typeof SEEN | typeof
  */
 export function loadImapInboxView(
   organizationId: string,
-  opts: { search: string; unreadOnly: boolean; messageId: string | null; maxMessageBytes?: number },
+  opts: {
+    search: string;
+    unreadOnly: boolean;
+    messageId: string | null;
+    /** @internal Test seam, not an API: the size above which an e-mail is not downloaded; only check:imap lowers it. */
+    maxMessageBytes?: number;
+  },
 ): Promise<MailboxResult<InboxView>> {
   const search = cleanSearch(opts.search);
   const maxBytes = opts.maxMessageBytes ?? IMAP_MAX_MESSAGE_BYTES;
@@ -613,8 +624,10 @@ function streamOf(bytes: Uint8Array): ReadableStream<Uint8Array> {
  * whose id the opened e-mail listed. That list leaves out the images the body
  * shows itself, so an id outside it (or any id of an e-mail that is too big to
  * be read) is "not_found", and so is an id from another numbering of the
- * mailbox. The bytes are in memory, as the 15 MB cap allows
- * (`maxMessageBytes`, as in loadImapInboxView).
+ * mailbox. The bytes are in memory, as the 15 MB cap allows.
+ *
+ * @param maxMessageBytes @internal Test seam, not an API: the size above which an e-mail is not downloaded (as in
+ * loadImapInboxView); only check:imap lowers it.
  */
 export function downloadImapAttachment(
   organizationId: string,
