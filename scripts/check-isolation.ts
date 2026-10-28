@@ -363,10 +363,71 @@ async function main() {
     }
     assert(secondSmtpCode === "P2002", "a second SMTP sending account in the same org is refused (P2002)");
 
+    // 16) WhatsApp group-add runs and their items are per org, and a contact
+    // enters a run only once (the unique key is [runId, contactId]).
+    const groupRunA = await prisma.whatsappGroupAddRun.create({
+      data: {
+        organizationId: orgA.id,
+        connectionId: `iso-conn-${stamp}`,
+        senderKey: `iso-sender-${stamp}`,
+        createdById: userA.id,
+        groupJid: `iso-${stamp}@g.us`,
+        groupName: `ISO-GRP-A-${stamp}`,
+        inviteText: "x",
+      },
+    });
+    await prisma.whatsappGroupAddItem.create({
+      data: {
+        organizationId: orgA.id,
+        runId: groupRunA.id,
+        contactId: `iso-contact-${stamp}`,
+        contactName: `ISO-CT-A-${stamp}`,
+        position: 0,
+        senderKey: `iso-sender-${stamp}`,
+      },
+    });
+    const groupRunsB = await prisma.whatsappGroupAddRun.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(
+      groupRunsB.length === 0,
+      "group-add run list scoped to org B excludes org A's run",
+    );
+    const groupItemsB = await prisma.whatsappGroupAddItem.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(
+      groupItemsB.length === 0,
+      "group-add item list scoped to org B excludes org A's item",
+    );
+    let secondItemCode: string | undefined;
+    try {
+      await prisma.whatsappGroupAddItem.create({
+        data: {
+          organizationId: orgA.id,
+          runId: groupRunA.id,
+          contactId: `iso-contact-${stamp}`,
+          contactName: `ISO-CT-A2-${stamp}`,
+          position: 1,
+          senderKey: `iso-sender-${stamp}`,
+        },
+      });
+    } catch (error) {
+      secondItemCode = (error as { code?: string }).code;
+    }
+    assert(
+      secondItemCode === "P2002",
+      "the same contact twice in one group-add run is refused (P2002)",
+    );
+
     console.log("\n✅ Tenant isolation: all checks passed.");
   } finally {
     // Cleanup. Companies/connections carry organizationId (no FK cascade from
     // org), so remove them explicitly before the orgs.
+    // Group-add items go with their run (onDelete: Cascade).
+    await prisma.whatsappGroupAddRun.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
     await prisma.emailSignature.deleteMany({
       where: { organizationId: { in: created.orgs } },
     });
