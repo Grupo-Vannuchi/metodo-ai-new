@@ -652,7 +652,10 @@ type ReplyPlan = { account: MailAccount; to: string; subject: string; headers: R
  * no plain mailbox in it, to the From (replyAddress: the sender wrote these, and the address ends up in an SMTP command);
  * with no address to answer there is no reply. The subject and the threading headers are replyHeadersForSend's. The Message-ID
  * is the one the header block carries (the envelope keeps a comment after it, "<id> (text)", that is no id), the envelope's
- * when the block has none. The e-mail has to be in the numbering the id was made in (UIDVALIDITY), as when it is opened.
+ * when the block has none. Either way it reaches the reply's headers only as a well-formed id of at most 998 characters
+ * (replyHeaders): a block whose id is longer yields none, the envelope's is then held to the same bound, and an id that fails
+ * it leaves the reply without In-Reply-To and References instead of failing it. The e-mail has to be in the numbering the id
+ * was made in (UIDVALIDITY), as when it is opened.
  */
 async function planReply(
   client: ImapFlow,

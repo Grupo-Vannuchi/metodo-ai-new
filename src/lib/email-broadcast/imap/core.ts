@@ -138,16 +138,22 @@ export function pickSentFolder(folders: { path: string; specialUse?: string | nu
  * of its length (about a minute for 200,000 spaces).
  */
 const REPLY_MARKER_RE = /^\s*res?\s*(?:\[\d+\]\s*)?:/i;
-/** A message id as headers write it: `<`, anything but spaces and angle brackets, `>`. Whatever else a sender put there is dropped. */
-const MESSAGE_ID_RE = /^<[^<>\s]+>$/;
+/**
+ * A message id as headers write it: `<`, 1 to 998 characters (ID_TOKEN_RE's bound; RFC 5322's line limit) that are not spaces or
+ * angle brackets, `>`. Whatever else a sender put there is dropped, an id too long included: it comes from the sender's header
+ * or from the server's envelope, which have no bound of their own, and it is copied into In-Reply-To and References.
+ */
+const MESSAGE_ID_RE = /^<[^<>\s]{1,998}>$/;
 
 /**
  * The subject and the threading headers of a reply to a received e-mail:
  * "Re: " once (not on a subject that already has one, nor in front of nothing),
  * In-Reply-To = the original's Message-ID and References = its chain plus that
  * id. Everything comes from the sender's headers, so a subject is cut to one
- * line and only well-formed `<id>` tokens are kept; an original with no usable
- * Message-ID has nothing to thread on, whatever its chain says.
+ * line and only well-formed `<id>` tokens of at most 998 characters are kept (a
+ * longer one is left out of the chain); an original with no usable Message-ID
+ * (none, malformed or too long) has nothing to thread on, whatever its chain says:
+ * the reply goes out without In-Reply-To and References.
  */
 export function replyHeaders(original: { subject: string; messageId: string | null; references: string[] }): {
   subject: string;

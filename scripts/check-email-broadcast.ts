@@ -2444,6 +2444,62 @@ check("replyHeaders keeps what the sender wrote out of the reply's headers", () 
   }
 });
 
+check("replyHeaders drops a message id past 998 characters, and the reply goes out without that threading header", () => {
+  // The id between the angle brackets holds at most 998 characters (the line limit); a sender's header, or the server's envelope,
+  // holds as many as the sender likes, and the id is copied into In-Reply-To and References.
+  const idOf = (inner: number) => `<${"a".repeat(inner)}>`;
+  const headersOf = (messageId: string | null, references: string[] = []) =>
+    replyHeaders({ subject: "oi", messageId, references }).headers;
+  assert.deepEqual(headersOf(idOf(998)), { "In-Reply-To": idOf(998), References: idOf(998) }, "998 is the largest id kept");
+  assert.deepEqual(headersOf(idOf(999)), {}, "999 is not");
+  // The reply is the same without the threading headers: the subject is still "Re: ...".
+  assert.equal(replyHeaders({ subject: "oi", messageId: idOf(999), references: ["<r1@x>"] }).subject, "Re: oi");
+  // A too long id in the chain is left out of it, the others stay in order; and a too long References leaves the reply threaded on the parent.
+  assert.deepEqual(headersOf("<a@x>", [idOf(999), "<r1@x>", idOf(998)]), {
+    "In-Reply-To": "<a@x>",
+    References: `<r1@x> ${idOf(998)} <a@x>`,
+  });
+  // A megabyte of id: dropped, at once.
+  const huge = idOf(1_000_000);
+  let headers: Record<string, string> = {};
+  const took = millis(() => {
+    headers = headersOf(huge, [huge, "<r1@x>"]);
+  });
+  assert.deepEqual(headers, {}, "the parent's id is the huge one: nothing to thread on");
+  assert.ok(took < 250, `${took.toFixed(0)} ms`);
+  // The same through replyHeadersForSend, which is what is sent.
+  assert.deepEqual(replyHeadersForSend({ subject: "oi", messageId: huge, references: [huge] }).headers, {});
+  assert.deepEqual(replyHeadersForSend({ subject: "oi", messageId: "<a@x>", references: [huge, "<r1@x>"] }).headers, {
+    "In-Reply-To": "<a@x>",
+    References: "<r1@x> <a@x>",
+  });
+});
+
+check("the Message-ID of a reply is held to 998 characters whether it comes from the header block or from the envelope", () => {
+  // What planReply (imap/inbox.ts) does: the id of the header block when there is one, else the envelope's, then replyHeadersForSend.
+  const plan = (block: string, envelopeId: string | null) => {
+    const ids = threadIdsFromHeaders(block);
+    return replyHeadersForSend({ subject: "oi", messageId: ids.messageId ?? envelopeId, references: ids.references }).headers;
+  };
+  const idOf = (inner: number) => `<${"a".repeat(inner)}>`;
+  const huge = idOf(1_000_000);
+  const normal = "Message-ID: <m1@x>\r\nReferences: <r0@x>\r\n\r\n";
+  const none = "References: <r0@x>\r\n\r\n";
+  // The block's id is read to at most 998 characters (ID_TOKEN_RE): a longer one yields none, so the envelope's stands in...
+  assert.equal(threadIdsFromHeaders(`Message-ID: ${idOf(999)}\r\n\r\n`).messageId, null);
+  assert.equal(threadIdsFromHeaders(`Message-ID: ${idOf(998)}\r\n\r\n`).messageId, idOf(998));
+  assert.equal(threadIdsFromHeaders(`Message-ID: ${huge}\r\n\r\n`).messageId, null);
+  // ...and the envelope's is held to the same bound: before, a megabyte of it became a megabyte In-Reply-To.
+  assert.deepEqual(plan(`Message-ID: ${huge}\r\n\r\n`, huge), {}, "too long in the block and in the envelope");
+  assert.deepEqual(plan(none, huge), {}, "no id in the block, a too long one in the envelope");
+  assert.deepEqual(plan(none, idOf(999)), {}, "999 characters from the envelope");
+  assert.deepEqual(plan(none, idOf(998)), { "In-Reply-To": idOf(998), References: `<r0@x> ${idOf(998)}` }, "998 from the envelope is kept");
+  // The ordinary cases stay as they were: the block's id wins; with none there, the envelope's is used.
+  assert.deepEqual(plan(normal, huge), { "In-Reply-To": "<m1@x>", References: "<r0@x> <m1@x>" });
+  assert.deepEqual(plan(none, "<env@x>"), { "In-Reply-To": "<env@x>", References: "<r0@x> <env@x>" });
+  assert.deepEqual(plan(none, null), {});
+});
+
 check("replyHeaders stays linear on a subject padded with spaces", () => {
   // The subject comes straight from the server. With two \s* either side of an optional group, each of these took about a minute.
   const spaces = " ".repeat(200_000);
