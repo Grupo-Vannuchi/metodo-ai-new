@@ -181,7 +181,8 @@ export default async function EmailPage({
     listEmailBroadcasts(ctx.organizationId, broadcastChannelOf(view)),
     mailbox ? Promise.resolve([] as string[]) : listSenderDomains(ctx.organizationId),
     mailbox ? Promise.resolve(0) : countEmailsSentThisMonth(ctx.organizationId),
-    provider ? getSenderAccountView(ctx.organizationId, provider) : Promise.resolve(null),
+    // The SMTP account was read above (for the tabs): reading it again would decrypt its credentials a second time.
+    smtp ? Promise.resolve(smtpAccount) : provider ? getSenderAccountView(ctx.organizationId, provider) : Promise.resolve(null),
   ]);
   const tracking = deliveryTrackingConfigured();
   const pct = Math.min(100, (used / limit) * 100);
