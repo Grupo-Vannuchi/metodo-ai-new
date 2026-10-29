@@ -974,4 +974,132 @@ check("the Evolution client sends no member action but add, and never names send
   for (const { rule, re } of rules) assert.ok(!re.test(text), `evolution-client.ts must not ${rule}`);
 });
 
+// ── What the audit entries of the actions may carry ──────────────────────────
+//
+// `AuditLog.meta` is free-form JSON in a table that lives as long as the organization does. The old form of a group's JID is
+// `<phone>-<timestamp>@g.us`: the number of whoever created the group, who is often someone else. The numbers of the people and
+// the invite text are theirs too. So an entry of the actions names the round (`entityId`) and the group by its NAME, and that is
+// all: no JID, no phone, no invite, and no object spread into it that could carry any of them.
+
+/** `source` without its comments, which never reach the audit table (a word in one is no finding). Strings stay as they are. */
+function withoutComments(source: string): string {
+  let out = "";
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i];
+    if (c === '"' || c === "'" || c === "`") {
+      const start = i;
+      for (i++; i < source.length && source[i] !== c; i++) if (source[i] === "\\") i++;
+      out += source.slice(start, i + 1);
+    } else if (c === "/" && source[i + 1] === "/") {
+      while (i < source.length && source[i] !== "\n") i++;
+      out += "\n";
+    } else if (c === "/" && source[i + 1] === "*") {
+      const end = source.indexOf("*/", i + 2);
+      i = end < 0 ? source.length : end + 1;
+      out += " ";
+    } else {
+      out += c;
+    }
+  }
+  return out;
+}
+
+/** The text from the `(` or `{` at `open` through its matching close. Strings are skipped (a brace in one is no bracket). */
+function balancedFrom(code: string, open: number): string {
+  let depth = 0;
+  for (let i = open; i < code.length; i++) {
+    const c = code[i];
+    if (c === '"' || c === "'" || c === "`") {
+      for (i++; i < code.length && code[i] !== c; i++) if (code[i] === "\\") i++;
+    } else if (c === "(" || c === "{") {
+      depth++;
+    } else if (c === ")" || c === "}") {
+      if (--depth === 0) return code.slice(open, i + 1);
+    }
+  }
+  throw new Error("unbalanced brackets in the source being scanned");
+}
+
+type AuditEntry = { action: string; meta: { kind: "none" } | { kind: "literal"; text: string } | { kind: "dynamic" } };
+
+/** Every `audit(ctx, { … })` of `source`: its action, and what its `meta` is: absent, an object literal (with its text), or anything else. */
+function auditEntriesOf(source: string): AuditEntry[] {
+  const code = withoutComments(source);
+  const entries: AuditEntry[] = [];
+  for (const found of code.matchAll(/\baudit\(/g)) {
+    const call = balancedFrom(code, (found.index ?? 0) + "audit".length);
+    const brace = call.indexOf("{");
+    if (brace < 0) {
+      entries.push({ action: "(an entry that is not an object literal)", meta: { kind: "dynamic" } });
+      continue;
+    }
+    const entry = balancedFrom(call, brace);
+    const action = /\baction\s*:\s*["'`]([^"'`]+)["'`]/.exec(entry)?.[1] ?? "(an entry with no action)";
+    const at = entry.search(/\bmeta\s*:/);
+    if (at < 0) {
+      entries.push({ action, meta: { kind: "none" } });
+      continue;
+    }
+    const value = entry.slice(at).replace(/^meta\s*:\s*/, "");
+    entries.push({ action, meta: value.startsWith("{") ? { kind: "literal", text: balancedFrom(value, 0) } : { kind: "dynamic" } });
+  }
+  return entries;
+}
+
+/** A JID (the group's too), a phone, or the invite (its text or its link), by any name that says so. */
+const AUDIT_META_FORBIDDEN = /jid|phone|invite/i;
+
+/** What the entries of `source` carry that they must not; empty when nothing of the kind is there. */
+function auditMetaLeaks(source: string): string[] {
+  const leaks: string[] = [];
+  for (const { action, meta } of auditEntriesOf(source)) {
+    if (meta.kind === "dynamic") leaks.push(`${action}: its meta is not an object literal, so it can't be told what it carries`);
+    else if (meta.kind === "literal" && meta.text.includes("...")) leaks.push(`${action}: its meta has an object spread into it`);
+    else if (meta.kind === "literal" && AUDIT_META_FORBIDDEN.test(meta.text)) leaks.push(`${action}: its meta names a JID, a phone or the invite`);
+  }
+  return leaks;
+}
+
+check("the audit entries of the actions carry no JID, phone or invite text in their meta", () => {
+  // The rule and the scan first, so a typo in either can't turn the real scan below into a silent pass.
+  const entry = (action: string, rest: string) => `await audit(g.ctx, { action: "${action}", entity: "WhatsappGroupAddRun", entityId: id, ${rest} });`;
+  const leaking = [
+    entry("whatsapp_group_add.started", "meta: { groupJid: parsed.data.groupJid }"),
+    entry("whatsapp_group_add.started", "meta: { source: parsed.data.source.kind, groupJid }"),
+    entry("x", "meta: { jid }"),
+    entry("x", "meta: { phone: contact.phone }"),
+    entry("x", "meta: { phoneKey }"),
+    entry("x", "meta: { inviteText: parsed.data.inviteText }"),
+    entry("x", "meta: { inviteUrl }"),
+    // A name after a nested object, and a name that is only the value.
+    entry("x", "meta: { counts: { added: 1 }, groupJid }"),
+    entry("x", "meta: { groupName: parsed.data.groupJid }"),
+    // Anything that can carry them without saying so.
+    entry("x", "meta: { ...parsed.data }"),
+    entry("x", "meta: parsed.data"),
+    "await audit(g.ctx, entry);",
+  ];
+  const clean = [
+    entry("whatsapp_group_add.paused", "meta: { groupName: own.run.groupName }"),
+    entry("whatsapp_group_add.started", "meta: { groupName: res.groupName }"),
+    entry("x", ""),
+    entry("x", "meta: { counts: { added: 1 }, groupName }"),
+    // A comment never reaches the table.
+    `// await audit(ctx, { action: "x", meta: { phone } });\n${entry("y", "meta: { groupName }")}`,
+    `/* audit(ctx, { meta: { inviteText } }) */ ${entry("y", "meta: { groupName }")}`,
+    // A brace in a string is not a bracket.
+    entry("x", 'meta: { groupName: "}{" }'),
+  ];
+  for (const sample of leaking) assert.notDeepEqual(auditMetaLeaks(sample), [], sample);
+  for (const sample of clean) assert.deepEqual(auditMetaLeaks(sample), [], sample);
+
+  const text = readFileSync(join(__dirname, "..", "src", "app", "actions", "whatsapp-group-add.ts"), "utf8");
+  // Not a silent pass: the four entries of the actions are in the file that was read.
+  const found = auditEntriesOf(text).map((e) => e.action);
+  for (const action of ["started", "paused", "resumed", "canceled"]) {
+    assert.ok(found.includes(`whatsapp_group_add.${action}`), `no audit entry for whatsapp_group_add.${action} (found: ${found.join(", ") || "none"})`);
+  }
+  assert.deepEqual(auditMetaLeaks(text), []);
+});
+
 console.log(`\n✅ group-add: ${passed} checks passed.`);

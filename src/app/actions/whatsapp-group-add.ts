@@ -24,7 +24,9 @@ import {
  * "Adicionar a grupo do WhatsApp" for the screens (spec 2026-10-28): list the groups of the member's own number, review a
  * round, start it, pause, resume, cancel, and poke the tracking screen's round. Who may do what is decided here; the
  * work is the service's (src/lib/whatsapp/group-add/service.ts). Nothing here logs a phone number or the invite text:
- * a failure writes the name and code of the error only.
+ * a failure writes the name and code of the error only. The audit entries carry the round (entityId) and the group's
+ * NAME, never a JID, a phone or the invite text (the old kind of group JID holds its creator's phone, and the audit
+ * table is long-lived): `npm run check:group-add` reads this file and fails if an entry's meta says otherwise.
  */
 
 export type GroupAddActionError = GroupAddError | "unauthorized" | "forbidden" | "invalid" | "unknown";
@@ -102,12 +104,13 @@ export async function startGroupAddAction(input: unknown): Promise<{ ok: true; r
   try {
     const res = await startGroupAdd(g.ctx.organizationId, g.ctx.userId, parsed.data);
     if (!res.ok) return res;
-    // The group and where the people came from; never who they are or what the invite says.
+    // The group by its name, like the other three entries: never its JID (the old kind, `<phone>-<timestamp>@g.us`, holds the
+    // phone of whoever made the group, and this table is long-lived), who the people are, or what the invite says.
     await audit(g.ctx, {
       action: "whatsapp_group_add.started",
       entity: "WhatsappGroupAddRun",
       entityId: res.runId,
-      meta: { groupJid: parsed.data.groupJid, source: parsed.data.source.kind },
+      meta: { groupName: res.groupName },
     });
     revalidatePath(trackingPath(res.runId));
     return { ok: true, runId: res.runId };

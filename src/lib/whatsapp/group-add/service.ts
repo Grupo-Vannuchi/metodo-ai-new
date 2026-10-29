@@ -232,19 +232,22 @@ const activeRunOf = (db: TenantDb, groupJid: string) =>
  * Starts a round: re-reads the group, plans it, writes the run (QUEUED) with an item per contact and
  * raises the oldest queued run of the number, which may be this one. The people that don't fit in the
  * group (1,024) start FAILED / group_full, never tried and not counted for the day. One round at a
- * time per group of an organization: two clicks make one.
+ * time per group of an organization: two clicks make one. Answers the run's id and the group's name as
+ * the run keeps it ("Grupo" when the group has none): the audit entry of the start records the name,
+ * never the JID, whose old form (`<phone>-<timestamp>@g.us`) holds the phone of whoever made the group.
  */
 export async function startGroupAdd(
   organizationId: string,
   userId: string,
   input: { source: GroupAddSource; groupJid: string; inviteText: string },
-): Promise<{ ok: true; runId: string } | Failure> {
+): Promise<{ ok: true; runId: string; groupName: string } | Failure> {
   const db = tenantDb(organizationId);
   const link = await openLink(db, userId);
   if (!link.ok) return link;
   if (await activeRunOf(db, input.groupJid)) return { ok: false, error: "already_running" };
   const ready = await prepare(db, organizationId, link, input.source, input.groupJid);
   if (!ready.ok) return ready;
+  const groupName = ready.group.subject || "Grupo";
 
   let room = roomIn(ready.group);
   const rows = ready.plan.map((item) => {
@@ -272,7 +275,7 @@ export async function startGroupAdd(
           senderKey: link.senderKey,
           createdById: userId,
           groupJid: input.groupJid,
-          groupName: ready.group.subject || "Grupo",
+          groupName,
           inviteText: input.inviteText.slice(0, INVITE_TEXT_MAX),
           status: "QUEUED",
         },
@@ -299,7 +302,7 @@ export async function startGroupAdd(
   if (!runId) return { ok: false, error: "already_running" };
 
   await promoteAndKick(link.senderKey);
-  return { ok: true, runId };
+  return { ok: true, runId, groupName };
 }
 
 /** QUEUED or RUNNING to PAUSED by hand. A pause is kept across a resume (the pause between people too). False when there was nothing to pause. */

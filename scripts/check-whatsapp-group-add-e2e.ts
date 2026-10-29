@@ -2203,6 +2203,31 @@ check("startGroupAdd twice: the second answers already_running; two clicks at on
   assert.deepEqual(await startGroupAdd(w.orgA, w.userA, input), { ok: false, error: "already_running" });
 });
 
+check("startGroupAdd answers the group's name as the round keeps it ('Grupo' when it has none), and not its JID: the audit entry records the name", async (ctx) => {
+  const { groups, w } = await scenario(ctx);
+  const ids = await people(w, 2);
+  // The old kind of JID holds the phone of whoever made the group, and the new kind is a group without a name.
+  const OLD_KIND = "5511987654321-1618000000@g.us";
+  const NO_NAME = "120363000000000013@g.us";
+  groups[OLD_KIND] = groupJson(OLD_KIND, "Clientes VIP", [meIn(w, "admin"), FRIEND]);
+  groups[NO_NAME] = groupJson(NO_NAME, "", [meIn(w, "admin"), FRIEND]);
+  const start = (groupJid: string) => startGroupAdd(w.orgA, w.userA, { source: ofContacts(ids), groupJid, inviteText: TEMPLATE });
+
+  for (const [groupJid, name] of [
+    [GROUP, "Ofertas"],
+    [OLD_KIND, "Clientes VIP"],
+    [NO_NAME, "Grupo"],
+  ] as const) {
+    const res = await start(groupJid);
+    assert.ok(res.ok, groupJid);
+    assert.equal(res.groupName, name);
+    assert.equal((await runOf(w, res.runId)).groupName, name, "the answer is the name the round was written with");
+    // The answer is the round and its name: nothing of the JID in it, least of all the number inside the old kind.
+    assert.deepEqual(Object.keys(res).sort(), ["groupName", "ok", "runId"]);
+    assert.ok(!JSON.stringify(res).includes("5511987654321"), "the answer carries the number of the group's creator");
+  }
+});
+
 check("a group that would pass 1,024 people: the overflow starts FAILED / group_full, never asked about and not counted for the day", async (ctx) => {
   const { fake, groups, w } = await scenario(ctx);
   groups[GROUP] = groupJson(GROUP, "Ofertas", [meIn(w, "admin"), FRIEND], { size: 1021 }); // room for 3

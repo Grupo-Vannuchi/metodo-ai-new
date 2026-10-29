@@ -101,7 +101,14 @@ E tem uma guarda estática, porque as únicas escritas no WhatsApp são adiciona
 convite: ela falha se algum arquivo de `src/lib/whatsapp/group-add/` citar `sendInvite` ou `updateSetting` ou escrever
 `"remove"`, `"promote"` ou `"demote"` (comentários também contam), se o `evolution-client.ts` citar `sendInvite` ou
 `updateSetting` ou mandar `action` `remove`, `promote` ou `demote`, ou se ela não achar o `core.ts` para varrer.
-Não usa banco nem rede. Rode sempre que mexer em `src/lib/whatsapp/group-add/`, em `src/lib/validations/whatsapp-group-add.ts`, em `src/lib/integrations/evolution-groups.ts` ou em `src/lib/integrations/evolution-client.ts`.
+Tem uma segunda guarda estática, para a auditoria: lê [src/app/actions/whatsapp-group-add.ts](../../src/app/actions/whatsapp-group-add.ts)
+(sem os comentários) e falha se o `meta` de algum `audit(...)` citar JID, telefone ou convite (`jid`, `phone`, `invite`,
+em qualquer grafia), espalhar um objeto dentro dele (`...x`) ou não for um objeto literal, ou se faltar uma das quatro
+entradas (`started`, `paused`, `resumed`, `canceled`) no arquivo lido. O motivo: o JID antigo de grupo é
+`<telefone>-<carimbo>@g.us`, o número de quem criou o grupo (muitas vezes um terceiro), e a tabela de auditoria dura
+tanto quanto a empresa; as entradas levam o id da rodada e o NOME do grupo. Ela confere a regra em exemplos que têm de
+falhar e em exemplos que têm de passar antes de varrer o arquivo, para que um erro nela não vire um passe silencioso.
+Não usa banco nem rede. Rode sempre que mexer em `src/lib/whatsapp/group-add/`, em `src/lib/validations/whatsapp-group-add.ts`, em `src/app/actions/whatsapp-group-add.ts`, em `src/lib/integrations/evolution-groups.ts` ou em `src/lib/integrations/evolution-client.ts`.
 
 `npm run check:group-add:e2e` testa o código de servidor do "Adicionar a grupo do WhatsApp"
 ([scripts/check-whatsapp-group-add-e2e.ts](../../scripts/check-whatsapp-group-add-e2e.ts)): o que fala com a
@@ -144,7 +151,9 @@ tempo, trava vencida, trava perdida no meio de uma espera) com uma chamada por n
 virando `interrupted` sem ser refeito; resposta sem código, erro de HTTP e sem resposta da adição; o link do grupo
 pedido uma vez, o texto do convite e o link que falta; o texto do convite sem resposta virando `invite_uncertain` (a
 recusa continua `invite_failed`) e a rodada seguinte do grupo pulando, sem chamada, quem ficou `interrupted`,
-`uncertain` ou `invite_uncertain`, só do mesmo grupo e da mesma empresa; dois cliques em "Começar" dando uma rodada só; o excedente de
+`uncertain` ou `invite_uncertain`, só do mesmo grupo e da mesma empresa; dois cliques em "Começar" dando uma rodada só; o
+nome do grupo que o começo devolve ao lado do id da rodada, o mesmo que a rodada guarda (`Grupo` se o grupo não tem nome,
+e nunca o JID, nem o antigo com o número de quem criou o grupo), que é o que a auditoria grava; o excedente de
 1.024 participantes como `group_full`; pausar, retomar e cancelar, inclusive no meio de uma chamada; a lista de
 rodadas devidas do cron e o `pokeGroupAdd`; a rota do cron (`/api/cron/whatsapp-groups`): sem o segredo, com um errado,
 de outro esquema ou com o segredo não configurado ela responde 401 e não toca em nada; com ele, chama só as rodadas
