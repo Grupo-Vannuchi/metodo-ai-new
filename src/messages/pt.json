@@ -1442,7 +1442,7 @@
       "folderName": "Nome da pasta",
       "renameFolder": "Renomear pasta",
       "deleteFolder": "Excluir pasta",
-      "confirmDeleteFolder": "Excluir esta pasta? Os contatos não serão apagados, apenas ficarão sem pasta.",
+      "confirmDeleteFolder": "Excluir esta pasta? Os contatos continuam no CRM e saem só desta pasta; quem não estiver em outra pasta vai para Sem pasta.",
       "dropHere": "Arraste contatos para cá",
       "openHint": "Duplo clique para abrir",
       "emptyFolder": "Pasta vazia — arraste contatos para cá.",

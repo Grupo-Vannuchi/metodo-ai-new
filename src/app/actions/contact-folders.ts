@@ -54,7 +54,8 @@ export async function renameFolder(
   }
 }
 
-/** Delete a folder. Its contacts are kept and become unfiled (FK SET NULL). */
+/** Delete a folder. Its contacts are kept and only leave this folder (their links
+ * to it go by FK cascade); a contact in no other folder shows in "Sem pasta". */
 export async function deleteFolder(id: string): Promise<{ ok: boolean }> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false };

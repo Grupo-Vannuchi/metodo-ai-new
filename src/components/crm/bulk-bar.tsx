@@ -40,6 +40,8 @@ export function BulkBar({
   const [pending, start] = useTransition();
   const [tag, setTag] = useState("");
   const [taggingOpen, setTaggingOpen] = useState(false);
+  // Where "Adicionar à pasta…" can put the selection: every folder but the open one.
+  const addTargets = folders.filter((f) => f.id !== openFolderId);
 
   function move(folderId: string | null) {
     start(async () => {
@@ -104,7 +106,8 @@ export function BulkBar({
         </select>
       </label>
 
-      {onAdd ? (
+      {/* Hidden when no folder is left to add to (only the open one, or none). */}
+      {onAdd && addTargets.length > 0 ? (
         <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <FolderPlus className="size-4" />
           <select
@@ -119,13 +122,11 @@ export function BulkBar({
             <option value="" disabled>
               {t("addTo")}
             </option>
-            {folders
-              .filter((f) => f.id !== openFolderId)
-              .map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
+            {addTargets.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
           </select>
         </label>
       ) : null}

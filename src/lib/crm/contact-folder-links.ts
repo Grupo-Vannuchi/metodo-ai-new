@@ -20,11 +20,18 @@ export async function ownContactIds(db: Db, ids: readonly string[]): Promise<str
   return rows.map((r) => r.id);
 }
 
+/** A folder argument: `null` ("Sem pasta") or a non-empty id. */
+export function isFolderArg(value: unknown): value is string | null {
+  return value === null || (typeof value === "string" && value.length > 0);
+}
+
 /**
  * Moves contacts out of the folder `from` (the one open) into `to`, keeping
  * their other folders. `null` is "Sem pasta": as `to` it removes every link; as
  * `from` it just adds `to`. Returns null when `to` is not a folder of this
- * organization, otherwise how many of this organization's contacts were moved.
+ * organization, or when `to`/`from` is neither null nor an id (an `undefined`
+ * origin would reach `deleteMany` as "no folder filter" and wipe every link),
+ * otherwise how many of this organization's contacts were moved.
  */
 export async function moveContactsToFolder(
   db: Db,
@@ -33,6 +40,7 @@ export async function moveContactsToFolder(
   to: string | null,
   from: string | null,
 ): Promise<number | null> {
+  if (!isFolderArg(to) || !isFolderArg(from)) return null;
   if (to !== null) {
     const folder = await db.contactFolder.findFirst({ where: { id: to }, select: { id: true } });
     if (!folder) return null;

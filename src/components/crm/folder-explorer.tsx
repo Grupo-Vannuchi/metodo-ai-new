@@ -278,7 +278,8 @@ export function FolderExplorer<T extends { id: string }>({
         key={keyOf(id)}
         onDragOver={(e) => {
           e.preventDefault();
-          e.dataTransfer.dropEffect = onAddItems && e.ctrlKey ? "copy" : "move";
+          // "Copy" only where Ctrl really adds: a real folder other than the open one.
+          e.dataTransfer.dropEffect = onAddItems && e.ctrlKey && id !== null && id !== openId ? "copy" : "move";
           setOverTile(keyOf(id));
         }}
         onDragLeave={() => setOverTile((c) => (c === keyOf(id) ? null : c))}
@@ -426,7 +427,7 @@ export function FolderExplorer<T extends { id: string }>({
             {renderBulkBar && openCol.items.length > 0 ? (
               <span className="ml-1 hidden text-xs text-muted-foreground sm:inline">
                 {labels.dragHint}
-                {onAddItems && labels.copyHint ? ` ${labels.copyHint}` : ""}
+                {onAddItems && labels.copyHint ? ` · ${labels.copyHint}` : ""}
               </span>
             ) : null}
           </div>

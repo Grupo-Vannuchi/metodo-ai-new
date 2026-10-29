@@ -12,6 +12,7 @@ import { normalizeWhatsappNumber, formatBrPhone, brPhoneKey, looksLikeWhatsappMo
 import { onlyDigits } from "@/lib/cnpj";
 import { getContactRows, getGroupMembers } from "@/lib/whatsapp/export";
 import { ensureContactFolder, findContactFolder, whatsappFolderName } from "@/lib/crm/import-folders";
+import { createWhatsappContacts, type WhatsappContactRow } from "@/lib/crm/whatsapp-import-contacts";
 import {
   CONTACT_NAME_PREFIX,
   MAX_IMPORT_GROUPS,
@@ -403,39 +404,6 @@ const importTargetSchema = z.object({
 });
 
 type Db = ReturnType<typeof tenantDb>;
-type ContactRow = { name: string; phone: string };
-
-/**
- * Creates the contacts in chunks (one big group shouldn't become one huge statement) and files
- * each chunk in `folderId` through contact_folder_links. `createManyAndReturn` is not in
- * WHERE_OPS of tenantDb (docs/guia/03-multi-tenancy.md), so organizationId goes by hand, in both
- * the contacts and the links.
- */
-async function createContacts(
-  db: Db,
-  organizationId: string,
-  rows: ContactRow[],
-  folderId: string,
-): Promise<void> {
-  for (let i = 0; i < rows.length; i += 500) {
-    // One transaction per chunk: contacts without their folder link would be skipped on a retry.
-    await db.$transaction(async (tx) => {
-      const created = await tx.contact.createManyAndReturn({
-        data: rows.slice(i, i + 500).map((r) => ({
-          organizationId,
-          name: r.name,
-          phone: r.phone,
-          tags: ["whatsapp"],
-          source: "whatsapp-import",
-        })),
-        select: { id: true },
-      });
-      await tx.contactFolderLink.createMany({
-        data: created.map((c) => ({ organizationId, contactId: c.id, folderId })),
-      });
-    });
-  }
-}
 
 /** The caller's individual conversations, under their names, in a new dated folder. */
 async function importConversationContacts(
@@ -445,7 +413,7 @@ async function importConversationContacts(
   known: Set<string>,
 ): Promise<ImportLine> {
   const rows = await getContactRows(organizationId, userId);
-  const picked: { name: string; phone: string }[] = [];
+  const picked: WhatsappContactRow[] = [];
   let skipped = 0;
   for (const r of rows) {
     const digits = onlyDigits(r.number);
@@ -464,7 +432,7 @@ async function importConversationContacts(
   // is a duplicate leaves no empty folder behind.
   if (picked.length > 0) {
     const folderId = await ensureContactFolder(db, organizationId, whatsappFolderName("Contatos", new Date()));
-    await createContacts(db, organizationId, picked, folderId);
+    await createWhatsappContacts(db, organizationId, picked, folderId);
   }
   return { id: "contacts", label: "Contatos", created: picked.length, skipped };
 }
@@ -496,7 +464,7 @@ async function importGroup(
   );
   if (plan.create.length > 0) {
     const folderId = existingFolder ?? (await ensureContactFolder(db, organizationId, group.title));
-    await createContacts(db, organizationId, plan.create.map((c) => ({ name: c.name, phone: c.phone })), folderId);
+    await createWhatsappContacts(db, organizationId, plan.create.map((c) => ({ name: c.name, phone: c.phone })), folderId);
     for (const c of plan.create) known.add(c.key);
   }
   return { id: conversationId, label: group.title, created: plan.create.length, skipped: plan.skipped };

@@ -32,11 +32,11 @@ type ListLabels = {
 };
 
 /** "N folders" pill, only for contacts in two or more folders. */
-function FolderBadge({ card, labels }: { card: ContactCard; labels: ListLabels }) {
+function FolderBadge({ card, labels, className }: { card: ContactCard; labels: ListLabels; className?: string }) {
   if (card.folderNames.length < 2) return null;
   return (
     <span
-      className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+      className={cn("shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground", className)}
       title={card.folderNames.join(", ")}
     >
       {labels.folderBadge(card.folderNames.length)}
@@ -142,16 +142,15 @@ function ContactList({
           <div className="flex items-start gap-3">
             <Avatar name={card.name} className="size-10 shrink-0" />
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="truncate text-sm font-medium">{card.name}</p>
-                <FolderBadge card={card} labels={labels} />
-              </div>
+              <p className="truncate text-sm font-medium">{card.name}</p>
               {card.companyName ? (
                 <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
                   <Building2 className="size-3 shrink-0" />
                   <span className="truncate">{card.companyName}</span>
                 </p>
               ) : null}
+              {/* Below the name, not beside it: the name keeps the card's full width. */}
+              <FolderBadge card={card} labels={labels} className="mt-1 inline-block" />
             </div>
             {actions(card)}
           </div>
@@ -236,7 +235,11 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
     copyHint: t("copyHint"),
     folderCount: (count) => t("folderCount", { count }),
   };
-  const listLabels: ListLabels = { name: t("name"), company: t("company"), phone: t("phone"), email: t("email"),
+  const listLabels: ListLabels = {
+    name: t("name"),
+    company: t("company"),
+    phone: t("phone"),
+    email: t("email"),
     folderBadge: (count) => t("folderBadge", { count }),
   };
 

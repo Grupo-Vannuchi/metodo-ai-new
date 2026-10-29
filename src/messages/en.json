@@ -1442,7 +1442,7 @@
       "folderName": "Folder name",
       "renameFolder": "Rename folder",
       "deleteFolder": "Delete folder",
-      "confirmDeleteFolder": "Delete this folder? Contacts won't be deleted, just unfiled.",
+      "confirmDeleteFolder": "Delete this folder? Contacts stay in the CRM and only leave this folder; those in no other folder become unfiled.",
       "dropHere": "Drag contacts here",
       "openHint": "Double-click to open",
       "emptyFolder": "Empty folder — drag contacts here.",

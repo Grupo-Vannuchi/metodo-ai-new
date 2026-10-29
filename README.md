@@ -249,8 +249,13 @@ com default `[]`). **Não** use `migrate deploy`.
 
 **Antes do merge da branch `feature/crm-contato-varias-pastas` (fase 1):**
 1. Aplicar no Supabase `prisma/migrations/20261029120000_contact_folder_links/migration.sql` com `npx prisma db execute --file prisma/migrations/20261029120000_contact_folder_links/migration.sql --schema prisma/schema.prisma` e depois `npx prisma migrate resolve --applied 20261029120000_contact_folder_links`. Ela cria `contact_folder_links`, copia os vínculos atuais e cria o gatilho `contacts_folder_link_sync` (espelha em `contact_folder_links` o que o código antigo gravar em `contacts.folderId` até o deploy). **Não** use `migrate deploy`.
-2. Conferir que nenhum contato com `folderId` ficou sem vínculo (precisa dar 0): `SELECT count(*) FROM contacts c WHERE c."folderId" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM contact_folder_links l WHERE l."contactId" = c.id AND l."folderId" = c."folderId");`
+2. Conferir no Supabase, antes do merge:
+   - nenhum contato com `folderId` ficou sem vínculo (precisa dar 0): `SELECT count(*) FROM contacts c WHERE c."folderId" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM contact_folder_links l WHERE l."contactId" = c.id AND l."folderId" = c."folderId");`
+   - o gatilho existe (precisa voltar 1 linha): `SELECT 1 FROM pg_trigger WHERE tgname = 'contacts_folder_link_sync';`
+   - nenhum vínculo aponta para contato ou pasta de outra organização (precisa dar 0): `SELECT count(*) FROM contact_folder_links l JOIN contacts c ON c.id = l."contactId" JOIN contact_folders f ON f.id = l."folderId" WHERE c."organizationId" <> l."organizationId" OR f."organizationId" <> l."organizationId";`
 3. Fazer o merge. Com o build no ar, testar uma movimentação e uma adição em produção. A fase 2 (outro PR, dias depois) apaga o campo legado: schema → merge e deploy → só então a migration que apaga gatilho, função, FK, índice e coluna.
+
+**Se o merge precisar ser revertido**, o código antigo volta a ler `contacts.folderId`, que o código novo nunca grava e por isso ficou parado no que era no deploy: as segundas pastas e tudo o que o código novo arquivou (movimentações, adições, importações) não aparecem nele. Quem entrou numa segunda pasta continua só na primeira, e um contato importado pelo código novo aparece em "Sem pasta". Os vínculos continuam em `contact_folder_links` para quando o código novo voltar.
 
 **Antes do merge da branch `feature/email-dominios-plataforma`:**
 1. Aplicar no Supabase `prisma/migrations/20261008120000_email_sender_domains/migration.sql` com
@@ -564,8 +569,12 @@ Diferente da lista de produto abaixo, estes têm próximo passo conhecido e escr
    como em `20261013180000_email_signatures_drop_intro_text`; apagar a coluna antes do deploy quebraria o
    código no ar):
    1. Tirar do `schema.prisma` o `legacyFolderId`, a relação `legacyFolder`, o `legacyContacts` de
-      `ContactFolder` e o `@@index([organizationId, legacyFolderId])`. Tirar também o caso do gatilho de
-      `scripts/check-contact-folders-db.ts` (e a linha dele no guia 06), que grava `"folderId"` à mão.
+      `ContactFolder` e o `@@index([organizationId, legacyFolderId])`. No mesmo PR, ajustar
+      `scripts/check-contact-folders-db.ts`, que hoje depende da coluna: o `makeContact` grava `"folderId"`
+      em todo caso, e em 25 casos (18 fora os `trigger: …`) é o gatilho que põe os contatos na pasta. Reescreva o
+      `makeContact` para inserir sem `"folderId"` e, quando receber uma pasta, criar o vínculo com
+      `addLink`; apague os casos `trigger: …` e o trecho sobre o gatilho no guia 06. Sem isso o script
+      quebra no passo 3, quando a coluna sair.
    2. Mergear e esperar o deploy entrar no ar. O Prisma não lê coluna que o schema não declara, então a
       coluna sobrando é inofensiva.
    3. Só então aplicar no Supabase a migration que apaga, nesta ordem, o gatilho `contacts_folder_link_sync`,

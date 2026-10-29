@@ -57,8 +57,12 @@ deste guia empurra pra lá: a seção acima ensina "nunca `update`, use `updateM
 que `updateMany` não devolve as linhas alteradas. O próximo passo óbvio, pra quem precisa do dado
 de volta, é alcançar `updateManyAndReturn` — que parece a versão "Many" seguindo o mesmo padrão
 recomendado, mas **não está em `WHERE_OPS`** e cruza organização em silêncio. Hoje nada em `src/`
-usa `createManyAndReturn` nem `updateManyAndReturn` — é uma armadilha latente, não um bug já
-disparado —, mas é exatamente o tipo de escolha que este guia, seguido pela metade, induziria.
+usa `updateManyAndReturn`, e `createManyAndReturn` tem um uso só: a importação de contatos do
+WhatsApp ([src/lib/crm/whatsapp-import-contacts.ts](../../src/lib/crm/whatsapp-import-contacts.ts)),
+que precisa dos ids dos contatos novos para criar os vínculos com a pasta. Lá o `organizationId` vai
+**à mão** no `data` de cada contato e de cada vínculo — o extends não põe nada nessa operação —, e o
+`check:folders:db` confere que os dois saem com a organização certa. Fora desse caso, continua sendo
+exatamente o tipo de escolha que este guia, seguido pela metade, induziria.
 
 O comentário no topo do arquivo já registra o motivo
 ([src/lib/tenant-db.ts:12-16](../../src/lib/tenant-db.ts#L12-L16)):
@@ -174,6 +178,12 @@ Postgres faz o que se espera dele.
   `count === 0`** como erro de autorização. Nunca `update`/`delete` direto.
 - `upsert`, `createManyAndReturn`, `updateManyAndReturn` em tabela de negócio: sem atalho — some
   `organizationId` ao `where` (ou ao `data`) à mão. Nenhuma das três está em `WHERE_OPS`.
+- `create` aninhado (ex.: `folderLinks: { create: { ... } }` dentro de `contact.create`) não passa
+  pelo extends, que só injeta no nível de cima: ponha o `organizationId` do registro aninhado à mão.
+- `createMany` numa tabela de vínculo (ex.: `ContactFolderLink`) injeta o `organizationId`, mas não
+  confere de quem são o `contactId` e o `folderId`: filtre antes pelos ids que são da organização
+  (`ownContactIds` e `findFirst` da pasta, em
+  [src/lib/crm/contact-folder-links.ts](../../src/lib/crm/contact-folder-links.ts)).
 - Model de negócio novo: adicione em `TENANT_MODELS`, senão o extends passa direto por ele.
 - `check:isolation` verde prova que o Postgres respeita o filtro que a query já traz — não que
   `tenantDb`, a DAL ou as actions estão passando esse filtro. Só o vermelho é garantia de algo.

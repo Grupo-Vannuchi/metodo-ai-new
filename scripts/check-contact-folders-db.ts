@@ -1,11 +1,17 @@
 /**
  * Database check of contacts in several folders (spec 2026-10-29): what only the real
- * Postgres can prove. Today: the phase-1 trigger that mirrors the legacy `contacts.folderId`
- * into `contact_folder_links` (migration 20261029120000). Later tasks add their cases.
+ * Postgres can prove. Covers the phase-1 trigger that mirrors the legacy `contacts.folderId`
+ * into `contact_folder_links` (migration 20261029120000); the board and `getContact`; move, add
+ * and remove (with another org's folder or contact, and a missing move origin); the e-mail and
+ * campaign folder filters; the duplicate merge; and the WhatsApp import (the only
+ * `createManyAndReturn` in src/).
  *
  * Contacts and their `folderId` are written with raw SQL so the script survives the rename
- * of the Prisma field (Task 8). Every case creates its own contacts. The folders FA1..FA3 of
- * company A live for the whole run; a case that deletes a folder creates its own.
+ * of the Prisma field (Task 8). `makeContact` files a contact through that legacy column and the
+ * trigger; phase 2 (README §10, item 5) must rewrite it to insert without `folderId` and use
+ * `addLink`, and drop the `trigger:` cases, before the column goes. Every case creates its own
+ * contacts. The folders FA1..FA3 of company A live for the whole run; a case that deletes a
+ * folder creates its own.
  *
  * Creates two companies (`FOLDERS-DB-A/B-<stamp>`) and ALWAYS deletes what it created, in
  * this order: contacts (their links go in cascade), folders, companies. A run that is killed leaves them behind:
@@ -30,6 +36,7 @@ import {
   moveContactsToFolder,
   removeContactsFromFolder,
 } from "@/lib/crm/contact-folder-links";
+import { createWhatsappContacts } from "@/lib/crm/whatsapp-import-contacts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is not set");
@@ -215,6 +222,15 @@ check("move: foreign contact", async () => {
   assert.deepEqual(await linksOf(y), []);
 });
 
+check("move: an undefined origin is refused and deletes nothing", async () => {
+  // An old client bundle calling with 2 args sends no origin; Prisma reads `folderId: undefined` as no filter.
+  const x = await makeContact(ctx.orgA, `m8-${stamp}`, ctx.fa1);
+  await addLink(ctx.orgA, x, ctx.fa3);
+  const n = await moveContactsToFolder(tenantDb(ctx.orgA), ctx.orgA, [x], ctx.fa2, undefined as unknown as null);
+  assert.deepEqual(await linksOf(x), [ctx.fa1, ctx.fa3].sort());
+  assert.equal(n, null);
+});
+
 check("add: keeps the current folders", async () => {
   const x = await makeContact(ctx.orgA, `a1-${stamp}`, ctx.fa1);
   const n = await addContactsToFolder(tenantDb(ctx.orgA), ctx.orgA, [x], ctx.fa2);
@@ -317,6 +333,30 @@ check("campaign: folder filter matches by link", async () => {
   await emailFixture("c1", g1, g2);
   const n = await tenantDb(ctx.orgA).contact.count({ where: audienceWhere("EMAIL", { folderId: g2 }) });
   assert.equal(n, 1);
+});
+
+check("WhatsApp import: contacts and their folder links carry the organization", async () => {
+  // The only createManyAndReturn in src/, inside an interactive transaction on the engine-less client.
+  const fw = await makeFolder(ctx.orgA, `FW-${stamp}`);
+  const names = [`w1-${stamp}`, `w2-${stamp}`];
+  // Fictional, non-dialable numbers: this never reaches WhatsApp.
+  const rows = names.map((name, i) => ({ name, phone: `(00) 00000-000${i}` }));
+  await createWhatsappContacts(tenantDb(ctx.orgA), ctx.orgA, rows, fw);
+  // Read by name with the raw client (no org filter), so a contact written into the wrong org shows up.
+  const made = await prisma.contact.findMany({
+    where: { name: { in: names } },
+    select: { id: true, name: true, organizationId: true, tags: true, source: true },
+    orderBy: { name: "asc" },
+  });
+  assert.deepEqual(made.map((c) => c.name), names);
+  for (const c of made) {
+    assert.equal(c.organizationId, ctx.orgA);
+    assert.deepEqual(c.tags, ["whatsapp"]);
+    assert.equal(c.source, "whatsapp-import");
+    const links = await prisma.$queryRaw<{ folderId: string; organizationId: string }[]>`
+      SELECT "folderId", "organizationId" FROM "contact_folder_links" WHERE "contactId" = ${c.id}`;
+    assert.deepEqual(links, [{ folderId: fw, organizationId: ctx.orgA }]);
+  }
 });
 
 async function main() {

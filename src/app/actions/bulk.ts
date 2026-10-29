@@ -5,6 +5,7 @@ import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import {
   addContactsToFolder,
+  isFolderArg,
   moveContactsToFolder,
   removeContactsFromFolder,
 } from "@/lib/crm/contact-folder-links";
@@ -52,7 +53,9 @@ export async function bulkDeleteContacts(ids: string[]): Promise<BulkResult> {
 }
 
 /** Move contacts out of the open folder (`fromFolderId`) into `folderId`,
- * keeping their other folders. `null` is "Sem pasta". */
+ * keeping their other folders. `null` is "Sem pasta". Both must be `null` or an
+ * id: a missing origin (an old client calling with two args) is refused, never
+ * read as "every folder". */
 export async function bulkMoveContacts(
   ids: string[],
   folderId: string | null,
@@ -60,6 +63,7 @@ export async function bulkMoveContacts(
 ): Promise<BulkResult> {
   const p = await prep(ids);
   if ("error" in p) return { ok: false, error: p.error };
+  if (!isFolderArg(folderId) || !isFolderArg(fromFolderId)) return { ok: false, error: "invalid" };
   try {
     const db = tenantDb(p.ctx.organizationId);
     const count = await moveContactsToFolder(db, p.ctx.organizationId, p.ids, folderId, fromFolderId);
