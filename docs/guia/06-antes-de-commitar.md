@@ -130,8 +130,12 @@ tempo, trava vencida, trava perdida no meio de uma espera) com uma chamada por n
 virando `interrupted` sem ser refeito; resposta sem código, erro de HTTP e sem resposta da adição; o link do grupo
 pedido uma vez, o texto do convite e o link que falta; dois cliques em "Começar" dando uma rodada só; o excedente de
 1.024 participantes como `group_full`; pausar, retomar e cancelar, inclusive no meio de uma chamada; a lista de
-rodadas devidas do cron e o `pokeGroupAdd`; e que outra empresa não vê, não pausa, não cancela nem retoma uma rodada, e
-que nenhum erro deixa número ou texto do convite no console nem no `lastError`.
+rodadas devidas do cron e o `pokeGroupAdd`; a rodada pausada porque o grupo não deu para ler (`not_admin` com a nota
+`group_unreadable`), que volta sozinha na lista do cron e no `pokeGroupAdd` quando o grupo lê de novo e o número é admin,
+e que fica como estava, sem escrita nenhuma, enquanto o grupo não lê, o número não é admin ou não dá para saber (um
+`not_admin` de verdade, sem a nota, e qualquer outro motivo de pausa nunca voltam sozinhos, nem perguntam nada à
+Evolution, e uma rodada cuja conexão é de outra empresa não é aberta); e que outra empresa não vê, não pausa, não
+cancela nem retoma uma rodada, e que nenhum erro deixa número ou texto do convite no console nem no `lastError`.
 Precisa de um `.env` (o comando o carrega) e do Postgres do Docker, e leva uns 15 s; não usa a internet. O banco é só o
 local, e o script recusa rodar contra outro. Cria duas empresas de teste (`wga-e2e-<carimbo>` e `wga-e2e-<carimbo>-b`),
 com usuários, vínculos e uma conexão Evolution cada, e apaga tudo no fim, mesmo se falhar (rodadas e itens, contatos,

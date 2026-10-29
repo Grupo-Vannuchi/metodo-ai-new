@@ -812,6 +812,7 @@ async function seedRun(
     connectionId?: string;
     status?: "QUEUED" | "RUNNING" | "PAUSED" | "DONE" | "CANCELED";
     pausedReason?: string | null;
+    lastError?: string | null;
     nextAttemptAt?: Date | null;
     lastDispatchAt?: Date | null;
     inviteUrl?: string | null;
@@ -833,6 +834,7 @@ async function seedRun(
       inviteUrl: o.inviteUrl ?? null,
       status: o.status ?? "DONE",
       pausedReason: o.pausedReason ?? null,
+      lastError: o.lastError ?? null,
       nextAttemptAt: o.nextAttemptAt ?? null,
       lastDispatchAt: o.lastDispatchAt ?? null,
       ...(o.createdAt ? { createdAt: o.createdAt } : {}),
@@ -1432,6 +1434,142 @@ check("disconnected: a manual pause stays paused when the number is open", async
   assert.ok(!(await dueIn(w)).includes(runId));
   assert.equal((await runOf(w, runId)).status, "PAUSED");
   assert.deepEqual(await runGroupAddRun(runId), { done: true });
+});
+
+/**
+ * A round that stopped because Evolution could not give the group at its first person: PAUSED, not_admin, with the note
+ * "group_unreadable". The group is gone from `groups` (the fake answers 404); `readable` is what it was.
+ */
+async function unreadablePause(ctx: Ctx) {
+  const scene = await scenario(ctx);
+  const { fake, groups, w } = scene;
+  await people(w, 2);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+  const readable = groups[GROUP];
+  delete groups[GROUP];
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  const run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.pausedReason, run.lastError, run.lastDispatchAt], ["PAUSED", "not_admin", "group_unreadable", null]);
+  assert.deepEqual(callsTo(fake, "whatsappNumbers", "updateParticipant"), []);
+  return { ...scene, runId, readable };
+}
+
+check("unreadable group: a round paused because the group could not be read comes back by itself when the group is readable and the number is admin", async (ctx) => {
+  const { fake, groups, w, runId, readable } = await unreadablePause(ctx);
+  groups[GROUP] = readable;
+  // The cron's list reads the group, sees the number is admin, takes the round back and lists it.
+  assert.ok((await dueIn(w)).includes(runId));
+  const back = await runOf(w, runId);
+  assert.deepEqual([back.status, back.pausedReason, back.lastError, back.waitReason, back.lastDispatchAt], ["RUNNING", null, null, null, null]);
+  assert.deepEqual(callsTo(fake, "whatsappNumbers", "updateParticipant"), [], "taking it back already added someone");
+  // And the round goes on from its first person.
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.deepEqual(await verdicts(w, runId), [["Pessoa 1", "ADDED", null], ["Pessoa 2", "ADDED", null]]);
+  assert.equal((await runOf(w, runId)).status, "DONE");
+});
+
+check("unreadable group: a round that comes back behind another round of the number waits QUEUED", async (ctx) => {
+  const { fake, groups, w, runId, readable } = await unreadablePause(ctx);
+  groups[GROUP] = readable;
+  // Another run took the number meanwhile (a state the queue prevents; seeded to see what the cron does with it).
+  const running = await seedRun(w, { org: w.orgB, group: OTHER_GROUP, status: "RUNNING" });
+  const due = await dueIn(w);
+  assert.ok(!due.includes(runId), "listed while the number is busy");
+  assert.ok(due.includes(running));
+  const run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.pausedReason, run.lastError], ["QUEUED", null, null]);
+  assert.deepEqual(callsTo(fake, "updateParticipant"), []);
+});
+
+check("unreadable group: the poke of the tracking screen takes the round back the same way, and an organization that doesn't own it can't", async (ctx) => {
+  const { groups, w, runId, readable } = await unreadablePause(ctx);
+  groups[GROUP] = readable;
+  const before = await runOf(w, runId);
+  await pokeGroupAdd(w.orgB, runId); // not org B's run: not even looked at
+  assert.deepEqual(await runOf(w, runId), before);
+  assert.equal(scheduled.length, 0);
+  await pokeGroupAdd(w.orgA, runId);
+  const back = await runOf(w, runId);
+  assert.deepEqual([back.status, back.pausedReason, back.lastError], ["RUNNING", null, null]);
+  assert.equal(scheduled.length, 1, "the round was not kicked");
+  assert.equal(await drain(), 1);
+  assert.equal((await runOf(w, runId)).status, "DONE");
+});
+
+check("unreadable group: while it stays unreadable, or the number is not admin, or can't be told, the round stays paused with nothing written", async (ctx) => {
+  const { fake, groups, w, runId } = await unreadablePause(ctx);
+  const before = await runOf(w, runId);
+  /** The cron's list and a poke each look at the group once; neither adds anyone or writes a thing to the run. */
+  const stays = async (what: string) => {
+    const looked = callsTo(fake, "findGroupInfos").length;
+    assert.ok(!(await dueIn(w)).includes(runId), what);
+    await pokeGroupAdd(w.orgA, runId);
+    assert.equal(callsTo(fake, "findGroupInfos").length - looked, 2, `${what}: the group was not looked at`);
+    assert.deepEqual(await runOf(w, runId), before, `${what}: the run was written`);
+    assert.equal(scheduled.length, 0, what);
+    assert.deepEqual(callsTo(fake, "whatsappNumbers", "updateParticipant", "sendText"), [], what);
+  };
+  await stays("not found");
+  fake.set("findGroupInfos", { status: 500, json: { error: "boom" } });
+  await stays("an error");
+  fake.set("findGroupInfos", "drop");
+  await stays("no answer");
+  wire(w, fake, groups);
+  // Readable, and every member has a number: the number is a member, not an admin.
+  groups[GROUP] = groupJson(GROUP, "Ofertas", [meIn(w, null), FRIEND]);
+  await stays("readable, the number is not admin");
+  // Readable, but a member has no number to read and ours is not among the others: it could be that member.
+  groups[GROUP] = groupJson(GROUP, "Ofertas", [FRIEND, NAMELESS]);
+  await stays("readable, can't be told");
+});
+
+check("a pause for a definite not_admin, or for any other reason, is never taken back by itself", async (ctx) => {
+  const { fake, groups, w } = await scenario(ctx);
+  const [one] = await people(w, 1);
+  const runId = await begin(w, { source: ofContacts([one]) });
+  scheduled.length = 0;
+  // The group is readable and the number is not admin: a definite answer, with no note.
+  groups[GROUP] = groupJson(GROUP, "Ofertas", [meIn(w, null), FRIEND]);
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  const paused = await runOf(w, runId);
+  assert.deepEqual([paused.status, paused.pausedReason, paused.lastError], ["PAUSED", "not_admin", null]);
+  // The same pause with some other note, and the other reasons a round is paused for.
+  const items: SeedItem[] = [{ name: "Pessoa 1", phone: N(1), status: "PENDING" }];
+  const others: string[] = [];
+  for (const [pausedReason, lastError] of [["not_admin", "something else"], ["error", "Error"], ["no_connection", null], ["manual", null]] as const) {
+    others.push(await seedRun(w, { status: "PAUSED", pausedReason, lastError, senderKey: `${w.owner}${others.length + 1}`, items }));
+  }
+  const all = [runId, ...others];
+
+  // Admin again. Nothing asks Evolution, nothing is written: only "Retomar" takes the first one back.
+  groups[GROUP] = groupJson(GROUP, "Ofertas", [meIn(w, "admin"), FRIEND]);
+  const before = await Promise.all(all.map((id) => runOf(w, id)));
+  const calls = fake.calls.length;
+  assert.deepEqual(await dueIn(w), []);
+  for (const id of all) await pokeGroupAdd(w.orgA, id);
+  assert.deepEqual(await Promise.all(all.map((id) => runOf(w, id))), before);
+  assert.equal(fake.calls.length, calls, "Evolution was asked about a round that needs a manual resume");
+  assert.equal(scheduled.length, 0);
+  assert.deepEqual(await resumeGroupAdd(w.orgA, runId), { ok: true });
+  assert.equal((await runOf(w, runId)).status, "RUNNING");
+});
+
+check("a paused round whose connection is another organization's, or is gone, is not taken back, and that connection is never asked", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const items: SeedItem[] = [{ name: "Pessoa 1", phone: N(1), status: "PENDING" }];
+  const ids = [
+    // The group is readable and the number admin on the fake: if the connection of org B were opened, it would come back.
+    await seedRun(w, { status: "PAUSED", pausedReason: "not_admin", lastError: "group_unreadable", connectionId: w.connB, senderKey: `${w.owner}1`, items }),
+    await seedRun(w, { status: "PAUSED", pausedReason: "not_admin", lastError: "group_unreadable", connectionId: "no-such-connection", senderKey: `${w.owner}2`, items }),
+    await seedRun(w, { status: "PAUSED", pausedReason: "disconnected", connectionId: w.connB, senderKey: `${w.owner}3`, items }),
+  ];
+  const before = await Promise.all(ids.map((id) => runOf(w, id)));
+  assert.deepEqual(await dueIn(w), []);
+  for (const id of ids) await pokeGroupAdd(w.orgA, id);
+  assert.deepEqual(await Promise.all(ids.map((id) => runOf(w, id))), before);
+  assert.equal(fake.calls.length, 0, "a connection that is not the run's organization's was asked");
+  assert.equal(scheduled.length, 0);
 });
 
 check("unavailable: Evolution not answering the state waits 5 minutes, with no add and no pause", async (ctx) => {

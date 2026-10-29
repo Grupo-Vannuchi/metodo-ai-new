@@ -364,7 +364,8 @@ export async function cancelGroupAdd(organizationId: string, runId: string): Pro
 
 /**
  * Called when someone opens the tracking screen, for where there is no cron: kicks the run if it is due and
- * its lease is free, after taking it back if it was paused for a number that is open again. Another
+ * its lease is free, after taking it back if it was paused for a number that is open again, or for a group
+ * that could not be read and can be now with the number admin of it (findDueGroupAddRuns). Another
  * organization's run is not found, so it is not kicked.
  */
 export async function pokeGroupAdd(organizationId: string, runId: string): Promise<void> {

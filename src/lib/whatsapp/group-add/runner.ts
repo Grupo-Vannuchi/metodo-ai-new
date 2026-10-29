@@ -30,15 +30,12 @@ import {
 } from "./core";
 
 /**
- * The runner of "Adicionar a grupo do WhatsApp" (spec 2026-10-28). Runs as SYSTEM
- * (raw Prisma, organizationId explicit in every query, taken from the run). One run
- * has one runner at a time, held by a lease on `lastDispatchAt` as in the mass
- * e-mail (email-broadcast/dispatch.ts): every write that touches the run is
- * owner-checked on the stamp, and a runner that loses it stops at once. One person
- * is handled at a time: reserved (PROCESSING) before the first call to Evolution,
- * so a person left PROCESSING by a crash is FAILED / interrupted and never redone.
- * One run is RUNNING per number (`senderKey`), in any organization; the rest wait
- * QUEUED, and the number's cap of a day is counted over all of them (counts and ids
+ * The runner of "Adicionar a grupo do WhatsApp" (spec 2026-10-28). Runs as SYSTEM (raw Prisma, organizationId explicit in
+ * every query, taken from the run). One run has one runner at a time, held by a lease on `lastDispatchAt` as in the mass
+ * e-mail (email-broadcast/dispatch.ts): every write that touches the run is owner-checked on the stamp, and a runner that
+ * loses it stops at once. One person is handled at a time: reserved (PROCESSING) before the first call to Evolution, so a
+ * person left PROCESSING by a crash is FAILED / interrupted and never redone. One run is RUNNING per number (`senderKey`),
+ * in any organization; the rest wait QUEUED, and the number's cap of a day is counted over all of them (counts and ids
  * only). Logs carry run ids and error names, never a number or the invite text.
  */
 
@@ -46,6 +43,8 @@ import {
 const UNAVAILABLE_WAIT_MS = 5 * 60_000;
 /** connectionState has no timeout of its own, and the lease would run out under a call that never answers. */
 const STATE_TIMEOUT_MS = 15_000;
+/** The note on a run paused as not_admin because the group could not be read: the cron and a poke take it back once they can. */
+const GROUP_UNREADABLE = "group_unreadable";
 
 export type GroupAddRuntime = {
   now: () => Date;
@@ -180,13 +179,13 @@ export async function promoteAndKick(senderKey: string): Promise<void> {
 }
 
 /**
- * Takes a PAUSED run back: RUNNING, or QUEUED when another run is RUNNING on its number. With
- * `onlyReason` only if it is still paused for that reason (a pause made by hand since stays).
+ * Takes a PAUSED run back: RUNNING, or QUEUED when another run is RUNNING on its number. With `only`,
+ * only if it is still paused for that reason (and with that note): a pause made by hand since stays.
  * Null when the run was not paused (any more).
  */
 export async function reactivateRun(
   run: { id: string; organizationId: string; senderKey: string; startedAt: Date | null },
-  onlyReason?: string,
+  only?: { pausedReason: string; lastError?: string },
 ): Promise<"RUNNING" | "QUEUED" | null> {
   return prisma.$transaction(async (tx) => {
     await lockNumber(tx, run.senderKey);
@@ -195,7 +194,7 @@ export async function reactivateRun(
     });
     const status = busy > 0 ? ("QUEUED" as const) : ("RUNNING" as const);
     const res = await tx.whatsappGroupAddRun.updateMany({
-      where: { id: run.id, organizationId: run.organizationId, status: "PAUSED", ...(onlyReason ? { pausedReason: onlyReason } : {}) },
+      where: { id: run.id, organizationId: run.organizationId, status: "PAUSED", ...only },
       data: {
         status,
         pausedReason: null,
@@ -210,21 +209,38 @@ export async function reactivateRun(
 
 /**
  * The runs the cron (or a poke) should kick now: RUNNING, with the time of the next person
- * come (or none yet) and the lease free. Before that, in system context: a PAUSED run
- * "disconnected" whose number answers open again is taken back (reactivateRun), and a number
- * with runs QUEUED and nobody holding it, which a crash between two runs can leave, gets the oldest.
- * `scope` narrows every read to some runs (a poke: one run).
+ * come (or none yet) and the lease free. Before that, in system context (the connection of each run
+ * is found inside its organization before its credentials are opened), a paused run is taken back
+ * (reactivateRun) when the number answers open again ("disconnected"), or when the group that could not
+ * be read can be now and the number is admin of it (not_admin with the note "group_unreadable"; a
+ * definite not_admin stays for "Retomar"). A number with runs QUEUED and nobody holding it, which a
+ * crash between two runs can leave, gets the oldest. `scope` narrows every read to some runs (a poke: one run).
  */
 export async function findDueGroupAddRuns(now: Date, scope: Prisma.WhatsappGroupAddRunWhereInput = {}): Promise<string[]> {
-  const gone = await prisma.whatsappGroupAddRun.findMany({
-    where: { AND: [scope, { status: "PAUSED", pausedReason: "disconnected" }] },
-    select: { id: true, organizationId: true, connectionId: true, senderKey: true, startedAt: true },
+  const paused = await prisma.whatsappGroupAddRun.findMany({
+    where: {
+      AND: [
+        scope,
+        { status: "PAUSED" },
+        { OR: [{ pausedReason: "disconnected" }, { pausedReason: "not_admin", lastError: GROUP_UNREADABLE }] },
+      ],
+    },
+    select: { id: true, organizationId: true, connectionId: true, senderKey: true, groupJid: true, startedAt: true, pausedReason: true },
   });
-  for (const run of gone) {
+  for (const run of paused) {
     try {
       const creds = await loadRunCreds(run);
-      const state = creds ? await liveState(creds) : null;
-      if (state?.ok && state.state === "open") await reactivateRun(run, "disconnected");
+      if (!creds) continue;
+      if (run.pausedReason === "disconnected") {
+        const state = await liveState(creds);
+        if (state.ok && state.state === "open") await reactivateRun(run, { pausedReason: "disconnected" });
+      } else {
+        // Readable and the number admin: back. Unreadable, not admin or can't be told: left exactly as it is.
+        const group = await fetchGroupSummary(creds, run.groupJid);
+        if (group && isAdminOf(group, run.senderKey) === true) {
+          await reactivateRun(run, { pausedReason: "not_admin", lastError: GROUP_UNREADABLE });
+        }
+      }
     } catch (e) {
       console.error("[group-add] could not take a run back", run.id, errorTag(e));
     }
@@ -540,7 +556,7 @@ export async function runGroupAddRun(runId: string, opts: { budgetMs?: number } 
       if (!adminChecked) {
         await beat(v);
         const group = await fetchGroupSummary(creds, run.groupJid);
-        if (!group) return await pause("not_admin", "group_unreadable");
+        if (!group) return await pause("not_admin", GROUP_UNREADABLE);
         if (isAdminOf(group, run.senderKey) !== true) return await pause("not_admin");
         adminChecked = true;
       }
