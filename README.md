@@ -452,16 +452,18 @@ isso a `main` exige PR e `enforce_admins` está ligado — sem isso, um push dir
    unavailable (os error 11)`: o limite de threads do servidor compartilhado, não o código. A falha
    depende da carga da máquina (builds anteriores passaram com 63), por isso o limite fica fixo.
 
-### Crons — só o `extractions` deve rodar
+### Crons — dos de manutenção, só o `extractions` deve rodar
 
 **Nada no repositório agenda esses jobs.** O `vercel.json` que os declarava era resquício de uma fase
 Vercel que nunca foi produção, e foi removido. Eles só executam se existir um cron job do hPanel
 batendo no endpoint com o header certo — o repositório nunca vai agendá-los, qualquer que seja o
 estado deles hoje.
 
-**Nenhum dos quatro produz sintoma visível quando não roda**, e é por isso que passaram meses
-despercebidos. Falha de manutenção é silenciosa por definição: o mural esconde post vencido por
-consulta, leads acumulam invisíveis, e ninguém sente falta de uma notificação que nunca existiu.
+**Nenhum dos quatro de manutenção produz sintoma visível quando não roda**, e é por isso que passaram
+meses despercebidos. Falha de manutenção é silenciosa por definição: o mural esconde post vencido por
+consulta, leads acumulam invisíveis, e ninguém sente falta de uma notificação que nunca existiu. O quinto,
+`whatsapp-groups`, é de outra natureza (ver a última linha da tabela): nada se perde sem ele, a rodada que
+parou só espera.
 
 A decisão de 25/09/2026 e o que cada um realmente vale:
 
@@ -471,8 +473,13 @@ A decisão de 25/09/2026 e o que cada um realmente vale:
 | `/api/cron/notifications`<br>`0 7 * * *` | Decisão de produto | Cria o digest diário (`DIGEST_KINDS`), que não nasce em nenhum outro lugar. Notificações de atribuição seguem funcionando sem ele. |
 | `/api/cron/feed-cleanup`<br>`0 * * * *` | Opcional | Só apaga fisicamente posts já vencidos. O mural já os esconde por `expiresAt`, então sem o cron a diferença é a tabela crescer. |
 | `/api/cron/campaigns`<br>`* * * * *` | Raramente | A promoção `SCHEDULED` → `RUNNING` é **código inalcançável**: `createCampaign` sempre grava `DRAFT` e a UI não expõe agendamento. O `startCampaign` já marca RUNNING e enfileira o primeiro disparo sozinho. Só serve para retomar campanha cuja cadeia de disparo morreu no meio. |
+| `/api/cron/whatsapp-groups`<br>`*/5 * * * *` | Opcional | Retoma sozinha a rodada de "Adicionar a grupo do WhatsApp" que parou à espera: da janela das 8h, do teto de 100 por dia, de uma Evolution que não respondeu, de um número que voltou a abrir, ou de um restart do servidor. Não apaga nada. **Sem ele, a rodada continua quando alguém abre a tela de acompanhamento ou clica em "Retomar"** (abrir a tela cutuca a rodada que já pode seguir; "Retomar" é para a pausada): a que espera a janela das 8h ou o teto do dia, ou que parou num restart, não retoma sozinha, porque não existe espera de horas dentro do processo (só as pausas de 30 a 90 s entre as pessoas são dormidas lá). Diferente do `campaigns`, **não** é no-op sem `QSTASH_TOKEN`: na produção, que não tem fila, ele roda a rodada no próprio processo (`after()`). |
 
-Os quatro exigem `Authorization: Bearer $CRON_SECRET` (guard em `src/lib/cron-auth.ts`) e respondem
+O `whatsapp-groups` (outubro/2026) não entra na decisão de 25/09 logo abaixo, que trata dos quatro de
+manutenção: ele não apaga nada, e agendá-lo é escolha de quem opera o recurso. O que muda sem ele está na
+linha da tabela.
+
+Os cinco exigem `Authorization: Bearer $CRON_SECRET` (guard em `src/lib/cron-auth.ts`) e respondem
 **401 sem o header** — inclusive quando `CRON_SECRET` não está setado, então defina-o no env de
 produção antes de agendar qualquer um. Comandos para o hPanel → Cron Jobs:
 
@@ -505,6 +512,7 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/ext
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/notifications   # 0 7 * * *
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/feed-cleanup    # 0 * * * *
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/campaigns       # * * * * *
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/whatsapp-groups # */5 * * * *
 ```
 
 ### Incidentes já resolvidos (histórico útil)
@@ -532,8 +540,8 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/cam
 
 Diferente da lista de produto abaixo, estes têm próximo passo conhecido e escrito.
 
-1. **`CRON_SECRET` em produção e agendar o `extractions`.** Os quatro `/api/cron/*` respondem 401 sem
-   o segredo definido no env. Só o `extractions` deve ser agendado — o porquê, a consulta que conta o
+1. **`CRON_SECRET` em produção e agendar o `extractions`.** Os cinco `/api/cron/*` respondem 401 sem
+   o segredo definido no env. Dos quatro de manutenção, só o `extractions` deve ser agendado — o porquê, a consulta que conta o
    que será apagado, e o cuidado com a primeira execução estão no [§8](#8-runbook-de-produção--leia-antes-de-qualquer-deploy).
    **Conte antes de agendar:** a primeira execução limpa tudo que acumulou desde que a prospecção
    entrou no ar, de uma vez, e leads nunca importados não voltam.

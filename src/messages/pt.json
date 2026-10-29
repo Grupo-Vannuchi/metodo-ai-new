@@ -3017,6 +3017,12 @@
       "email_broadcast": { "started": "Iniciou um envio de e-mail em massa" },
       "email_sender": { "connected": "Conectou uma conta de envio de e-mail", "replaced": "Trocou a conta de envio de e-mail", "disconnected": "Desconectou uma conta de envio de e-mail", "replied": "Respondeu um e-mail pela conta Microsoft" },
       "task_board": { "entrance_changed": "Trocou a coluna de entrada do quadro de tarefas", "column_deleted": "Excluiu uma coluna do quadro de tarefas" },
+      "whatsapp_group_add": {
+        "started": "Iniciou a adição de contatos a um grupo do WhatsApp",
+        "paused": "Pausou a adição de contatos a um grupo do WhatsApp",
+        "resumed": "Retomou a adição de contatos a um grupo do WhatsApp",
+        "canceled": "Cancelou a adição de contatos a um grupo do WhatsApp"
+      },
       "connection": {
         "created": "Conectou uma integração",
         "updated": "Alterou uma integração",
@@ -3076,6 +3082,7 @@
       "AutomationRule": "Automação",
       "TeamChat": "Chat de equipe",
       "TaskBoardColumn": "Quadro de tarefas",
+      "WhatsappGroupAddRun": "Adição a grupo do WhatsApp",
       "companies": "Empresas",
       "contacts": "Contatos"
     }

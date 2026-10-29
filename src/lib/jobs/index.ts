@@ -3,7 +3,11 @@ import { dispatchCampaignBatch } from "@/lib/dispatch";
 import { runExtractionBatch } from "@/lib/prospecting/runner";
 import { runWhatsappMediaJob, type WhatsappMediaJob } from "@/lib/whatsapp/media";
 import { QUEUE_BUDGET_MS, runEmailBroadcast } from "@/lib/email-broadcast/dispatch";
+import { runGroupAddRun } from "@/lib/whatsapp/group-add/runner";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
+
+/** How long one queue visit to a WhatsApp group-add round works before it hands the round back (a job is cut off after about a minute). */
+const GROUP_ADD_BUDGET_MS = 50_000;
 
 /**
  * Job registry. Each key maps to a handler invoked by `/api/jobs/<job>` after
@@ -55,5 +59,19 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
     if (!broadcastId) return;
     const { done } = await runEmailBroadcast(broadcastId, { budgetMs: QUEUE_BUDGET_MS });
     if (!done && isQueueConfigured()) await enqueue("email-broadcast", { broadcastId });
+  },
+
+  /**
+   * Work a WhatsApp group-add round for up to ~50s, then come back after the wait it asks for (the pause between people,
+   * the window of the hours, the cap of the day, an Evolution that did not answer). A second delivery of the job, or a
+   * job for a round another runner holds, does nothing: the round's lease keeps it to one runner.
+   */
+  "whatsapp-group-add": async (payload) => {
+    const runId = String((payload as { runId?: string })?.runId ?? "");
+    if (!runId) return;
+    const { done, retryAfterSec } = await runGroupAddRun(runId, { budgetMs: GROUP_ADD_BUDGET_MS });
+    if (!done && isQueueConfigured()) {
+      await enqueue("whatsapp-group-add", { runId }, retryAfterSec ? { delaySeconds: retryAfterSec } : {});
+    }
   },
 };

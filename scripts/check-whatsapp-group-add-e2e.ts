@@ -10,7 +10,10 @@
  * `wga-e2e-%` organizations by hand. Refuses to run against a database that isn't local. Every connection points at the
  * fake on loopback and the script refuses any request to another host, so the real Evolution of .env is never reached.
  * The queue (QStash) and after() are never reached either: the runner's scheduler is replaced by a capture the checks run
- * themselves, and its clock by one the checks move (sleeping only moves it).
+ * themselves, and its clock by one the checks move (sleeping only moves it). The check of the queue job points the QStash
+ * client at a fake of its own on loopback. The cron route is called with a secret of the checks, set in `env` for the run.
+ * The route reads every run of the database, so the checks that call it as authorized stand down (and say so) when a run
+ * outside the throwaway organizations is open.
  *
  * Run: npm run check:group-add:e2e   (needs a valid .env and the Docker Postgres; no internet: the fake is on loopback)
  * Exits non-zero on the first failure. Every check starts a fake of its own and it is closed when the check ends.
@@ -18,10 +21,14 @@
  * Later tasks add their checks with check(...) above main().
  */
 import assert from "node:assert/strict";
+import { createServer, type IncomingHttpHeaders } from "node:http";
+import type { AddressInfo } from "node:net";
 import { inspect } from "node:util";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { GET as cronWhatsappGroups } from "@/app/api/cron/whatsapp-groups/route";
 import { env } from "@/lib/env";
+import { JOB_HANDLERS } from "@/lib/jobs";
 import { prisma as appPrisma } from "@/lib/prisma";
 import { decryptCredentials, encryptCredentials } from "@/lib/integrations/crypto";
 import {
@@ -39,6 +46,7 @@ import { phoneMatchKey, renderInvite, type GroupAddItemStatus } from "@/lib/what
 import {
   findDueGroupAddRuns,
   groupAddRuntime,
+  kickGroupAddRun,
   promoteQueuedRuns,
   runGroupAddRun,
 } from "@/lib/whatsapp/group-add/runner";
@@ -2448,6 +2456,251 @@ check("poke: a paused run whose number is back is moved to RUNNING and kicked", 
   assert.equal(scheduled.length, 1);
 });
 
+// ── The cron route and the queue job ─────────────────────────────────────────
+
+/** The secret the route is called with here: the real one of .env is never used, and none is needed in .env. */
+const CRON_SECRET = "e2e-cron-secret-0123456789abcdef0123456789";
+
+/** A call to the cron route as the hPanel makes it; `authorization` is the header as sent, or none. */
+const callCron = (authorization?: string): Promise<Response> =>
+  cronWhatsappGroups(new Request("http://localhost/api/cron/whatsapp-groups", authorization === undefined ? {} : { headers: { authorization } }));
+
+/** The one person a seeded run still has to try: Pessoa n, with the number N(n). */
+const waiting = (n: number): SeedItem[] => [{ name: `Pessoa ${n}`, phone: N(n), status: "PENDING" }];
+
+/**
+ * The runs outside the two throwaway organizations that the route would act on. The route reads every run of the database (it
+ * is the cron: no organization, no scope), so a run of someone's manual tests that is open would be promoted, taken back or
+ * kicked by it. The checks that call it as authorized do so only when there is none, and say so when there is.
+ */
+async function openRunsOutside(w: World): Promise<number> {
+  return w.prisma.whatsappGroupAddRun.count({
+    where: { organizationId: { notIn: [w.orgA, w.orgB] }, status: { in: ["QUEUED", "RUNNING", "PAUSED"] } },
+  });
+}
+
+/** True when the route can be called as authorized without touching a run that is not the check's. */
+async function routeIsSafeToCall(w: World): Promise<boolean> {
+  const outside = await openRunsOutside(w);
+  if (outside === 0) return true;
+  console.log(`  ! skipped: ${outside} open run(s) outside the throwaway organizations would be acted on by the cron route`);
+  return false;
+}
+
+check("the cron route: no secret, a wrong one, another scheme, or no secret configured is 401, and nothing is touched", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const due = await seedRun(w, { status: "RUNNING", items: waiting(1) });
+  const stale = await seedRun(w, { status: "RUNNING", senderKey: `${w.owner}2`, lastDispatchAt: new Date(clock.at.getTime() - 120_000), items: waiting(2) });
+  const before = [await runOf(w, due), await runOf(w, stale)];
+
+  const wrong: (string | undefined)[] = [
+    undefined,
+    "",
+    "Bearer",
+    "Bearer ",
+    `Bearer ${CRON_SECRET}x`,
+    `Bearer ${CRON_SECRET.slice(0, -1)}`,
+    `Bearer ${CRON_SECRET.toUpperCase()}`,
+    `bearer ${CRON_SECRET}`,
+    `Basic ${CRON_SECRET}`,
+    `Bearer  ${CRON_SECRET}`,
+    CRON_SECRET,
+  ];
+  // (A space before or after the header is not in the list on purpose: a Headers object trims it, as an HTTP server does.)
+  for (const header of wrong) {
+    const res = await callCron(header);
+    assert.equal(res.status, 401, JSON.stringify(header));
+    assert.equal(await res.text(), "Unauthorized");
+  }
+  // These are wrong against the secret of this check; the right header, which the checks below use, is let in.
+  const secret = env.CRON_SECRET;
+  assert.equal(secret, CRON_SECRET);
+
+  // With no secret configured the route fails closed, even for a caller who sends what looks like one.
+  env.CRON_SECRET = undefined;
+  try {
+    for (const header of [`Bearer ${CRON_SECRET}`, "Bearer undefined", "Bearer ", undefined]) {
+      assert.equal((await callCron(header)).status, 401, `no secret configured: ${JSON.stringify(header)}`);
+    }
+  } finally {
+    env.CRON_SECRET = secret;
+  }
+
+  // Nothing was kicked, taken or written: the guard comes before anything else.
+  assert.equal(scheduled.length, 0);
+  assert.equal(fake.calls.length, 0);
+  assert.deepEqual([await runOf(w, due), await runOf(w, stale)], before);
+});
+
+check("the cron route: kicks the runs that are due and only those, and a round with a live lease is left alone", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  if (!(await routeIsSafeToCall(w))) return;
+  const now = clock.at.getTime();
+  const lease = groupAddRuntime.leaseMs;
+  const key = (n: number) => `${w.owner}${n}`; // one number per round that is not meant to run
+  // The three that are due run on the number of the fake (the only one it knows as admin of the group).
+  const free = await seedRun(w, { status: "RUNNING", senderKey: w.owner, items: waiting(1) });
+  const lapsed = await seedRun(w, { status: "RUNNING", senderKey: w.owner, lastDispatchAt: new Date(now - (lease + 1)), items: waiting(2) });
+  const ready = await seedRun(w, { status: "RUNNING", senderKey: w.owner, nextAttemptAt: new Date(now - 1_000), items: waiting(3) });
+  // The ones that are not: a lease that has not run out (at the very edge of it, and well inside it), a wait that has not
+  // ended, a pause by hand, and a round that is over.
+  const edge = await seedRun(w, { status: "RUNNING", senderKey: key(1), lastDispatchAt: new Date(now - lease), items: waiting(4) });
+  const held = await seedRun(w, { status: "RUNNING", senderKey: key(2), lastDispatchAt: new Date(now - 30_000), items: waiting(5) });
+  const later = await seedRun(w, { status: "RUNNING", senderKey: key(3), nextAttemptAt: new Date(now + 60_000), items: waiting(6) });
+  const manual = await seedRun(w, { status: "PAUSED", pausedReason: "manual", senderKey: key(4), items: waiting(7) });
+  const over = await seedRun(w, { status: "DONE", senderKey: key(5), items: [] });
+  const untouched = [edge, held, later, manual, over];
+  const before = await Promise.all(untouched.map((id) => runOf(w, id)));
+
+  const res = await callCron(`Bearer ${CRON_SECRET}`);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true, resumed: 3 });
+  assert.equal(scheduled.length, 3, "one background task for each round that is due");
+  assert.deepEqual(callsTo(fake, "updateParticipant"), [], "the route only schedules: nobody is added until the tasks run");
+
+  // The tasks are the three that were due: those are the people who were added.
+  assert.equal(await drain(), 3);
+  assert.deepEqual([...addedNumbers(fake)].sort(), [N(1), N(2), N(3)]);
+  assert.deepEqual(await Promise.all([free, lapsed, ready].map(async (id) => (await runOf(w, id)).status)), ["DONE", "DONE", "DONE"]);
+  // The rest is exactly as it was, down to the lease stamp of the ones that had one.
+  assert.deepEqual(await Promise.all(untouched.map((id) => runOf(w, id))), before);
+  assert.deepEqual((await itemsOf(w, edge)).map((i) => i.status), ["PENDING"]);
+  assert.deepEqual((await itemsOf(w, held)).map((i) => i.status), ["PENDING"]);
+
+  // A second later the lease at the very edge has run out, and it is the only one that has: nothing else is due.
+  clock.at = new Date(now + 1_000);
+  const again = await callCron(`Bearer ${CRON_SECRET}`);
+  assert.deepEqual(await again.json(), { ok: true, resumed: 1 });
+  assert.equal(scheduled.length, 1);
+});
+
+check("the cron route: a round a runner is working on is not kicked again, and an idle database answers resumed 0", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  if (!(await routeIsSafeToCall(w))) return;
+  // Nothing at all to do.
+  const idle = await callCron(`Bearer ${CRON_SECRET}`);
+  assert.equal(idle.status, 200);
+  assert.deepEqual(await idle.json(), { ok: true, resumed: 0 });
+  assert.equal(scheduled.length, 0);
+
+  // A real runner, inside its call to Evolution with the lease: the cron comes by and leaves it be.
+  await people(w, 3);
+  let open!: () => void;
+  const gate = new Promise<void>((resolve) => (open = resolve));
+  let held = false;
+  fake.set("updateParticipant", async (call) => {
+    if (!held) {
+      held = true;
+      await gate;
+    }
+    return addReply(numberOf(call), "200");
+  });
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+  const runner = runGroupAddRun(runId);
+  await until(() => callsTo(fake, "updateParticipant").length >= 1, "the first add");
+  const callsBefore = fake.calls.length;
+  const during = await callCron(`Bearer ${CRON_SECRET}`);
+  assert.deepEqual(await during.json(), { ok: true, resumed: 0 });
+  assert.equal(scheduled.length, 0, "the cron kicked a round whose runner holds the lease");
+  assert.equal(fake.calls.length, callsBefore);
+  assert.notEqual((await runOf(w, runId)).lastDispatchAt, null, "the runner's lease is still stamped");
+  open();
+  await runner;
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2), N(3)], "each person was added once");
+  assert.equal((await runOf(w, runId)).status, "DONE");
+});
+
+/** A QStash on loopback that says yes to everything it is given and writes down what it got. */
+async function listenFakeQstash() {
+  const published: { url: string; headers: IncomingHttpHeaders; body: unknown }[] = [];
+  const server = createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => {
+      const text = Buffer.concat(chunks).toString("utf8");
+      published.push({ url: req.url ?? "", headers: req.headers, body: text ? JSON.parse(text) : null });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ messageId: "msg-e2e" }));
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    published,
+    baseUrl: `http://127.0.0.1:${port}`,
+    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+  };
+}
+
+check("the queue job: it works the round with a budget of 50 s, comes back after the wait it asks for, and is the one the kick publishes", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const handler = JOB_HANDLERS["whatsapp-group-add"];
+  assert.ok(handler, "no whatsapp-group-add job in the registry");
+  await people(w, 4);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+
+  const qstash = await listenFakeQstash();
+  const saved = { token: env.QSTASH_TOKEN, url: env.QSTASH_URL };
+  env.QSTASH_TOKEN = "e2e-qstash-token";
+  env.QSTASH_URL = qstash.baseUrl;
+  try {
+    // First visit: 50 s of work (the people at 0 s and 30 s), then the third is due past the budget: asks to come back in 30 s.
+    await handler({ runId });
+    assert.deepEqual(addedNumbers(fake), [N(1), N(2)]);
+    assert.equal(qstash.published.length, 1);
+    const [first] = qstash.published;
+    assert.ok(first?.url.endsWith("/api/jobs/whatsapp-group-add"), String(first?.url));
+    assert.deepEqual(first.body, { runId });
+    assert.equal(first.headers["upstash-delay"], "30s");
+    assert.equal(first.headers.authorization, "Bearer e2e-qstash-token");
+    assert.deepEqual([(await runOf(w, runId)).status, (await runOf(w, runId)).lastDispatchAt], ["RUNNING", null]);
+
+    // The job that comes back goes on from there; it ends when the round does, and then nothing is published.
+    let visits = 1;
+    while ((await runOf(w, runId)).status === "RUNNING" && visits < 10) {
+      await handler({ runId });
+      visits++;
+    }
+    assert.equal((await runOf(w, runId)).status, "DONE");
+    assert.deepEqual(addedNumbers(fake), [N(1), N(2), N(3), N(4)], "each person was added once");
+    assert.equal(qstash.published.length, visits - 1, "every visit but the last asks to come back");
+    for (const sent of qstash.published) {
+      assert.deepEqual(sent.body, { runId });
+      assert.match(String(sent.headers["upstash-delay"]), /^[1-9]\d*s$/);
+    }
+
+    // Nothing to do: no round id, a round that is not there, or one that is over. Nothing is published, nothing is called.
+    const published = qstash.published.length;
+    const calls = fake.calls.length;
+    for (const payload of [null, undefined, {}, { runId: "" }, { runId: null }, { runId: "no-such-run" }, { runId }]) {
+      await handler(payload);
+    }
+    assert.equal(qstash.published.length, published);
+    assert.equal(fake.calls.length, calls);
+
+    // The kick, with a queue, publishes this job: the name in the registry is the one the runner publishes under. The start of
+    // a round kicks it (nothing else holds the number), and so does a kick of its own.
+    qstash.published.length = 0;
+    const other = await begin(w, { source: ofContacts([await contactOf(w, { name: "Ana", phone: N(9) })]), group: OTHER_GROUP });
+    await kickGroupAddRun(other);
+    assert.equal(scheduled.length, 0, "with a queue the kick does not use the process");
+    assert.equal(qstash.published.length, 2, "the start and the kick of its own");
+    for (const kick of qstash.published) {
+      assert.deepEqual(kick.body, { runId: other });
+      assert.equal(kick.headers["upstash-delay"], undefined, "a kick is not delayed");
+      const job = /\/api\/jobs\/([^/?#]+)$/.exec(kick.url)?.[1];
+      assert.equal(job, "whatsapp-group-add");
+      assert.ok(job in JOB_HANDLERS);
+    }
+  } finally {
+    env.QSTASH_TOKEN = saved.token;
+    env.QSTASH_URL = saved.url;
+    await qstash.close();
+  }
+});
+
 check("another organization sees nothing of a run: no view, no list on the contact, and it can't pause, resume, cancel or poke it", async (ctx) => {
   const { w } = await scenario(ctx);
   const [ana, bia] = [await contactOf(w, { name: "Ana", phone: N(1) }), await contactOf(w, { name: "Bia", phone: FRIEND_NUMBER })];
@@ -2670,7 +2923,11 @@ async function destroyWorld(prisma: PrismaClient): Promise<void> {
 async function main(): Promise<number> {
   assertLocalDatabase();
   // The queue is a real service: with a token in .env a kick would publish to it. The checks run what is scheduled themselves.
+  // (The one check of the queue job points the client at a QStash of its own on loopback, and puts this back.)
   env.QSTASH_TOKEN = undefined;
+  // The cron route is called with a secret of the checks, whatever .env holds, or does not.
+  const realCronSecret = env.CRON_SECRET;
+  env.CRON_SECRET = CRON_SECRET;
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: env.DATABASE_URL }) });
   const undoFetch = refuseOtherHosts();
   const defaults = { ...groupAddRuntime };
@@ -2703,6 +2960,7 @@ async function main(): Promise<number> {
     return passed;
   } finally {
     undoFetch();
+    env.CRON_SECRET = realCronSecret;
     Object.assign(groupAddRuntime, defaults);
     await destroyWorld(prisma).catch((e) => console.error("cleanup failed:", e instanceof Error ? e.message : "unknown error"));
     await prisma.$disconnect();

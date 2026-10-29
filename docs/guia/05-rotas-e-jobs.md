@@ -48,7 +48,7 @@ sobrou.
 | Quem chama | Mecanismo | Onde vive |
 |---|---|---|
 | Usuário logado (navegador) | cookie de sessão → `getOrgContext()` | [src/lib/tenant.ts](../../src/lib/tenant.ts) |
-| Cron do hPanel | header fixo → `isCronAuthorized(req)` | [src/lib/cron-auth.ts](../../src/lib/cron-auth.ts) |
+| Cron do hPanel (as cinco rotas de `/api/cron/*`: `campaigns`, `extractions`, `feed-cleanup`, `notifications` e `whatsapp-groups`) | header fixo → `isCronAuthorized(req)` | [src/lib/cron-auth.ts](../../src/lib/cron-auth.ts) |
 | QStash (fila de jobs) | assinatura HMAC → `verifyQStashSignature(...)` | [src/lib/queue.ts](../../src/lib/queue.ts) |
 | Evolution (webhook) | token embutido no caminho | rota de webhook, ver abaixo |
 | Destinatário de e-mail em massa (link) | HMAC do id do destinatário no caminho → `verifyEmailUnsubscribeSig` | [src/lib/email-broadcast/unsubscribe.ts](../../src/lib/email-broadcast/unsubscribe.ts) |
@@ -191,8 +191,8 @@ Guard e comportamento: [src/lib/mcp/handler.ts](../../src/lib/mcp/handler.ts).
 
 ## O guard de cron: por que é compartilhado, e não copiado
 
-As quatro rotas de `/api/cron/*` — `campaigns`, `extractions`, `feed-cleanup`, `notifications` —
-chamam a mesma função, `isCronAuthorized(req)` de
+As cinco rotas de `/api/cron/*` — `campaigns`, `extractions`, `feed-cleanup`, `notifications`,
+`whatsapp-groups` — chamam a mesma função, `isCronAuthorized(req)` de
 [src/lib/cron-auth.ts:18-31](../../src/lib/cron-auth.ts#L18-L31), como uma das primeiras linhas
 do handler:
 
@@ -250,13 +250,17 @@ despercebido — e importa ainda mais aqui porque este código não tem um revis
 
 ## Os crons não rodam sozinhos
 
-Nada neste repositório agenda essas quatro rotas — elas só executam se alguém criar o cron job
-correspondente no hPanel, batendo no endpoint com o header certo. Nenhuma delas dá sintoma
-visível quando não roda, o que já as deixou passar despercebidas por um bom tempo. Quais valem a
+Nada neste repositório agenda essas cinco rotas — elas só executam se alguém criar o cron job
+correspondente no hPanel, batendo no endpoint com o header certo. Quatro delas não dão sintoma
+visível quando não rodam, o que já as deixou passar despercebidas por um bom tempo. A quinta,
+`whatsapp-groups`, é de outra natureza: sem ela nada se perde nem se apaga, só que a rodada de
+"Adicionar a grupo do WhatsApp" que parou à espera (da janela das 8h, do teto do dia, de uma
+Evolution que não respondeu) ou num restart do servidor continua apenas quando alguém abre a tela
+de acompanhamento (ou, se estiver pausada, clica em "Retomar"). Quais valem a
 pena agendar, por quê, e o cuidado necessário na primeira execução de cada um está no quadro do
 [README, seção 8 (Runbook de produção)](../../README.md) — não repetido aqui para não ter duas
 versões da mesma tabela desatualizando em ritmos diferentes. Vá lá antes de agendar qualquer um:
-três dos quatro apagam dados, e a primeira execução de um cron de limpeza que nunca rodou apaga
+três dos cinco apagam dados, e a primeira execução de um cron de limpeza que nunca rodou apaga
 tudo que acumulou desde sempre, de uma vez.
 
 ## Filas: sem `QSTASH_TOKEN`, o caminho vira no-op silencioso
@@ -287,6 +291,14 @@ um fluxo que depende de fila (disparo de campanha, prospecção, mídia do inbox
 deveria ser assíncrono parece não estar acontecendo, confira o `.env` antes de suspeitar do
 código. (`enqueue()` chamado direto, sem passar por `isQueueConfigured()` antes, lança erro
 explícito — o silêncio é escolha de quem chama, não um defeito de `enqueue`.)
+
+A exceção é [src/app/api/cron/whatsapp-groups/route.ts](../../src/app/api/cron/whatsapp-groups/route.ts):
+ele **não** sai cedo sem `QSTASH_TOKEN`, e não deve ganhar esse `if` por analogia com o `campaigns`. A
+produção não tem fila, então esse cron chama `kickGroupAddRun`, que usa a fila quando ela existe (job
+`whatsapp-group-add` em `JOB_HANDLERS`, entregue em `/api/jobs/whatsapp-group-add`) e cai para o `after()`
+do próprio processo quando não existe. Copiar o `return` do `campaigns` o desligaria justo onde ele é usado.
+O cron também não inicia um segundo executor: uma rodada cujo executor ainda segura a trava
+(`lastDispatchAt` de até 90 s atrás) não entra na lista que ele chama.
 
 `verifyQStashSignature` — usado nas rotas de job, não nas de cron — é o mecanismo irmão, mas com
 o efeito oposto: sem as chaves de assinatura configuradas, ele devolve `false` e a rota rejeita a

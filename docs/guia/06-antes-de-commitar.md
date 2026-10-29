@@ -91,11 +91,17 @@ participantes `@lid` resolvidos pelo `phoneNumber` e a contagem dos que ficaram 
 do grupo (`null`, e não `false`, quando um membro sem número poderia ser ele); os dígitos de um JID sem o `:device`; o JID
 do próprio número, nas respostas v2 e v1 do `fetchInstances` e só o da instância pedida; o código de cada adição, que vem
 como texto ou como número; se o número tem WhatsApp; e o link do grupo, que só vale se for `https://chat.whatsapp.com/…`.
+Cobre também o que as actions aceitam
+([src/lib/validations/whatsapp-group-add.ts](../../src/lib/validations/whatsapp-group-add.ts)), porque elas são
+endpoints públicos: o JID do grupo (dígitos, ou dígitos-dígitos, e `@g.us`: `x@g.us` e o JID de uma pessoa,
+`…@s.whatsapp.net`, não passam), o texto do convite (aparado, de 1 a 1.000 caracteres: vazio e 1.001 não passam) e a
+origem da rodada (uma pasta, com `folderId` `null` para "sem pasta" e nunca omitido, ou de 1 a 1.000 contatos
+marcados: lista vazia e 1.001 não passam).
 E tem uma guarda estática, porque as únicas escritas no WhatsApp são adicionar um participante e mandar o texto do
 convite: ela falha se algum arquivo de `src/lib/whatsapp/group-add/` citar `sendInvite` ou `updateSetting` ou escrever
 `"remove"`, `"promote"` ou `"demote"` (comentários também contam), se o `evolution-client.ts` citar `sendInvite` ou
 `updateSetting` ou mandar `action` `remove`, `promote` ou `demote`, ou se ela não achar o `core.ts` para varrer.
-Não usa banco nem rede. Rode sempre que mexer em `src/lib/whatsapp/group-add/`, em `src/lib/integrations/evolution-groups.ts` ou em `src/lib/integrations/evolution-client.ts`.
+Não usa banco nem rede. Rode sempre que mexer em `src/lib/whatsapp/group-add/`, em `src/lib/validations/whatsapp-group-add.ts`, em `src/lib/integrations/evolution-groups.ts` ou em `src/lib/integrations/evolution-client.ts`.
 
 `npm run check:group-add:e2e` testa o código de servidor do "Adicionar a grupo do WhatsApp"
 ([scripts/check-whatsapp-group-add-e2e.ts](../../scripts/check-whatsapp-group-add-e2e.ts)): o que fala com a
@@ -120,8 +126,9 @@ Depois cobre o serviço, o executor e as consultas
 ([src/lib/whatsapp/group-add/service.ts](../../src/lib/whatsapp/group-add/service.ts),
 [runner.ts](../../src/lib/whatsapp/group-add/runner.ts) e
 [src/lib/queries/whatsapp-group-add.ts](../../src/lib/queries/whatsapp-group-add.ts)), com um relógio e um
-agendador do próprio teste no lugar dos reais (`groupAddRuntime`: dormir só move o relógio, e o `after()` e a fila
-nunca são usados). Confere, entre outras coisas: os grupos do próprio número com `admin` verdadeiro, falso ou `null`, e
+agendador do próprio teste no lugar dos reais (`groupAddRuntime`: dormir só move o relógio, e o `after()` nunca é
+usado, nem a fila, a não ser no teste do job, que aponta o cliente para um QStash falso em loopback). Confere, entre
+outras coisas: os grupos do próprio número com `admin` verdadeiro, falso ou `null`, e
 `no_connection` para quem não tem número seu, mesmo com um colega da empresa conectado; a conferência com as contagens
 exatas (rodada anterior incluída) e sem escrever nada; uma rodada inteira (adicionado, convite por texto, já estava,
 falha, sem WhatsApp) em que o contato com opt-out, e o de mesmo número de um opt-out fora da pasta, não aparecem em
@@ -139,13 +146,20 @@ pedido uma vez, o texto do convite e o link que falta; o texto do convite sem re
 recusa continua `invite_failed`) e a rodada seguinte do grupo pulando, sem chamada, quem ficou `interrupted`,
 `uncertain` ou `invite_uncertain`, só do mesmo grupo e da mesma empresa; dois cliques em "Começar" dando uma rodada só; o excedente de
 1.024 participantes como `group_full`; pausar, retomar e cancelar, inclusive no meio de uma chamada; a lista de
-rodadas devidas do cron e o `pokeGroupAdd`; a rodada pausada porque o grupo não deu para ler (`not_admin` com a nota
+rodadas devidas do cron e o `pokeGroupAdd`; a rota do cron (`/api/cron/whatsapp-groups`): sem o segredo, com um errado,
+de outro esquema ou com o segredo não configurado ela responde 401 e não toca em nada; com ele, chama só as rodadas
+devidas e deixa em paz a de trava ainda viva (até 90 s, o limite incluído) e a que um executor está trabalhando, e
+responde `{ ok: true, resumed }` (as chamadas autorizadas só rodam quando não há rodada aberta de outra empresa no
+banco, porque a rota lê todas, e o teste avisa quando as pula); o job da fila `whatsapp-group-add` (trabalha por 50 s,
+volta depois da espera que a rodada pede e é o nome que o `kickGroupAddRun` publica); a rodada pausada porque o grupo
+não deu para ler (`not_admin` com a nota
 `group_unreadable`), que volta sozinha na lista do cron e no `pokeGroupAdd` quando o grupo lê de novo e o número é admin,
 e que fica como estava, sem escrita nenhuma, enquanto o grupo não lê, o número não é admin ou não dá para saber (um
 `not_admin` de verdade, sem a nota, e qualquer outro motivo de pausa nunca voltam sozinhos, nem perguntam nada à
 Evolution, e uma rodada cuja conexão é de outra empresa não é aberta); e que outra empresa não vê, não pausa, não
 cancela nem retoma uma rodada, e que nenhum erro deixa número ou texto do convite no console nem no `lastError`.
-Precisa de um `.env` (o comando o carrega) e do Postgres do Docker, e leva uns 15 s; não usa a internet. O banco é só o
+Precisa de um `.env` (o comando o carrega; o segredo do cron é do próprio teste, então o `.env` não precisa ter um) e do
+Postgres do Docker, e leva uns 30 s; não usa a internet. O banco é só o
 local, e o script recusa rodar contra outro. Cria duas empresas de teste (`wga-e2e-<carimbo>` e `wga-e2e-<carimbo>-b`),
 com usuários, vínculos e uma conexão Evolution cada, e apaga tudo no fim, mesmo se falhar (rodadas e itens, contatos,
 pastas, conexões, vínculos, usuários e empresas). Se o processo for morto no meio (Ctrl+C, queda do Docker), sobram as

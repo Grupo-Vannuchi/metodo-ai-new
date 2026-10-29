@@ -43,6 +43,13 @@ import {
   type PlannedItem,
   type PreviousOutcome,
 } from "../src/lib/whatsapp/group-add/core";
+import {
+  GROUP_JID_PATTERN,
+  groupAddPreviewSchema,
+  groupAddRunIdSchema,
+  groupAddSourceSchema,
+  groupAddStartSchema,
+} from "../src/lib/validations/whatsapp-group-add";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -763,6 +770,129 @@ check("inviteUrlFrom accepts only a https://chat.whatsapp.com/ link, and builds 
   }
   const noLink: unknown[] = [{}, null, undefined, "x", [], [{ inviteCode: "AbC" }]];
   for (const data of noLink) assert.equal(inviteUrlFrom(data), null, JSON.stringify(data));
+});
+
+// ── What the actions accept ──────────────────────────────────────────────────
+//
+// The server actions are public endpoints: whatever arrives is parsed by these schemas before anything is read or
+// written, and an input that does not fit is `invalid`.
+
+const GROUP = "120363000000000001@g.us";
+const ONE_CONTACT = { kind: "contacts", contactIds: ["c1"] } as const;
+const startOf = (patch: Record<string, unknown>) => ({ source: ONE_CONTACT, groupJid: GROUP, inviteText: "Oi {{nome}}", ...patch });
+/** The ids `c1`..`cN`. */
+const idsUpTo = (n: number) => Array.from({ length: n }, (_, i) => `c${i + 1}`);
+
+check("groupAddStartSchema: the group is digits, optionally a dash and digits, then @g.us (the old and the new JID)", () => {
+  for (const groupJid of [GROUP, "5511987654321-1618000000@g.us", "1@g.us", `${"1".repeat(59)}@g.us`]) {
+    assert.ok(groupAddStartSchema.safeParse(startOf({ groupJid })).success, groupJid);
+  }
+  // A person's JID, a group name, a missing or an extra part, another case, and anything around it.
+  const notAGroup = [
+    "x@g.us",
+    "@g.us",
+    "5511987654321@s.whatsapp.net",
+    "5511987654321@lid",
+    "120363000000000001",
+    "120363000000000001@g.us@g.us",
+    "120363000000000001@G.US",
+    "120363000000000001@g.usx",
+    "120363000000000001@g.u",
+    "120363000000000001@gXus",
+    "12-34-56@g.us",
+    "-12@g.us",
+    "12-@g.us",
+    "x120363000000000001@g.us",
+    " 120363000000000001@g.us",
+    "120363000000000001@g.us ",
+    "120363000000000001@g.us\n",
+    "120363000000000001@g.us\nx@g.us",
+    "",
+    // Longer than any JID is: the pattern alone would take it.
+    `${"1".repeat(60)}@g.us`,
+  ];
+  for (const groupJid of notAGroup) assert.ok(!groupAddStartSchema.safeParse(startOf({ groupJid })).success, JSON.stringify(groupJid));
+  for (const groupJid of [null, undefined, 120363000000000001, ["120363000000000001@g.us"]]) {
+    assert.ok(!groupAddStartSchema.safeParse(startOf({ groupJid })).success, String(groupJid));
+  }
+  assert.ok(!groupAddStartSchema.safeParse({ source: ONE_CONTACT, inviteText: "Oi" }).success, "no groupJid at all");
+  // The pattern itself, as the screens may reuse it.
+  assert.ok(GROUP_JID_PATTERN.test(GROUP) && !GROUP_JID_PATTERN.test("x@g.us"));
+});
+
+check("groupAddStartSchema: the invite text is trimmed, 1 to 1,000 characters", () => {
+  assert.equal(INVITE_TEXT_MAX, 1000);
+  const parse = (inviteText: unknown) => groupAddStartSchema.safeParse(startOf({ inviteText }));
+  for (const length of [1, 2, 500, INVITE_TEXT_MAX]) assert.ok(parse("a".repeat(length)).success, `${length} characters`);
+  // 1,001 characters, and none at all, or nothing but spaces and line breaks.
+  for (const text of ["a".repeat(INVITE_TEXT_MAX + 1), "", " ", "   \n\t  "]) {
+    assert.ok(!parse(text).success, `${text.length} characters of ${JSON.stringify(text.slice(0, 4))}`);
+  }
+  // Trimmed first: the spaces around the text are not part of the count, and they are not kept.
+  const padded = parse(`  ${"a".repeat(INVITE_TEXT_MAX)}\n `);
+  assert.ok(padded.success);
+  assert.equal(padded.data.inviteText, "a".repeat(INVITE_TEXT_MAX));
+  assert.ok(!parse(`  ${"a".repeat(INVITE_TEXT_MAX + 1)}  `).success, "1,001 characters once trimmed");
+  assert.equal(parse("  Oi {{nome}}!  \n").data?.inviteText, "Oi {{nome}}!");
+  for (const text of [null, undefined, 5, ["Oi"], { text: "Oi" }]) assert.ok(!parse(text).success, String(text));
+  assert.ok(!groupAddStartSchema.safeParse({ source: ONE_CONTACT, groupJid: GROUP }).success, "no inviteText at all");
+});
+
+check("groupAddSourceSchema: the contacts of a folder (or of none), or 1 to 1,000 marked contacts", () => {
+  assert.equal(GROUP_ADD_MAX_CONTACTS, 1000);
+  const parse = (source: unknown) => groupAddSourceSchema.safeParse(source);
+  // A folder, and "no folder" (the contacts in no folder) which is a null and not a missing key.
+  assert.deepEqual(parse({ kind: "folder", folderId: "f1" }).data, { kind: "folder", folderId: "f1" });
+  assert.deepEqual(parse({ kind: "folder", folderId: null }).data, { kind: "folder", folderId: null });
+  for (const source of [
+    { kind: "folder" },
+    { kind: "folder", folderId: "" },
+    { kind: "folder", folderId: 5 },
+    { kind: "folder", folderId: "f".repeat(65) },
+    { kind: "folder", contactIds: ["c1"] },
+  ]) {
+    assert.ok(!parse(source).success, JSON.stringify(source));
+  }
+  // Marked contacts: at least one, at most the 1,000 a round takes.
+  for (const n of [1, 2, GROUP_ADD_MAX_CONTACTS]) {
+    assert.ok(parse({ kind: "contacts", contactIds: idsUpTo(n) }).success, `${n} ids`);
+  }
+  for (const n of [0, GROUP_ADD_MAX_CONTACTS + 1, 5000]) {
+    assert.ok(!parse({ kind: "contacts", contactIds: idsUpTo(n) }).success, `${n} ids`);
+  }
+  for (const contactIds of [undefined, null, "c1", [""], [5], [null], ["c".repeat(65)], ["c1", ""]]) {
+    assert.ok(!parse({ kind: "contacts", contactIds }).success, JSON.stringify(contactIds));
+  }
+  // Only the two kinds there are; a union does not guess.
+  for (const source of [null, undefined, "folder", [], {}, { kind: "all" }, { kind: "company", companyIds: ["x"] }, { folderId: "f1" }]) {
+    assert.ok(!parse(source).success, JSON.stringify(source));
+  }
+  // The same source as the start takes, and as the preview takes.
+  assert.ok(groupAddStartSchema.safeParse(startOf({ source: { kind: "folder", folderId: null } })).success);
+  assert.ok(!groupAddStartSchema.safeParse(startOf({ source: { kind: "contacts", contactIds: idsUpTo(GROUP_ADD_MAX_CONTACTS + 1) } })).success);
+});
+
+check("groupAddPreviewSchema: the same group and source as the start, without a text", () => {
+  assert.ok(groupAddPreviewSchema.safeParse({ source: ONE_CONTACT, groupJid: GROUP }).success);
+  assert.ok(groupAddPreviewSchema.safeParse({ source: { kind: "folder", folderId: null }, groupJid: GROUP }).success);
+  assert.ok(!groupAddPreviewSchema.safeParse({ source: ONE_CONTACT, groupJid: "x@g.us" }).success);
+  assert.ok(!groupAddPreviewSchema.safeParse({ source: ONE_CONTACT, groupJid: "5511987654321@s.whatsapp.net" }).success);
+  assert.ok(!groupAddPreviewSchema.safeParse({ source: { kind: "contacts", contactIds: [] }, groupJid: GROUP }).success);
+  assert.ok(!groupAddPreviewSchema.safeParse({ source: { kind: "contacts", contactIds: idsUpTo(1001) }, groupJid: GROUP }).success);
+  assert.ok(!groupAddPreviewSchema.safeParse({ groupJid: GROUP }).success, "no source at all");
+  assert.ok(!groupAddPreviewSchema.safeParse(null).success);
+  // The preview writes nothing and sends nothing: a text that comes along is not read.
+  assert.deepEqual(groupAddPreviewSchema.safeParse({ source: ONE_CONTACT, groupJid: GROUP, inviteText: "Oi" }).data, {
+    source: ONE_CONTACT,
+    groupJid: GROUP,
+  });
+});
+
+check("groupAddRunIdSchema: a round's id is a non-empty string of at most 64 characters", () => {
+  for (const id of ["x", "cmabc123def456ghi789jkl012", "a".repeat(64)]) assert.ok(groupAddRunIdSchema.safeParse(id).success, id);
+  for (const id of ["", "a".repeat(65), null, undefined, 5, { id: "x" }, ["x"]]) {
+    assert.ok(!groupAddRunIdSchema.safeParse(id).success, JSON.stringify(id));
+  }
 });
 
 // ── What the feature may write to WhatsApp ───────────────────────────────────

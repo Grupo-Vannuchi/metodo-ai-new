@@ -3017,6 +3017,12 @@
       "email_broadcast": { "started": "Started a bulk email send" },
       "email_sender": { "connected": "Connected an e-mail sending account", "replaced": "Replaced the e-mail sending account", "disconnected": "Disconnected an e-mail sending account", "replied": "Replied to an e-mail from the Microsoft account" },
       "task_board": { "entrance_changed": "Changed the task board's entrance column", "column_deleted": "Deleted a task board column" },
+      "whatsapp_group_add": {
+        "started": "Started adding contacts to a WhatsApp group",
+        "paused": "Paused adding contacts to a WhatsApp group",
+        "resumed": "Resumed adding contacts to a WhatsApp group",
+        "canceled": "Canceled adding contacts to a WhatsApp group"
+      },
       "connection": {
         "created": "Connected an integration",
         "updated": "Changed an integration",
@@ -3076,6 +3082,7 @@
       "AutomationRule": "Automation",
       "TeamChat": "Team chat",
       "TaskBoardColumn": "Task board",
+      "WhatsappGroupAddRun": "WhatsApp group add",
       "companies": "Companies",
       "contacts": "Contacts"
     }
