@@ -20,7 +20,7 @@ organização ativa e devolve o mesmo client Prisma cru de
 `$allOperations`: toda chamada, em qualquer model, passa por essa função antes de chegar no
 banco.
 
-A interceptação só age sobre os models listados na constante `TENANT_MODELS` — **78 hoje**
+A interceptação só age sobre os models listados na constante `TENANT_MODELS` — **79 hoje**
 (é a contagem das entradas do array; cresce conforme o schema cresce). Para qualquer model
 fora dessa lista, o extends devolve a query sem tocar nela:
 
@@ -57,8 +57,12 @@ deste guia empurra pra lá: a seção acima ensina "nunca `update`, use `updateM
 que `updateMany` não devolve as linhas alteradas. O próximo passo óbvio, pra quem precisa do dado
 de volta, é alcançar `updateManyAndReturn` — que parece a versão "Many" seguindo o mesmo padrão
 recomendado, mas **não está em `WHERE_OPS`** e cruza organização em silêncio. Hoje nada em `src/`
-usa `createManyAndReturn` nem `updateManyAndReturn` — é uma armadilha latente, não um bug já
-disparado —, mas é exatamente o tipo de escolha que este guia, seguido pela metade, induziria.
+usa `updateManyAndReturn`, e `createManyAndReturn` tem um uso só: a importação de contatos do
+WhatsApp ([src/lib/crm/whatsapp-import-contacts.ts](../../src/lib/crm/whatsapp-import-contacts.ts)),
+que precisa dos ids dos contatos novos para criar os vínculos com a pasta. Lá o `organizationId` vai
+**à mão** no `data` de cada contato e de cada vínculo — o extends não põe nada nessa operação —, e o
+`check:folders:db` confere que os dois saem com a organização certa. Fora desse caso, continua sendo
+exatamente o tipo de escolha que este guia, seguido pela metade, induziria.
 
 O comentário no topo do arquivo já registra o motivo
 ([src/lib/tenant-db.ts:12-16](../../src/lib/tenant-db.ts#L12-L16)):
@@ -152,7 +156,7 @@ mas verifica compatibilidade de versão do Node — não tem relação com isola
 **O que o script prova, com precisão — não mais que isso.** Ele importa só `PrismaClient` +
 `PrismaPg`, nunca `tenantDb` nem nada de [src/lib/queries/](../../src/lib/queries/): cria duas
 organizações reais no Postgres local, popula cada uma com dado próprio (membro, empresa, conexão
-de integração, campanha, job de extração, conversa, envio de e-mail, destinatário, bloqueio de e-mail, domínio de envio, coluna do quadro de tarefas, assinatura de e-mail e conta de envio de e-mail, com uma Microsoft, uma Google e uma SMTP na mesma empresa) e roda **24 asserções**, todas com
+de integração, campanha, job de extração, conversa, envio de e-mail, destinatário, bloqueio de e-mail, domínio de envio, coluna do quadro de tarefas, assinatura de e-mail e conta de envio de e-mail, com uma Microsoft, uma Google e uma SMTP na mesma empresa, além de pasta de contato, contato e vínculo de contato com pasta) e roda **28 asserções**, todas com
 `where: { organizationId: ... }` escrito à mão contra o client **cru** — inclusive um
 `updateMany` com filtro de organização trocado, que precisa afetar zero linhas. Isso prova que o
 Postgres honra o filtro de organização quando a query o inclui. **Não prova que o código da
@@ -174,6 +178,12 @@ Postgres faz o que se espera dele.
   `count === 0`** como erro de autorização. Nunca `update`/`delete` direto.
 - `upsert`, `createManyAndReturn`, `updateManyAndReturn` em tabela de negócio: sem atalho — some
   `organizationId` ao `where` (ou ao `data`) à mão. Nenhuma das três está em `WHERE_OPS`.
+- `create` aninhado (ex.: `folderLinks: { create: { ... } }` dentro de `contact.create`) não passa
+  pelo extends, que só injeta no nível de cima: ponha o `organizationId` do registro aninhado à mão.
+- `createMany` numa tabela de vínculo (ex.: `ContactFolderLink`) injeta o `organizationId`, mas não
+  confere de quem são o `contactId` e o `folderId`: filtre antes pelos ids que são da organização
+  (`ownContactIds` e `findFirst` da pasta, em
+  [src/lib/crm/contact-folder-links.ts](../../src/lib/crm/contact-folder-links.ts)).
 - Model de negócio novo: adicione em `TENANT_MODELS`, senão o extends passa direto por ele.
 - `check:isolation` verde prova que o Postgres respeita o filtro que a query já traz — não que
   `tenantDb`, a DAL ou as actions estão passando esse filtro. Só o vermelho é garantia de algo.

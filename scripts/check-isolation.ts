@@ -363,6 +363,57 @@ async function main() {
     }
     assert(secondSmtpCode === "P2002", "a second SMTP sending account in the same org is refused (P2002)");
 
+    // 16) Contact-folder links are per org, and a contact sits in a folder once.
+    const folderA = await prisma.contactFolder.create({
+      data: { organizationId: orgA.id, name: `ISO-FOLDER-A-${stamp}` },
+    });
+    const folderB = await prisma.contactFolder.create({
+      data: { organizationId: orgB.id, name: `ISO-FOLDER-B-${stamp}` },
+    });
+    const contactA = await prisma.contact.create({
+      data: { organizationId: orgA.id, name: `ISO-CT-A-${stamp}` },
+    });
+    const contactB = await prisma.contact.create({
+      data: { organizationId: orgB.id, name: `ISO-CT-B-${stamp}` },
+    });
+    const linkA = await prisma.contactFolderLink.create({
+      data: { organizationId: orgA.id, contactId: contactA.id, folderId: folderA.id },
+    });
+    await prisma.contactFolderLink.create({
+      data: { organizationId: orgB.id, contactId: contactB.id, folderId: folderB.id },
+    });
+    const linksOfA = await prisma.contactFolderLink.findMany({
+      where: { organizationId: orgA.id },
+    });
+    assert(
+      linksOfA.length === 1 && linksOfA[0].id === linkA.id,
+      "a contact-folder link read scoped by org A returns only org A's link",
+    );
+    const wrongLinkUpdate = await prisma.contactFolderLink.updateMany({
+      where: { id: linkA.id, organizationId: orgB.id },
+      data: { folderId: folderB.id },
+    });
+    assert(
+      wrongLinkUpdate.count === 0,
+      "a contact-folder link updateMany with the wrong org affects 0 rows",
+    );
+    const wrongLinkDelete = await prisma.contactFolderLink.deleteMany({
+      where: { id: linkA.id, organizationId: orgB.id },
+    });
+    assert(
+      wrongLinkDelete.count === 0,
+      "a contact-folder link deleteMany with the wrong org affects 0 rows",
+    );
+    let duplicateLinkCode: string | undefined;
+    try {
+      await prisma.contactFolderLink.create({
+        data: { organizationId: orgA.id, contactId: contactA.id, folderId: folderA.id },
+      });
+    } catch (error) {
+      duplicateLinkCode = (error as { code?: string }).code;
+    }
+    assert(duplicateLinkCode === "P2002", "the same contact twice in one folder is refused (P2002)");
+
     console.log("\n✅ Tenant isolation: all checks passed.");
   } finally {
     // Cleanup. Companies/connections carry organizationId (no FK cascade from
@@ -396,6 +447,15 @@ async function main() {
       where: { organizationId: { in: created.orgs } },
     });
     await prisma.integrationConnection.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
+    await prisma.contactFolderLink.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
+    await prisma.contact.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
+    await prisma.contactFolder.deleteMany({
       where: { organizationId: { in: created.orgs } },
     });
     await prisma.company.deleteMany({

@@ -82,7 +82,7 @@ O MétodoAI **deixou de ser um SaaS de planos fixos** e virou uma **plataforma m
 - Nav final = `allowedScreens ∩ availableScreens(modules)`.
 
 ### 3.5 Modelo de dados (Prisma) — principais
-`Organization` (com `ownerId`), `User`, `Membership`, `AccountModule`, `OrganizationModule`, `AccessTemplate`, `Invitation`, `AuthToken`, `Account` (OAuth), `UserProfile` · CRM: `Company`, `Contact`, `ContactFolder`, `Pipeline`, `Stage`, `Opportunity`, `ProductService`, `Automation`, `Goal` · Financeiro: `FinanceEntry`, `FinanceCategory` · RH: `Employee`, `PayrollRun`, `TimeOff` · Suprimentos: `SupplyItem`, `PurchaseOrder`, `Asset`, `MaintenanceEvent`, `Supplier`, `ClientEquipment` · Marketing: `MessageTemplate`, `Campaign`, `CampaignRecipient`, `ExtractionJob`, `ExtractedLead` · Inbox: `IntegrationConnection`, `Conversation`, `Message`, `WhatsappAgent` · Colaboração: `TeamChat*`, `FeedPost*`, `Notification`, `PinnedItem` · `AuditLog`.
+`Organization` (com `ownerId`), `User`, `Membership`, `AccountModule`, `OrganizationModule`, `AccessTemplate`, `Invitation`, `AuthToken`, `Account` (OAuth), `UserProfile` · CRM: `Company`, `Contact`, `ContactFolder`, `ContactFolderLink`, `Pipeline`, `Stage`, `Opportunity`, `ProductService`, `Automation`, `Goal` · Financeiro: `FinanceEntry`, `FinanceCategory` · RH: `Employee`, `PayrollRun`, `TimeOff` · Suprimentos: `SupplyItem`, `PurchaseOrder`, `Asset`, `MaintenanceEvent`, `Supplier`, `ClientEquipment` · Marketing: `MessageTemplate`, `Campaign`, `CampaignRecipient`, `ExtractionJob`, `ExtractedLead` · Inbox: `IntegrationConnection`, `Conversation`, `Message`, `WhatsappAgent` · Colaboração: `TeamChat*`, `FeedPost*`, `Notification`, `PinnedItem` · `AuditLog`.
 
 ---
 
@@ -246,6 +246,16 @@ com default `[]`). **Não** use `migrate deploy`.
 **Antes do merge da branch `feature/email-assinaturas`:** aplicar no Supabase `prisma/migrations/20261013120000_email_signatures/migration.sql` com `npx prisma db execute --file prisma/migrations/20261013120000_email_signatures/migration.sql --schema prisma/schema.prisma` e depois `npx prisma migrate resolve --applied 20261013120000_email_signatures`. Ela só adiciona: o enum, a tabela `email_signatures` e as colunas `signatureId`/`signatureHtml`/`signatureText` em `email_broadcasts`. **Não** use `migrate deploy`.
 
 **Depois do merge e do deploy da branch `feature/email-assinatura-sem-texto`** (ordem invertida de propósito: o código anterior ainda lê `introText`, então apagar a coluna antes do deploy quebra as telas de assinatura): aplicar no Supabase `prisma/migrations/20261013180000_email_signatures_drop_intro_text/migration.sql` com `npx prisma db execute --file prisma/migrations/20261013180000_email_signatures_drop_intro_text/migration.sql --schema prisma/schema.prisma` e depois `npx prisma migrate resolve --applied 20261013180000_email_signatures_drop_intro_text`. Ela apaga a coluna `introText` de `email_signatures` (destrutiva: o texto acima da imagem das assinaturas existentes se perde; envios já feitos guardam a cópia congelada e não mudam). **Não** use `migrate deploy`.
+
+**Antes do merge da branch `feature/crm-contato-varias-pastas` (fase 1):**
+1. Aplicar no Supabase `prisma/migrations/20261029120000_contact_folder_links/migration.sql` com `npx prisma db execute --file prisma/migrations/20261029120000_contact_folder_links/migration.sql --schema prisma/schema.prisma` e depois `npx prisma migrate resolve --applied 20261029120000_contact_folder_links`. Ela cria `contact_folder_links`, copia os vínculos atuais e cria o gatilho `contacts_folder_link_sync` (espelha em `contact_folder_links` o que o código antigo gravar em `contacts.folderId` até o deploy). **Não** use `migrate deploy`.
+2. Conferir no Supabase, antes do merge:
+   - nenhum contato com `folderId` ficou sem vínculo (precisa dar 0): `SELECT count(*) FROM contacts c WHERE c."folderId" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM contact_folder_links l WHERE l."contactId" = c.id AND l."folderId" = c."folderId");`
+   - o gatilho existe (precisa voltar 1 linha): `SELECT 1 FROM pg_trigger WHERE tgname = 'contacts_folder_link_sync';`
+   - nenhum vínculo aponta para contato ou pasta de outra organização (precisa dar 0): `SELECT count(*) FROM contact_folder_links l JOIN contacts c ON c.id = l."contactId" JOIN contact_folders f ON f.id = l."folderId" WHERE c."organizationId" <> l."organizationId" OR f."organizationId" <> l."organizationId";`
+3. Fazer o merge. Com o build no ar, testar uma movimentação e uma adição em produção. A fase 2 (outro PR, dias depois) apaga o campo legado: schema → merge e deploy → só então a migration que apaga gatilho, função, FK, índice e coluna.
+
+**Se o merge precisar ser revertido**, o código antigo volta a ler `contacts.folderId`, que o código novo nunca grava e por isso ficou parado no que era no deploy: as segundas pastas e tudo o que o código novo arquivou (movimentações, adições, importações) não aparecem nele. Quem entrou numa segunda pasta continua só na primeira, e um contato importado pelo código novo aparece em "Sem pasta". Os vínculos continuam em `contact_folder_links` para quando o código novo voltar.
 
 **Antes do merge da branch `feature/email-dominios-plataforma`:**
 1. Aplicar no Supabase `prisma/migrations/20261008120000_email_sender_domains/migration.sql` com
@@ -549,6 +559,30 @@ Diferente da lista de produto abaixo, estes têm próximo passo conhecido e escr
 
 4. **`package.json#prisma` está depreciado.** O log de deploy avisa que a chave sai no Prisma 7 e pede
    migração para um `prisma.config.ts`. Não urge — mas é quebra garantida num upgrade futuro.
+
+5. **Fase 2 de contato em várias pastas.** A fase 1 (`feature/crm-contato-varias-pastas`, runbook no
+   [§8](#8-runbook-de-produção--leia-antes-de-qualquer-deploy)) passou as pastas do contato para
+   `contact_folder_links` e deixou a coluna antiga `contacts."folderId"` no banco, sem uso: no schema ela é
+   `Contact.legacyFolderId` (`@map("folderId")`), e só o gatilho `contacts_folder_link_sync` (função
+   `contact_folder_link_sync`) a usa, para não perder o que o código antigo gravasse até o deploy. Depois de
+   alguns dias com a fase 1 estável em produção, num PR separado e **nesta ordem** (invertida de propósito,
+   como em `20261013180000_email_signatures_drop_intro_text`; apagar a coluna antes do deploy quebraria o
+   código no ar):
+   1. Tirar do `schema.prisma` o `legacyFolderId`, a relação `legacyFolder`, o `legacyContacts` de
+      `ContactFolder` e o `@@index([organizationId, legacyFolderId])`. No mesmo PR, ajustar
+      `scripts/check-contact-folders-db.ts`, que hoje depende da coluna: o `makeContact` grava `"folderId"`
+      em todo caso, e em 25 casos (18 fora os `trigger: …`) é o gatilho que põe os contatos na pasta. Reescreva o
+      `makeContact` para inserir sem `"folderId"` e, quando receber uma pasta, criar o vínculo com
+      `addLink`; apague os casos `trigger: …` e o trecho sobre o gatilho no guia 06. Sem isso o script
+      quebra no passo 3, quando a coluna sair.
+   2. Mergear e esperar o deploy entrar no ar. O Prisma não lê coluna que o schema não declara, então a
+      coluna sobrando é inofensiva.
+   3. Só então aplicar no Supabase a migration que apaga, nesta ordem, o gatilho `contacts_folder_link_sync`,
+      a função `contact_folder_link_sync`, a FK `contacts_folderId_fkey`, o índice
+      `contacts_organizationId_folderId_idx` e a coluna `contacts."folderId"`. Com `npx prisma db execute
+      --file … --schema prisma/schema.prisma` e depois `npx prisma migrate resolve --applied <pasta>`.
+      **Nunca** `migrate deploy` (nem `migrate dev`) em produção. Depois disso, não volte o código para antes
+      da fase 1: ele lê `folderId`, que não existe mais. Corrija para frente.
 
 ### Produto
 

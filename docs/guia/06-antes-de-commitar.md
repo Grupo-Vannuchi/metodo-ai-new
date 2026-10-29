@@ -35,6 +35,12 @@ banco nem rede. Rode sempre que mexer em `src/lib/email-broadcast/`.
 horário de Brasília, posição entre cards, nome de coluna, coluna da tarefa nova pela data, para onde vai
 o card ao concluir, reabrir ou arrastar para a coluna de concluídas). Rode sempre que mexer nesse arquivo.
 
+`npm run check:folders` faz o mesmo para as regras puras de contato em várias pastas
+([src/lib/crm/contact-folders-core.ts](../../src/lib/crm/contact-folders-core.ts): o que muda ao soltar
+contatos numa pasta, mover ou adicionar, inclusive para "Sem pasta" e a partir dela; as colunas do quadro
+de contatos, com o contato em cada pasta dele; e o que apagar e o que repontar nos vínculos ao mesclar
+contatos). Não usa banco nem rede. Rode sempre que mexer nesse arquivo.
+
 `npm run check:automation` cobre as regras puras da automação de WhatsApp. Em
 [src/lib/automation/types.ts](../../src/lib/automation/types.ts), confere a leitura e a validação da regra:
 início por palavra ou por qualquer mensagem, menu de opções, regras salvas antes do menu e a troca entre
@@ -153,6 +159,25 @@ criação da conta na Ethereal de vez em quando: o script tenta 3 vezes antes de
 rede, rode de novo (os pedidos à caixa que devem ter resposta de verdade repetem até 2 vezes se vier
 `temporary`). Rode sempre que mexer em `src/lib/email-broadcast/imap/` ou em
 `src/lib/email-broadcast/smtp/credentials.ts` ou `smtp/send.ts`.
+
+`npm run check:folders:db` testa no Postgres local o que só ele prova sobre contato em várias pastas
+([scripts/check-contact-folders-db.ts](../../scripts/check-contact-folders-db.ts)). Hoje cobre:
+- o gatilho `contacts_folder_link_sync` da fase 1 (migration `20261029120000_contact_folder_links`): contato
+  inserido com `folderId` ganha o vínculo, mudar o `folderId` move o vínculo, um vínculo extra sobrevive à
+  mudança, `folderId` nulo tira só o vínculo legado, e apagar a pasta não apaga o contato;
+- o quadro (contato em duas pastas aparece nas duas; sem vínculo, em "Sem pasta"; vínculo para contato de
+  outra empresa nunca aparece) e o `getContact` com as pastas;
+- mover, adicionar e tirar da pasta, inclusive com pasta ou contato de outra empresa e com a origem do mover
+  faltando (é recusada e não apaga nada);
+- os filtros por pasta do e-mail em massa e da campanha, e a mesclagem de duplicados;
+- a importação do WhatsApp (o único `createManyAndReturn` de `src/`): contato e vínculo saem com a empresa.
+
+Contatos e `folderId` entram por SQL cru, para o script sobreviver à renomeação do campo; o `makeContact`
+põe o contato na pasta pela coluna legada e o gatilho, e a fase 2 precisa trocar isso por `addLink`
+([README §10](../../README.md#10-pendências--próximos-passos), item 5). Cria duas empresas `FOLDERS-DB-A/B-<carimbo>` e apaga o que criou
+(contatos, pastas, empresas; os vínculos saem junto, em cascata), mesmo quando falha; se você matar o script no meio, apague a mão as
+organizações cujo `slug` começa com `folders-db-` (o LIKE diferencia maiúsculas de minúsculas). Precisa do Postgres do Docker e de um `.env` válido. Rode sempre que mexer em
+`ContactFolderLink`, nas ações de pasta de contato ou em `src/lib/crm/whatsapp-import-contacts.ts`.
 
 ## `check:isolation`
 

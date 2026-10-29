@@ -19,9 +19,9 @@ import { useSessionState } from "@/lib/use-session-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { useConfirm } from "@/components/ui/confirm";
+import { applyFolderDrop, type FolderColumn } from "@/lib/crm/contact-folders-core";
 
-/** A folder + its items. `id: null` is the predefined "unfiled" folder. */
-export type FolderColumn<T> = { id: string | null; name: string; items: T[] };
+export type { FolderColumn };
 
 export type ExplorerLabels = {
   newFolder: string;
@@ -38,6 +38,8 @@ export type ExplorerLabels = {
   confirmDeleteFolder: string;
   save: string;
   dragHint: string;
+  /** Shown after `dragHint` when the explorer supports `onAddItems`. */
+  copyHint?: string;
   folderCount: (count: number) => string;
 };
 
@@ -56,6 +58,8 @@ export type BulkContext = {
   ids: string[];
   /** Folders in this explorer (excluding "unfiled"), for a move-to-folder menu. */
   folders: { id: string; name: string }[];
+  /** The folder that is open (`null` = "unfiled"): where a move takes items from. */
+  openFolderId: string | null;
   clear: () => void;
 };
 
@@ -78,6 +82,7 @@ export function FolderExplorer<T extends { id: string }>({
   onRenameFolder,
   onDeleteFolder,
   onMoveItems,
+  onAddItems,
   renderItems,
   renderBulkBar,
 }: {
@@ -88,8 +93,12 @@ export function FolderExplorer<T extends { id: string }>({
   onCreateFolder: (name: string) => Promise<unknown> | void;
   onRenameFolder: (id: string, name: string) => Promise<unknown> | void;
   onDeleteFolder: (id: string) => Promise<unknown> | void;
-  /** Move one or many items to a folder (`null` = unfiled) in a single call. */
-  onMoveItems: (itemIds: string[], folderId: string | null) => Promise<unknown> | void;
+  /** Move one or many items to a folder (`null` = unfiled) in a single call;
+   *  `fromFolderId` is the folder they are taken from (the open one). */
+  onMoveItems: (itemIds: string[], folderId: string | null, fromFolderId: string | null) => Promise<unknown> | void;
+  /** Optional: add items to a folder while keeping them where they are. When
+   *  present, dropping with Ctrl held calls this instead of `onMoveItems`. */
+  onAddItems?: (itemIds: string[], folderId: string) => Promise<unknown> | void;
   renderItems: (args: RenderItemsArgs<T>) => React.ReactNode;
   /** Optional bulk-action bar, shown while items are selected. */
   renderBulkBar?: (ctx: BulkContext) => React.ReactNode;
@@ -202,7 +211,7 @@ export function FolderExplorer<T extends { id: string }>({
     window.addEventListener("mouseup", onUp);
   }
 
-  function onDrop(toId: string | null) {
+  function onDrop(toId: string | null, ctrl: boolean) {
     setOverTile(null);
     const draggedId = dragId;
     setDragId(null);
@@ -212,29 +221,19 @@ export function FolderExplorer<T extends { id: string }>({
     // one moves just it (and clears any stale selection).
     const ids = selected.has(draggedId) ? [...selectedIds] : [draggedId];
 
-    // Gather the items that actually change folder (skip any already in target).
-    const moving: T[] = [];
-    const movingIds = new Set<string>();
-    for (const c of cols) {
-      if (c.id === toId) continue;
-      for (const it of c.items) {
-        if (ids.includes(it.id)) {
-          moving.push(it);
-          movingIds.add(it.id);
-        }
-      }
-    }
     clearSelection();
-    if (moving.length === 0) return;
-
-    setCols((prevCols) =>
-      prevCols.map((c) => {
-        if (c.id === toId) return { ...c, items: [...moving, ...c.items] };
-        return { ...c, items: c.items.filter((x) => !movingIds.has(x.id)) };
-      }),
-    );
+    // Items are taken from the open folder; applyFolderDrop returns the same
+    // array when nothing changes, so there is no server call to make.
+    if (openId === undefined) return;
+    // Ctrl keeps the items in the open folder too ("add"); only where the
+    // entity supports it, and never onto "unfiled" (that is not a folder).
+    const mode = onAddItems && ctrl && toId !== null ? "add" : "move";
+    const next = applyFolderDrop(cols, ids, openId, toId, mode);
+    if (next === cols) return;
+    setCols(next);
     start(async () => {
-      await onMoveItems([...movingIds], toId);
+      if (mode === "add") await onAddItems!(ids, toId!);
+      else await onMoveItems(ids, toId, openId);
       router.refresh();
     });
   }
@@ -279,10 +278,12 @@ export function FolderExplorer<T extends { id: string }>({
         key={keyOf(id)}
         onDragOver={(e) => {
           e.preventDefault();
+          // "Copy" only where Ctrl really adds: a real folder other than the open one.
+          e.dataTransfer.dropEffect = onAddItems && e.ctrlKey && id !== null && id !== openId ? "copy" : "move";
           setOverTile(keyOf(id));
         }}
         onDragLeave={() => setOverTile((c) => (c === keyOf(id) ? null : c))}
-        onDrop={() => onDrop(id)}
+        onDrop={(e) => onDrop(id, e.ctrlKey)}
         onClick={() => setSelectedId(id)}
         onDoubleClick={() => {
           // Toggle: double-clicking an already-open folder closes it.
@@ -412,7 +413,7 @@ export function FolderExplorer<T extends { id: string }>({
             setOverTile(keyOf(openCol.id));
           }}
           onDragLeave={() => setOverTile((c) => (c === keyOf(openCol.id) ? null : c))}
-          onDrop={() => onDrop(openCol.id)}
+          onDrop={(e) => onDrop(openCol.id, e.ctrlKey)}
           className={cn(
             "glass relative rounded-xl border p-4 shadow-sm transition-colors",
             marquee && "select-none",
@@ -424,7 +425,10 @@ export function FolderExplorer<T extends { id: string }>({
             <h2 className="text-sm font-semibold">{openCol.id === null ? labels.unfiled : openCol.name}</h2>
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{labels.folderCount(openCol.items.length)}</span>
             {renderBulkBar && openCol.items.length > 0 ? (
-              <span className="ml-1 hidden text-xs text-muted-foreground sm:inline">{labels.dragHint}</span>
+              <span className="ml-1 hidden text-xs text-muted-foreground sm:inline">
+                {labels.dragHint}
+                {onAddItems && labels.copyHint ? ` · ${labels.copyHint}` : ""}
+              </span>
             ) : null}
           </div>
 
@@ -443,6 +447,7 @@ export function FolderExplorer<T extends { id: string }>({
               {renderBulkBar({
                 ids: selectedIds,
                 folders: folders.map((f) => ({ id: f.id as string, name: f.name })),
+                openFolderId: openCol.id,
                 clear: clearSelection,
               })}
             </div>

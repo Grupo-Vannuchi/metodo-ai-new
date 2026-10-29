@@ -2,6 +2,7 @@ import "server-only";
 import type { EmailRecipientStatus } from "@prisma/client";
 import { tenantDb } from "@/lib/tenant-db";
 import { LIMITS } from "@/config/limits";
+import { contactFolderEmailCounts } from "@/lib/queries/contact-folders";
 import { listSenderDomains } from "@/lib/queries/email-sender-domains";
 import { listSignatureOptions } from "@/lib/queries/email-signatures";
 import { getSenderAccountView } from "@/lib/queries/email-sender-accounts";
@@ -134,18 +135,17 @@ export async function getEmailBroadcastReport(organizationId: string, id: string
 /** Chips of the recipient picker, each with how many addresses it holds. */
 export async function emailComposerOptions(organizationId: string): Promise<ComposerOptions> {
   const db = tenantDb(organizationId);
-  const [contacts, contactFolders, companyFolders, companyGroups] = await Promise.all([
-    db.contact.findMany({ where: { email: HAS_EMAIL, optedOut: false }, select: { tags: true, folderId: true } }),
+  const [contacts, contactFolderCount, contactFolders, companyFolders, companyGroups] = await Promise.all([
+    db.contact.findMany({ where: { email: HAS_EMAIL, optedOut: false }, select: { tags: true } }),
+    contactFolderEmailCounts(organizationId),
     db.contactFolder.findMany({ orderBy: [{ order: "asc" }, { createdAt: "asc" }], select: { id: true, name: true } }),
     db.companyFolder.findMany({ orderBy: [{ order: "asc" }, { createdAt: "asc" }], select: { id: true, name: true } }),
     db.company.groupBy({ by: ["folderId"], where: { email: HAS_EMAIL }, _count: { _all: true } }),
   ]);
 
   const tagCount = new Map<string, number>();
-  const contactFolderCount = new Map<string, number>();
   for (const c of contacts) {
     for (const tag of c.tags) tagCount.set(tag, (tagCount.get(tag) ?? 0) + 1);
-    if (c.folderId) contactFolderCount.set(c.folderId, (contactFolderCount.get(c.folderId) ?? 0) + 1);
   }
   const companyFolderCount = new Map<string, number>();
   for (const g of companyGroups) if (g.folderId) companyFolderCount.set(g.folderId, g._count._all);

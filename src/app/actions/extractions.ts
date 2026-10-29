@@ -239,7 +239,8 @@ async function importLeadCore(
         email: lead.email,
         tags: ["prospecção"],
         source: "extractor:google",
-        folderId: await folders.contact(),
+        // organizationId by hand: the tenantDb extends does not reach a nested create.
+        folderLinks: { create: { organizationId, folderId: await folders.contact() } },
       },
       select: { id: true },
     });
