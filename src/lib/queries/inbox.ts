@@ -115,12 +115,14 @@ export async function listConversationFolders(organizationId: string) {
   });
 }
 
-/** Messages of a conversation, oldest first (scoped via organizationId). */
+/** The latest 200 messages of a conversation, oldest first (scoped via organizationId).
+ * Taken newest-first and reversed: an ascending `take` would freeze the thread
+ * on its first 200 messages once the chat grows past that. */
 export async function listMessages(organizationId: string, conversationId: string) {
   const db = tenantDb(organizationId);
-  return db.message.findMany({
+  const rows = await db.message.findMany({
     where: { conversationId },
-    orderBy: { timestamp: "asc" },
+    orderBy: { timestamp: "desc" },
     take: 200,
     select: {
       id: true,
@@ -143,6 +145,7 @@ export async function listMessages(organizationId: string, conversationId: strin
       mediaHeight: true,
     },
   });
+  return rows.reverse();
 }
 
 /** Contact details for the inbox side panel. */
