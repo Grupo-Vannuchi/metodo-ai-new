@@ -154,6 +154,16 @@ rede, rode de novo (os pedidos à caixa que devem ter resposta de verdade repete
 `temporary`). Rode sempre que mexer em `src/lib/email-broadcast/imap/` ou em
 `src/lib/email-broadcast/smtp/credentials.ts` ou `smtp/send.ts`.
 
+`npm run check:folders:db` testa no Postgres local o que só ele prova sobre contato em várias pastas
+([scripts/check-contact-folders-db.ts](../../scripts/check-contact-folders-db.ts)). Hoje cobre o gatilho
+`contacts_folder_link_sync` da fase 1 (migration `20261029120000_contact_folder_links`): contato inserido com
+`folderId` ganha o vínculo, mudar o `folderId` move o vínculo, um vínculo extra sobrevive à mudança, `folderId`
+nulo tira só o vínculo legado, e apagar a pasta não apaga o contato. Contatos e `folderId` entram por SQL cru,
+para o script sobreviver à renomeação do campo. Cria duas empresas `FOLDERS-DB-A/B-<carimbo>` e apaga o que criou
+(vínculos, contatos, pastas, empresas), mesmo quando falha; se você matar o script no meio, apague a mão as
+organizações `FOLDERS-DB-%`. Precisa do Postgres do Docker e de um `.env` válido. Rode sempre que mexer em
+`ContactFolderLink` ou nas ações de pasta de contato.
+
 ## `check:isolation`
 
 Isolamento multi-tenant é [a regra inviolável nº 1 do `CLAUDE.md`](../../CLAUDE.md) e o

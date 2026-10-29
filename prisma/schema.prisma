@@ -356,6 +356,7 @@ model Contact {
   opportunities      Opportunity[]
   proposals          Proposal[]
   campaignRecipients CampaignRecipient[]
+  folderLinks        ContactFolderLink[]
 
   @@index([organizationId, companyId])
   @@index([organizationId, folderId])
@@ -373,9 +374,26 @@ model ContactFolder {
   updatedAt      DateTime @updatedAt
 
   contacts Contact[]
+  links    ContactFolderLink[]
 
   @@index([organizationId, order])
   @@map("contact_folders")
+}
+
+/// Um contato arquivado numa pasta. Um contato pode estar em várias; em nenhuma = "Sem pasta".
+model ContactFolderLink {
+  id             String   @id @default(cuid())
+  organizationId String
+  contactId      String
+  folderId       String
+  createdAt      DateTime @default(now())
+
+  contact Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  folder  ContactFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, folderId])
+  @@index([organizationId, folderId])
+  @@map("contact_folder_links")
 }
 
 /// A user-defined folder to organize companies (drag-and-drop explorer).
