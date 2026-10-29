@@ -555,6 +555,26 @@ Diferente da lista de produto abaixo, estes têm próximo passo conhecido e escr
 4. **`package.json#prisma` está depreciado.** O log de deploy avisa que a chave sai no Prisma 7 e pede
    migração para um `prisma.config.ts`. Não urge — mas é quebra garantida num upgrade futuro.
 
+5. **Fase 2 de contato em várias pastas.** A fase 1 (`feature/crm-contato-varias-pastas`, runbook no
+   [§8](#8-runbook-de-produção--leia-antes-de-qualquer-deploy)) passou as pastas do contato para
+   `contact_folder_links` e deixou a coluna antiga `contacts."folderId"` no banco, sem uso: no schema ela é
+   `Contact.legacyFolderId` (`@map("folderId")`), e só o gatilho `contacts_folder_link_sync` (função
+   `contact_folder_link_sync`) a usa, para não perder o que o código antigo gravasse até o deploy. Depois de
+   alguns dias com a fase 1 estável em produção, num PR separado e **nesta ordem** (invertida de propósito,
+   como em `20261013180000_email_signatures_drop_intro_text`; apagar a coluna antes do deploy quebraria o
+   código no ar):
+   1. Tirar do `schema.prisma` o `legacyFolderId`, a relação `legacyFolder`, o `legacyContacts` de
+      `ContactFolder` e o `@@index([organizationId, legacyFolderId])`. Tirar também o caso do gatilho de
+      `scripts/check-contact-folders-db.ts` (e a linha dele no guia 06), que grava `"folderId"` à mão.
+   2. Mergear e esperar o deploy entrar no ar. O Prisma não lê coluna que o schema não declara, então a
+      coluna sobrando é inofensiva.
+   3. Só então aplicar no Supabase a migration que apaga, nesta ordem, o gatilho `contacts_folder_link_sync`,
+      a função `contact_folder_link_sync`, a FK `contacts_folderId_fkey`, o índice
+      `contacts_organizationId_folderId_idx` e a coluna `contacts."folderId"`. Com `npx prisma db execute
+      --file … --schema prisma/schema.prisma` e depois `npx prisma migrate resolve --applied <pasta>`.
+      **Nunca** `migrate deploy` (nem `migrate dev`) em produção. Depois disso, não volte o código para antes
+      da fase 1: ele lê `folderId`, que não existe mais. Corrija para frente.
+
 ### Produto
 
 

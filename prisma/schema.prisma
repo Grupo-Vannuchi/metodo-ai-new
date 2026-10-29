@@ -339,7 +339,11 @@ model Contact {
   id             String   @id @default(cuid())
   organizationId String
   companyId      String?
-  folderId       String?
+  /// OBSOLETO: a pasta única de antes de `ContactFolderLink`. A app não lê nem grava este campo; só a
+  /// função `contact_folder_link_sync` (gatilho `contacts_folder_link_sync`) o usa, para espelhar em
+  /// `contact_folder_links` o que o código antigo gravar até o deploy. A fase 2 (outro PR) apaga a
+  /// coluna, a FK, o índice, o gatilho e a função. Pastas do contato: `folderLinks`.
+  legacyFolderId String?  @map("folderId")
   name           String
   email          String?
   phone          String?
@@ -352,14 +356,15 @@ model Contact {
   updatedAt      DateTime @updatedAt
 
   company            Company?            @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  folder             ContactFolder?      @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  /// OBSOLETO: relação do `legacyFolderId`. A fase 2 apaga.
+  legacyFolder       ContactFolder?      @relation(fields: [legacyFolderId], references: [id], onDelete: SetNull)
   opportunities      Opportunity[]
   proposals          Proposal[]
   campaignRecipients CampaignRecipient[]
   folderLinks        ContactFolderLink[]
 
   @@index([organizationId, companyId])
-  @@index([organizationId, folderId])
+  @@index([organizationId, legacyFolderId])
   @@index([organizationId, name])
   @@map("contacts")
 }
@@ -373,8 +378,9 @@ model ContactFolder {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  contacts Contact[]
-  links    ContactFolderLink[]
+  /// OBSOLETO: lado inverso de `Contact.legacyFolder`. A fase 2 apaga. Contatos da pasta: `links`.
+  legacyContacts Contact[]
+  links          ContactFolderLink[]
 
   @@index([organizationId, order])
   @@map("contact_folders")
