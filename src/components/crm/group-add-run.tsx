@@ -185,7 +185,14 @@ export function GroupAddRun(props: GroupAddRunProps) {
   const total = SUMMARY_ORDER.reduce((n, s) => n + counts[s], 0);
   const done = total - counts.PENDING - counts.PROCESSING;
   const now = new Date(props.now);
-  const when = (iso: string) => format.dateTime(new Date(iso), { dateStyle: "short", timeStyle: "short", timeZone: GROUP_ADD_TIME_ZONE });
+  // The date and the time are formatted apart and joined here: the glue Intl puts between them (a space, a comma) has changed
+  // between versions of its data, and this markup is rendered on the server and again in the browser, which must agree.
+  const when = (iso: string) => {
+    const at = new Date(iso);
+    const date = format.dateTime(at, { dateStyle: "short", timeZone: GROUP_ADD_TIME_ZONE });
+    const time = format.dateTime(at, { timeStyle: "short", timeZone: GROUP_ADD_TIME_ZONE });
+    return `${date} ${time}`;
+  };
 
   // Why the round is not simply going: a pause (with what to do about it), or a wait.
   let notice: Notice | null = null;
