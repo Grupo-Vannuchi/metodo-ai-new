@@ -94,10 +94,11 @@ convite: ela falha se algum arquivo de `src/lib/whatsapp/group-add/` citar `send
 `updateSetting` ou mandar `action` `remove`, `promote` ou `demote`, ou se ela não achar o `core.ts` para varrer.
 Não usa banco nem rede. Rode sempre que mexer em `src/lib/whatsapp/group-add/`, em `src/lib/integrations/evolution-groups.ts` ou em `src/lib/integrations/evolution-client.ts`.
 
-`npm run check:group-add:e2e` testa o código de servidor que fala com a Evolution no "Adicionar a grupo do WhatsApp"
-([scripts/check-whatsapp-group-add-e2e.ts](../../scripts/check-whatsapp-group-add-e2e.ts)) contra uma Evolution
-falsa em loopback ([scripts/shims/fake-evolution.ts](../../scripts/shims/fake-evolution.ts)), então nada chega ao
-WhatsApp. Hoje cobre as chamadas novas de
+`npm run check:group-add:e2e` testa o código de servidor do "Adicionar a grupo do WhatsApp"
+([scripts/check-whatsapp-group-add-e2e.ts](../../scripts/check-whatsapp-group-add-e2e.ts)): o que fala com a
+Evolution e o que grava no banco. A Evolution é uma falsa em loopback
+([scripts/shims/fake-evolution.ts](../../scripts/shims/fake-evolution.ts)), então nada chega ao WhatsApp; o banco é o
+Postgres local. Primeiro cobre as chamadas novas de
 [src/lib/integrations/evolution-client.ts](../../src/lib/integrations/evolution-client.ts): a lista de grupos do número
 (`fetchAllGroups`), um grupo pelo JID (`fetchGroupSummary`, em todos os formatos de resposta que o `findGroupInfo` já
 aceita), o JID do próprio número (`fetchOwnerJid`, respostas v2 e v1), a adição (`addGroupParticipant`), a conferência de
@@ -112,13 +113,38 @@ certo, e uma resposta que não é uma lista de grupos não vira lista vazia; um 
 nenhuma das sete chamadas; e um erro 500 que repete o número e o texto, como a Evolution faz, não deixa nenhum dos dois
 em nenhuma linha do console. Só duas escritas chegam à Evolution falsa: a adição (sempre `action: "add"`) e o texto, e
 nenhuma chamada cai fora das rotas que ela serve.
-Precisa de um `.env` (o comando o carrega; esta parte ainda não lê nada dele). Não usa banco nem internet: a Evolution
-falsa roda em loopback e o script leva alguns segundos. Roda com `tsx --tsconfig scripts/tsconfig.server.json`, como o
+Depois cobre o serviço, o executor e as consultas
+([src/lib/whatsapp/group-add/service.ts](../../src/lib/whatsapp/group-add/service.ts),
+[runner.ts](../../src/lib/whatsapp/group-add/runner.ts) e
+[src/lib/queries/whatsapp-group-add.ts](../../src/lib/queries/whatsapp-group-add.ts)), com um relógio e um
+agendador do próprio teste no lugar dos reais (`groupAddRuntime`: dormir só move o relógio, e o `after()` e a fila
+nunca são usados). Confere, entre outras coisas: os grupos do próprio número com `admin` verdadeiro, falso ou `null`, e
+`no_connection` para quem não tem número seu, mesmo com um colega da empresa conectado; a conferência com as contagens
+exatas (rodada anterior incluída) e sem escrever nada; uma rodada inteira (adicionado, convite por texto, já estava,
+falha, sem WhatsApp) em que o contato com opt-out, e o de mesmo número de um opt-out fora da pasta, não aparecem em
+nenhuma requisição; o horário das 8h às 20h e o relógio lido de novo antes da adição e do convite; o teto de 100 por dia
+contado por número em todas as empresas, no dia de São Paulo e só com adicionado, convite e falha, e a rodada que
+continua no dia seguinte; uma rodada por número com a fila subindo na ordem e a pausada segurando a fila; número
+desconectado, Evolution fora do ar e não ser admin (pausam sem adicionar ninguém); a trava (dois executores ao mesmo
+tempo, trava vencida, trava perdida no meio de uma espera) com uma chamada por número e quem ficou em andamento
+virando `interrupted` sem ser refeito; resposta sem código, erro de HTTP e sem resposta da adição; o link do grupo
+pedido uma vez, o texto do convite e o link que falta; dois cliques em "Começar" dando uma rodada só; o excedente de
+1.024 participantes como `group_full`; pausar, retomar e cancelar, inclusive no meio de uma chamada; a lista de
+rodadas devidas do cron e o `pokeGroupAdd`; e que outra empresa não vê, não pausa, não cancela nem retoma uma rodada, e
+que nenhum erro deixa número ou texto do convite no console nem no `lastError`.
+Precisa de um `.env` (o comando o carrega) e do Postgres do Docker, e leva uns 15 s; não usa a internet. O banco é só o
+local, e o script recusa rodar contra outro. Cria duas empresas de teste (`wga-e2e-<carimbo>` e `wga-e2e-<carimbo>-b`),
+com usuários, vínculos e uma conexão Evolution cada, e apaga tudo no fim, mesmo se falhar (rodadas e itens, contatos,
+pastas, conexões, vínculos, usuários e empresas). Se o processo for morto no meio (Ctrl+C, queda do Docker), sobram as
+empresas `wga-e2e-%` e os usuários `wga-*@test.local`: apague só esses, à mão. Toda conexão aponta para a Evolution
+falsa em loopback: o script lê cada uma de volta e confere que tem `baseUrl`, chave e instância próprias em loopback antes
+de qualquer chamada (uma conexão sem `baseUrl` cairia na Evolution real do `.env`), e recusa qualquer requisição a outro
+host. Os números dos testes só vão para a falsa. Roda com `tsx --tsconfig scripts/tsconfig.server.json`, como o
 `check:imap`: o shim `scripts/shims/server-only.ts` deixa os módulos `server-only` carregarem fora do Next, e o tsconfig
-traz o alias `@/`. A falsa serve também `connectionState` (padrão `open`) e `fetchInstances`, que o executor da rodada vai
-usar; cada rota tem uma resposta padrão, o teste troca a que quiser (`set`) e a falsa guarda método, caminho, query e
-corpo de toda chamada. Rode sempre que mexer em `src/lib/integrations/evolution-client.ts` ou em
-`scripts/shims/fake-evolution.ts`.
+traz o alias `@/`. A falsa serve também `connectionState` (padrão `open`) e `fetchInstances`, que o executor da rodada
+usa; cada rota tem uma resposta padrão, o teste troca a que quiser (`set`) e a falsa guarda método, caminho, query e
+corpo de toda chamada. Rode sempre que mexer em `src/lib/integrations/evolution-client.ts`, em
+`scripts/shims/fake-evolution.ts`, em `src/lib/whatsapp/group-add/` ou em `src/lib/queries/whatsapp-group-add.ts`.
 
 `npm run check:mcp` cobre as regras puras do servidor MCP de leitura
 ([src/lib/mcp/core.ts](../../src/lib/mcp/core.ts): comparação da chave com espaço ou quebra de linha

@@ -1,16 +1,29 @@
 /**
  * Integration check of "Adicionar a grupo do WhatsApp" (spec 2026-10-28): what check:group-add can't reach, the server
- * code that talks to Evolution. It runs against a fake Evolution on loopback (scripts/shims/fake-evolution.ts), so nothing
- * reaches WhatsApp and no number, group or message is real. The server modules (`server-only`, the `@/` alias) load
- * through scripts/tsconfig.server.json.
+ * code that talks to Evolution and to the database. It runs against a fake Evolution on loopback
+ * (scripts/shims/fake-evolution.ts), so nothing reaches WhatsApp and no number, group or message is real, and against the
+ * local Postgres. The server modules (`server-only`, the `@/` alias) load through scripts/tsconfig.server.json.
  *
- * Run: npm run check:group-add:e2e   (needs a valid .env; no database yet and no internet: the fake is on loopback)
+ * Creates its own data: two organizations (`wga-e2e-<stamp>` and `wga-e2e-<stamp>-b`) with their users, memberships and an
+ * Evolution connection each, and ALWAYS deletes them (runs and their items, contacts, folders, connections, memberships,
+ * users, organizations), even on failure. A run that is killed (Ctrl+C, a timeout) leaves them behind: delete the
+ * `wga-e2e-%` organizations by hand. Refuses to run against a database that isn't local. Every connection points at the
+ * fake on loopback and the script refuses any request to another host, so the real Evolution of .env is never reached.
+ * The queue (QStash) and after() are never reached either: the runner's scheduler is replaced by a capture the checks run
+ * themselves, and its clock by one the checks move (sleeping only moves it).
+ *
+ * Run: npm run check:group-add:e2e   (needs a valid .env and the Docker Postgres; no internet: the fake is on loopback)
  * Exits non-zero on the first failure. Every check starts a fake of its own and it is closed when the check ends.
  *
  * Later tasks add their checks with check(...) above main().
  */
 import assert from "node:assert/strict";
 import { inspect } from "node:util";
+import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { env } from "@/lib/env";
+import { prisma as appPrisma } from "@/lib/prisma";
+import { decryptCredentials, encryptCredentials } from "@/lib/integrations/crypto";
 import {
   addGroupParticipant,
   checkOnWhatsapp,
@@ -22,12 +35,32 @@ import {
   sendPlainText,
   type EvoCreds,
 } from "@/lib/integrations/evolution-client";
+import { phoneMatchKey, renderInvite, type GroupAddItemStatus } from "@/lib/whatsapp/group-add/core";
+import {
+  findDueGroupAddRuns,
+  groupAddRuntime,
+  promoteQueuedRuns,
+  runGroupAddRun,
+} from "@/lib/whatsapp/group-add/runner";
+import {
+  cancelGroupAdd,
+  listMyGroups,
+  pauseGroupAdd,
+  pokeGroupAdd,
+  previewGroupAdd,
+  resumeGroupAdd,
+  startGroupAdd,
+  type GroupAddSource,
+} from "@/lib/whatsapp/group-add/service";
+import { getGroupAddRunView, listContactGroupAdds } from "@/lib/queries/whatsapp-group-add";
 import {
   FAKE_EVO_GROUP,
   FAKE_EVO_GROUP_JID,
   FAKE_EVO_OWNER_JID,
   FAKE_EVO_ROUTES,
   listenFakeEvolution,
+  type FakeEvoCall,
+  type FakeEvoReply,
   type FakeEvolution,
 } from "./shims/fake-evolution";
 
@@ -36,6 +69,8 @@ type StartedFake = FakeEvolution & { creds: EvoCreds };
 type Ctx = {
   /** A fake Evolution of this check's own, closed when the check ends (pass or fail). `instance` is the name in the credentials. */
   startFake: (instance?: string) => Promise<StartedFake>;
+  /** The throwaway organizations, users and connections of this run (the database checks use them). */
+  world: World;
 };
 
 /** Each task below registers its checks with check(); main() runs them in order. */
@@ -529,28 +564,1809 @@ check("the fake records every call with its query and body parsed, runs a swappe
   ]);
 });
 
+// ── The database: organizations, a clock and a scheduler of our own ──────────
+
+type World = {
+  prisma: PrismaClient;
+  /** The number every instance of the fakes is linked to. New on each run of this script, so nothing an earlier run left behind shares its day. */
+  owner: string;
+  orgA: string;
+  orgB: string;
+  /** Owns `connA`. */
+  userA: string;
+  /** A member of org A with no number of their own. */
+  colleague: string;
+  /** Owns `connB`. */
+  userB: string;
+  connA: string;
+  connB: string;
+};
+
+const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
+/** The hosts the script refused to call. A check ends with none. */
+const refused: string[] = [];
+
+function assertLoopback(baseUrl: string): void {
+  // The message says nothing of the URL: it may carry a key.
+  assert.ok(LOOPBACK.has(new URL(baseUrl).hostname), "a connection of the check does not point at loopback");
+}
+
+/** Fails every fetch to a host that isn't loopback and writes the host down (.env points EVOLUTION_API_URL at the real server). Returns the undo. */
+function refuseOtherHosts(): () => void {
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const host = new URL(href).hostname;
+    if (!LOOPBACK.has(host)) {
+      refused.push(host);
+      throw new Error("blocked: not a loopback host");
+    }
+    return real(input, init);
+  }) as typeof fetch;
+  return () => {
+    globalThis.fetch = real;
+  };
+}
+
+/** 10:00 in São Paulo: inside the window; the São Paulo day starts at 03:00Z. */
+const START_AT = "2026-10-28T13:00:00.000Z";
+const at = (iso: string) => new Date(iso);
+
+/** The runner's clock: only a check or a sleep moves it. */
+const clock = { at: at(START_AT), sleeps: [] as number[] };
+
+/** What the runner asked to run in the background (instead of after() or the queue). */
+const scheduled: (() => Promise<void>)[] = [];
+
+/** Runs the scheduled tasks, one after the other, until none is left; the number that ran. */
+async function drain(): Promise<number> {
+  let ran = 0;
+  for (let task = scheduled.shift(); task; task = scheduled.shift()) {
+    await task();
+    ran++;
+  }
+  return ran;
+}
+
+function installRuntime(): void {
+  groupAddRuntime.now = () => new Date(clock.at);
+  groupAddRuntime.sleep = async (ms) => {
+    clock.sleeps.push(ms);
+    clock.at = new Date(clock.at.getTime() + ms);
+  };
+  groupAddRuntime.random = () => 0;
+  groupAddRuntime.schedule = (task) => {
+    scheduled.push(task);
+  };
+}
+
+async function until(done: () => boolean, what: string): Promise<void> {
+  const end = Date.now() + 5_000;
+  while (!done()) {
+    assert.ok(Date.now() < end, `timed out waiting for ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+const OTHER_GROUP = "120363000000000002@g.us";
+const TEMPLATE = "Oi {{nome}}! Este é o link para entrar no grupo {{grupo}}:";
+/** The n-th test number as the CRM has it: a BR mobile with the country code. */
+const N = (n: number) => `551191111${String(n).padStart(4, "0")}`;
+const FRIEND_NUMBER = "5511912345678";
+
+type Member = Record<string, unknown>;
+const meIn = (w: World, admin: "superadmin" | "admin" | null): Member => ({ id: `${w.owner}@s.whatsapp.net`, admin });
+/** A member whose LID comes with the number, and one whose LID doesn't. */
+const FRIEND: Member = { id: "1@lid", phoneNumber: `${FRIEND_NUMBER}@s.whatsapp.net`, admin: null };
+const NAMELESS: Member = { id: "2@lid", admin: null };
+const groupJson = (jid: string, subject: string, members: Member[], extra: Record<string, unknown> = {}) => ({
+  ...FAKE_EVO_GROUP,
+  id: jid,
+  subject,
+  size: members.length,
+  participants: members,
+  ...extra,
+});
+
+/** The groups a fake serves, by JID. A check changes them to change what Evolution answers. */
+type Groups = Record<string, unknown>;
+
+/** Links the fake's instances to the number of this run and serves `groups`. */
+function wire(w: World, fake: FakeEvolution, groups: Groups): void {
+  fake.set("fetchInstances", (call) => ({ status: 200, json: [{ name: call.instance ?? "", ownerJid: `${w.owner}@s.whatsapp.net` }] }));
+  fake.set("findGroupInfos", (call) => {
+    const group = groups[call.query.groupJid ?? ""];
+    return group
+      ? { status: 200, json: group }
+      : { status: 404, json: { status: 404, error: "Not Found", response: { message: ["Group not found"] } } };
+  });
+  fake.set("fetchAllGroups", () => ({ status: 200, json: Object.values(groups) }));
+}
+
+/** Points the two connections at this check's fake. */
+async function aim(w: World, fake: StartedFake): Promise<void> {
+  assertLoopback(fake.creds.baseUrl);
+  for (const [id, instance] of [
+    [w.connA, "wga-a"],
+    [w.connB, "wga-b"],
+  ] as const) {
+    await w.prisma.integrationConnection.update({
+      where: { id },
+      data: { credentialsEnc: encryptCredentials({ baseUrl: fake.creds.baseUrl, apiKey: "e2e", instance }), status: "ACTIVE" },
+    });
+  }
+}
+
+/**
+ * Reads back every connection of the two organizations and checks each one carries a base URL of its own on loopback, a key and an
+ * instance, before any call goes out. A connection without a base URL would fall back to the Evolution of .env, which is real.
+ */
+async function assertConnectionsLoopback(w: World): Promise<void> {
+  const rows = await w.prisma.integrationConnection.findMany({
+    where: { organizationId: { in: [w.orgA, w.orgB] } },
+    select: { credentialsEnc: true },
+  });
+  assert.ok(rows.length >= 2, "the throwaway connections are missing");
+  for (const row of rows) {
+    const creds = decryptCredentials(row.credentialsEnc);
+    assert.ok(creds.baseUrl && creds.apiKey && creds.instance, "a connection of the check has no base URL, key or instance of its own");
+    assertLoopback(creds.baseUrl);
+  }
+}
+
+/** Removes what the checks before left in the two organizations. */
+async function wipe(w: World): Promise<void> {
+  const inTest = { organizationId: { in: [w.orgA, w.orgB] } };
+  await w.prisma.whatsappGroupAddRun.deleteMany({ where: inTest }); // the items go with it
+  await w.prisma.contact.deleteMany({ where: inTest });
+  await w.prisma.contactFolder.deleteMany({ where: inTest });
+  // A check that adds a connection of its own leaves it only until here.
+  await w.prisma.integrationConnection.deleteMany({ where: { ...inTest, id: { notIn: [w.connA, w.connB] } } });
+}
+
+/** A clean slate: no data of an earlier check, the clock at 10:00, nothing scheduled, a fake linked to the number of this run. */
+async function scenario(ctx: Ctx) {
+  const w = ctx.world;
+  await wipe(w);
+  clock.at = at(START_AT);
+  clock.sleeps = [];
+  scheduled.length = 0;
+  installRuntime();
+  const fake = await ctx.startFake();
+  const groups: Groups = {
+    [GROUP]: groupJson(GROUP, "Ofertas", [meIn(w, "superadmin"), FRIEND, NAMELESS]),
+    [OTHER_GROUP]: groupJson(OTHER_GROUP, "Avisos", [meIn(w, "superadmin")]),
+  };
+  wire(w, fake, groups);
+  await aim(w, fake);
+  await assertConnectionsLoopback(w);
+  return { fake, groups, w };
+}
+
+let contactSeq = 0;
+
+/** A contact; creation times strictly increase, so the order in a folder is the order of the calls. */
+async function contactOf(
+  w: World,
+  o: { name: string; phone: string | null; org?: string; optedOut?: boolean; folderId?: string | null },
+): Promise<string> {
+  const contact = await w.prisma.contact.create({
+    data: {
+      organizationId: o.org ?? w.orgA,
+      name: o.name,
+      phone: o.phone,
+      optedOut: o.optedOut ?? false,
+      folderId: o.folderId ?? null,
+      createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, contactSeq++)),
+    },
+    select: { id: true },
+  });
+  return contact.id;
+}
+
+/** `count` contacts named "Pessoa n" with the numbers N(n), from `from`; their ids. */
+async function people(w: World, count: number, o: { org?: string; from?: number; folderId?: string | null } = {}): Promise<string[]> {
+  const ids: string[] = [];
+  for (let n = o.from ?? 1; n < (o.from ?? 1) + count; n++) {
+    ids.push(await contactOf(w, { name: `Pessoa ${n}`, phone: N(n), org: o.org, folderId: o.folderId }));
+  }
+  return ids;
+}
+
+async function folderOf(w: World, name: string, org = w.orgA): Promise<string> {
+  const folder = await w.prisma.contactFolder.create({ data: { organizationId: org, name }, select: { id: true } });
+  return folder.id;
+}
+
+const ofContacts = (contactIds: string[]): GroupAddSource => ({ kind: "contacts", contactIds });
+
+/** Starts a run and checks it was accepted; its id. */
+async function begin(
+  w: World,
+  o: { source: GroupAddSource; group?: string; text?: string; org?: string; user?: string },
+): Promise<string> {
+  const res = await startGroupAdd(o.org ?? w.orgA, o.user ?? w.userA, {
+    source: o.source,
+    groupJid: o.group ?? GROUP,
+    inviteText: o.text ?? TEMPLATE,
+  });
+  assert.ok(res.ok, JSON.stringify(res));
+  return res.runId;
+}
+
+type SeedItem = {
+  name: string;
+  phone: string | null;
+  status: GroupAddItemStatus;
+  reason?: string | null;
+  processedAt?: Date | null;
+};
+
+/** A run written straight to the table, with its items in order. */
+async function seedRun(
+  w: World,
+  o: {
+    org?: string;
+    group?: string;
+    senderKey?: string;
+    connectionId?: string;
+    status?: "QUEUED" | "RUNNING" | "PAUSED" | "DONE" | "CANCELED";
+    pausedReason?: string | null;
+    nextAttemptAt?: Date | null;
+    lastDispatchAt?: Date | null;
+    inviteUrl?: string | null;
+    createdAt?: Date;
+    items?: SeedItem[];
+  } = {},
+): Promise<string> {
+  const org = o.org ?? w.orgA;
+  const senderKey = o.senderKey ?? w.owner;
+  const run = await w.prisma.whatsappGroupAddRun.create({
+    data: {
+      organizationId: org,
+      connectionId: o.connectionId ?? (org === w.orgA ? w.connA : w.connB),
+      senderKey,
+      createdById: org === w.orgA ? w.userA : w.userB,
+      groupJid: o.group ?? GROUP,
+      groupName: "Ofertas",
+      inviteText: TEMPLATE,
+      inviteUrl: o.inviteUrl ?? null,
+      status: o.status ?? "DONE",
+      pausedReason: o.pausedReason ?? null,
+      nextAttemptAt: o.nextAttemptAt ?? null,
+      lastDispatchAt: o.lastDispatchAt ?? null,
+      ...(o.createdAt ? { createdAt: o.createdAt } : {}),
+    },
+    select: { id: true },
+  });
+  await w.prisma.whatsappGroupAddItem.createMany({
+    data: (o.items ?? []).map((item, position) => ({
+      organizationId: org,
+      runId: run.id,
+      contactId: `seed-${run.id}-${position}`,
+      contactName: item.name,
+      position,
+      phone: item.phone,
+      phoneKey: item.phone ? phoneMatchKey(item.phone) : null,
+      senderKey,
+      status: item.status,
+      reason: item.reason ?? null,
+      processedAt: item.processedAt ?? null,
+    })),
+  });
+  return run.id;
+}
+
+const runOf = (w: World, id: string) => w.prisma.whatsappGroupAddRun.findFirstOrThrow({ where: { id } });
+const itemsOf = (w: World, runId: string) => w.prisma.whatsappGroupAddItem.findMany({ where: { runId }, orderBy: { position: "asc" } });
+/** [name, status, reason] of each item, in the order of the run. */
+const verdicts = async (w: World, runId: string) => (await itemsOf(w, runId)).map((i) => [i.contactName, i.status, i.reason] as const);
+
+const bodyOf = (call: FakeEvoCall): Record<string, unknown> =>
+  typeof call.body === "object" && call.body !== null ? (call.body as Record<string, unknown>) : {};
+/** The one number an add, a number check or a text carries. */
+const numberOf = (call: FakeEvoCall): string => {
+  const body = bodyOf(call);
+  const list = body.participants ?? body.numbers ?? [body.number];
+  return Array.isArray(list) ? String(list[0] ?? "") : "";
+};
+const callsTo = (fake: FakeEvolution, ...routes: string[]) => fake.calls.filter((c) => c.route !== null && routes.includes(c.route));
+const addedNumbers = (fake: FakeEvolution) => callsTo(fake, "updateParticipant").map(numberOf);
+const texts = (fake: FakeEvolution) => callsTo(fake, "sendText").map(bodyOf);
+
+const addReply = (number: string, status: string, content: unknown = null): FakeEvoReply => ({
+  status: 201,
+  json: { updateParticipants: [{ status, jid: `${number}@s.whatsapp.net`, content }] },
+});
+/** What WhatsApp gives for a person whose privacy settings ask for the link instead. */
+const PRIVACY = { tag: "add_request", attrs: { code: "XyZ", expiration: "1700000000" } };
+const notOnWhatsapp = (number: string): FakeEvoReply => ({
+  status: 200,
+  json: [{ exists: false, jid: `${number}@s.whatsapp.net`, number }],
+});
+
+/** The cron's list, limited to the throwaway organizations (the database may hold runs of someone's manual tests). */
+const dueIn = (w: World, now = groupAddRuntime.now()) =>
+  findDueGroupAddRuns(now, { organizationId: { in: [w.orgA, w.orgB] } });
+
+// ── The read of the groups and the preview ───────────────────────────────────
+
+check("listMyGroups: the groups of the caller's own number, admin true / false / null as the number is, in or can't be told", async (ctx) => {
+  const { fake, groups, w } = await scenario(ctx);
+  const CLIENTES = "120363000000000011@g.us";
+  const MISTERIO = "120363000000000012@g.us";
+  groups[CLIENTES] = groupJson(CLIENTES, "Clientes", [meIn(w, null), FRIEND], { announce: false });
+  // The number isn't among the members that have one, and one member has none: it could be that one.
+  groups[MISTERIO] = groupJson(MISTERIO, "Mistério", [FRIEND, NAMELESS], { announce: undefined });
+
+  assert.deepEqual(await listMyGroups(w.orgA, w.userA), {
+    ok: true,
+    groups: [
+      { jid: OTHER_GROUP, subject: "Avisos", size: 1, announce: true, admin: true },
+      { jid: CLIENTES, subject: "Clientes", size: 2, announce: false, admin: false },
+      { jid: MISTERIO, subject: "Mistério", size: 2, announce: null, admin: null },
+      { jid: GROUP, subject: "Ofertas", size: 3, announce: true, admin: true },
+    ],
+  });
+  // The caller's own instance, asked in this order, and nothing written.
+  assert.deepEqual(
+    fake.calls.map((c) => [c.route, c.instance]),
+    [
+      ["connectionState", "wga-a"],
+      ["fetchInstances", "wga-a"],
+      ["fetchAllGroups", "wga-a"],
+    ],
+  );
+});
+
+check("listMyGroups: Evolution out of reach is unavailable, a number that isn't open is disconnected", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  fake.set("fetchAllGroups", { status: 500, json: { error: "boom" } });
+  assert.deepEqual(await listMyGroups(w.orgA, w.userA), { ok: false, error: "unavailable" });
+  fake.set("fetchAllGroups", "drop");
+  assert.deepEqual(await listMyGroups(w.orgA, w.userA), { ok: false, error: "unavailable" });
+
+  fake.set("connectionState", { status: 500, json: {} });
+  assert.deepEqual(await listMyGroups(w.orgA, w.userA), { ok: false, error: "unavailable" });
+  for (const state of ["close", "connecting"]) {
+    fake.set("connectionState", { status: 200, json: { instance: { state } } });
+    assert.deepEqual(await listMyGroups(w.orgA, w.userA), { ok: false, error: "disconnected" }, state);
+  }
+});
+
+check("a number with no ownerJid lists every group with admin null, and no round starts from it", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  fake.set("fetchInstances", { status: 200, json: [{ name: "wga-a", ownerJid: null }] });
+  const listed = await listMyGroups(w.orgA, w.userA);
+  assert.ok(listed.ok);
+  assert.deepEqual(
+    listed.groups.map((g) => [g.subject, g.admin]),
+    [
+      ["Avisos", null],
+      ["Ofertas", null],
+    ],
+  );
+  const [pessoa] = await people(w, 1);
+  assert.deepEqual(
+    await startGroupAdd(w.orgA, w.userA, { source: ofContacts([pessoa]), groupJid: GROUP, inviteText: TEMPLATE }),
+    { ok: false, error: "not_admin" },
+  );
+  assert.deepEqual(await previewGroupAdd(w.orgA, w.userA, ofContacts([pessoa]), GROUP), { ok: false, error: "not_admin" });
+  assert.equal(await w.prisma.whatsappGroupAddRun.count({ where: { organizationId: w.orgA } }), 0);
+});
+
+check("a user with no number of their own gets no_connection, even when a colleague of the org has an active one", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const [pessoa] = await people(w, 1);
+  const noConnection = { ok: false, error: "no_connection" };
+  assert.deepEqual(await listMyGroups(w.orgA, w.colleague), noConnection);
+  assert.deepEqual(await previewGroupAdd(w.orgA, w.colleague, ofContacts([pessoa]), GROUP), noConnection);
+  assert.deepEqual(
+    await startGroupAdd(w.orgA, w.colleague, { source: ofContacts([pessoa]), groupJid: GROUP, inviteText: TEMPLATE }),
+    noConnection,
+  );
+  // Another org's number is no one's here either.
+  assert.deepEqual(await listMyGroups(w.orgA, w.userB), noConnection);
+  assert.equal(fake.calls.length, 0, "the colleague's number was used");
+  assert.equal(await w.prisma.whatsappGroupAddRun.count({ where: { organizationId: w.orgA } }), 0);
+  // The owner of the number still has it.
+  assert.ok((await listMyGroups(w.orgA, w.userA)).ok);
+
+  // A connection that isn't active is not a number to use.
+  await w.prisma.integrationConnection.update({ where: { id: w.connA }, data: { status: "INACTIVE" } });
+  assert.deepEqual(await listMyGroups(w.orgA, w.userA), noConnection);
+  await w.prisma.integrationConnection.update({ where: { id: w.connA }, data: { status: "ACTIVE" } });
+
+  // With two, the newest.
+  fake.calls.length = 0;
+  await w.prisma.integrationConnection.create({
+    data: {
+      organizationId: w.orgA,
+      ownerId: w.userA,
+      provider: "EVOLUTION",
+      label: "wga newer",
+      status: "ACTIVE",
+      credentialsEnc: encryptCredentials({ baseUrl: fake.creds.baseUrl, apiKey: "e2e", instance: "wga-a2" }),
+    },
+  });
+  await assertConnectionsLoopback(w);
+  assert.ok((await listMyGroups(w.orgA, w.userA)).ok);
+  assert.ok(fake.calls.length > 0 && fake.calls.every((c) => c.instance === "wga-a2"), "not the newest connection");
+});
+
+check("previewGroupAdd: the exact counts of a folder with a contact of each kind, a previous round included, and nothing is written", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const folderId = await folderOf(w, "Clientes VIP");
+  const pendente = await contactOf(w, { name: "Pendente", phone: N(1), folderId });
+  await contactOf(w, { name: "Já estava", phone: "(11) 91234-5678", folderId }); // the member of the group, typed with a mask
+  await contactOf(w, { name: "Fixo", phone: "(11) 3333-4444", folderId });
+  await contactOf(w, { name: "Sem telefone", phone: null, folderId });
+  await contactOf(w, { name: "Optout", phone: N(9), optedOut: true, folderId });
+  const saiu = await contactOf(w, { name: "Saiu", phone: "(11) 91111-0006", folderId }); // added by an earlier round, not in the group now
+  await contactOf(w, { name: "Convidado", phone: "11 91111-0007", folderId }); // got the link in an earlier round
+  await contactOf(w, { name: "Repetido", phone: "(11) 91111-0001", folderId }); // the number of Pendente again
+  await contactOf(w, { name: "Outra pasta", phone: N(8) });
+
+  const longAgo = at("2026-10-20T12:00:00.000Z");
+  await seedRun(w, {
+    items: [
+      { name: "Saiu", phone: N(6), status: "ADDED", processedAt: longAgo },
+      { name: "Convidado", phone: N(7), status: "INVITED", processedAt: longAgo },
+      { name: "Pendente", phone: N(1), status: "FAILED", reason: "http_500", processedAt: longAgo }, // not a reason to leave anyone out
+    ],
+  });
+  // Rounds that are not about this org and this group say nothing about it.
+  await seedRun(w, { group: OTHER_GROUP, items: [{ name: "Pendente", phone: N(1), status: "ADDED", processedAt: longAgo }] });
+  await seedRun(w, { org: w.orgB, items: [{ name: "Pendente", phone: N(1), status: "ADDED", processedAt: longAgo }] });
+  // Two people tried today on this number (by a round of another org): they count for the day.
+  await seedRun(w, {
+    org: w.orgB,
+    group: OTHER_GROUP,
+    items: [
+      { name: "x", phone: null, status: "ADDED", processedAt: at("2026-10-28T12:00:00.000Z") },
+      { name: "y", phone: null, status: "INVITED", processedAt: at("2026-10-28T12:01:00.000Z") },
+    ],
+  });
+  const runsBefore = await w.prisma.whatsappGroupAddRun.count({ where: { organizationId: w.orgA } });
+  const itemsBefore = await w.prisma.whatsappGroupAddItem.count({ where: { organizationId: w.orgA } });
+
+  const preview = await previewGroupAdd(w.orgA, w.userA, { kind: "folder", folderId }, GROUP);
+  assert.deepEqual(preview, {
+    ok: true,
+    group: { jid: GROUP, subject: "Ofertas", size: 3, announce: true, admin: true },
+    counts: { total: 8, pending: 1, alreadyIn: 1, noWhatsapp: 1, skipped: 3, leftGroup: 1, alreadyInvited: 1 },
+    usedToday: 2,
+    forecastAt: "2026-10-28T13:01:00.000Z",
+    overLimit: false,
+  });
+
+  // The same plan from a selection of contacts.
+  const picked = await previewGroupAdd(w.orgA, w.userA, ofContacts([pendente, saiu]), GROUP);
+  assert.ok(picked.ok);
+  assert.deepEqual(picked.counts, { total: 2, pending: 1, alreadyIn: 0, noWhatsapp: 0, skipped: 0, leftGroup: 1, alreadyInvited: 0 });
+  // Contacts with no folder are a source of their own.
+  const loose = await previewGroupAdd(w.orgA, w.userA, { kind: "folder", folderId: null }, GROUP);
+  assert.ok(loose.ok);
+  assert.deepEqual(loose.counts, { total: 1, pending: 1, alreadyIn: 0, noWhatsapp: 0, skipped: 0, leftGroup: 0, alreadyInvited: 0 });
+
+  // What can't be planned.
+  assert.deepEqual(await previewGroupAdd(w.orgA, w.userA, { kind: "folder", folderId: "nope" }, GROUP), { ok: false, error: "not_found" });
+  assert.deepEqual(await previewGroupAdd(w.orgA, w.userA, { kind: "folder", folderId: await folderOf(w, "Vazia") }, GROUP), { ok: false, error: "empty" });
+  assert.deepEqual(await previewGroupAdd(w.orgA, w.userA, ofContacts([]), GROUP), { ok: false, error: "empty" });
+  const ofB = await contactOf(w, { name: "Da outra empresa", phone: N(2), org: w.orgB });
+  assert.deepEqual(await previewGroupAdd(w.orgA, w.userA, ofContacts([ofB]), GROUP), { ok: false, error: "empty" });
+  assert.deepEqual(await previewGroupAdd(w.orgA, w.userA, { kind: "folder", folderId }, "120363999999999999@g.us"), { ok: false, error: "not_found" });
+
+  // Nothing was written, to the table or to WhatsApp.
+  assert.equal(await w.prisma.whatsappGroupAddRun.count({ where: { organizationId: w.orgA } }), runsBefore);
+  assert.equal(await w.prisma.whatsappGroupAddItem.count({ where: { organizationId: w.orgA } }), itemsBefore);
+  assert.deepEqual(callsTo(fake, "updateParticipant", "sendText", "whatsappNumbers"), []);
+});
+
+check("previewGroupAdd: a group that the number does not run is not_admin, and one that would pass 1,024 people is over the limit", async (ctx) => {
+  const { groups, w } = await scenario(ctx);
+  const [one, two, three, four, five, six] = await people(w, 6);
+  groups[GROUP] = groupJson(GROUP, "Ofertas", [meIn(w, null), FRIEND]);
+  assert.deepEqual(await previewGroupAdd(w.orgA, w.userA, ofContacts([one]), GROUP), { ok: false, error: "not_admin" });
+
+  // Room for 3 more people: 6 are pending, so the last 3 would not fit.
+  groups[GROUP] = groupJson(GROUP, "Ofertas", [meIn(w, "admin"), FRIEND], { size: 1021 });
+  const preview = await previewGroupAdd(w.orgA, w.userA, ofContacts([one, two, three, four, five, six]), GROUP);
+  assert.ok(preview.ok);
+  assert.equal(preview.overLimit, true);
+  assert.equal(preview.group.size, 1021);
+  assert.equal(preview.counts.pending, 6);
+  // The forecast is for the 3 that fit.
+  assert.equal(preview.forecastAt, "2026-10-28T13:03:00.000Z");
+});
+
+// ── The run ──────────────────────────────────────────────────────────────────
+
+check("a full run: added, invited by text, already in, failed, no WhatsApp; the opted-out contact is never asked about", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const folderId = await folderOf(w, "Clientes");
+  await contactOf(w, { name: "Ana", phone: N(1), folderId }); // added
+  await contactOf(w, { name: "Bia", phone: N(2), folderId }); // her privacy settings ask for the link
+  await contactOf(w, { name: "Caio", phone: N(3), folderId }); // already a member
+  await contactOf(w, { name: "Davi", phone: N(4), folderId }); // HTTP 500
+  await contactOf(w, { name: "Eva", phone: N(5), folderId }); // no WhatsApp account
+  await contactOf(w, { name: "Fábio", phone: N(6), optedOut: true, folderId });
+  fake.set("updateParticipant", (call) => {
+    const number = numberOf(call);
+    if (number === N(2)) return addReply(number, "403", PRIVACY);
+    if (number === N(3)) return addReply(number, "409");
+    if (number === N(4)) return { status: 500, json: { status: 500, error: "Internal Server Error" } };
+    return addReply(number, "200");
+  });
+  fake.set("whatsappNumbers", (call) => {
+    const number = numberOf(call);
+    return number === N(5) ? notOnWhatsapp(number) : { status: 200, json: [{ exists: true, jid: `${number}@s.whatsapp.net`, number }] };
+  });
+
+  const runId = await begin(w, { source: { kind: "folder", folderId } });
+  assert.equal((await runOf(w, runId)).status, "RUNNING");
+  assert.equal(scheduled.length, 1, "the start kicks the run once");
+  assert.equal(await drain(), 1);
+
+  assert.deepEqual(await verdicts(w, runId), [
+    ["Ana", "ADDED", null],
+    ["Bia", "INVITED", null],
+    ["Caio", "ALREADY_IN", null],
+    ["Davi", "FAILED", "http_500"],
+    ["Eva", "NO_WHATSAPP", null],
+    ["Fábio", "SKIPPED", "opted_out"],
+  ]);
+  const items = await itemsOf(w, runId);
+  assert.deepEqual(items.map((i) => i.code), ["200", "403", "409", null, null, null]);
+  // Every try is stamped; the person Evolution found no account for, and the one who was left out, are not.
+  assert.deepEqual(
+    items.map((i) => i.processedAt?.toISOString() ?? null),
+    ["2026-10-28T13:00:00.000Z", "2026-10-28T13:00:30.000Z", "2026-10-28T13:01:00.000Z", "2026-10-28T13:01:30.000Z", null, null],
+  );
+  const run = await runOf(w, runId);
+  assert.equal(run.status, "DONE");
+  assert.equal(run.finishedAt?.toISOString(), "2026-10-28T13:02:00.000Z");
+  assert.deepEqual([run.lastDispatchAt, run.nextAttemptAt, run.waitReason, run.pausedReason, run.lastError], [null, null, null, null, null]);
+  assert.equal(run.inviteUrl, "https://chat.whatsapp.com/AbC", "the link is fetched once and kept on the round");
+
+  // One person at a time, with the pause of 30 s (random 0) between the tries, slept in pieces that renew the lease.
+  assert.equal(clock.sleeps.reduce((a, b) => a + b, 0), 120_000);
+  assert.ok(clock.sleeps.every((ms) => ms <= 10_000));
+
+  // The only text is the invite of the person who was refused, with the link last.
+  assert.deepEqual(texts(fake), [{ number: N(2), text: renderInvite(TEMPLATE, { nome: "Bia", grupo: "Ofertas" }, "https://chat.whatsapp.com/AbC") }]);
+  assert.ok(String(texts(fake)[0]?.text).endsWith("\n\nhttps://chat.whatsapp.com/AbC"));
+  assert.equal(String(texts(fake)[0]?.text).startsWith("Oi Bia! Este é o link para entrar no grupo Ofertas:"), true);
+  // The adds, in order, one each; the person with no account was only asked about.
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2), N(3), N(4)]);
+  assert.deepEqual(callsTo(fake, "whatsappNumbers").map(numberOf), [N(1), N(2), N(3), N(4), N(5)]);
+  // Nothing else reached Evolution: every call is on a route the fake serves, none is the call that sends a link to a list.
+  assert.deepEqual(fake.calls.filter((c) => c.route === null), []);
+  assert.ok(fake.calls.every((c) => !c.path.toLowerCase().includes("sendinvite")));
+  // The opted-out contact is in no request: not the number, not the name.
+  const traffic = JSON.stringify(fake.calls);
+  assert.ok(!traffic.includes(N(6)) && !traffic.includes("911110006") && !traffic.includes("Fábio"), "the opted-out contact reached Evolution");
+});
+
+check("window: outside 08:00-20:00 in São Paulo nothing goes out, the run waits for 08:00 and goes on then", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 2);
+  clock.at = at("2026-10-28T23:05:00.000Z"); // 20:05 in São Paulo
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  const callsAtStart = fake.calls.length;
+
+  assert.deepEqual(await runGroupAddRun(runId), { done: false, retryAfterSec: 42_900 });
+  const waiting = await runOf(w, runId);
+  assert.equal(waiting.status, "RUNNING");
+  assert.equal(waiting.nextAttemptAt?.toISOString(), "2026-10-29T11:00:00.000Z");
+  assert.equal(waiting.waitReason, "window");
+  assert.equal(waiting.lastDispatchAt, null, "the lease is released while it waits");
+  assert.equal(fake.calls.length, callsAtStart, "a call went out of the window");
+
+  // Not due until 08:00, due at 08:00.
+  assert.ok(!(await dueIn(w, at("2026-10-28T23:10:00.000Z"))).includes(runId));
+  assert.ok(!(await dueIn(w, at("2026-10-29T10:59:59.000Z"))).includes(runId));
+  assert.ok((await dueIn(w, at("2026-10-29T11:00:00.000Z"))).includes(runId));
+
+  clock.at = at("2026-10-29T11:00:00.000Z");
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.equal((await runOf(w, runId)).status, "DONE");
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2)]);
+});
+
+check("window: a pause that would end after 20:00 becomes a wait until 08:00, and the person is not tried at 20:00", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 3);
+  clock.at = at("2026-10-28T22:59:30.000Z"); // 19:59:30
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  assert.deepEqual(await runGroupAddRun(runId), { done: false, retryAfterSec: 43_230 });
+  assert.deepEqual(addedNumbers(fake), [N(1)]);
+  const run = await runOf(w, runId);
+  assert.equal(run.nextAttemptAt?.toISOString(), "2026-10-29T11:00:00.000Z");
+  assert.equal(run.waitReason, "window", "the window, not the pace, is what it waits for");
+  assert.deepEqual(clock.sleeps, [], "it did not sleep through the night");
+
+  clock.at = at("2026-10-29T11:00:00.000Z");
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2), N(3)]);
+});
+
+check("window: the clock is read again before the add and before the invite, so neither goes out after 20:00", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const [first, second] = await people(w, 2);
+  clock.at = at("2026-10-28T22:59:59.000Z"); // 19:59:59
+  // The number check takes the clock past 20:00, as a slow call would.
+  fake.set("whatsappNumbers", (call) => {
+    clock.at = at("2026-10-28T23:00:01.000Z");
+    return { status: 200, json: [{ exists: true, jid: `${numberOf(call)}@s.whatsapp.net`, number: numberOf(call) }] };
+  });
+  const runId = await begin(w, { source: ofContacts([first, second]) });
+  assert.deepEqual(await runGroupAddRun(runId), { done: false, retryAfterSec: 43_199 });
+  assert.deepEqual(addedNumbers(fake), [], "the add went out after 20:00");
+  let items = await itemsOf(w, runId);
+  // The person was reserved and given back: pending, with no try stamped.
+  assert.deepEqual(items.map((i) => [i.status, i.processedAt]), [["PENDING", null], ["PENDING", null]]);
+  assert.equal((await runOf(w, runId)).waitReason, "window");
+
+  // The next morning the add is refused for her privacy settings, and by then it is 20:00:01: the invite can't go out.
+  fake.set("whatsappNumbers", (call) => ({ status: 200, json: [{ exists: true, jid: `${numberOf(call)}@s.whatsapp.net`, number: numberOf(call) }] }));
+  fake.set("updateParticipant", (call) => {
+    clock.at = at("2026-10-29T23:00:01.000Z");
+    return addReply(numberOf(call), "403", PRIVACY);
+  });
+  clock.at = at("2026-10-29T22:59:50.000Z");
+  assert.deepEqual(await runGroupAddRun(runId), { done: false, retryAfterSec: 43_199 });
+  assert.deepEqual(texts(fake), [], "the invite went out after 20:00");
+  items = await itemsOf(w, runId);
+  assert.deepEqual(items.map((i) => [i.status, i.reason, i.code]), [["FAILED", "invite_failed", "403"], ["PENDING", null, null]]);
+});
+
+/** `count` people of a done round, all tried today (12:00Z) with this status. */
+const triedToday = (status: GroupAddItemStatus, count: number): SeedItem[] =>
+  Array.from({ length: count }, (_, i) => ({ name: `x${status}${i}`, phone: null, status, processedAt: at("2026-10-28T12:00:00.000Z") }));
+
+/** A round of org B, done, on the same number (the fake links every instance to it), with these people tried today. */
+const otherOrgTried = (w: World, items: SeedItem[]) => seedRun(w, { org: w.orgB, group: OTHER_GROUP, items });
+
+/** Starts a round of two people in org A and runs it once, expecting it to wait for 08:00 tomorrow because of the cap. */
+async function expectCapWait(ctx: Ctx, tried: (w: World) => Promise<unknown>): Promise<void> {
+  const { fake, w } = await scenario(ctx);
+  await tried(w);
+  await people(w, 2);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  assert.deepEqual(await runGroupAddRun(runId), { done: false, retryAfterSec: 79_200 });
+  assert.deepEqual(callsTo(fake, "updateParticipant", "whatsappNumbers", "sendText"), []);
+  const run = await runOf(w, runId);
+  assert.equal(run.status, "RUNNING");
+  assert.equal(run.nextAttemptAt?.toISOString(), "2026-10-29T11:00:00.000Z");
+  assert.equal(run.waitReason, "cap");
+  assert.equal(run.lastDispatchAt, null);
+  assert.deepEqual((await itemsOf(w, runId)).map((i) => i.status), ["PENDING", "PENDING"]);
+}
+
+check("cap: 100 ADDED today on the same number, in another organization, stop the run until 08:00 tomorrow", async (ctx) => {
+  await expectCapWait(ctx, (w) => otherOrgTried(w, triedToday("ADDED", 100)));
+});
+
+check("cap: a try that ended in an invite or in a failure counts as much as an add", async (ctx) => {
+  await expectCapWait(ctx, (w) =>
+    otherOrgTried(w, [...triedToday("ADDED", 34), ...triedToday("INVITED", 33), ...triedToday("FAILED", 33)]),
+  );
+});
+
+check("cap: only ADDED, INVITED and FAILED tried today count; yesterday (São Paulo) and the people left out do not", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const many = (status: GroupAddItemStatus, processedAt: Date | null): SeedItem[] =>
+    Array.from({ length: 100 }, (_, i) => ({ name: `x${status}${i}`, phone: null, status, processedAt }));
+  await seedRun(w, {
+    org: w.orgB,
+    group: OTHER_GROUP,
+    items: [
+      // One millisecond before the São Paulo day started: yesterday.
+      ...many("ADDED", at("2026-10-28T02:59:59.999Z")),
+      ...many("ALREADY_IN", at("2026-10-28T12:00:00.000Z")),
+      ...many("NO_WHATSAPP", at("2026-10-28T12:00:00.000Z")),
+      ...many("SKIPPED", null),
+    ],
+  });
+  await people(w, 2);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2)]);
+  assert.equal((await runOf(w, runId)).status, "DONE");
+});
+
+check("cap: a round that spends the day in the middle goes on by itself the next day, from 08:00", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  // 99 tried today: room for one more.
+  await seedRun(w, {
+    org: w.orgB,
+    group: OTHER_GROUP,
+    items: Array.from({ length: 99 }, (_, i) => ({ name: `x${i}`, phone: null, status: "ADDED" as const, processedAt: at("2026-10-28T11:00:00.000Z") })),
+  });
+  await people(w, 3);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  // The cap is looked at before the pause between people, so it doesn't sleep on the way to the morning.
+  assert.deepEqual(await runGroupAddRun(runId), { done: false, retryAfterSec: 79_200 });
+  assert.deepEqual(addedNumbers(fake), [N(1)]);
+  assert.deepEqual((await itemsOf(w, runId)).map((i) => i.status), ["ADDED", "PENDING", "PENDING"]);
+  const run = await runOf(w, runId);
+  assert.equal(run.waitReason, "cap");
+  assert.equal(run.nextAttemptAt?.toISOString(), "2026-10-29T11:00:00.000Z");
+
+  // Tomorrow's day is empty.
+  assert.ok(!(await dueIn(w, at("2026-10-29T10:59:00.000Z"))).includes(runId));
+  assert.ok((await dueIn(w, at("2026-10-29T11:00:00.000Z"))).includes(runId));
+  clock.at = at("2026-10-29T11:00:00.000Z");
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2), N(3)]);
+  assert.equal((await runOf(w, runId)).status, "DONE");
+});
+
+check("one run at a time per number, in any organization: the second is QUEUED and rises, in order, when the first ends", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const idsA = await people(w, 2);
+  const idsB = await people(w, 2, { org: w.orgB, from: 11 });
+  const [one] = await people(w, 1, { from: 21 });
+
+  // The same number (the fake links every instance to it): org B's round waits for org A's.
+  const first = await begin(w, { source: ofContacts(idsA) });
+  const second = await begin(w, { source: ofContacts(idsB), org: w.orgB, user: w.userB });
+  const third = await begin(w, { source: ofContacts([one]), group: OTHER_GROUP });
+  assert.deepEqual(
+    await Promise.all([first, second, third].map(async (id) => (await runOf(w, id)).status)),
+    ["RUNNING", "QUEUED", "QUEUED"],
+  );
+  assert.equal(scheduled.length, 1, "only the round that runs is kicked");
+
+  // The first ends: the oldest of the queue rises, and is kicked.
+  await scheduled.shift()?.();
+  assert.deepEqual(
+    await Promise.all([first, second, third].map(async (id) => (await runOf(w, id)).status)),
+    ["DONE", "RUNNING", "QUEUED"],
+  );
+  assert.equal(scheduled.length, 1);
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2)], "the second round made a call before its turn");
+  assert.notEqual((await runOf(w, second)).startedAt, null);
+
+  await drain();
+  assert.deepEqual(
+    await Promise.all([first, second, third].map(async (id) => (await runOf(w, id)).status)),
+    ["DONE", "DONE", "DONE"],
+  );
+  // Each round went out through its own organization's connection, one after the other.
+  assert.deepEqual(
+    callsTo(fake, "updateParticipant").map((c) => [c.instance, numberOf(c)]),
+    [["wga-a", N(1)], ["wga-a", N(2)], ["wga-b", N(11)], ["wga-b", N(12)], ["wga-a", N(21)]],
+  );
+});
+
+check("cancel promotes the next run of the number; a paused run holds the queue until it is resumed", async (ctx) => {
+  const { w } = await scenario(ctx);
+  const [a1] = await people(w, 1);
+  const [b1] = await people(w, 1, { org: w.orgB, from: 11 });
+  const [a2] = await people(w, 1, { from: 21 });
+  const first = await begin(w, { source: ofContacts([a1]) });
+  const second = await begin(w, { source: ofContacts([b1]), org: w.orgB, user: w.userB });
+  const statusOf = async (id: string) => (await runOf(w, id)).status;
+  assert.deepEqual([await statusOf(first), await statusOf(second)], ["RUNNING", "QUEUED"]);
+  assert.equal(scheduled.length, 1);
+  scheduled.length = 0;
+
+  // A queued run can be paused; paused, it holds the number.
+  assert.equal(await pauseGroupAdd(w.orgB, second), true);
+  const run2 = await runOf(w, second);
+  assert.deepEqual([run2.status, run2.pausedReason], ["PAUSED", "manual"]);
+  const third = await begin(w, { source: ofContacts([a2]), group: OTHER_GROUP });
+
+  // The round that runs is canceled: its people stay PENDING, and nobody rises past the paused one.
+  assert.equal(await cancelGroupAdd(w.orgA, first), true);
+  const canceled = await runOf(w, first);
+  assert.equal(canceled.status, "CANCELED");
+  assert.ok(canceled.finishedAt !== null);
+  assert.deepEqual((await itemsOf(w, first)).map((i) => i.status), ["PENDING"]);
+  assert.deepEqual([await statusOf(second), await statusOf(third)], ["PAUSED", "QUEUED"]);
+  assert.equal(scheduled.length, 0);
+  // A canceled run is no one's to cancel again, or to pause, or to run.
+  assert.equal(await cancelGroupAdd(w.orgA, first), false);
+  assert.equal(await pauseGroupAdd(w.orgA, first), false);
+  assert.deepEqual(await resumeGroupAdd(w.orgA, first), { ok: false, error: "not_found" });
+  assert.deepEqual(await runGroupAddRun(first), { done: true });
+
+  // Resumed, the paused run goes first: nothing else is running on the number.
+  assert.deepEqual(await resumeGroupAdd(w.orgB, second), { ok: true });
+  const resumed = await runOf(w, second);
+  assert.deepEqual([resumed.status, resumed.pausedReason, resumed.waitReason], ["RUNNING", null, null]);
+  assert.equal(scheduled.length, 1);
+  assert.equal(await statusOf(third), "QUEUED");
+  await drain();
+  assert.deepEqual([await statusOf(second), await statusOf(third)], ["DONE", "DONE"]);
+});
+
+check("disconnected: the live state decides, not the row; the run pauses with no add and goes on when the number answers open", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 3);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  fake.set("connectionState", { status: 200, json: { instance: { state: "close" } } });
+  // The row still says ACTIVE (it is the live state that changed).
+  assert.equal(await w.prisma.integrationConnection.count({ where: { id: w.connA, status: "ACTIVE" } }), 1);
+
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  let run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.pausedReason, run.lastDispatchAt], ["PAUSED", "disconnected", null]);
+  assert.deepEqual(callsTo(fake, "whatsappNumbers", "updateParticipant", "sendText"), []);
+
+  // Still closed: the cron leaves it be.
+  assert.ok(!(await dueIn(w)).includes(runId));
+  assert.equal((await runOf(w, runId)).status, "PAUSED");
+
+  // Answering open again: the cron's list moves it back and lists it.
+  fake.set("connectionState", { status: 200, json: { instance: { state: "open" } } });
+  assert.ok((await dueIn(w)).includes(runId));
+  run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.pausedReason], ["RUNNING", null]);
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.equal((await runOf(w, runId)).status, "DONE");
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2), N(3)]);
+});
+
+check("disconnected: a paused run whose number is back waits in the queue when another run has the number", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 1);
+  const paused = await seedRun(w, { status: "PAUSED", pausedReason: "disconnected", items: [{ name: "Pessoa 1", phone: N(1), status: "PENDING" }] });
+  // Another run took the number meanwhile (a state the queue prevents; seeded to see what the cron does with it).
+  const running = await seedRun(w, { org: w.orgB, group: OTHER_GROUP, status: "RUNNING" });
+
+  const due = await dueIn(w);
+  assert.ok(!due.includes(paused), "listed while the number is busy");
+  assert.ok(due.includes(running));
+  assert.deepEqual([(await runOf(w, paused)).status, (await runOf(w, paused)).pausedReason], ["QUEUED", null]);
+  assert.deepEqual(callsTo(fake, "updateParticipant"), []);
+});
+
+check("disconnected: a manual pause stays paused when the number is open", async (ctx) => {
+  const { w } = await scenario(ctx);
+  const [one] = await people(w, 1);
+  const runId = await begin(w, { source: ofContacts([one]) });
+  assert.equal(await pauseGroupAdd(w.orgA, runId), true);
+  assert.ok(!(await dueIn(w)).includes(runId));
+  assert.equal((await runOf(w, runId)).status, "PAUSED");
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+});
+
+check("unavailable: Evolution not answering the state waits 5 minutes, with no add and no pause", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 2);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  fake.set("connectionState", { status: 500, json: {} });
+  assert.deepEqual(await runGroupAddRun(runId), { done: false, retryAfterSec: 300 });
+  const run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.waitReason, run.lastDispatchAt], ["RUNNING", "unavailable", null]);
+  assert.equal(run.nextAttemptAt?.toISOString(), "2026-10-28T13:05:00.000Z");
+  assert.deepEqual(callsTo(fake, "updateParticipant", "whatsappNumbers"), []);
+});
+
+check("a run whose connection is gone, or is another organization's, pauses as no_connection and never reaches it", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const items = [{ name: "Pessoa 1", phone: N(1), status: "PENDING" as const }];
+  const gone = await seedRun(w, { status: "RUNNING", connectionId: "no-such-connection", items });
+  assert.deepEqual(await runGroupAddRun(gone), { done: true });
+  // Org B's connection is a real one, with working credentials: the run of org A must not use it.
+  const crossed = await seedRun(w, { status: "RUNNING", connectionId: w.connB, senderKey: `${w.owner}2`, items });
+  assert.deepEqual(await runGroupAddRun(crossed), { done: true });
+  for (const id of [gone, crossed]) {
+    const run = await runOf(w, id);
+    assert.deepEqual([run.status, run.pausedReason, run.lastDispatchAt], ["PAUSED", "no_connection", null]);
+  }
+  assert.equal(fake.calls.length, 0, "a call went out");
+});
+
+check("not admin: a number that stopped being admin pauses the run as not_admin with no add, and resuming asks again", async (ctx) => {
+  const { fake, groups, w } = await scenario(ctx);
+  await people(w, 2);
+  // At the start it is admin; before the run goes it is not.
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+  groups[GROUP] = groupJson(GROUP, "Ofertas", [meIn(w, null), FRIEND, NAMELESS]);
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  const run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.pausedReason, run.lastDispatchAt], ["PAUSED", "not_admin", null]);
+  assert.deepEqual(callsTo(fake, "whatsappNumbers", "updateParticipant"), []);
+  assert.deepEqual((await itemsOf(w, runId)).map((i) => i.status), ["PENDING", "PENDING"]);
+
+  // A paused round holds its group: no second round starts for it.
+  assert.deepEqual(
+    await startGroupAdd(w.orgA, w.userA, { source: { kind: "folder", folderId: null }, groupJid: GROUP, inviteText: TEMPLATE }),
+    { ok: false, error: "already_running" },
+  );
+  // Resuming asks again: still not admin, still paused.
+  assert.deepEqual(await resumeGroupAdd(w.orgA, runId), { ok: false, error: "not_admin" });
+  assert.equal((await runOf(w, runId)).status, "PAUSED");
+  // Admin again: it resumes and goes on.
+  groups[GROUP] = groupJson(GROUP, "Ofertas", [meIn(w, "admin"), FRIEND, NAMELESS]);
+  assert.deepEqual(await resumeGroupAdd(w.orgA, runId), { ok: true });
+  assert.equal((await runOf(w, runId)).status, "RUNNING");
+  assert.equal(await drain(), 1);
+  assert.equal((await runOf(w, runId)).status, "DONE");
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2)]);
+});
+
+check("not admin: the start refuses a group the number does not run", async (ctx) => {
+  const { groups, w } = await scenario(ctx);
+  const [one] = await people(w, 1);
+  groups[GROUP] = groupJson(GROUP, "Ofertas", [meIn(w, null), FRIEND]);
+  assert.deepEqual(
+    await startGroupAdd(w.orgA, w.userA, { source: ofContacts([one]), groupJid: GROUP, inviteText: TEMPLATE }),
+    { ok: false, error: "not_admin" },
+  );
+  assert.deepEqual(
+    await startGroupAdd(w.orgA, w.userA, { source: ofContacts([one]), groupJid: "120363999999999999@g.us", inviteText: TEMPLATE }),
+    { ok: false, error: "not_found" },
+  );
+  assert.equal(await w.prisma.whatsappGroupAddRun.count({ where: { organizationId: w.orgA } }), 0);
+});
+
+check("not admin: after a try that failed the admin is asked again, so a number that lost it stops after one person", async (ctx) => {
+  const { fake, groups, w } = await scenario(ctx);
+  await people(w, 3);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  // The first add fails (the number lost its rights meanwhile); the second person must not be tried.
+  fake.set("updateParticipant", () => {
+    groups[GROUP] = groupJson(GROUP, "Ofertas", [meIn(w, null), FRIEND, NAMELESS]);
+    return { status: 400, json: { status: 400, error: "Bad Request" } };
+  });
+  await drain();
+  assert.deepEqual(addedNumbers(fake), [N(1)]);
+  const run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.pausedReason], ["PAUSED", "not_admin"]);
+  assert.deepEqual((await itemsOf(w, runId)).map((i) => [i.status, i.reason]), [["FAILED", "http_400"], ["PENDING", null], ["PENDING", null]]);
+});
+
+check("two runners at the same time: one add per number, whoever has the lease", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 4);
+  // A slow add keeps the first runner busy while the second one tries.
+  fake.set("updateParticipant", async (call) => {
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    return addReply(numberOf(call), "200");
+  });
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+  const results = await Promise.all([runGroupAddRun(runId), runGroupAddRun(runId)]);
+  assert.deepEqual(results, [{ done: true }, { done: true }]);
+  assert.deepEqual([...addedNumbers(fake)].sort(), [N(1), N(2), N(3), N(4)]);
+  assert.deepEqual([...callsTo(fake, "whatsappNumbers").map(numberOf)].sort(), [N(1), N(2), N(3), N(4)]);
+  assert.equal((await runOf(w, runId)).status, "DONE");
+  assert.deepEqual((await itemsOf(w, runId)).map((i) => i.status), ["ADDED", "ADDED", "ADDED", "ADDED"]);
+});
+
+check("a second runner that starts while the first is mid-call does nothing: a live lease is respected", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 3);
+  let open!: () => void;
+  const gate = new Promise<void>((resolve) => (open = resolve));
+  let held = false;
+  fake.set("updateParticipant", async (call) => {
+    if (!held) {
+      held = true;
+      await gate; // the first runner is inside this call, with the lease
+    }
+    return addReply(numberOf(call), "200");
+  });
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+  const first = runGroupAddRun(runId);
+  await until(() => callsTo(fake, "updateParticipant").length >= 1, "the first add");
+  const callsBefore = fake.calls.length;
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.equal(fake.calls.length, callsBefore, "a second runner made a call");
+  assert.deepEqual((await itemsOf(w, runId)).map((i) => i.status), ["PROCESSING", "PENDING", "PENDING"]);
+  open();
+  await first;
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2), N(3)]);
+  assert.equal((await runOf(w, runId)).status, "DONE");
+});
+
+check("a lease that expired under a stalled runner is taken over, and the person in its hands is never tried twice", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 3);
+  let open!: () => void;
+  const gate = new Promise<void>((resolve) => (open = resolve));
+  let stalled = true;
+  fake.set("updateParticipant", async (call) => {
+    if (stalled && numberOf(call) === N(1)) {
+      stalled = false;
+      await gate; // the first runner hangs in this call
+    }
+    return addReply(numberOf(call), "200");
+  });
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+  const first = runGroupAddRun(runId);
+  await until(() => callsTo(fake, "updateParticipant").length >= 1, "the stalled add");
+
+  // Its lease runs out (no heartbeat for longer than the lease): a second runner takes over.
+  await w.prisma.whatsappGroupAddRun.update({ where: { id: runId }, data: { lastDispatchAt: new Date(clock.at.getTime() - 5 * 60_000) } });
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  open();
+  assert.deepEqual(await first, { done: true });
+
+  // Each number was tried once: the stalled person is the one the new owner marked interrupted, never retried.
+  assert.deepEqual([...addedNumbers(fake)].sort(), [N(1), N(2), N(3)]);
+  assert.deepEqual(await verdicts(w, runId), [
+    ["Pessoa 1", "FAILED", "interrupted"],
+    ["Pessoa 2", "ADDED", null],
+    ["Pessoa 3", "ADDED", null],
+  ]);
+  // The person was stamped when reserved, so the try that may have happened counts for the day.
+  assert.notEqual((await itemsOf(w, runId))[0]?.processedAt, null);
+  assert.equal((await runOf(w, runId)).status, "DONE");
+});
+
+check("a runner that loses its lease while it waits stops at the next piece, and leaves the new owner's lease alone", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 3);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+  const thief = new Date(clock.at.getTime() + 3_600_000);
+  const sleep = groupAddRuntime.sleep;
+  groupAddRuntime.sleep = async (ms) => {
+    await sleep(ms);
+    // Another runner took the lease meanwhile: its stamp is not ours, so our next renewal has to fail.
+    await w.prisma.whatsappGroupAddRun.update({ where: { id: runId }, data: { lastDispatchAt: thief } });
+  };
+  try {
+    assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  } finally {
+    groupAddRuntime.sleep = sleep;
+  }
+  assert.deepEqual(addedNumbers(fake), [N(1)], "it went on after losing the lease");
+  const run = await runOf(w, runId);
+  assert.equal(run.status, "RUNNING");
+  assert.equal(run.lastDispatchAt?.getTime(), thief.getTime(), "the lease of the new owner was touched");
+});
+
+check("a pause that arrives while the runner is on a call is kept, with the pause between people, and the person is not lost", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 3);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+  // While Evolution answers the add of the first person, someone pauses the run.
+  let paused: boolean | null = null;
+  fake.set("updateParticipant", async (call) => {
+    paused = await pauseGroupAdd(w.orgA, runId);
+    return addReply(numberOf(call), "200");
+  });
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.equal(paused, true);
+  const run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.pausedReason, run.lastDispatchAt], ["PAUSED", "manual", null]);
+  assert.equal(run.nextAttemptAt?.toISOString(), "2026-10-28T13:00:30.000Z", "the pause between people was lost");
+  assert.deepEqual((await itemsOf(w, runId)).map((i) => i.status), ["ADDED", "PENDING", "PENDING"]);
+  assert.deepEqual(addedNumbers(fake), [N(1)]);
+});
+
+check("a pause that arrives before the next person is reserved stops the run with nobody reserved", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 2);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+  // The state of the number is asked after the run was read and before the person is reserved.
+  let paused: boolean | null = null;
+  fake.set("connectionState", async () => {
+    paused = await pauseGroupAdd(w.orgA, runId);
+    return { status: 200, json: { instance: { state: "open" } } };
+  });
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.equal(paused, true);
+  assert.deepEqual(callsTo(fake, "whatsappNumbers", "updateParticipant"), []);
+  assert.deepEqual((await itemsOf(w, runId)).map((i) => [i.status, i.processedAt]), [["PENDING", null], ["PENDING", null]]);
+  const run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.pausedReason, run.lastDispatchAt], ["PAUSED", "manual", null]);
+});
+
+check("a cancel that arrives while the runner waits for Evolution is not undone by what the runner finds out", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 2);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+  // The group is read first; while that call is out the run is canceled, and the answer says the number is not admin.
+  let canceled: boolean | null = null;
+  fake.set("findGroupInfos", async () => {
+    canceled = await cancelGroupAdd(w.orgA, runId);
+    return { status: 200, json: groupJson(GROUP, "Ofertas", [meIn(w, null), FRIEND, NAMELESS]) };
+  });
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.equal(canceled, true);
+  const run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.pausedReason, run.lastDispatchAt], ["CANCELED", null, null]);
+  assert.deepEqual(callsTo(fake, "whatsappNumbers", "updateParticipant"), []);
+});
+
+check("cancel settles the person a dead runner left PROCESSING, and leaves a live runner's person to it", async (ctx) => {
+  const { w } = await scenario(ctx);
+  const items: SeedItem[] = [
+    { name: "Pessoa 1", phone: N(1), status: "PROCESSING" },
+    { name: "Pessoa 2", phone: N(2), status: "PENDING" },
+  ];
+  const dead = await seedRun(w, { status: "RUNNING", senderKey: `${w.owner}1`, lastDispatchAt: new Date(clock.at.getTime() - 300_000), items });
+  const alive = await seedRun(w, { status: "RUNNING", senderKey: `${w.owner}2`, lastDispatchAt: new Date(clock.at.getTime() - 10_000), items });
+  const free = await seedRun(w, { status: "PAUSED", pausedReason: "error", senderKey: `${w.owner}3`, items });
+  for (const id of [dead, alive, free]) assert.equal(await cancelGroupAdd(w.orgA, id), true);
+  assert.deepEqual((await verdicts(w, dead)).map(([, status, reason]) => [status, reason]), [["FAILED", "interrupted"], ["PENDING", null]]);
+  assert.deepEqual((await itemsOf(w, alive)).map((i) => i.status), ["PROCESSING", "PENDING"]);
+  assert.deepEqual((await verdicts(w, free)).map(([, status, reason]) => [status, reason]), [["FAILED", "interrupted"], ["PENDING", null]]);
+});
+
+check("resume asks again: a number that is closed, an Evolution out of reach, a group that is gone or a connection that is gone keep the run paused", async (ctx) => {
+  const { fake, groups, w } = await scenario(ctx);
+  const items: SeedItem[] = [{ name: "Pessoa 1", phone: N(1), status: "PENDING" }];
+  const runId = await seedRun(w, { status: "PAUSED", pausedReason: "manual", items });
+  const stillPaused = async () => {
+    const run = await runOf(w, runId);
+    return [run.status, run.pausedReason];
+  };
+  fake.set("connectionState", { status: 200, json: { instance: { state: "close" } } });
+  assert.deepEqual(await resumeGroupAdd(w.orgA, runId), { ok: false, error: "disconnected" });
+  fake.set("connectionState", { status: 500, json: {} });
+  assert.deepEqual(await resumeGroupAdd(w.orgA, runId), { ok: false, error: "unavailable" });
+  fake.set("connectionState", { status: 200, json: { instance: { state: "open" } } });
+  delete groups[GROUP];
+  assert.deepEqual(await resumeGroupAdd(w.orgA, runId), { ok: false, error: "not_found" });
+  const gone = await seedRun(w, { status: "PAUSED", pausedReason: "manual", senderKey: `${w.owner}2`, connectionId: "no-such-connection", items });
+  assert.deepEqual(await resumeGroupAdd(w.orgA, gone), { ok: false, error: "no_connection" });
+  // The connection of org B is not org A's to use.
+  const crossed = await seedRun(w, { status: "PAUSED", pausedReason: "manual", senderKey: `${w.owner}3`, connectionId: w.connB, items });
+  assert.deepEqual(await resumeGroupAdd(w.orgA, crossed), { ok: false, error: "no_connection" });
+  assert.deepEqual(await stillPaused(), ["PAUSED", "manual"]);
+  assert.equal(scheduled.length, 0);
+  // Everything answering again: it resumes, and the run's own number is the one asked.
+  groups[GROUP] = groupJson(GROUP, "Ofertas", [meIn(w, "admin"), FRIEND, NAMELESS]);
+  fake.calls.length = 0;
+  assert.deepEqual(await resumeGroupAdd(w.orgA, runId), { ok: true });
+  assert.deepEqual(await stillPaused(), ["RUNNING", null]);
+  assert.ok(fake.calls.length > 0 && fake.calls.every((c) => c.instance === "wga-a"));
+  assert.equal(scheduled.length, 1);
+});
+
+check("a person left PROCESSING by a crash becomes FAILED / interrupted and is never asked about again", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const items: SeedItem[] = [
+    { name: "Pessoa 1", phone: N(1), status: "PROCESSING" },
+    { name: "Pessoa 2", phone: N(2), status: "PENDING" },
+    { name: "Pessoa 3", phone: N(3), status: "PENDING" },
+  ];
+  // The lease of the dead runner is still live: nobody touches the run yet.
+  const live = await seedRun(w, { status: "RUNNING", lastDispatchAt: new Date(clock.at.getTime() - 10_000), items });
+  assert.deepEqual(await runGroupAddRun(live), { done: true });
+  assert.deepEqual((await itemsOf(w, live)).map((i) => i.status), ["PROCESSING", "PENDING", "PENDING"]);
+  assert.equal(fake.calls.length, 0);
+
+  // A minute and a half later the lease is free.
+  await w.prisma.whatsappGroupAddRun.update({ where: { id: live }, data: { lastDispatchAt: new Date(clock.at.getTime() - 120_000) } });
+  assert.ok((await dueIn(w)).includes(live));
+  assert.deepEqual(await runGroupAddRun(live), { done: true });
+  assert.deepEqual(await verdicts(w, live), [
+    ["Pessoa 1", "FAILED", "interrupted"],
+    ["Pessoa 2", "ADDED", null],
+    ["Pessoa 3", "ADDED", null],
+  ]);
+  assert.deepEqual(addedNumbers(fake), [N(2), N(3)], "the interrupted person was asked about");
+  assert.deepEqual(callsTo(fake, "whatsappNumbers").map(numberOf), [N(2), N(3)]);
+  assert.equal((await runOf(w, live)).status, "DONE");
+});
+
+check("an interrupted person who was already stamped keeps counting for the day", async (ctx) => {
+  const { w } = await scenario(ctx);
+  // Reserved at 12:59 and cut: WhatsApp may have been asked, so the try is stamped and counted.
+  const runId = await seedRun(w, {
+    status: "RUNNING",
+    items: [{ name: "Pessoa 1", phone: N(1), status: "PROCESSING", processedAt: at("2026-10-28T12:59:00.000Z") }],
+  });
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  const [item] = await itemsOf(w, runId);
+  assert.deepEqual([item?.status, item?.reason], ["FAILED", "interrupted"]);
+  assert.equal(
+    await w.prisma.whatsappGroupAddItem.count({ where: { senderKey: w.owner, status: { in: ["ADDED", "INVITED", "FAILED"] }, processedAt: { gte: at("2026-10-28T03:00:00.000Z") } } }),
+    1,
+  );
+});
+
+check("an answer of {} (or none) to the add is FAILED / unknown_answer and no invite goes out", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 3);
+  fake.set("updateParticipant", (call) => {
+    const number = numberOf(call);
+    if (number === N(1)) return { status: 201, json: {} };
+    if (number === N(2)) return { status: 200, json: { updateParticipants: [] } };
+    return { status: 201 };
+  });
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  await drain();
+  assert.deepEqual(await verdicts(w, runId), [
+    ["Pessoa 1", "FAILED", "unknown_answer"],
+    ["Pessoa 2", "FAILED", "unknown_answer"],
+    ["Pessoa 3", "FAILED", "unknown_answer"],
+  ]);
+  assert.deepEqual(callsTo(fake, "inviteCode", "sendText"), []);
+  // They were all asked, so they all count for the day.
+  assert.ok((await itemsOf(w, runId)).every((i) => i.processedAt !== null && i.code === null));
+});
+
+check("the other ways an add can fail: no answer is uncertain, an HTTP error is http_<n>, any other code is FAILED with the code", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 3);
+  fake.set("updateParticipant", (call) => {
+    const number = numberOf(call);
+    if (number === N(1)) return "drop";
+    if (number === N(2)) return { status: 429, json: { error: "slow down" } };
+    return addReply(number, "408");
+  });
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  await drain();
+  assert.deepEqual(
+    (await itemsOf(w, runId)).map((i) => [i.status, i.reason, i.code]),
+    [["FAILED", "uncertain", null], ["FAILED", "http_429", null], ["FAILED", null, "408"]],
+  );
+  assert.deepEqual(callsTo(fake, "sendText"), []);
+  assert.equal((await runOf(w, runId)).status, "DONE");
+});
+
+check("the invite: the link is asked once per round, a missing link is no_invite_link and a refused text is invite_failed", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 4);
+  fake.set("updateParticipant", (call) => addReply(numberOf(call), "403", PRIVACY));
+  fake.set("sendText", (call) => (numberOf(call) === N(3) ? { status: 500, json: { error: "boom" } } : { status: 201, json: { key: {} } }));
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  await drain();
+  assert.deepEqual(
+    (await itemsOf(w, runId)).map((i) => [i.status, i.reason, i.code]),
+    [["INVITED", null, "403"], ["INVITED", null, "403"], ["FAILED", "invite_failed", "403"], ["INVITED", null, "403"]],
+  );
+  assert.equal(callsTo(fake, "inviteCode").length, 1, "the link was asked more than once");
+  assert.deepEqual(callsTo(fake, "sendText").map(numberOf), [N(1), N(2), N(3), N(4)]);
+
+  // No link to give: nobody gets a text without it.
+  const { fake: noLink, w: w2 } = await scenario(ctx);
+  await people(w2, 2);
+  noLink.set("updateParticipant", (call) => addReply(numberOf(call), "403", PRIVACY));
+  noLink.set("inviteCode", { status: 404, json: { error: "No invite code" } });
+  const second = await begin(w2, { source: { kind: "folder", folderId: null } });
+  await drain();
+  assert.deepEqual(
+    (await itemsOf(w2, second)).map((i) => [i.status, i.reason]),
+    [["FAILED", "no_invite_link"], ["FAILED", "no_invite_link"]],
+  );
+  assert.deepEqual(callsTo(noLink, "sendText"), []);
+  assert.equal((await runOf(w2, second)).inviteUrl, null);
+});
+
+check("the invite text is what the person typed with {{nome}} and {{grupo}} filled in and the link on a line of its own, last", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const [ana] = [await contactOf(w, { name: "Ana Souza", phone: N(1) })];
+  fake.set("updateParticipant", (call) => addReply(numberOf(call), "403", PRIVACY));
+  const runId = await begin(w, { source: ofContacts([ana]), text: "{{ nome }}, entre no {{grupo}} para as ofertas." });
+  await drain();
+  assert.deepEqual(texts(fake), [
+    { number: N(1), text: "Ana Souza, entre no Ofertas para as ofertas.\n\nhttps://chat.whatsapp.com/AbC" },
+  ]);
+  assert.equal((await runOf(w, runId)).status, "DONE");
+});
+
+check("startGroupAdd twice: the second answers already_running; two clicks at once make one round; a canceled one frees the group", async (ctx) => {
+  const { w } = await scenario(ctx);
+  const ids = await people(w, 3);
+  const input = { source: ofContacts(ids), groupJid: GROUP, inviteText: TEMPLATE };
+  const first = await startGroupAdd(w.orgA, w.userA, input);
+  assert.ok(first.ok);
+  assert.deepEqual(await startGroupAdd(w.orgA, w.userA, input), { ok: false, error: "already_running" });
+  assert.equal(await w.prisma.whatsappGroupAddRun.count({ where: { organizationId: w.orgA } }), 1);
+  // Another group is another round (it waits for the number).
+  assert.ok((await startGroupAdd(w.orgA, w.userA, { ...input, groupJid: OTHER_GROUP })).ok);
+  // The same group in another organization is another round too.
+  const [other] = await people(w, 1, { org: w.orgB, from: 31 });
+  assert.ok((await startGroupAdd(w.orgB, w.userB, { source: ofContacts([other]), groupJid: GROUP, inviteText: TEMPLATE })).ok);
+
+  assert.equal(await cancelGroupAdd(w.orgA, first.runId), true);
+  const again = await startGroupAdd(w.orgA, w.userA, input);
+  assert.ok(again.ok);
+  assert.notEqual(again.runId, first.runId);
+
+  // Two clicks at the same moment: one round.
+  await w.prisma.whatsappGroupAddRun.deleteMany({ where: { organizationId: w.orgA } });
+  const both = await Promise.all([startGroupAdd(w.orgA, w.userA, input), startGroupAdd(w.orgA, w.userA, input)]);
+  assert.deepEqual(both.map((r) => r.ok).sort(), [false, true]);
+  assert.deepEqual(both.filter((r) => !r.ok), [{ ok: false, error: "already_running" }]);
+  assert.equal(await w.prisma.whatsappGroupAddRun.count({ where: { organizationId: w.orgA, groupJid: GROUP } }), 1);
+  // A paused or done round: the group is held while paused, free once done.
+  const held = both.find((r) => r.ok);
+  assert.ok(held?.ok);
+  assert.equal(await pauseGroupAdd(w.orgA, held.runId), true);
+  assert.deepEqual(await startGroupAdd(w.orgA, w.userA, input), { ok: false, error: "already_running" });
+});
+
+check("a group that would pass 1,024 people: the overflow starts FAILED / group_full, never asked about and not counted for the day", async (ctx) => {
+  const { fake, groups, w } = await scenario(ctx);
+  groups[GROUP] = groupJson(GROUP, "Ofertas", [meIn(w, "admin"), FRIEND], { size: 1021 }); // room for 3
+  const ids = await people(w, 6);
+  const runId = await begin(w, { source: ofContacts(ids) });
+  assert.deepEqual(
+    (await itemsOf(w, runId)).map((i) => [i.status, i.reason, i.processedAt]),
+    [
+      ["PENDING", null, null],
+      ["PENDING", null, null],
+      ["PENDING", null, null],
+      ["FAILED", "group_full", null],
+      ["FAILED", "group_full", null],
+      ["FAILED", "group_full", null],
+    ],
+  );
+  await drain();
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2), N(3)]);
+  assert.equal((await runOf(w, runId)).status, "DONE");
+  assert.equal(
+    await w.prisma.whatsappGroupAddItem.count({ where: { senderKey: w.owner, status: { in: ["ADDED", "INVITED", "FAILED"] }, processedAt: { not: null } } }),
+    3,
+  );
+  // A full group takes nobody.
+  groups[GROUP] = groupJson(GROUP, "Ofertas", [meIn(w, "admin"), FRIEND], { size: 1024 });
+  await w.prisma.whatsappGroupAddRun.deleteMany({ where: { organizationId: w.orgA } });
+  const full = await begin(w, { source: ofContacts(ids) });
+  assert.ok((await itemsOf(w, full)).every((i) => i.status === "FAILED" && i.reason === "group_full"));
+  assert.equal(await drain(), 1);
+  assert.equal((await runOf(w, full)).status, "DONE");
+});
+
+check("a contact whose number belongs to an opted-out contact outside the folder is left out and never asked about", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const folderId = await folderOf(w, "Clientes");
+  await contactOf(w, { name: "Na pasta", phone: N(1), folderId }); // no opt-out of its own
+  await contactOf(w, { name: "Outra", phone: N(2), folderId });
+  // The same person, typed another way, in another place of the CRM, asked not to be contacted.
+  await contactOf(w, { name: "Mesma pessoa", phone: "(11) 91111-0001", optedOut: true });
+  const preview = await previewGroupAdd(w.orgA, w.userA, { kind: "folder", folderId }, GROUP);
+  assert.ok(preview.ok);
+  assert.deepEqual([preview.counts.pending, preview.counts.skipped], [1, 1]);
+
+  const runId = await begin(w, { source: { kind: "folder", folderId } });
+  await drain();
+  assert.deepEqual(await verdicts(w, runId), [
+    ["Na pasta", "SKIPPED", "opted_out"],
+    ["Outra", "ADDED", null],
+  ]);
+  const traffic = JSON.stringify(fake.calls);
+  assert.ok(!traffic.includes(N(1)) && !traffic.includes("911110001"), "the opted-out person reached Evolution");
+  // And of org B's opt-out, nothing: it is another organization's record.
+  await contactOf(w, { name: "Da outra empresa", phone: N(3), optedOut: true, org: w.orgB });
+  const free = await contactOf(w, { name: "Livre", phone: N(3) });
+  const second = await begin(w, { source: ofContacts([free]), group: OTHER_GROUP });
+  await drain();
+  assert.deepEqual(await verdicts(w, second), [["Livre", "ADDED", null]]);
+});
+
+check("pause, resume and cancel: a pause is kept across a resume, the pause between people is not skipped", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 3);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+  // One person, then the budget ends: the next one is due 30 s later.
+  const partial = await runGroupAddRun(runId, { budgetMs: 10_000 });
+  assert.deepEqual(partial, { done: false, retryAfterSec: 30 });
+  assert.deepEqual(addedNumbers(fake), [N(1)]);
+  const pausedAt = await runOf(w, runId);
+  assert.equal(pausedAt.nextAttemptAt?.toISOString(), "2026-10-28T13:00:30.000Z");
+
+  assert.equal(await pauseGroupAdd(w.orgA, runId), true);
+  assert.equal(await pauseGroupAdd(w.orgA, runId), false, "already paused");
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.deepEqual(addedNumbers(fake), [N(1)]);
+  assert.deepEqual(await resumeGroupAdd(w.orgA, runId), { ok: true });
+  assert.deepEqual(await resumeGroupAdd(w.orgA, runId), { ok: false, error: "already_running" });
+  const resumed = await runOf(w, runId);
+  assert.deepEqual([resumed.status, resumed.pausedReason, resumed.waitReason], ["RUNNING", null, null]);
+  assert.equal(resumed.nextAttemptAt?.toISOString(), "2026-10-28T13:00:30.000Z", "the pause between people survived the pause");
+  assert.equal(scheduled.length, 1);
+
+  // Canceled in the middle: the rest stays PENDING, and the runner stops.
+  assert.equal(await cancelGroupAdd(w.orgA, runId), true);
+  assert.deepEqual(await drain(), 1);
+  assert.deepEqual(addedNumbers(fake), [N(1)]);
+  assert.deepEqual((await itemsOf(w, runId)).map((i) => i.status), ["ADDED", "PENDING", "PENDING"]);
+  assert.equal((await runOf(w, runId)).status, "CANCELED");
+});
+
+check("a pause or a cancel during the wait between two people is seen at the next piece of the wait and releases the lease", async (ctx) => {
+  const { w } = await scenario(ctx);
+  await people(w, 3);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+  // The pause happens while the runner sleeps its 30 s.
+  let sleeps = 0;
+  const sleep = groupAddRuntime.sleep;
+  groupAddRuntime.sleep = async (ms) => {
+    await sleep(ms);
+    if (++sleeps === 1) assert.equal(await pauseGroupAdd(w.orgA, runId), true);
+  };
+  try {
+    assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  } finally {
+    groupAddRuntime.sleep = sleep;
+  }
+  assert.equal(sleeps, 1, "it slept on after the pause");
+  const run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.pausedReason, run.lastDispatchAt], ["PAUSED", "manual", null]);
+  assert.deepEqual((await itemsOf(w, runId)).map((i) => i.status), ["ADDED", "PENDING", "PENDING"]);
+});
+
+check("a queue job gets a budget: it works until the budget ends and says when to come back", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 4);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+  // 50 s: the first person at 0 s, the second at 30 s; the third is due at 60 s, past the budget.
+  assert.deepEqual(await runGroupAddRun(runId, { budgetMs: 50_000 }), { done: false, retryAfterSec: 30 });
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2)]);
+  const run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.waitReason, run.lastDispatchAt], ["RUNNING", "pace", null]);
+  assert.equal(run.nextAttemptAt?.toISOString(), "2026-10-28T13:01:00.000Z");
+  // The job that comes back finishes it.
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2), N(3), N(4)]);
+});
+
+check("a run with nobody left to try finishes at once, whatever the hour, the day or the pause", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  // Everyone is already in the group: nothing to do, and no reason to wait for 08:00.
+  await contactOf(w, { name: "Já estava", phone: FRIEND_NUMBER });
+  clock.at = at("2026-10-28T23:30:00.000Z"); // 20:30
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.deepEqual(await verdicts(w, runId), [["Já estava", "ALREADY_IN", null]]);
+  const run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.nextAttemptAt, run.waitReason, run.lastDispatchAt], ["DONE", null, null, null]);
+  assert.deepEqual(callsTo(fake, "updateParticipant", "whatsappNumbers"), []);
+
+  // And the last person of a round does not make it wait out the pause after them.
+  const [one] = await people(w, 1);
+  const second = await begin(w, { source: ofContacts([one]), group: OTHER_GROUP });
+  clock.at = at("2026-10-29T13:00:00.000Z");
+  assert.deepEqual(await runGroupAddRun(second), { done: true });
+  assert.equal((await runOf(w, second)).status, "DONE");
+  assert.deepEqual(clock.sleeps, []);
+});
+
+check("the cron's list: running and due only, a live lease is left alone, and a queue nobody holds is started", async (ctx) => {
+  const { w } = await scenario(ctx);
+  const pending: SeedItem[] = [{ name: "Pessoa 1", phone: N(1), status: "PENDING" }];
+  const key = (n: number) => `${w.owner}${n}`; // one number per seeded round: only one may run on a number
+  const free = await seedRun(w, { status: "RUNNING", senderKey: key(1), items: pending });
+  const later = await seedRun(w, { status: "RUNNING", senderKey: key(2), nextAttemptAt: new Date(clock.at.getTime() + 300_000), items: pending });
+  const live = await seedRun(w, { status: "RUNNING", senderKey: key(3), lastDispatchAt: new Date(clock.at.getTime() - 60_000), items: pending });
+  const stale = await seedRun(w, { status: "RUNNING", senderKey: key(4), lastDispatchAt: new Date(clock.at.getTime() - 120_000), items: pending });
+  const late = await seedRun(w, { status: "RUNNING", senderKey: key(5), nextAttemptAt: new Date(clock.at.getTime() - 1_000), items: pending });
+  for (const [n, status] of [[6, "PAUSED"], [7, "DONE"], [8, "CANCELED"]] as const) {
+    await seedRun(w, { status, pausedReason: status === "PAUSED" ? "manual" : null, senderKey: key(n), items: pending });
+  }
+  // Queued behind a round that runs, and behind one that is paused: stays queued.
+  const behindRunning = await seedRun(w, { status: "QUEUED", senderKey: key(1), group: OTHER_GROUP, items: pending });
+  const behindPaused = await seedRun(w, { status: "QUEUED", senderKey: key(6), group: OTHER_GROUP, items: pending });
+  // Nobody holds this number: a crash between the end of a round and the next one's turn left it queued.
+  const orphan = await seedRun(w, { status: "QUEUED", senderKey: key(9), items: pending });
+
+  const due = await dueIn(w);
+  assert.deepEqual([...due].sort(), [free, stale, late, orphan].sort());
+  assert.ok(![later, live, behindRunning, behindPaused].some((id) => due.includes(id)));
+  assert.equal((await runOf(w, orphan)).status, "RUNNING");
+  assert.deepEqual([(await runOf(w, behindRunning)).status, (await runOf(w, behindPaused)).status], ["QUEUED", "QUEUED"]);
+  // Later: the one that was waiting for its pause is due.
+  assert.ok((await dueIn(w, new Date(clock.at.getTime() + 300_000))).includes(later));
+});
+
+check("promoteQueuedRuns: the oldest queued run of the number rises, one at a time, and a number nobody queued for gives none", async (ctx) => {
+  const { w } = await scenario(ctx);
+  const older = await seedRun(w, { status: "QUEUED", createdAt: at("2026-10-27T10:00:00.000Z"), items: [] });
+  const newer = await seedRun(w, { org: w.orgB, status: "QUEUED", createdAt: at("2026-10-27T11:00:00.000Z"), items: [] });
+  assert.deepEqual(await promoteQueuedRuns(`${w.owner}-nobody`), []);
+  assert.deepEqual(await promoteQueuedRuns(w.owner), [older]);
+  assert.deepEqual(await promoteQueuedRuns(w.owner), [], "a run is already running on the number");
+  assert.deepEqual([(await runOf(w, older)).status, (await runOf(w, newer)).status], ["RUNNING", "QUEUED"]);
+  assert.notEqual((await runOf(w, older)).startedAt, null);
+  // Two promotions at the same moment still raise one.
+  await w.prisma.whatsappGroupAddRun.update({ where: { id: older }, data: { status: "DONE" } });
+  const both = await Promise.all([promoteQueuedRuns(w.owner), promoteQueuedRuns(w.owner)]);
+  assert.deepEqual(both.flat(), [newer]);
+});
+
+check("poke: a run that is due is kicked, one that isn't, or is another organization's, is not", async (ctx) => {
+  const { w } = await scenario(ctx);
+  const item: SeedItem[] = [{ name: "Pessoa 1", phone: N(1), status: "PENDING" }];
+  const due = await seedRun(w, { status: "RUNNING", senderKey: `${w.owner}1`, items: item });
+  const waiting = await seedRun(w, { status: "RUNNING", senderKey: `${w.owner}2`, nextAttemptAt: new Date(clock.at.getTime() + 60_000), items: item });
+  const leased = await seedRun(w, { status: "RUNNING", senderKey: `${w.owner}3`, lastDispatchAt: new Date(clock.at.getTime() - 30_000), items: item });
+
+  await pokeGroupAdd(w.orgA, waiting);
+  await pokeGroupAdd(w.orgA, leased);
+  await pokeGroupAdd(w.orgB, due); // org B has no such run
+  await pokeGroupAdd(w.orgA, "no-such-run");
+  assert.equal(scheduled.length, 0);
+  await pokeGroupAdd(w.orgA, due);
+  assert.equal(scheduled.length, 1);
+});
+
+check("poke: a paused run whose number is back is moved to RUNNING and kicked", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const runId = await seedRun(w, { status: "PAUSED", pausedReason: "disconnected", items: [{ name: "Pessoa 1", phone: N(1), status: "PENDING" }] });
+  fake.set("connectionState", { status: 200, json: { instance: { state: "close" } } });
+  await pokeGroupAdd(w.orgA, runId);
+  assert.equal((await runOf(w, runId)).status, "PAUSED");
+  assert.equal(scheduled.length, 0);
+  fake.set("connectionState", { status: 200, json: { instance: { state: "open" } } });
+  await pokeGroupAdd(w.orgA, runId);
+  assert.equal((await runOf(w, runId)).status, "RUNNING");
+  assert.equal(scheduled.length, 1);
+});
+
+check("another organization sees nothing of a run: no view, no list on the contact, and it can't pause, resume, cancel or poke it", async (ctx) => {
+  const { w } = await scenario(ctx);
+  const [ana, bia] = [await contactOf(w, { name: "Ana", phone: N(1) }), await contactOf(w, { name: "Bia", phone: FRIEND_NUMBER })];
+  const runId = await begin(w, { source: ofContacts([ana, bia]) });
+  await drain();
+
+  // The owner sees it all.
+  const view = await getGroupAddRunView(w.orgA, runId);
+  assert.ok(view);
+  assert.deepEqual(
+    [view.id, view.groupName, view.status, view.pausedReason, view.waitReason, view.nextAttemptAt, view.createdById],
+    [runId, "Ofertas", "DONE", null, null, null, w.userA],
+  );
+  assert.ok(view.startedAt !== null && view.finishedAt !== null);
+  assert.deepEqual(view.counts, { PENDING: 0, PROCESSING: 0, ADDED: 1, INVITED: 0, ALREADY_IN: 1, NO_WHATSAPP: 0, SKIPPED: 0, LEFT_GROUP: 0, ALREADY_INVITED: 0, FAILED: 0 });
+  assert.deepEqual(
+    view.items.map((i) => [i.contactId, i.contactName, i.status, i.reason, i.processedAt !== null]),
+    // Bia was left out before any call (already in the group): no try is stamped on her.
+    [[ana, "Ana", "ADDED", null, true], [bia, "Bia", "ALREADY_IN", null, false]],
+  );
+  const history = await listContactGroupAdds(w.orgA, ana);
+  assert.deepEqual(
+    history.map((h) => [h.runId, h.groupName, h.status, h.createdById, h.processedAt?.toISOString()]),
+    [[runId, "Ofertas", "ADDED", w.userA, "2026-10-28T13:00:00.000Z"]],
+  );
+
+  // Org B sees nothing, and changes nothing.
+  assert.equal(await getGroupAddRunView(w.orgB, runId), null);
+  assert.deepEqual(await listContactGroupAdds(w.orgB, ana), []);
+  assert.equal(await getGroupAddRunView(w.orgA, "no-such-run"), null);
+  const live = await seedRun(w, { status: "RUNNING", items: [{ name: "x", phone: N(1), status: "PENDING" }] });
+  assert.equal(await pauseGroupAdd(w.orgB, live), false);
+  assert.equal(await cancelGroupAdd(w.orgB, live), false);
+  assert.deepEqual(await resumeGroupAdd(w.orgB, live), { ok: false, error: "not_found" });
+  await pokeGroupAdd(w.orgB, live);
+  assert.equal(scheduled.length, 0);
+  assert.equal((await runOf(w, live)).status, "RUNNING");
+});
+
+check("the history of a contact lists the rounds it was in, newest first, and a deleted contact keeps its name in the round", async (ctx) => {
+  const { w } = await scenario(ctx);
+  const ana = await contactOf(w, { name: "Ana", phone: N(1) });
+  const older = await seedRun(w, { createdAt: at("2026-10-20T10:00:00.000Z"), group: OTHER_GROUP, items: [] });
+  await w.prisma.whatsappGroupAddItem.create({
+    data: { organizationId: w.orgA, runId: older, contactId: ana, contactName: "Ana", position: 0, phone: N(1), phoneKey: phoneMatchKey(N(1)), senderKey: w.owner, status: "FAILED", reason: "http_500", processedAt: at("2026-10-20T10:05:00.000Z") },
+  });
+  const newer = await begin(w, { source: ofContacts([ana]) });
+  await drain();
+  const history = await listContactGroupAdds(w.orgA, ana);
+  assert.deepEqual(history.map((h) => [h.runId, h.status]), [[newer, "ADDED"], [older, "FAILED"]]);
+
+  await w.prisma.contact.deleteMany({ where: { id: ana } });
+  const view = await getGroupAddRunView(w.orgA, newer);
+  assert.deepEqual(view?.items.map((i) => [i.contactName, i.status]), [["Ana", "ADDED"]]);
+});
+
+// ── What reaches the console ─────────────────────────────────────────────────
+
+/** Nothing of a contact or of the invite: the numbers, their last digits, the typed text and the link. */
+function assertNoSecrets(lines: string[], secrets: string[]): void {
+  for (const line of lines) {
+    for (const secret of secrets) {
+      // The message says nothing of the line: a failing assertion must not print the number or the text either.
+      assert.ok(!line.includes(secret), "a console line holds a number or the invite text");
+    }
+  }
+}
+
+check("logs: an error in the run writes a trace with no number and no invite text, and pauses it with a clean lastError", async (ctx) => {
+  const { w } = await scenario(ctx);
+  const text = "Oi {{nome}}, segredo-do-convite";
+  await people(w, 2);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null }, text });
+  scheduled.length = 0;
+  // An exception that carries the number and the text, as the message of a library's error may.
+  const random = groupAddRuntime.random;
+  groupAddRuntime.random = () => {
+    throw new Error(`boom ${N(1)} segredo-do-convite`);
+  };
+  let lines: string[];
+  try {
+    lines = await consoleLinesOf(async () => {
+      assert.deepEqual(await runGroupAddRun(runId), { done: true });
+    });
+  } finally {
+    groupAddRuntime.random = random;
+  }
+  // The control: the failure did leave a line, so an empty list of secrets below means something.
+  assert.ok(lines.length >= 1, "the failure left no trace at all");
+  assertNoSecrets(lines, [N(1), "911110001", "segredo", "boom", "Pessoa 1"]);
+
+  const run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.pausedReason, run.lastDispatchAt], ["PAUSED", "error", null]);
+  assert.ok(run.lastError, "the pause has no lastError");
+  assertNoSecrets([run.lastError], [N(1), "911110001", "segredo", "boom"]);
+  // The person tried before the error is settled; the one not reached is untouched.
+  assert.deepEqual((await itemsOf(w, runId)).map((i) => i.status), ["ADDED", "PENDING"]);
+});
+
+check("logs: Evolution's own errors repeat the number and the text, and none of it reaches the console", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const text = "Oi {{nome}}, segredo-do-convite";
+  const echo = (status: number, call: FakeEvoCall): FakeEvoReply => ({
+    status,
+    json: {
+      status,
+      error: "Error",
+      response: { message: [`Failed for ${numberOf(call)}: ${String(bodyOf(call).text ?? "")} ${text}`] },
+    },
+  });
+  fake.set("whatsappNumbers", (call) =>
+    numberOf(call) === N(3) ? echo(500, call) : { status: 200, json: [{ exists: true, jid: `${numberOf(call)}@s.whatsapp.net`, number: numberOf(call) }] },
+  );
+  fake.set("updateParticipant", (call) => {
+    const number = numberOf(call);
+    if (number === N(1)) return addReply(number, "403", PRIVACY); // the invite fails below
+    if (number === N(2)) return echo(500, call);
+    return addReply(number, "200");
+  });
+  fake.set("sendText", (call) => echo(500, call));
+  const ids = await people(w, 4);
+  const runId = await begin(w, { source: ofContacts(ids), text });
+  const lines = await consoleLinesOf(async () => {
+    await drain();
+  });
+  assert.deepEqual(await verdicts(w, runId), [
+    ["Pessoa 1", "FAILED", "invite_failed"],
+    ["Pessoa 2", "FAILED", "http_500"],
+    ["Pessoa 3", "ADDED", null],
+    ["Pessoa 4", "ADDED", null],
+  ]);
+  assertNoSecrets(lines, [N(1), N(2), N(3), N(4), "911110001", "segredo", "Failed for", "chat.whatsapp.com", "Pessoa"]);
+  const run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.lastError], ["DONE", null]);
+});
+
 // ── Harness ──────────────────────────────────────────────────────────────────
 
-async function main(): Promise<number> {
-  let passed = 0;
-  for (const c of checks) {
-    const started: FakeEvolution[] = [];
-    const ctx: Ctx = {
-      startFake: async (instance = "e2e") => {
-        const fake = await listenFakeEvolution();
-        started.push(fake);
-        return { ...fake, creds: { baseUrl: `http://127.0.0.1:${fake.port}`, apiKey: "e2e", instance } };
-      },
-    };
-    try {
-      await c.run(ctx);
-    } finally {
-      await Promise.all(started.map((fake) => fake.close()));
-    }
-    passed++;
-    console.log(`  ✓ ${c.name}`);
+/** The check creates and deletes organizations: only against the local database, never a shared one. */
+function assertLocalDatabase(): void {
+  const host = new URL(env.DATABASE_URL).hostname; // never the whole URL: it holds the password
+  if (!["localhost", "127.0.0.1", "[::1]"].includes(host)) {
+    throw new Error(
+      `check:group-add:e2e creates and deletes test organizations: it only runs against the local Postgres (DATABASE_URL points at ${host}).`,
+    );
   }
-  return passed;
+}
+
+/** What the harness created, so a failure half way through still cleans up. */
+const made = { orgs: [] as string[], users: [] as string[] };
+
+async function createWorld(prisma: PrismaClient): Promise<World> {
+  const stamp = Date.now();
+  const user = async (tag: string) => {
+    const created = await prisma.user.create({
+      data: { name: `WGA-E2E-${stamp} ${tag}`, email: `wga-${tag}-${stamp}@test.local`, passwordHash: "x" },
+      select: { id: true },
+    });
+    made.users.push(created.id);
+    return created.id;
+  };
+  const [userA, colleague, userB] = [await user("a"), await user("colleague"), await user("b")];
+  const org = async (slug: string, name: string, ownerId: string) => {
+    const created = await prisma.organization.create({ data: { name, slug, ownerId }, select: { id: true } });
+    made.orgs.push(created.id);
+    return created.id;
+  };
+  const orgA = await org(`wga-e2e-${stamp}`, `WGA-E2E-${stamp}`, userA);
+  const orgB = await org(`wga-e2e-${stamp}-b`, `WGA-E2E-${stamp}-B`, userB);
+  await prisma.membership.createMany({
+    data: [
+      { organizationId: orgA, userId: userA, role: "OWNER" },
+      { organizationId: orgA, userId: colleague, role: "MEMBER" },
+      { organizationId: orgB, userId: userB, role: "OWNER" },
+    ],
+  });
+  // Pointing at loopback from the start; each check points them at its own fake.
+  const connection = async (organizationId: string, ownerId: string, instance: string) => {
+    const baseUrl = "http://127.0.0.1:9";
+    assertLoopback(baseUrl);
+    const created = await prisma.integrationConnection.create({
+      data: {
+        organizationId,
+        ownerId,
+        provider: "EVOLUTION",
+        label: `wga-e2e ${instance}`,
+        status: "ACTIVE",
+        credentialsEnc: encryptCredentials({ baseUrl, apiKey: "e2e", instance }),
+      },
+      select: { id: true },
+    });
+    return created.id;
+  };
+  return {
+    prisma,
+    // 13 digits, a BR mobile: 55 + 11 + 9 + 8 digits, the last 6 of the stamp making it new on each run.
+    owner: `5511988${String(stamp).slice(-6)}`,
+    orgA,
+    orgB,
+    userA,
+    colleague,
+    userB,
+    connA: await connection(orgA, userA, "wga-a"),
+    connB: await connection(orgB, userB, "wga-b"),
+  };
+}
+
+/** Runs and their items, contacts, folders, connections, memberships, users and organizations; whatever was created. */
+async function destroyWorld(prisma: PrismaClient): Promise<void> {
+  const inTest = { organizationId: { in: made.orgs } };
+  await prisma.whatsappGroupAddRun.deleteMany({ where: inTest }); // the items go with it
+  await prisma.contact.deleteMany({ where: inTest });
+  await prisma.contactFolder.deleteMany({ where: inTest });
+  await prisma.integrationConnection.deleteMany({ where: inTest });
+  await prisma.membership.deleteMany({ where: inTest });
+  await prisma.user.deleteMany({ where: { id: { in: made.users } } });
+  await prisma.organization.deleteMany({ where: { id: { in: made.orgs } } });
+}
+
+async function main(): Promise<number> {
+  assertLocalDatabase();
+  // The queue is a real service: with a token in .env a kick would publish to it. The checks run what is scheduled themselves.
+  env.QSTASH_TOKEN = undefined;
+  const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: env.DATABASE_URL }) });
+  const undoFetch = refuseOtherHosts();
+  const defaults = { ...groupAddRuntime };
+  let passed = 0;
+  try {
+    // The control of the guard: another host is refused before anything leaves the machine (".invalid" never resolves anyway).
+    await assert.rejects(() => fetch("http://evolution.invalid/"), /blocked/);
+    assert.deepEqual(refused.splice(0), ["evolution.invalid"]);
+    const world = await createWorld(prisma);
+    installRuntime();
+    for (const c of checks) {
+      const started: FakeEvolution[] = [];
+      const ctx: Ctx = {
+        world,
+        startFake: async (instance = "e2e") => {
+          const fake = await listenFakeEvolution();
+          started.push(fake);
+          return { ...fake, creds: { baseUrl: `http://127.0.0.1:${fake.port}`, apiKey: "e2e", instance } };
+        },
+      };
+      try {
+        await c.run(ctx);
+        assert.deepEqual(refused, [], "a request went to a host that isn't loopback");
+      } finally {
+        await Promise.all(started.map((fake) => fake.close()));
+      }
+      passed++;
+      console.log(`  ✓ ${c.name}`);
+    }
+    return passed;
+  } finally {
+    undoFetch();
+    Object.assign(groupAddRuntime, defaults);
+    await destroyWorld(prisma).catch((e) => console.error("cleanup failed:", e instanceof Error ? e.message : "unknown error"));
+    await prisma.$disconnect();
+    // The app's own client (the service reads through tenantDb) has a pool of its own.
+    await appPrisma.$disconnect();
+  }
 }
 
 main()

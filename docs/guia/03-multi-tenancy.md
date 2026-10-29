@@ -127,8 +127,11 @@ Para leitura por id vale o mesmo raciocínio: o par é `findFirst({ where: { id 
 
 ## Onde cada coisa vive
 
-- **Leitura:** DAL em [src/lib/queries/](../../src/lib/queries/) — 56 arquivos, um por
-  domínio, mais a pasta `mcp/` (abaixo).
+- **Leitura:** DAL em [src/lib/queries/](../../src/lib/queries/) — 57 arquivos, um por
+  domínio, mais a pasta `mcp/` (abaixo). O mais novo é
+  [whatsapp-group-add.ts](../../src/lib/queries/whatsapp-group-add.ts): o acompanhamento de uma rodada de
+  "Adicionar a grupo do WhatsApp" (`getGroupAddRunView`) e o registro no contato (`listContactGroupAdds`),
+  os dois com `tenantDb`. Um `id` de rodada de outra empresa dá `null`, não um erro.
 - **Leitura do servidor MCP** ([src/lib/queries/mcp/](../../src/lib/queries/mcp/)): contexto de
   sistema. Quem chama é o portador da chave `MCP_API_KEY` ([guia 05](05-rotas-e-jobs.md)), não um
   usuário com sessão, então não existe organização ativa: ela chega como argumento de cada
@@ -141,6 +144,20 @@ Para leitura por id vale o mesmo raciocínio: o par é `findFirst({ where: { id 
   contexto de sistema — webhook, job, cron — nunca no caminho de uma request de usuário.
   Nesses contextos não existe "organização ativa" vinda de sessão, então todo filtro de
   `organizationId` precisa ser passado à mão, explicitamente, em cada query.
+- **Executor das rodadas de grupo do WhatsApp**
+  ([src/lib/whatsapp/group-add/runner.ts](../../src/lib/whatsapp/group-add/runner.ts)): contexto de
+  sistema, com Prisma cru. Roda em segundo plano (`after()`, job da fila ou cron), sem sessão: a
+  organização vem da própria rodada e vai explícita em cada query, e a conexão da Evolution é
+  buscada dentro dessa organização **antes** de decifrar as credenciais (`loadEvoCredsById` não filtra
+  por organização, então não serve sozinho). A promoção da fila (`promoteQueuedRuns`,
+  `findDueGroupAddRuns`) e a conta do teto do dia (`countUsedToday`) cruzam empresas de propósito: o teto de
+  100 por dia e a regra de uma rodada por vez valem por **número do celular** (`senderKey`), e o mesmo
+  celular pode estar ligado a duas empresas. Só leem contagens e ids (e a organização da rodada que vão
+  tocar), nunca contato, telefone ou texto. A promoção e a retomada de uma rodada pausada rodam numa
+  transação com `pg_advisory_xact_lock` por número. Quem usa a tela
+  ([service.ts](../../src/lib/whatsapp/group-add/service.ts)) lê e grava as tabelas com `tenantDb`; do
+  executor só chama o que cruza empresas (a conta do dia, a fila do número, a retomada), sempre com a
+  rodada e a organização que ele mesmo já leu por `tenantDb`.
 
 ## Como se prova
 
