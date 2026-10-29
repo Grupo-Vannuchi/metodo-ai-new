@@ -122,9 +122,13 @@ nunca são usados). Confere, entre outras coisas: os grupos do próprio número 
 `no_connection` para quem não tem número seu, mesmo com um colega da empresa conectado; a conferência com as contagens
 exatas (rodada anterior incluída) e sem escrever nada; uma rodada inteira (adicionado, convite por texto, já estava,
 falha, sem WhatsApp) em que o contato com opt-out, e o de mesmo número de um opt-out fora da pasta, não aparecem em
-nenhuma requisição; o horário das 8h às 20h e o relógio lido de novo antes da adição e do convite; o teto de 100 por dia
-contado por número em todas as empresas, no dia de São Paulo e só com adicionado, convite e falha, e a rodada que
-continua no dia seguinte; uma rodada por número com a fila subindo na ordem e a pausada segurando a fila; número
+nenhuma requisição; um opt-out feito depois de começar (do próprio contato, ou de outro da empresa com o mesmo número)
+valendo na vez da pessoa, sem chamada nenhuma; o horário das 8h às 20h e o relógio lido de novo antes da adição e do
+convite; o teto de 100 por dia contado por número em todas as empresas, no dia de São Paulo e só com adicionado,
+convite e falha, e a rodada que continua no dia seguinte; uma rodada por número com a fila subindo na ordem e a
+pausada segurando a fila; a pausa de
+30 a 90 s entre as pessoas, que vale pelo número e não pela rodada (a que sobe depois do fim de outra, de um
+cancelamento ou de uma retomada espera a pausa da última tentativa do número, de qualquer empresa); número
 desconectado, Evolution fora do ar e não ser admin (pausam sem adicionar ninguém); a trava (dois executores ao mesmo
 tempo, trava vencida, trava perdida no meio de uma espera) com uma chamada por número e quem ficou em andamento
 virando `interrupted` sem ser refeito; resposta sem código, erro de HTTP e sem resposta da adição; o link do grupo

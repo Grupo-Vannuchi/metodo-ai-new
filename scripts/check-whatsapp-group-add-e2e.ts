@@ -1330,6 +1330,10 @@ check("one run at a time per number, in any organization: the second is QUEUED a
   assert.equal(scheduled.length, 1);
   assert.deepEqual(addedNumbers(fake), [N(1), N(2)], "the second round made a call before its turn");
   assert.notEqual((await runOf(w, second)).startedAt, null);
+  // The last try of the first round was at 13:00:30: the pause of the number is owed to it, so the second round starts 30 s later.
+  const owing = await runOf(w, second);
+  assert.equal(owing.nextAttemptAt?.toISOString(), "2026-10-28T13:01:00.000Z");
+  assert.equal(owing.waitReason, "pace");
 
   await drain();
   assert.deepEqual(
@@ -1341,6 +1345,88 @@ check("one run at a time per number, in any organization: the second is QUEUED a
     callsTo(fake, "updateParticipant").map((c) => [c.instance, numberOf(c)]),
     [["wga-a", N(1)], ["wga-a", N(2)], ["wga-b", N(11)], ["wga-b", N(12)], ["wga-a", N(21)]],
   );
+  // And the pause between people held across both changes of round: every try is 30 s after the one before it.
+  const tries = await w.prisma.whatsappGroupAddItem.findMany({
+    where: { runId: { in: [first, second, third] }, processedAt: { not: null } },
+    orderBy: { processedAt: "asc" },
+    select: { processedAt: true },
+  });
+  assert.deepEqual(
+    tries.map((t) => t.processedAt?.toISOString()),
+    ["2026-10-28T13:00:00.000Z", "2026-10-28T13:00:30.000Z", "2026-10-28T13:01:00.000Z", "2026-10-28T13:01:30.000Z", "2026-10-28T13:02:00.000Z"],
+  );
+});
+
+check("the pause between people holds across a cancel: the round that rises waits the pause from the last try", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const idsA = await people(w, 3);
+  const idsB = await people(w, 1, { org: w.orgB, from: 11 });
+  const first = await begin(w, { source: ofContacts(idsA) });
+  const second = await begin(w, { source: ofContacts(idsB), org: w.orgB, user: w.userB });
+  scheduled.length = 0;
+  // The first round tries one person at 13:00:00 and is canceled during the pause that follows.
+  assert.deepEqual(await runGroupAddRun(first, { budgetMs: 10_000 }), { done: false, retryAfterSec: 30 });
+  assert.equal(await cancelGroupAdd(w.orgA, first), true);
+  const rose = await runOf(w, second);
+  assert.deepEqual([rose.status, rose.waitReason], ["RUNNING", "pace"]);
+  assert.equal(rose.nextAttemptAt?.toISOString(), "2026-10-28T13:00:30.000Z");
+  assert.equal(scheduled.length, 1);
+  // Its first person goes out when the pause is over, not at once.
+  assert.equal(await drain(), 1);
+  assert.deepEqual(addedNumbers(fake), [N(1), N(11)]);
+  assert.equal((await itemsOf(w, second))[0]?.processedAt?.toISOString(), "2026-10-28T13:00:30.000Z");
+  assert.equal(clock.sleeps.reduce((a, b) => a + b, 0), 30_000);
+});
+
+check("the pause between people holds when a paused round is resumed right after another round ended on the number", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const idsA = await people(w, 2);
+  const idsB = await people(w, 1, { org: w.orgB, from: 11 });
+  const first = await begin(w, { source: ofContacts(idsA) });
+  const second = await begin(w, { source: ofContacts(idsB), org: w.orgB, user: w.userB });
+  assert.equal(await pauseGroupAdd(w.orgB, second), true); // queued, then paused: it holds the number
+  // The first round runs to its end (tries at 13:00:00 and 13:00:30), and the paused one stays where it is.
+  assert.equal(await drain(), 1);
+  assert.deepEqual([(await runOf(w, first)).status, (await runOf(w, second)).status], ["DONE", "PAUSED"]);
+  assert.deepEqual(await resumeGroupAdd(w.orgB, second), { ok: true });
+  const back = await runOf(w, second);
+  assert.deepEqual([back.status, back.waitReason], ["RUNNING", "pace"]);
+  assert.equal(back.nextAttemptAt?.toISOString(), "2026-10-28T13:01:00.000Z");
+  assert.equal(await drain(), 1);
+  assert.equal((await itemsOf(w, second))[0]?.processedAt?.toISOString(), "2026-10-28T13:01:00.000Z");
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2), N(11)]);
+});
+
+check("a run that starts again owes its number the pause from the last try, keeps its own later time, and owes nothing for an old try", async (ctx) => {
+  const { w } = await scenario(ctx);
+  const triedAgo = (seconds: number): SeedItem[] => [
+    { name: "x", phone: null, status: "ADDED", processedAt: new Date(clock.at.getTime() - seconds * 1000) },
+  ];
+  const mine: SeedItem[] = [{ name: "Pessoa 1", phone: N(1), status: "PENDING" }];
+  const key = (n: number) => `${w.owner}${n}`; // one number per case
+  // Case 1: another round tried someone on the number 10 s ago; the paused run's own time is long gone.
+  await seedRun(w, { org: w.orgB, group: OTHER_GROUP, senderKey: key(1), items: triedAgo(10) });
+  const stale = await seedRun(w, { status: "PAUSED", pausedReason: "disconnected", senderKey: key(1), nextAttemptAt: new Date(clock.at.getTime() - 3_600_000), items: mine });
+  // Case 2: the same, but the paused run's own time is later than the pause owed (80 s from now against 20 s).
+  await seedRun(w, { org: w.orgB, group: OTHER_GROUP, senderKey: key(2), items: triedAgo(10) });
+  const own = await seedRun(w, { status: "PAUSED", pausedReason: "disconnected", senderKey: key(2), nextAttemptAt: new Date(clock.at.getTime() + 80_000), items: mine });
+  // Case 3: the last try on the number was two hours ago, and a queued run rises.
+  await seedRun(w, { org: w.orgB, group: OTHER_GROUP, senderKey: key(3), items: triedAgo(7200) });
+  const queued = await seedRun(w, { status: "QUEUED", senderKey: key(3), items: mine });
+  // Case 4: nobody ever tried anyone on the number.
+  const fresh = await seedRun(w, { status: "QUEUED", senderKey: key(4), items: mine });
+
+  const due = await dueIn(w);
+  const nextOf = async (id: string) => (await runOf(w, id)).nextAttemptAt?.getTime() ?? null;
+  const now = clock.at.getTime();
+  assert.equal(await nextOf(stale), now + 20_000, "the pause owed to the last try");
+  assert.equal(await nextOf(own), now + 80_000, "its own later time");
+  assert.equal(await nextOf(queued), now - 7200_000 + 30_000, "an old try owes nothing");
+  assert.equal(await nextOf(fresh), null);
+  assert.equal((await runOf(w, stale)).status, "RUNNING");
+  assert.equal((await runOf(w, queued)).status, "RUNNING");
+  // Only the two that owe nothing now are due.
+  assert.deepEqual([...due].sort(), [queued, fresh].sort());
 });
 
 check("cancel promotes the next run of the number; a paused run holds the queue until it is resumed", async (ctx) => {
@@ -2080,6 +2166,38 @@ check("a contact whose number belongs to an opted-out contact outside the folder
   const second = await begin(w, { source: ofContacts([free]), group: OTHER_GROUP });
   await drain();
   assert.deepEqual(await verdicts(w, second), [["Livre", "ADDED", null]]);
+});
+
+check("an opt-out made after the start is honored at the person's turn: the contact's own, and the same number on another contact of the organization", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const [one, two, three, four, five] = await people(w, 5);
+  const runId = await begin(w, { source: ofContacts([one, two, three, four, five]) });
+  scheduled.length = 0;
+  // The first person goes (at 13:00:00). Then, before the others' turn, three of the four who are left ask not to be contacted.
+  assert.deepEqual(await runGroupAddRun(runId, { budgetMs: 10_000 }), { done: false, retryAfterSec: 30 });
+  assert.deepEqual(addedNumbers(fake), [N(1)]);
+  await w.prisma.contact.update({ where: { id: two }, data: { optedOut: true } }); // the contact itself
+  await contactOf(w, { name: "Mesma pessoa", phone: "(11) 91111-0003", optedOut: true }); // the number of the third, on a contact outside the round
+  await contactOf(w, { name: "Outro formato", phone: "(11) 91111-0005", optedOut: true }); // the fifth's number, written another way
+  await contactOf(w, { name: "Outra empresa", phone: N(4), optedOut: true, org: w.orgB }); // another organization's opt-out means nothing here
+
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.deepEqual(await verdicts(w, runId), [
+    ["Pessoa 1", "ADDED", null],
+    ["Pessoa 2", "SKIPPED", "opted_out"],
+    ["Pessoa 3", "SKIPPED", "opted_out"],
+    ["Pessoa 4", "ADDED", null],
+    ["Pessoa 5", "SKIPPED", "opted_out"],
+  ]);
+  // Nobody was asked about them: not the number check, not the add.
+  assert.deepEqual(addedNumbers(fake), [N(1), N(4)]);
+  assert.deepEqual(callsTo(fake, "whatsappNumbers").map(numberOf), [N(1), N(4)]);
+  const traffic = JSON.stringify(fake.calls);
+  assert.ok(!traffic.includes(N(2)) && !traffic.includes(N(3)) && !traffic.includes(N(5)), "an opted-out person reached Evolution");
+  // Left out without a call: no try stamped on them, and no pause spent: the fourth goes out when the first one's pause ends.
+  const items = await itemsOf(w, runId);
+  assert.deepEqual(items.map((i) => i.processedAt?.toISOString() ?? null), ["2026-10-28T13:00:00.000Z", null, null, "2026-10-28T13:00:30.000Z", null]);
+  assert.equal((await runOf(w, runId)).status, "DONE");
 });
 
 check("pause, resume and cancel: a pause is kept across a resume, the pause between people is not skipped", async (ctx) => {

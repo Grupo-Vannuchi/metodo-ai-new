@@ -152,9 +152,12 @@ Para leitura por id vale o mesmo raciocínio: o par é `findFirst({ where: { id 
   por organização, então não serve sozinho). A promoção da fila (`promoteQueuedRuns`,
   `findDueGroupAddRuns`) e a conta do teto do dia (`countUsedToday`) cruzam empresas de propósito: o teto de
   100 por dia e a regra de uma rodada por vez valem por **número do celular** (`senderKey`), e o mesmo
-  celular pode estar ligado a duas empresas. Só leem contagens e ids (e a organização da rodada que vão
-  tocar), nunca contato, telefone ou texto. A promoção e a retomada de uma rodada pausada rodam numa
-  transação com `pg_advisory_xact_lock` por número. Quem usa a tela
+  celular pode estar ligado a duas empresas; a pausa de 30 a 90 s entre as pessoas também (a rodada que
+  começa ou recomeça espera a última tentativa do número, de qualquer empresa). Só leem contagens, ids, a
+  data dessa última tentativa (um `max`) e a organização da rodada que vão tocar, nunca contato, telefone
+  ou texto. O que o executor lê de contato é o opt-out, só dentro da empresa da rodada, na vez de cada
+  pessoa. A promoção e a retomada de uma rodada pausada rodam numa transação com `pg_advisory_xact_lock`
+  por número. Quem usa a tela
   ([service.ts](../../src/lib/whatsapp/group-add/service.ts)) lê e grava as tabelas com `tenantDb`; do
   executor só chama o que cruza empresas (a conta do dia, a fila do número, a retomada), sempre com a
   rodada e a organização que ele mesmo já leu por `tenantDb`.

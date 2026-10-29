@@ -25,6 +25,7 @@ import {
   nextAttemptAt,
   nextWindowStart,
   outcomeFromCode,
+  phoneMatchKey,
   pickPauseSeconds,
   renderInvite,
 } from "./core";
@@ -137,11 +138,35 @@ async function lockNumber(tx: Pick<Prisma.TransactionClient, "$queryRaw">, sende
 
 const QUEUE_TX = { maxWait: 5_000, timeout: 10_000 };
 
+/** When the next person may be tried after a try at `from`: a random pause of 30 to 90 s, moved into the window (and said so then). */
+function pauseAfter(from: Date): { at: Date; reason: "pace" | "window" } {
+  const seconds = pickPauseSeconds(groupAddRuntime.random);
+  const at = nextAttemptAt(from, seconds);
+  return { at, reason: at.getTime() > from.getTime() + seconds * 1000 ? "window" : "pace" };
+}
+
+/**
+ * The pause between people belongs to the number, not to the round: a run that starts (or starts again) on a number owes
+ * it to the last try made there by any run, in any organization (one aggregate, no row is read). The later of that and
+ * the run's own time, which this never shortens. `waitReason` is null when the run's own time stays.
+ */
+async function owedPause(
+  tx: Pick<Prisma.TransactionClient, "whatsappGroupAddItem">,
+  senderKey: string,
+  own: Date | null,
+): Promise<{ nextAttemptAt: Date | null; waitReason: "pace" | "window" | null }> {
+  const { _max } = await tx.whatsappGroupAddItem.aggregate({ where: { senderKey }, _max: { processedAt: true } });
+  if (!_max.processedAt) return { nextAttemptAt: own, waitReason: null };
+  const pause = pauseAfter(_max.processedAt);
+  if (own && own.getTime() >= pause.at.getTime()) return { nextAttemptAt: own, waitReason: null };
+  return { nextAttemptAt: pause.at, waitReason: pause.reason };
+}
+
 /**
  * Raises the oldest QUEUED run of the number to RUNNING when nothing else holds it: no run
  * RUNNING and none PAUSED (a paused run keeps its place). In any organization, so it reads and
- * writes with the organizationId of the run it found. The ids it raised (none or one); the
- * caller kicks them.
+ * writes with the organizationId of the run it found. The run starts after the pause the number
+ * owes to its last try (owedPause). The ids it raised (none or one); the caller kicks them.
  */
 export async function promoteQueuedRuns(senderKey: string): Promise<string[]> {
   if (!senderKey) return [];
@@ -152,16 +177,17 @@ export async function promoteQueuedRuns(senderKey: string): Promise<string[]> {
     const next = await tx.whatsappGroupAddRun.findFirst({
       where: { senderKey, status: "QUEUED" },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      select: { id: true, organizationId: true, startedAt: true },
+      select: { id: true, organizationId: true, startedAt: true, nextAttemptAt: true },
     });
     if (!next) return [];
+    const owed = await owedPause(tx, senderKey, next.nextAttemptAt);
     const res = await tx.whatsappGroupAddRun.updateMany({
       where: { id: next.id, organizationId: next.organizationId, status: "QUEUED" },
       data: {
         status: "RUNNING",
         startedAt: next.startedAt ?? groupAddRuntime.now(),
-        nextAttemptAt: null,
-        waitReason: null,
+        nextAttemptAt: owed.nextAttemptAt,
+        waitReason: owed.waitReason,
         pausedReason: null,
       },
     });
@@ -181,6 +207,7 @@ export async function promoteAndKick(senderKey: string): Promise<void> {
 /**
  * Takes a PAUSED run back: RUNNING, or QUEUED when another run is RUNNING on its number. With `only`,
  * only if it is still paused for that reason (and with that note): a pause made by hand since stays.
+ * Running again, it owes the number the pause after its last try (owedPause), whoever made it.
  * Null when the run was not paused (any more).
  */
 export async function reactivateRun(
@@ -193,13 +220,19 @@ export async function reactivateRun(
       where: { senderKey: run.senderKey, status: "RUNNING", id: { not: run.id } },
     });
     const status = busy > 0 ? ("QUEUED" as const) : ("RUNNING" as const);
+    const own = await tx.whatsappGroupAddRun.findFirst({
+      where: { id: run.id, organizationId: run.organizationId },
+      select: { nextAttemptAt: true },
+    });
+    const owed = status === "RUNNING" ? await owedPause(tx, run.senderKey, own?.nextAttemptAt ?? null) : null;
     const res = await tx.whatsappGroupAddRun.updateMany({
       where: { id: run.id, organizationId: run.organizationId, status: "PAUSED", ...only },
       data: {
         status,
         pausedReason: null,
-        waitReason: null,
+        waitReason: owed?.waitReason ?? null,
         lastError: null,
+        ...(owed ? { nextAttemptAt: owed.nextAttemptAt } : {}),
         ...(status === "RUNNING" && !run.startedAt ? { startedAt: groupAddRuntime.now() } : {}),
       },
     });
@@ -421,6 +454,18 @@ async function inviteByText(
 }
 
 /**
+ * Whether the person asked not to be contacted since the round was planned: the contact itself, or any contact of the
+ * run's organization with the same number (the plan's key, so any way of writing it). Read at the person's turn.
+ */
+async function optedOutNow(organizationId: string, item: { contactId: string; phoneKey: string | null }): Promise<boolean> {
+  const asked = await prisma.contact.findMany({
+    where: { organizationId, optedOut: true, OR: [{ id: item.contactId }, { phone: { not: null } }] },
+    select: { id: true, phone: true },
+  });
+  return asked.some((c) => c.id === item.contactId || (item.phoneKey !== null && phoneMatchKey(c.phone) === item.phoneKey));
+}
+
+/**
  * One person: reserved, looked up, added and, when WhatsApp asks for the link instead, sent the
  * link by text. "again" when nothing was asked of the add (someone else reserved the person, the
  * person has no WhatsApp account, the window closed first): no pause follows. Otherwise the status
@@ -430,9 +475,17 @@ async function tryPerson(
   v: Visit,
   run: Run,
   creds: EvoCreds,
-  item: { id: string; contactName: string; phone: string | null },
+  item: { id: string; contactId: string; contactName: string; phone: string | null; phoneKey: string | null },
 ): Promise<"again" | "ADDED" | "INVITED" | "ALREADY_IN" | "FAILED"> {
   const rt = groupAddRuntime;
+  // An opt-out made since the plan: nothing is asked of WhatsApp about this person, and no pause is spent on them.
+  if (await optedOutNow(v.org, item)) {
+    await prisma.whatsappGroupAddItem.updateMany({
+      where: { id: item.id, organizationId: v.org, runId: v.id, status: "PENDING" },
+      data: { status: "SKIPPED", reason: "opted_out" },
+    });
+    return "again";
+  }
   // Reserved only while the run is still RUNNING, and stamped now: if the runner dies from here on, the
   // try counts for the day (the person may have been added) and is never redone.
   const claim = await prisma.whatsappGroupAddItem.updateMany({
@@ -521,7 +574,7 @@ export async function runGroupAddRun(runId: string, opts: { budgetMs?: number } 
       const item = await prisma.whatsappGroupAddItem.findFirst({
         where: { runId: v.id, organizationId: v.org, status: "PENDING" },
         orderBy: { position: "asc" },
-        select: { id: true, contactName: true, phone: true },
+        select: { id: true, contactId: true, contactName: true, phone: true, phoneKey: true },
       });
       if (!item) {
         // Nobody left: done at once, whatever the hour or the pause.
@@ -564,13 +617,11 @@ export async function runGroupAddRun(runId: string, opts: { budgetMs?: number } 
       const turn = await tryPerson(v, run, creds, item);
       if (turn === "again") continue;
       if (turn === "FAILED") adminChecked = false;
-      const settledAt = rt.now();
-      const seconds = pickPauseSeconds(rt.random);
-      const next = nextAttemptAt(settledAt, seconds);
+      const pace = pauseAfter(rt.now());
       // Written for the owner of the lease only, not for a RUNNING run: a pause made by hand meanwhile keeps it.
       const res = await prisma.whatsappGroupAddRun.updateMany({
         where: { id: v.id, organizationId: v.org, lastDispatchAt: v.stamp },
-        data: { nextAttemptAt: next, waitReason: next.getTime() > settledAt.getTime() + seconds * 1000 ? "window" : "pace" },
+        data: { nextAttemptAt: pace.at, waitReason: pace.reason },
       });
       if (res.count !== 1) throw new LeaseLost();
     }
