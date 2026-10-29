@@ -1,5 +1,6 @@
 import "server-only";
 import type { tenantDb } from "@/lib/tenant-db";
+import { mergeLinkPlan } from "@/lib/crm/contact-folders-core";
 
 /**
  * Writes to the contact ↔ folder links (a contact can sit in several folders).
@@ -96,4 +97,32 @@ export async function removeContactsFromFolder(
     where: { contactId: { in: [...ids] }, folderId },
   });
   return res.count;
+}
+
+/**
+ * Duplicate merge: the primary ends up in every folder any of the losers was
+ * in. Links to a folder the primary already has (or that another loser already
+ * brings) are deleted; the rest are repointed to the primary. Call it BEFORE
+ * deleting the losers, or their links cascade away. The caller has already
+ * proved that all the ids are contacts of this organization.
+ */
+export async function mergeContactFolderLinks(
+  tx: Pick<Db, "contactFolderLink">,
+  primaryId: string,
+  loserIds: readonly string[],
+): Promise<void> {
+  if (loserIds.length === 0) return;
+  const primaryFolderIds = (
+    await tx.contactFolderLink.findMany({ where: { contactId: primaryId }, select: { folderId: true } })
+  ).map((l) => l.folderId);
+  const loserLinks = await tx.contactFolderLink.findMany({
+    where: { contactId: { in: [...loserIds] } },
+    select: { id: true, folderId: true },
+    orderBy: { id: "asc" },
+  });
+  const { deleteIds, repointIds } = mergeLinkPlan(primaryFolderIds, loserLinks);
+  if (deleteIds.length) await tx.contactFolderLink.deleteMany({ where: { id: { in: deleteIds } } });
+  if (repointIds.length) {
+    await tx.contactFolderLink.updateMany({ where: { id: { in: repointIds } }, data: { contactId: primaryId } });
+  }
 }

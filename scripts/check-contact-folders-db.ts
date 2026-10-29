@@ -24,7 +24,12 @@ import { EMPTY_AUDIENCE } from "@/lib/validations/email-broadcast";
 import { audienceWhere } from "@/lib/queries/campaigns";
 import { getContact } from "@/lib/queries/contacts";
 import { tenantDb } from "@/lib/tenant-db";
-import { addContactsToFolder, moveContactsToFolder, removeContactsFromFolder } from "@/lib/crm/contact-folder-links";
+import {
+  addContactsToFolder,
+  mergeContactFolderLinks,
+  moveContactsToFolder,
+  removeContactsFromFolder,
+} from "@/lib/crm/contact-folder-links";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is not set");
@@ -256,6 +261,18 @@ check("remove: the last folder sends it to Sem pasta", async () => {
   assert.ok(!columns.find((c) => c.id === ctx.fa1)!.contacts.some((c) => c.id === x));
 });
 
+check("merge: the primary ends up in every folder", async () => {
+  const p = await makeContact(ctx.orgA, `g0-${stamp}`, ctx.fa1);
+  const l1 = await makeContact(ctx.orgA, `g1-${stamp}`, ctx.fa1);
+  await addLink(ctx.orgA, l1, ctx.fa2);
+  const l2 = await makeContact(ctx.orgA, `g2-${stamp}`, ctx.fa2);
+  await addLink(ctx.orgA, l2, ctx.fa3);
+  await tenantDb(ctx.orgA).$transaction((tx) => mergeContactFolderLinks(tx, p, [l1, l2]));
+  assert.deepEqual(await linksOf(p), [ctx.fa1, ctx.fa2, ctx.fa3].sort());
+  assert.deepEqual(await linksOf(l1), []);
+  assert.deepEqual(await linksOf(l2), []);
+});
+
 /** Gives a contact an e-mail and an opt-out flag (raw SQL, like makeContact). */
 async function setEmail(contactId: string, email: string, optedOut = false) {
   await prisma.$executeRaw`
@@ -277,8 +294,10 @@ async function emailFixture(tag: string, f1 = ctx.fa1, f2 = ctx.fa2) {
 }
 
 check("e-mail: a contact in two chosen folders gets one e-mail", async () => {
-  const { xEmail, oEmail } = await emailFixture("e1");
-  const { recipients } = await resolveAudience(ctx.orgA, { ...EMPTY_AUDIENCE, contactFolderIds: [ctx.fa1, ctx.fa2] });
+  const { o, xEmail, oEmail } = await emailFixture("e1");
+  await addLink(ctx.orgA, o, ctx.fa2); // the opted-out contact is in the chosen folder too
+  // x sits in fa2 through a link alone (its legacy folderId is fa1), so only the new code finds it.
+  const { recipients } = await resolveAudience(ctx.orgA, { ...EMPTY_AUDIENCE, contactFolderIds: [ctx.fa2] });
   assert.equal(recipients.filter((r) => r.email === xEmail).length, 1);
   assert.equal(recipients.filter((r) => r.email === oEmail).length, 0);
 });

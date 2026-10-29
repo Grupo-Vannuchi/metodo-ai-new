@@ -403,20 +403,33 @@ const importTargetSchema = z.object({
 });
 
 type Db = ReturnType<typeof tenantDb>;
-type ContactData = { name: string; phone: string; folderId: string };
+type ContactRow = { name: string; phone: string };
 
-/** createMany in chunks, so one big group doesn't become one huge statement. */
-async function createContacts(db: Db, organizationId: string, rows: ContactData[]): Promise<void> {
+/**
+ * Creates the contacts in chunks (one big group shouldn't become one huge statement) and files
+ * each chunk in `folderId` through contact_folder_links. `createManyAndReturn` is not in
+ * WHERE_OPS of tenantDb (docs/guia/03-multi-tenancy.md), so organizationId goes by hand, in both
+ * the contacts and the links.
+ */
+async function createContacts(
+  db: Db,
+  organizationId: string,
+  rows: ContactRow[],
+  folderId: string,
+): Promise<void> {
   for (let i = 0; i < rows.length; i += 500) {
-    await db.contact.createMany({
+    const created = await db.contact.createManyAndReturn({
       data: rows.slice(i, i + 500).map((r) => ({
         organizationId,
         name: r.name,
         phone: r.phone,
-        folderId: r.folderId,
         tags: ["whatsapp"],
         source: "whatsapp-import",
       })),
+      select: { id: true },
+    });
+    await db.contactFolderLink.createMany({
+      data: created.map((c) => ({ organizationId, contactId: c.id, folderId })),
     });
   }
 }
@@ -448,7 +461,7 @@ async function importConversationContacts(
   // is a duplicate leaves no empty folder behind.
   if (picked.length > 0) {
     const folderId = await ensureContactFolder(db, organizationId, whatsappFolderName("Contatos", new Date()));
-    await createContacts(db, organizationId, picked.map((p) => ({ ...p, folderId })));
+    await createContacts(db, organizationId, picked, folderId);
   }
   return { id: "contacts", label: "Contatos", created: picked.length, skipped };
 }
@@ -469,7 +482,7 @@ async function importGroup(
   const existingFolder = await findContactFolder(db, group.title);
   const numbered = existingFolder
     ? await db.contact.findMany({
-        where: { folderId: existingFolder, name: { startsWith: CONTACT_NAME_PREFIX } },
+        where: { folderLinks: { some: { folderId: existingFolder } }, name: { startsWith: CONTACT_NAME_PREFIX } },
         select: { name: true },
       })
     : [];
@@ -480,7 +493,7 @@ async function importGroup(
   );
   if (plan.create.length > 0) {
     const folderId = existingFolder ?? (await ensureContactFolder(db, organizationId, group.title));
-    await createContacts(db, organizationId, plan.create.map((c) => ({ name: c.name, phone: c.phone, folderId })));
+    await createContacts(db, organizationId, plan.create.map((c) => ({ name: c.name, phone: c.phone })), folderId);
     for (const c of plan.create) known.add(c.key);
   }
   return { id: conversationId, label: group.title, created: plan.create.length, skipped: plan.skipped };
