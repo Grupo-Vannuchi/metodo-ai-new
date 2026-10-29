@@ -46,6 +46,18 @@ export async function getContactsBoard(
   return { folders, columns };
 }
 
+/** Per folder, how many contacts can receive e-mail (has an address, not opted out). A contact in
+ * several folders counts once in each. Groups links (org-scoped by tenantDb), filtering on the contact. */
+export async function contactFolderEmailCounts(organizationId: string): Promise<Map<string, number>> {
+  const db = tenantDb(organizationId);
+  const groups = await db.contactFolderLink.groupBy({
+    by: ["folderId"],
+    where: { contact: { email: { contains: "@" }, optedOut: false } },
+    _count: { _all: true },
+  });
+  return new Map(groups.map((g) => [g.folderId, g._count._all]));
+}
+
 /** Minimal folder options (for the contact form select). */
 export async function contactFolderOptions(organizationId: string) {
   const db = tenantDb(organizationId);

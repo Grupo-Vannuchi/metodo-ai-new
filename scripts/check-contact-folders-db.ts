@@ -18,7 +18,10 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { getContactsBoard } from "@/lib/queries/contact-folders";
+import { contactFolderEmailCounts, getContactsBoard } from "@/lib/queries/contact-folders";
+import { resolveAudience } from "@/lib/email-broadcast/audience";
+import { EMPTY_AUDIENCE } from "@/lib/validations/email-broadcast";
+import { audienceWhere } from "@/lib/queries/campaigns";
 import { getContact } from "@/lib/queries/contacts";
 import { tenantDb } from "@/lib/tenant-db";
 import { addContactsToFolder, moveContactsToFolder, removeContactsFromFolder } from "@/lib/crm/contact-folder-links";
@@ -251,6 +254,50 @@ check("remove: the last folder sends it to Sem pasta", async () => {
   const { columns } = await getContactsBoard(ctx.orgA);
   assert.ok(columns.find((c) => c.id === null)!.contacts.some((c) => c.id === x), "missing from Sem pasta");
   assert.ok(!columns.find((c) => c.id === ctx.fa1)!.contacts.some((c) => c.id === x));
+});
+
+/** Gives a contact an e-mail and an opt-out flag (raw SQL, like makeContact). */
+async function setEmail(contactId: string, email: string, optedOut = false) {
+  await prisma.$executeRaw`
+    UPDATE "contacts" SET "email" = ${email}, "optedOut" = ${optedOut}, "updatedAt" = now()
+    WHERE "id" = ${contactId}`;
+}
+
+/** x: e-mail, in f1 and f2. o: e-mail, in f1, opted out. Returns their ids and e-mails. Org-wide counts
+ * (e2, c1) pass their own folders so other cases' contacts don't add to them. */
+async function emailFixture(tag: string, f1 = ctx.fa1, f2 = ctx.fa2) {
+  const x = await makeContact(ctx.orgA, `${tag}x-${stamp}`, f1);
+  await addLink(ctx.orgA, x, f2);
+  const xEmail = `${tag}x-${stamp}@folders-db.test`;
+  await setEmail(x, xEmail);
+  const o = await makeContact(ctx.orgA, `${tag}o-${stamp}`, f1);
+  const oEmail = `${tag}o-${stamp}@folders-db.test`;
+  await setEmail(o, oEmail, true);
+  return { x, xEmail, o, oEmail };
+}
+
+check("e-mail: a contact in two chosen folders gets one e-mail", async () => {
+  const { xEmail, oEmail } = await emailFixture("e1");
+  const { recipients } = await resolveAudience(ctx.orgA, { ...EMPTY_AUDIENCE, contactFolderIds: [ctx.fa1, ctx.fa2] });
+  assert.equal(recipients.filter((r) => r.email === xEmail).length, 1);
+  assert.equal(recipients.filter((r) => r.email === oEmail).length, 0);
+});
+
+check("e-mail: folder counts include a contact in both folders", async () => {
+  const g1 = await makeFolder(ctx.orgA, `FE1-${stamp}`);
+  const g2 = await makeFolder(ctx.orgA, `FE2-${stamp}`);
+  await emailFixture("e2", g1, g2);
+  const counts = await contactFolderEmailCounts(ctx.orgA);
+  assert.equal(counts.get(g1), 1);
+  assert.equal(counts.get(g2), 1);
+});
+
+check("campaign: folder filter matches by link", async () => {
+  const g1 = await makeFolder(ctx.orgA, `FC1-${stamp}`);
+  const g2 = await makeFolder(ctx.orgA, `FC2-${stamp}`);
+  await emailFixture("c1", g1, g2);
+  const n = await tenantDb(ctx.orgA).contact.count({ where: audienceWhere("EMAIL", { folderId: g2 }) });
+  assert.equal(n, 1);
 });
 
 async function main() {
