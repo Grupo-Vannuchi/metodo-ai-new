@@ -389,6 +389,14 @@ async function main() {
       linksOfA.length === 1 && linksOfA[0].id === linkA.id,
       "a contact-folder link read scoped by org A returns only org A's link",
     );
+    const wrongLinkUpdate = await prisma.contactFolderLink.updateMany({
+      where: { id: linkA.id, organizationId: orgB.id },
+      data: { folderId: folderB.id },
+    });
+    assert(
+      wrongLinkUpdate.count === 0,
+      "a contact-folder link updateMany with the wrong org affects 0 rows",
+    );
     const wrongLinkDelete = await prisma.contactFolderLink.deleteMany({
       where: { id: linkA.id, organizationId: orgB.id },
     });

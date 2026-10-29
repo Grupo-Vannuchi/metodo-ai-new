@@ -249,7 +249,7 @@ com default `[]`). **Não** use `migrate deploy`.
 
 **Antes do merge da branch `feature/crm-contato-varias-pastas` (fase 1):**
 1. Aplicar no Supabase `prisma/migrations/20261029120000_contact_folder_links/migration.sql` com `npx prisma db execute --file prisma/migrations/20261029120000_contact_folder_links/migration.sql --schema prisma/schema.prisma` e depois `npx prisma migrate resolve --applied 20261029120000_contact_folder_links`. Ela cria `contact_folder_links`, copia os vínculos atuais e cria o gatilho `contacts_folder_link_sync` (espelha em `contact_folder_links` o que o código antigo gravar em `contacts.folderId` até o deploy). **Não** use `migrate deploy`.
-2. Conferir que o número de vínculos é igual ao número de contatos com `folderId`: `SELECT (SELECT count(*) FROM contact_folder_links) AS vinculos, (SELECT count(*) FROM contacts WHERE "folderId" IS NOT NULL) AS contatos;`
+2. Conferir que nenhum contato com `folderId` ficou sem vínculo (precisa dar 0): `SELECT count(*) FROM contacts c WHERE c."folderId" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM contact_folder_links l WHERE l."contactId" = c.id AND l."folderId" = c."folderId");`
 3. Fazer o merge. Com o build no ar, testar uma movimentação e uma adição em produção. A fase 2 (outro PR, dias depois) apaga o campo legado: schema → merge e deploy → só então a migration que apaga gatilho, função, FK, índice e coluna.
 
 **Antes do merge da branch `feature/email-dominios-plataforma`:**

@@ -21,14 +21,8 @@ ALTER TABLE "contact_folder_links" ADD CONSTRAINT "contact_folder_links_contactI
 -- AddForeignKey
 ALTER TABLE "contact_folder_links" ADD CONSTRAINT "contact_folder_links_folderId_fkey" FOREIGN KEY ("folderId") REFERENCES "contact_folders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- Fase 1: os vínculos atuais.
-INSERT INTO "contact_folder_links" ("id", "organizationId", "contactId", "folderId", "createdAt")
-SELECT gen_random_uuid()::text, c."organizationId", c."id", c."folderId", now()
-FROM "contacts" c
-WHERE c."folderId" IS NOT NULL
-ON CONFLICT ("contactId", "folderId") DO NOTHING;
-
 -- Fase 1: espelha o que o código antigo gravar em contacts.folderId até o deploy.
+-- Vem antes da cópia: uma escrita do código antigo durante a cópia também é espelhada.
 -- O código novo nunca grava folderId. A fase 2 apaga a função, o gatilho e a coluna.
 CREATE FUNCTION "contact_folder_link_sync"() RETURNS trigger AS $$
 BEGIN
@@ -47,3 +41,10 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER "contacts_folder_link_sync"
 AFTER INSERT OR UPDATE OF "folderId" ON "contacts"
 FOR EACH ROW EXECUTE FUNCTION "contact_folder_link_sync"();
+
+-- Fase 1: os vínculos atuais (depois do gatilho; os dois usam ON CONFLICT DO NOTHING).
+INSERT INTO "contact_folder_links" ("id", "organizationId", "contactId", "folderId", "createdAt")
+SELECT gen_random_uuid()::text, c."organizationId", c."id", c."folderId", now()
+FROM "contacts" c
+WHERE c."folderId" IS NOT NULL
+ON CONFLICT ("contactId", "folderId") DO NOTHING;

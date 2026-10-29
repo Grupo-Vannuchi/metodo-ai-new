@@ -8,8 +8,8 @@
  * company A live for the whole run; a case that deletes a folder creates its own.
  *
  * Creates two companies (`FOLDERS-DB-A/B-<stamp>`) and ALWAYS deletes what it created, in
- * this order: links, contacts, folders, companies. A run that is killed leaves them behind:
- * delete the `folders-db-%` organizations by hand.
+ * this order: contacts (their links go in cascade), folders, companies. A run that is killed leaves them behind:
+ * delete by hand the organizations whose `slug` starts with `folders-db-` (LIKE is case-sensitive).
  *
  * Run: npm run check:folders:db   (needs the local Postgres up and a valid .env)
  * Exits non-zero on the first failure.
@@ -26,8 +26,6 @@ const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) })
 const stamp = Date.now();
 const created = {
   orgs: [] as string[],
-  folders: [] as string[],
-  contacts: [] as string[],
 };
 
 type Case = { name: string; fn: () => Promise<void> };
@@ -40,7 +38,6 @@ const ctx = {} as { orgA: string; orgB: string; fa1: string; fa2: string; fa3: s
 
 async function makeFolder(organizationId: string, name: string) {
   const folder = await prisma.contactFolder.create({ data: { organizationId, name } });
-  created.folders.push(folder.id);
   return folder.id;
 }
 
@@ -50,7 +47,6 @@ async function makeContact(organizationId: string, name: string, folderId: strin
   await prisma.$executeRaw`
     INSERT INTO "contacts" ("id", "organizationId", "name", "folderId", "updatedAt")
     VALUES (${id}, ${organizationId}, ${name}, ${folderId}, now())`;
-  created.contacts.push(id);
   return id;
 }
 
@@ -101,6 +97,20 @@ check("trigger: deleting a folder keeps the contact", async () => {
   assert.deepEqual(await linksOf(t), [ctx.fa3]);
 });
 
+check("trigger: the link carries the contact's organizationId", async () => {
+  const t = await makeContact(ctx.orgA, `t6-${stamp}`, ctx.fa1);
+  const rows = await prisma.$queryRaw<{ organizationId: string }[]>`
+    SELECT "organizationId" FROM "contact_folder_links" WHERE "contactId" = ${t}`;
+  assert.deepEqual(rows.map((r) => r.organizationId), [ctx.orgA]);
+});
+
+check("trigger: moving folderId onto an already linked folder leaves one link there", async () => {
+  const t = await makeContact(ctx.orgA, `t7-${stamp}`, ctx.fa1);
+  await addLink(ctx.orgA, t, ctx.fa2);
+  await prisma.$executeRaw`UPDATE "contacts" SET "folderId" = ${ctx.fa2} WHERE "id" = ${t}`;
+  assert.deepEqual(await linksOf(t), [ctx.fa2]);
+});
+
 async function main() {
   try {
     const a = await prisma.organization.create({
@@ -122,11 +132,8 @@ async function main() {
     }
     console.log(`\n✅ Contact folders (database): ${cases.length} checks passed.`);
   } finally {
-    // Links go with their contact or folder (onDelete: Cascade), but delete them first anyway.
-    await prisma.$executeRaw`DELETE FROM "contact_folder_links" WHERE "organizationId" = ANY(${created.orgs})`.catch(() => {});
-    if (created.contacts.length) {
-      await prisma.contact.deleteMany({ where: { id: { in: created.contacts } } });
-    }
+    // Links go with their contact or folder (onDelete: Cascade).
+    await prisma.contact.deleteMany({ where: { organizationId: { in: created.orgs } } });
     await prisma.contactFolder.deleteMany({ where: { organizationId: { in: created.orgs } } });
     await prisma.organization.deleteMany({ where: { id: { in: created.orgs } } });
   }

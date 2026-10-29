@@ -160,8 +160,8 @@ rede, rode de novo (os pedidos à caixa que devem ter resposta de verdade repete
 `folderId` ganha o vínculo, mudar o `folderId` move o vínculo, um vínculo extra sobrevive à mudança, `folderId`
 nulo tira só o vínculo legado, e apagar a pasta não apaga o contato. Contatos e `folderId` entram por SQL cru,
 para o script sobreviver à renomeação do campo. Cria duas empresas `FOLDERS-DB-A/B-<carimbo>` e apaga o que criou
-(vínculos, contatos, pastas, empresas), mesmo quando falha; se você matar o script no meio, apague a mão as
-organizações `FOLDERS-DB-%`. Precisa do Postgres do Docker e de um `.env` válido. Rode sempre que mexer em
+(contatos, pastas, empresas; os vínculos saem junto, em cascata), mesmo quando falha; se você matar o script no meio, apague a mão as
+organizações cujo `slug` começa com `folders-db-` (o LIKE diferencia maiúsculas de minúsculas). Precisa do Postgres do Docker e de um `.env` válido. Rode sempre que mexer em
 `ContactFolderLink` ou nas ações de pasta de contato.
 
 ## `check:isolation`
