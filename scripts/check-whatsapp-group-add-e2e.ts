@@ -42,7 +42,7 @@ import {
   sendPlainText,
   type EvoCreds,
 } from "@/lib/integrations/evolution-client";
-import { phoneMatchKey, renderInvite, type GroupAddItemStatus } from "@/lib/whatsapp/group-add/core";
+import { forecastFinish, phoneMatchKey, renderInvite, type GroupAddItemStatus } from "@/lib/whatsapp/group-add/core";
 import {
   findDueGroupAddRuns,
   groupAddRuntime,
@@ -52,6 +52,7 @@ import {
 } from "@/lib/whatsapp/group-add/runner";
 import {
   cancelGroupAdd,
+  forecastGroupAddRun,
   listMyGroups,
   pauseGroupAdd,
   pokeGroupAdd,
@@ -2780,6 +2781,69 @@ check("the history of a contact lists the rounds it was in, newest first, and a 
   await w.prisma.contact.deleteMany({ where: { id: ana } });
   const view = await getGroupAddRunView(w.orgA, newer);
   assert.deepEqual(view?.items.map((i) => [i.contactName, i.status]), [["Ana", "ADDED"]]);
+});
+
+check("what the tracking screens read: the pause note in the view, the date and state of the round in the contact's register, and the forecast from what the number spent today", async (ctx) => {
+  const { w } = await scenario(ctx);
+
+  // The view carries the note a pause was left with: the screen tells "the group could not be read" from "no longer admin" by it.
+  const unreadable = await seedRun(w, { status: "PAUSED", pausedReason: "not_admin", lastError: "group_unreadable", items: [{ name: "Ana", phone: N(1), status: "PENDING" }] });
+  const definite = await seedRun(w, { status: "PAUSED", pausedReason: "not_admin", group: OTHER_GROUP, items: [{ name: "Ana", phone: N(1), status: "PENDING" }] });
+  assert.deepEqual(
+    [(await getGroupAddRunView(w.orgA, unreadable))?.lastError, (await getGroupAddRunView(w.orgA, definite))?.lastError],
+    ["group_unreadable", null],
+  );
+
+  // The register on the contact says when the round was made (for whoever was left out before any call, who has no try stamped)
+  // and in what state it ended up, so a person never reached by a canceled round does not read as "queued".
+  const ana = await contactOf(w, { name: "Ana", phone: N(1) });
+  const canceled = await seedRun(w, { status: "CANCELED", group: "120363000000000033@g.us", createdAt: at("2026-10-27T10:00:00.000Z"), items: [] });
+  await w.prisma.whatsappGroupAddItem.create({
+    data: { organizationId: w.orgA, runId: canceled, contactId: ana, contactName: "Ana", position: 0, phone: N(1), phoneKey: phoneMatchKey(N(1)), senderKey: w.owner, status: "PENDING" },
+  });
+  const history = await listContactGroupAdds(w.orgA, ana);
+  assert.deepEqual(
+    history.map((h) => [h.runId, h.status, h.processedAt, h.runCreatedAt.toISOString(), h.runStatus]),
+    [[canceled, "PENDING", null, "2026-10-27T10:00:00.000Z", "CANCELED"]],
+  );
+  assert.deepEqual(await listContactGroupAdds(w.orgB, ana), []);
+
+  // The forecast: the review's own simulation for the people still waiting (PENDING and the one being tried), from what the
+  // number has already tried today (an ADDED, an INVITED and a FAILED count; a SKIPPED does not).
+  const today = at("2026-10-28T11:00:00.000Z");
+  const going = await seedRun(w, {
+    status: "RUNNING",
+    group: "120363000000000044@g.us",
+    items: [
+      { name: "A", phone: N(11), status: "ADDED", processedAt: today },
+      { name: "B", phone: N(12), status: "INVITED", processedAt: today },
+      { name: "C", phone: N(13), status: "FAILED", reason: "http_500", processedAt: today },
+      { name: "D", phone: N(14), status: "SKIPPED", reason: "opted_out" },
+      { name: "E", phone: N(15), status: "PROCESSING", processedAt: today },
+      { name: "F", phone: N(16), status: "PENDING" },
+      { name: "G", phone: N(17), status: "PENDING" },
+    ],
+  });
+  // 3 waiting (2 PENDING and the PROCESSING one), 3 tried today: 10:00 + 3 minutes.
+  assert.equal((await forecastGroupAddRun(w.orgA, going))?.toISOString(), forecastFinish(clock.at, 3, 3).toISOString());
+  assert.equal((await forecastGroupAddRun(w.orgA, going))?.toISOString(), "2026-10-28T13:03:00.000Z");
+  // The number's whole day goes in, from every round of it: another round that tried 100 people today (the cap) pushes the same
+  // 3 people to the next morning at 08:00 (11:00Z), plus their 3 minutes.
+  await seedRun(w, {
+    status: "DONE",
+    group: "120363000000000066@g.us",
+    items: Array.from({ length: 100 }, (_, i): SeedItem => ({ name: `T${i}`, phone: N(100 + i), status: "FAILED", reason: "http_500", processedAt: today })),
+  });
+  assert.equal((await forecastGroupAddRun(w.orgA, going))?.toISOString(), forecastFinish(clock.at, 3, 103).toISOString());
+  assert.equal((await forecastGroupAddRun(w.orgA, going))?.toISOString(), "2026-10-29T11:03:00.000Z");
+
+  // Nothing to say for a round that isn't going (paused, queued, finished), one with nobody waiting, or another company's.
+  assert.equal(await forecastGroupAddRun(w.orgA, unreadable), null);
+  const idle = await seedRun(w, { status: "RUNNING", group: "120363000000000055@g.us", items: [{ name: "A", phone: N(21), status: "ADDED", processedAt: today }] });
+  assert.equal(await forecastGroupAddRun(w.orgA, idle), null);
+  assert.equal(await forecastGroupAddRun(w.orgA, canceled), null);
+  assert.equal(await forecastGroupAddRun(w.orgB, going), null);
+  assert.equal(await forecastGroupAddRun(w.orgA, "no-such-run"), null);
 });
 
 // ── What reaches the console ─────────────────────────────────────────────────

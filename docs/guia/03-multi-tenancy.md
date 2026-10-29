@@ -130,8 +130,11 @@ Para leitura por id vale o mesmo raciocínio: o par é `findFirst({ where: { id 
 - **Leitura:** DAL em [src/lib/queries/](../../src/lib/queries/) — 57 arquivos, um por
   domínio, mais a pasta `mcp/` (abaixo). O mais novo é
   [whatsapp-group-add.ts](../../src/lib/queries/whatsapp-group-add.ts): o acompanhamento de uma rodada de
-  "Adicionar a grupo do WhatsApp" (`getGroupAddRunView`) e o registro no contato (`listContactGroupAdds`),
-  os dois com `tenantDb`. Um `id` de rodada de outra empresa dá `null`, não um erro.
+  "Adicionar a grupo do WhatsApp" (`getGroupAddRunView`, com o motivo da pausa, a espera e o `lastError`) e
+  o registro no contato (`listContactGroupAdds`, com a data e a situação da rodada), os dois com
+  `tenantDb`. Um `id` de rodada de outra empresa dá `null`, não um erro. A tela de acompanhamento também
+  pede ao serviço a previsão de término (`forecastGroupAddRun`, que lê a rodada por `tenantDb` e só do
+  executor a conta do dia do número).
 - **Leitura do servidor MCP** ([src/lib/queries/mcp/](../../src/lib/queries/mcp/)): contexto de
   sistema. Quem chama é o portador da chave `MCP_API_KEY` ([guia 05](05-rotas-e-jobs.md)), não um
   usuário com sessão, então não existe organização ativa: ela chega como argumento de cada

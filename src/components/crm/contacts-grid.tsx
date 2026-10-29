@@ -2,14 +2,17 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Trash2, Phone, Mail, Building2 } from "lucide-react";
+import { Trash2, Phone, Mail, Building2, Users } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/app/avatar";
+import { Button } from "@/components/ui/button";
 import { useUndo } from "@/components/ui/undo";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { FolderExplorer, type FolderColumn, type ExplorerLabels } from "@/components/crm/folder-explorer";
 import { BulkBar } from "@/components/crm/bulk-bar";
+import { GroupAddDialog } from "@/components/crm/group-add-dialog";
+import type { GroupAddSource } from "@/lib/whatsapp/group-add/service";
 import { createFolder, renameFolder, deleteFolder } from "@/app/actions/contact-folders";
 import { deleteContact } from "@/app/actions/contacts";
 import { bulkDeleteContacts, bulkMoveContacts, bulkTagContacts } from "@/app/actions/bulk";
@@ -148,11 +151,20 @@ function ContactList({
   );
 }
 
-export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
+/**
+ * `canAddToGroup` comes from the server (the Atendimento module is installed): it turns on the two entries of "Adicionar a
+ * grupo do WhatsApp", the button of the open folder and the one of the selection bar, which open the same dialog.
+ */
+export function ContactsGrid({ columns, canAddToGroup }: { columns: ContactColumn[]; canAddToGroup: boolean }) {
   const t = useTranslations("crm.contacts");
   const tc = useTranslations("crm.common");
+  const tg = useTranslations("crm.groupAdd");
   const router = useRouter();
   const undo = useUndo();
+
+  // What the dialog is open for: the source of the round and how many contacts the member sees in it. Kept here, outside the
+  // explorer, so the dialog is not inside the open folder's section (whose mouse handler starts the selection box).
+  const [groupAdd, setGroupAdd] = useState<{ source: GroupAddSource; count: number } | null>(null);
 
   // Ids hidden optimistically while an undoable delete is pending. Reconciled
   // against fresh server data: keep only ids still present (i.e. not yet
@@ -211,48 +223,72 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
   const onDeleteContact = (id: string) => deleteWithUndo([id], () => deleteContact(id));
 
   return (
-    <FolderExplorer<ContactCard>
-      storageKey="contacts"
-      columns={cols}
-      labels={labels}
-      onCreateFolder={(name) => createFolder({ name })}
-      onRenameFolder={(id, name) => renameFolder(id, { name })}
-      onDeleteFolder={(id) => deleteFolder(id)}
-      onMoveItems={(ids, folderId) => bulkMoveContacts(ids, folderId)}
-      renderItems={({ items, view, onDragStart, onDragEnd, selected }) => (
-        <ContactList
-          contacts={items}
-          view={view}
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          onOpen={(id) => router.push(`/app/contacts/${id}`)}
-          onDelete={onDeleteContact}
-          deleteLabel={tc("delete")}
-          labels={listLabels}
-          selected={selected}
-        />
-      )}
-      renderBulkBar={({ ids, folders, clear }) => (
-        <BulkBar
-          count={ids.length}
-          folders={folders}
-          onMove={async (folderId) => {
-            await bulkMoveContacts(ids, folderId);
-            clear();
-            router.refresh();
-          }}
-          onTag={async (tag) => {
-            await bulkTagContacts(ids, tag);
-            clear();
-            router.refresh();
-          }}
-          onDelete={async () => {
-            clear();
-            deleteWithUndo(ids, () => bulkDeleteContacts(ids));
-          }}
-          onClear={clear}
-        />
-      )}
-    />
+    <>
+      <FolderExplorer<ContactCard>
+        storageKey="contacts"
+        columns={cols}
+        labels={labels}
+        onCreateFolder={(name) => createFolder({ name })}
+        onRenameFolder={(id, name) => renameFolder(id, { name })}
+        onDeleteFolder={(id) => deleteFolder(id)}
+        onMoveItems={(ids, folderId) => bulkMoveContacts(ids, folderId)}
+        renderItems={({ items, view, onDragStart, onDragEnd, selected }) => (
+          <ContactList
+            contacts={items}
+            view={view}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onOpen={(id) => router.push(`/app/contacts/${id}`)}
+            onDelete={onDeleteContact}
+            deleteLabel={tc("delete")}
+            labels={listLabels}
+            selected={selected}
+          />
+        )}
+        renderOpenFolderActions={
+          canAddToGroup
+            ? (column) =>
+                column.items.length > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setGroupAdd({ source: { kind: "folder", folderId: column.id }, count: column.items.length })}
+                  >
+                    <Users className="size-4" />
+                    {tg("button")}
+                  </Button>
+                ) : null
+            : undefined
+        }
+        renderBulkBar={({ ids, folders, clear }) => (
+          <BulkBar
+            count={ids.length}
+            folders={folders}
+            onMove={async (folderId) => {
+              await bulkMoveContacts(ids, folderId);
+              clear();
+              router.refresh();
+            }}
+            onTag={async (tag) => {
+              await bulkTagContacts(ids, tag);
+              clear();
+              router.refresh();
+            }}
+            onAddToGroup={
+              canAddToGroup ? () => setGroupAdd({ source: { kind: "contacts", contactIds: ids }, count: ids.length }) : undefined
+            }
+            onDelete={async () => {
+              clear();
+              deleteWithUndo(ids, () => bulkDeleteContacts(ids));
+            }}
+            onClear={clear}
+          />
+        )}
+      />
+      {canAddToGroup && groupAdd ? (
+        <GroupAddDialog source={groupAdd.source} count={groupAdd.count} onClose={() => setGroupAdd(null)} />
+      ) : null}
+    </>
   );
 }

@@ -153,6 +153,23 @@ resolvido e mostra ou esconde o vínculo com oportunidade/contato conforme essa 
 padrão se repete para outras combinações de módulo em `tasks`, `feed`, `inbox`, `campaigns` — grep
 por `hasModule(ctx.modules,` mostra todos.
 
+**Um caso com três chaves: "Adicionar a grupo do WhatsApp"** (CRM → Contatos). A tela `contacts` e
+o módulo `crm` já são exigidos pelo
+[layout de `/app/contacts`](<../../src/app/[locale]/app/contacts/layout.tsx>); a terceira chave é o
+`inbox`, porque o número que adiciona é o conectado pela própria pessoa em Conversas. Quem resolve
+é o **servidor**, nunca o componente:
+
+- a lista de contatos recebe `canAddToGroup = hasModule(ctx.modules, "inbox")` como prop
+  ([contacts/page.tsx](<../../src/app/[locale]/app/contacts/page.tsx>)); sem ela, o botão da pasta
+  aberta e o da barra de seleção nem existem;
+- a página de acompanhamento (`contacts/grupos/[runId]`) responde `notFound()` sem `inbox`, e a seção
+  "Grupos do WhatsApp" da página do contato só renderiza com `canInbox`;
+- as server actions (`src/app/actions/whatsapp-group-add.ts`) repetem as três checagens no `gate()`,
+  porque server action é endpoint público — esconder o botão não protege nada;
+- pausar, retomar e cancelar uma rodada valem para quem a começou ou para ADMIN+
+  (`run.createdById === ctx.userId || hasRole(ctx.role, "ADMIN")`). A página calcula isso no servidor e
+  passa `canSteer` pronto ao componente; a action confere de novo.
+
 Vale notar: nem toda `Feature` do tipo `Feature` (em `modules.ts`) tem um módulo dono hoje.
 `webhooks.outbound` e `sso` estão no tipo mas não aparecem em nenhum `unlocks` de `MODULES` —
 leitura minha do código, não comentário do arquivo: `FEATURE_MODULE` é construído por
@@ -162,7 +179,7 @@ para o tipo mas sem dono ainda — não gatear nada por elas por engano.
 
 ## Paridade de i18n
 
-`src/messages/pt.json` e `src/messages/en.json` têm **3241 chaves-folha cada um** (contagem
+`src/messages/pt.json` e `src/messages/en.json` têm **3373 chaves-folha cada um** (contagem
 própria, recursiva sobre os dois arquivos — batem exatamente). Não existe script no repositório
 que verifique a paridade inteira automaticamente: o único arquivo em `scripts/` que lê
 `pt.json`/`en.json` é o `check-email-broadcast.ts` (`npm run check:email`), e ele só confere que os

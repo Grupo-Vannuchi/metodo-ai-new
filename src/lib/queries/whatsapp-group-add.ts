@@ -23,6 +23,11 @@ export type GroupAddRunView = {
   pausedReason: string | null;
   waitReason: string | null;
   nextAttemptAt: Date | null;
+  /**
+   * The note the runner leaves with a pause: the name of the error that stopped it, or `group_unreadable` on a run paused
+   * as `not_admin` because the group could not be read (it goes on by itself once it can). Names an error, never a person.
+   */
+  lastError: string | null;
   createdById: string;
   startedAt: Date | null;
   finishedAt: Date | null;
@@ -48,6 +53,7 @@ export async function getGroupAddRunView(organizationId: string, runId: string):
       pausedReason: true,
       waitReason: true,
       nextAttemptAt: true,
+      lastError: true,
       createdById: true,
       startedAt: true,
       finishedAt: true,
@@ -64,21 +70,38 @@ export async function getGroupAddRunView(organizationId: string, runId: string):
   return { ...run, counts, items };
 }
 
+export type ContactGroupAdd = {
+  runId: string;
+  groupName: string;
+  status: GroupAddItemStatus;
+  /** When the person was tried. Null for whoever was left out before any call (already in the group, no phone…). */
+  processedAt: Date | null;
+  /** When the round was started: the date to show when `processedAt` is null. */
+  runCreatedAt: Date;
+  /** A person still PENDING in a CANCELED round was never reached, which `status` alone does not say. */
+  runStatus: GroupAddRunView["status"];
+  createdById: string;
+};
+
 /** The rounds a contact was in, newest first: the register on the contact's page. */
-export async function listContactGroupAdds(
-  organizationId: string,
-  contactId: string,
-): Promise<{ runId: string; groupName: string; status: GroupAddItemStatus; processedAt: Date | null; createdById: string }[]> {
+export async function listContactGroupAdds(organizationId: string, contactId: string): Promise<ContactGroupAdd[]> {
   const rows = await tenantDb(organizationId).whatsappGroupAddItem.findMany({
     where: { contactId },
     orderBy: { run: { createdAt: "desc" } },
-    select: { runId: true, status: true, processedAt: true, run: { select: { groupName: true, createdById: true } } },
+    select: {
+      runId: true,
+      status: true,
+      processedAt: true,
+      run: { select: { groupName: true, createdById: true, createdAt: true, status: true } },
+    },
   });
   return rows.map((r) => ({
     runId: r.runId,
     groupName: r.run.groupName,
     status: r.status,
     processedAt: r.processedAt,
+    runCreatedAt: r.run.createdAt,
+    runStatus: r.run.status,
     createdById: r.run.createdById,
   }));
 }

@@ -1307,7 +1307,171 @@
       "tagPlaceholder": "Nova tag",
       "delete": "Excluir",
       "confirmDelete": "Excluir {count} item(ns)? Esta ação não pode ser desfeita.",
-      "clear": "Limpar seleção"
+      "clear": "Limpar seleção",
+      "addToGroup": "Adicionar a grupo do WhatsApp"
+    },
+    "groupAdd": {
+      "button": "Adicionar a grupo do WhatsApp",
+      "forecast": "{day, select, today {Previsão: termina hoje por volta das {time}} tomorrow {Previsão: termina amanhã por volta das {time}} other {Previsão: termina em {date} por volta das {time}}}",
+      "inviteDefault": "Oi '{{nome}}'! Este é o link para entrar no grupo '{{grupo}}':",
+      "error": {
+        "no_connection": "Conecte o seu WhatsApp em Conversas",
+        "disconnected": "Seu WhatsApp está desconectado. Reconecte em Conversas.",
+        "unavailable": "O WhatsApp não respondeu agora. Tente de novo em instantes.",
+        "not_admin": "Seu número não é admin deste grupo.",
+        "not_found": "Não encontramos o grupo, a pasta ou a rodada. Atualize a página e tente de novo.",
+        "empty": "Não há contatos para adicionar.",
+        "already_running": "Este grupo já tem uma rodada em andamento, na fila ou pausada.",
+        "unauthorized": "Sessão expirada.",
+        "forbidden": "Você não tem permissão para fazer isso.",
+        "invalid": "Dados inválidos.",
+        "unknown": "Algo deu errado. Tente de novo."
+      },
+      "dialog": {
+        "title": "Adicionar a grupo do WhatsApp",
+        "close": "Fechar",
+        "subtitleGroup": "Escolha o grupo que vai receber os contatos.",
+        "subtitleReview": "Confira antes de começar.",
+        "tooMany": "Você marcou {count} contatos. Cada rodada leva no máximo {max}: marque menos contatos.",
+        "folderCut": "Esta pasta tem {count} contatos. Cada rodada leva no máximo {max}: entram os {max} mais antigos.",
+        "searchPlaceholder": "Buscar grupo pelo nome",
+        "loadingGroups": "Buscando os seus grupos…",
+        "noGroups": "O seu número não está em nenhum grupo.",
+        "noMatch": "Nenhum grupo com esse nome.",
+        "unnamedGroup": "Grupo sem nome",
+        "participants": "{count, plural, one {# participante} other {# participantes}}",
+        "adminYes": "você é admin",
+        "adminNo": "você não é admin deste grupo",
+        "adminUnknown": "não foi possível confirmar que você é admin",
+        "openInbox": "Abrir Conversas",
+        "retry": "Tentar de novo",
+        "change": "Trocar grupo",
+        "checking": "Conferindo o grupo e os contatos…",
+        "counts": {
+          "total": "Contatos escolhidos",
+          "pending": "Serão adicionados",
+          "alreadyIn": "Já estão no grupo",
+          "noWhatsapp": "Sem WhatsApp (o número não é de celular)",
+          "skipped": "Pulados (sem telefone, opt-out, repetidos ou incertos de uma rodada anterior)",
+          "leftGroup": "Saíram do grupo depois de uma rodada anterior",
+          "alreadyInvited": "Já receberam o convite numa rodada anterior"
+        },
+        "privacy": "Num grupo, todos veem o telefone de todos.",
+        "everyoneCanSend": "Neste grupo todos podem mandar mensagens.",
+        "overLimit": "O grupo passaria de {max} participantes.",
+        "overLimitHint": "Só entram os que cabem; os outros ficam como “Não deu agora”.",
+        "inviteLabel": "Mensagem de convite",
+        "inviteHelp": "Quem o WhatsApp não deixar adicionar por causa da privacidade recebe esta mensagem no privado, pelo seu número.",
+        "inviteVars": "Use '{{nome}}' e '{{grupo}}' para personalizar.",
+        "inviteLinkHint": "O link do grupo vai no fim da mensagem.",
+        "pace": "1 pessoa a cada {min} a {max} segundos, só das {start}h às {end}h, até {cap} por dia",
+        "usedToday": "Hoje o seu número já tentou {used} de {cap} pessoas.",
+        "nothingToAdd": "Ninguém para adicionar: todos já estão no grupo ou ficaram de fora.",
+        "start": "Começar",
+        "starting": "Começando…"
+      },
+      "run": {
+        "crumb": "Contatos",
+        "kicker": "Adicionar a grupo do WhatsApp",
+        "status": {
+          "QUEUED": "Na fila",
+          "RUNNING": "Em andamento",
+          "PAUSED": "Pausada",
+          "DONE": "Concluída",
+          "CANCELED": "Cancelada"
+        },
+        "startedAt": "Começou em {date}",
+        "finishedAt": "terminou em {date}",
+        "progress": "{done} de {total} contatos",
+        "pause": "Pausar",
+        "resume": "Retomar",
+        "cancel": "Cancelar",
+        "confirmCancel": "Cancelar esta rodada? Quem ainda não foi alcançado não será adicionado, e a rodada não pode ser retomada depois.",
+        "confirmCancelYes": "Cancelar rodada",
+        "keep": "Voltar",
+        "toast": {
+          "pause": "Rodada pausada",
+          "resume": "Rodada retomada",
+          "cancel": "Rodada cancelada"
+        },
+        "paused": {
+          "manual": "Pausada por você",
+          "manualOther": "Pausada manualmente",
+          "disconnected": "WhatsApp desconectado",
+          "not_admin": "Seu número não é mais admin do grupo",
+          "unreadable": "Não foi possível ler o grupo agora. A rodada continua sozinha quando o grupo voltar a responder.",
+          "no_connection": "Conexão removida",
+          "error": "Erro inesperado",
+          "other": "Rodada pausada"
+        },
+        "pausedHint": {
+          "disconnected": "Reconecte o número em Conversas. A rodada continua sozinha quando ele voltar.",
+          "not_admin": "A rodada só continua quando o seu número voltar a ser admin do grupo.",
+          "no_connection": "A conexão do WhatsApp desta rodada foi removida e ela não consegue continuar. Cancele e comece outra.",
+          "error": "Algo falhou no meio do caminho. Retome a rodada para tentar de novo."
+        },
+        "wait": {
+          "queued": "Na fila: este número já está adicionando pessoas a outro grupo",
+          "pace": "A próxima pessoa entra em alguns segundos",
+          "window": "Aguardando o horário: volta às {hour}h",
+          "cap": "Teto de {cap} por dia atingido: volta amanhã às {hour}h",
+          "unavailable": "O servidor do WhatsApp não está respondendo. A rodada tenta de novo em instantes."
+        },
+        "col": {
+          "contact": "Contato",
+          "status": "Situação",
+          "when": "Quando"
+        }
+      },
+      "item": {
+        "PENDING": "Na fila",
+        "PROCESSING": "Em andamento",
+        "ADDED": "Adicionado",
+        "INVITED": "Convite enviado",
+        "ALREADY_IN": "Já estava no grupo",
+        "NO_WHATSAPP": "Sem WhatsApp",
+        "SKIPPED": "Pulado",
+        "LEFT_GROUP": "Saiu do grupo",
+        "ALREADY_INVITED": "Já recebeu o convite",
+        "FAILED": "Não deu agora",
+        "NOT_TRIED": "Não tentado"
+      },
+      "itemHint": {
+        "INVITED": "O WhatsApp não deixou adicionar; o link do grupo foi enviado no privado.",
+        "NO_WHATSAPP": "Este número não tem conta no WhatsApp.",
+        "LEFT_GROUP": "Uma rodada anterior adicionou esta pessoa e ela não está mais no grupo.",
+        "ALREADY_INVITED": "Uma rodada anterior mandou o link e a pessoa não entrou.",
+        "FAILED": "O WhatsApp não aceitou a adição desta pessoa."
+      },
+      "reason": {
+        "no_phone": "Contato sem telefone",
+        "opted_out": "Pediu para não receber mensagens",
+        "not_mobile": "O número não é de celular",
+        "duplicate": "Mesmo número de outro contato da rodada",
+        "previous_uncertain": "Uma rodada anterior pode já ter adicionado ou convidado esta pessoa",
+        "unconfirmed": "Não foi possível confirmar se a pessoa foi adicionada",
+        "no_invite_link": "Não foi possível pegar o link do grupo para mandar o convite",
+        "invite_failed": "O WhatsApp não deixou adicionar e o convite não pôde ser enviado",
+        "invite_uncertain": "Não foi possível confirmar o envio do convite",
+        "group_full": "O grupo chegou ao limite de {max} participantes"
+      },
+      "contact": {
+        "title": "Grupos do WhatsApp",
+        "line": {
+          "PENDING": "Na fila para entrar no grupo {group}",
+          "NOT_TRIED": "Não chegou a ser adicionado ao grupo {group}: rodada cancelada",
+          "ADDED": "Adicionado ao grupo {group}",
+          "INVITED": "Convite do grupo {group} enviado",
+          "ALREADY_IN": "Já estava no grupo {group}",
+          "NO_WHATSAPP": "Sem WhatsApp, não entrou no grupo {group}",
+          "SKIPPED": "Ficou de fora da rodada do grupo {group}",
+          "LEFT_GROUP": "Saiu do grupo {group} e não foi adicionado de novo",
+          "ALREADY_INVITED": "Já tinha recebido o convite do grupo {group}",
+          "FAILED": "Não deu para adicionar ao grupo {group}"
+        },
+        "when": "em {date}",
+        "whenBy": "em {date} por {who}"
+      }
     },
     "import": {
       "button": "Importar CSV",

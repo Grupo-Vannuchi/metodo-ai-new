@@ -389,3 +389,18 @@ export async function pokeGroupAdd(organizationId: string, runId: string): Promi
     console.error("[group-add] poke failed", run.id, errorTag(e));
   }
 }
+
+/**
+ * When the people still waiting in a run would be done, for the tracking screen: the same simulation as the review
+ * (forecastFinish), from what the number has already spent today. Null when the run is not RUNNING or nobody is waiting: a
+ * paused run has no date to give, and a queued one first waits for the other run of its number.
+ */
+export async function forecastGroupAddRun(organizationId: string, runId: string): Promise<Date | null> {
+  const db = tenantDb(organizationId);
+  const run = await db.whatsappGroupAddRun.findFirst({ where: { id: runId, status: "RUNNING" }, select: { senderKey: true } });
+  if (!run) return null;
+  const remaining = await db.whatsappGroupAddItem.count({ where: { runId, status: { in: ["PENDING", "PROCESSING"] } } });
+  if (remaining === 0) return null;
+  const now = groupAddRuntime.now();
+  return forecastFinish(now, remaining, await countUsedToday(run.senderKey, now));
+}

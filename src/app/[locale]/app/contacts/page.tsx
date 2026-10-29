@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { Plus } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
+import { hasModule } from "@/config/modules";
 import { getContactsBoard } from "@/lib/queries/contact-folders";
 import { findContactDuplicates } from "@/lib/queries/duplicates";
 import { ContactsGrid } from "@/components/crm/contacts-grid";
@@ -26,6 +27,9 @@ export default async function ContactsPage({
     getContactsBoard(ctx.organizationId),
     findContactDuplicates(ctx.organizationId),
   ]);
+  // "Adicionar a grupo do WhatsApp" sends from the member's number of Conversas, so it needs the Atendimento module (the
+  // layout already gates the screen and the CRM). Resolved here and sent down as a prop; the actions check it again.
+  const canAddToGroup = hasModule(ctx.modules, "inbox");
 
   return (
     <div className="flex flex-col gap-6">
@@ -45,7 +49,7 @@ export default async function ContactsPage({
         </div>
       </div>
 
-      <ContactsGrid columns={columns} />
+      <ContactsGrid columns={columns} canAddToGroup={canAddToGroup} />
     </div>
   );
 }

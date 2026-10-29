@@ -44,8 +44,11 @@ import {
 const UNAVAILABLE_WAIT_MS = 5 * 60_000;
 /** connectionState has no timeout of its own, and the lease would run out under a call that never answers. */
 const STATE_TIMEOUT_MS = 15_000;
-/** The note on a run paused as not_admin because the group could not be read: the cron and a poke take it back once they can. */
-const GROUP_UNREADABLE = "group_unreadable";
+/**
+ * The note on a run paused as not_admin because the group could not be read: the cron and a poke take it back once they can.
+ * The tracking screen reads it too, to say so instead of "your number is no longer admin".
+ */
+export const GROUP_UNREADABLE = "group_unreadable";
 
 export type GroupAddRuntime = {
   now: () => Date;

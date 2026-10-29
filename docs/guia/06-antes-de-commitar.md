@@ -165,8 +165,13 @@ não deu para ler (`not_admin` com a nota
 `group_unreadable`), que volta sozinha na lista do cron e no `pokeGroupAdd` quando o grupo lê de novo e o número é admin,
 e que fica como estava, sem escrita nenhuma, enquanto o grupo não lê, o número não é admin ou não dá para saber (um
 `not_admin` de verdade, sem a nota, e qualquer outro motivo de pausa nunca voltam sozinhos, nem perguntam nada à
-Evolution, e uma rodada cuja conexão é de outra empresa não é aberta); e que outra empresa não vê, não pausa, não
-cancela nem retoma uma rodada, e que nenhum erro deixa número ou texto do convite no console nem no `lastError`.
+Evolution, e uma rodada cuja conexão é de outra empresa não é aberta); o que as telas de acompanhamento leem (a nota
+da pausa na consulta da rodada; a data e a situação da rodada no registro do contato, para quem ficou de fora antes de
+qualquer chamada e para quem uma rodada cancelada nunca alcançou; e a previsão de término, `forecastGroupAddRun`, que é a
+mesma conta da conferência a partir do que o número já tentou no dia, em todas as rodadas dele, e que o teto empurra para
+as 8h do dia seguinte, sem dar data para rodada que não está rodando, sem ninguém esperando ou de outra empresa); e que
+outra empresa não vê, não pausa, não cancela nem retoma uma rodada, e que nenhum erro deixa número ou texto do convite no
+console nem no `lastError`.
 Precisa de um `.env` (o comando o carrega; o segredo do cron é do próprio teste, então o `.env` não precisa ter um) e do
 Postgres do Docker, e leva uns 30 s; não usa a internet. O banco é só o
 local, e o script recusa rodar contra outro. Cria duas empresas de teste (`wga-e2e-<carimbo>` e `wga-e2e-<carimbo>-b`),
