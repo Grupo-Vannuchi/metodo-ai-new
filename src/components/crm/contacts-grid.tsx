@@ -243,7 +243,7 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
       onCreateFolder={(name) => createFolder({ name })}
       onRenameFolder={(id, name) => renameFolder(id, { name })}
       onDeleteFolder={(id) => deleteFolder(id)}
-      onMoveItems={(ids, folderId) => bulkMoveContacts(ids, folderId)}
+      onMoveItems={(ids, to, from) => bulkMoveContacts(ids, to, from)}
       renderItems={({ items, view, onDragStart, onDragEnd, selected }) => (
         <ContactList
           contacts={items}
@@ -257,12 +257,12 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
           selected={selected}
         />
       )}
-      renderBulkBar={({ ids, folders, clear }) => (
+      renderBulkBar={({ ids, folders, clear, openFolderId }) => (
         <BulkBar
           count={ids.length}
           folders={folders}
           onMove={async (folderId) => {
-            await bulkMoveContacts(ids, folderId);
+            await bulkMoveContacts(ids, folderId, openFolderId);
             clear();
             router.refresh();
           }}

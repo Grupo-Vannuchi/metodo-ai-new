@@ -19,9 +19,9 @@ import { useSessionState } from "@/lib/use-session-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { useConfirm } from "@/components/ui/confirm";
+import { applyFolderDrop, type FolderColumn } from "@/lib/crm/contact-folders-core";
 
-/** A folder + its items. `id: null` is the predefined "unfiled" folder. */
-export type FolderColumn<T> = { id: string | null; name: string; items: T[] };
+export type { FolderColumn };
 
 export type ExplorerLabels = {
   newFolder: string;
@@ -56,6 +56,8 @@ export type BulkContext = {
   ids: string[];
   /** Folders in this explorer (excluding "unfiled"), for a move-to-folder menu. */
   folders: { id: string; name: string }[];
+  /** The folder that is open (`null` = "unfiled"): where a move takes items from. */
+  openFolderId: string | null;
   clear: () => void;
 };
 
@@ -88,8 +90,9 @@ export function FolderExplorer<T extends { id: string }>({
   onCreateFolder: (name: string) => Promise<unknown> | void;
   onRenameFolder: (id: string, name: string) => Promise<unknown> | void;
   onDeleteFolder: (id: string) => Promise<unknown> | void;
-  /** Move one or many items to a folder (`null` = unfiled) in a single call. */
-  onMoveItems: (itemIds: string[], folderId: string | null) => Promise<unknown> | void;
+  /** Move one or many items to a folder (`null` = unfiled) in a single call;
+   *  `fromFolderId` is the folder they are taken from (the open one). */
+  onMoveItems: (itemIds: string[], folderId: string | null, fromFolderId: string | null) => Promise<unknown> | void;
   renderItems: (args: RenderItemsArgs<T>) => React.ReactNode;
   /** Optional bulk-action bar, shown while items are selected. */
   renderBulkBar?: (ctx: BulkContext) => React.ReactNode;
@@ -212,29 +215,15 @@ export function FolderExplorer<T extends { id: string }>({
     // one moves just it (and clears any stale selection).
     const ids = selected.has(draggedId) ? [...selectedIds] : [draggedId];
 
-    // Gather the items that actually change folder (skip any already in target).
-    const moving: T[] = [];
-    const movingIds = new Set<string>();
-    for (const c of cols) {
-      if (c.id === toId) continue;
-      for (const it of c.items) {
-        if (ids.includes(it.id)) {
-          moving.push(it);
-          movingIds.add(it.id);
-        }
-      }
-    }
     clearSelection();
-    if (moving.length === 0) return;
-
-    setCols((prevCols) =>
-      prevCols.map((c) => {
-        if (c.id === toId) return { ...c, items: [...moving, ...c.items] };
-        return { ...c, items: c.items.filter((x) => !movingIds.has(x.id)) };
-      }),
-    );
+    // Items are taken from the open folder; applyFolderDrop returns the same
+    // array when nothing changes, so there is no server call to make.
+    if (openId === undefined) return;
+    const next = applyFolderDrop(cols, ids, openId, toId, "move");
+    if (next === cols) return;
+    setCols(next);
     start(async () => {
-      await onMoveItems([...movingIds], toId);
+      await onMoveItems(ids, toId, openId);
       router.refresh();
     });
   }
@@ -443,6 +432,7 @@ export function FolderExplorer<T extends { id: string }>({
               {renderBulkBar({
                 ids: selectedIds,
                 folders: folders.map((f) => ({ id: f.id as string, name: f.name })),
+                openFolderId: openCol.id,
                 clear: clearSelection,
               })}
             </div>

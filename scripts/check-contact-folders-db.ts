@@ -20,6 +20,8 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { getContactsBoard } from "@/lib/queries/contact-folders";
 import { getContact } from "@/lib/queries/contacts";
+import { tenantDb } from "@/lib/tenant-db";
+import { moveContactsToFolder } from "@/lib/crm/contact-folder-links";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is not set");
@@ -36,7 +38,7 @@ function check(name: string, fn: () => Promise<void>) {
   cases.push({ name, fn });
 }
 
-const ctx = {} as { orgA: string; orgB: string; fa1: string; fa2: string; fa3: string };
+const ctx = {} as { orgA: string; orgB: string; fa1: string; fa2: string; fa3: string; fb1: string };
 
 async function makeFolder(organizationId: string, name: string) {
   const folder = await prisma.contactFolder.create({ data: { organizationId, name } });
@@ -152,6 +154,59 @@ check("getContact lists the contact's folders", async () => {
   assert.deepEqual(c.folderLinks.map((l) => l.folder.name).sort(), [`FA1-${stamp}`, `FA2-${stamp}`]);
 });
 
+check("move: A→B keeps the contact's other folders", async () => {
+  const x = await makeContact(ctx.orgA, `m1-${stamp}`, ctx.fa1);
+  await addLink(ctx.orgA, x, ctx.fa3);
+  const n = await moveContactsToFolder(tenantDb(ctx.orgA), ctx.orgA, [x], ctx.fa2, ctx.fa1);
+  assert.equal(n, 1);
+  assert.deepEqual(await linksOf(x), [ctx.fa2, ctx.fa3].sort());
+});
+
+check("move: to Sem pasta removes every link", async () => {
+  const x = await makeContact(ctx.orgA, `m2-${stamp}`, ctx.fa1);
+  await addLink(ctx.orgA, x, ctx.fa3);
+  await moveContactsToFolder(tenantDb(ctx.orgA), ctx.orgA, [x], null, ctx.fa1);
+  assert.deepEqual(await linksOf(x), []);
+});
+
+check("move: from Sem pasta adds the folder", async () => {
+  const x = await makeContact(ctx.orgA, `m3-${stamp}`, null);
+  const n = await moveContactsToFolder(tenantDb(ctx.orgA), ctx.orgA, [x], ctx.fa1, null);
+  assert.equal(n, 1);
+  assert.deepEqual(await linksOf(x), [ctx.fa1]);
+});
+
+check("move: into a folder it is already in", async () => {
+  const x = await makeContact(ctx.orgA, `m4-${stamp}`, ctx.fa1);
+  await addLink(ctx.orgA, x, ctx.fa2);
+  await moveContactsToFolder(tenantDb(ctx.orgA), ctx.orgA, [x], ctx.fa2, ctx.fa1);
+  assert.deepEqual(await linksOf(x), [ctx.fa2]);
+});
+
+check("move: same folder is a no-op", async () => {
+  const x = await makeContact(ctx.orgA, `m5-${stamp}`, ctx.fa1);
+  await addLink(ctx.orgA, x, ctx.fa3);
+  const n = await moveContactsToFolder(tenantDb(ctx.orgA), ctx.orgA, [x], ctx.fa1, ctx.fa1);
+  assert.equal(n, 0);
+  assert.deepEqual(await linksOf(x), [ctx.fa1, ctx.fa3].sort());
+});
+
+check("move: another org's folder is refused", async () => {
+  const x = await makeContact(ctx.orgA, `m6-${stamp}`, ctx.fa1);
+  const n = await moveContactsToFolder(tenantDb(ctx.orgA), ctx.orgA, [x], ctx.fb1, ctx.fa1);
+  assert.equal(n, null);
+  assert.deepEqual(await linksOf(x), [ctx.fa1]);
+});
+
+check("move: foreign contact", async () => {
+  const x = await makeContact(ctx.orgA, `m7-${stamp}`, ctx.fa1);
+  const y = await makeContact(ctx.orgB, `m7b-${stamp}`, null);
+  const n = await moveContactsToFolder(tenantDb(ctx.orgA), ctx.orgA, [x, y], ctx.fa2, ctx.fa1);
+  assert.equal(n, 1);
+  assert.deepEqual(await linksOf(x), [ctx.fa2]);
+  assert.deepEqual(await linksOf(y), []);
+});
+
 async function main() {
   try {
     const a = await prisma.organization.create({
@@ -166,6 +221,7 @@ async function main() {
     ctx.fa1 = await makeFolder(a.id, `FA1-${stamp}`);
     ctx.fa2 = await makeFolder(a.id, `FA2-${stamp}`);
     ctx.fa3 = await makeFolder(a.id, `FA3-${stamp}`);
+    ctx.fb1 = await makeFolder(b.id, `FB1-${stamp}`);
 
     for (const c of cases) {
       await c.fn();

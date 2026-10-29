@@ -69,32 +69,3 @@ export async function deleteFolder(id: string): Promise<{ ok: boolean }> {
     return { ok: false };
   }
 }
-
-/** Move a contact to a folder, or to "unfiled" when `folderId` is null. */
-export async function moveContactToFolder(
-  contactId: string,
-  folderId: string | null,
-): Promise<{ ok: boolean }> {
-  const ctx = await getOrgContext();
-  if (!ctx) return { ok: false };
-
-  try {
-    const db = tenantDb(ctx.organizationId);
-
-    // A target folder must belong to this org (tenantDb scopes the lookup).
-    if (folderId) {
-      const folder = await db.contactFolder.findFirst({
-        where: { id: folderId },
-        select: { id: true },
-      });
-      if (!folder) return { ok: false };
-    }
-
-    await db.contact.updateMany({ where: { id: contactId }, data: { folderId } });
-    revalidatePath("/app/contacts");
-    return { ok: true };
-  } catch (error) {
-    console.error("Failed to move contact", error);
-    return { ok: false };
-  }
-}

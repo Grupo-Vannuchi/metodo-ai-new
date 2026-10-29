@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
+import { moveContactsToFolder } from "@/lib/crm/contact-folder-links";
 
 /**
  * Bulk operations for the folder explorers (contacts, companies): apply one
@@ -46,18 +47,21 @@ export async function bulkDeleteContacts(ids: string[]): Promise<BulkResult> {
   }
 }
 
-export async function bulkMoveContacts(ids: string[], folderId: string | null): Promise<BulkResult> {
+/** Move contacts out of the open folder (`fromFolderId`) into `folderId`,
+ * keeping their other folders. `null` is "Sem pasta". */
+export async function bulkMoveContacts(
+  ids: string[],
+  folderId: string | null,
+  fromFolderId: string | null,
+): Promise<BulkResult> {
   const p = await prep(ids);
   if ("error" in p) return { ok: false, error: p.error };
   try {
     const db = tenantDb(p.ctx.organizationId);
-    if (folderId) {
-      const folder = await db.contactFolder.findFirst({ where: { id: folderId }, select: { id: true } });
-      if (!folder) return { ok: false, error: "invalid" };
-    }
-    const res = await db.contact.updateMany({ where: { id: { in: p.ids } }, data: { folderId } });
+    const count = await moveContactsToFolder(db, p.ctx.organizationId, p.ids, folderId, fromFolderId);
+    if (count === null) return { ok: false, error: "invalid" };
     revalidatePath("/app/contacts");
-    return { ok: true, count: res.count };
+    return { ok: true, count };
   } catch (error) {
     console.error("bulkMoveContacts failed", error);
     return { ok: false, error: "unknown" };
