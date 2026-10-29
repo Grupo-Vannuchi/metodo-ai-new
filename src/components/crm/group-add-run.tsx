@@ -158,17 +158,20 @@ export function GroupAddRun(props: GroupAddRunProps) {
       .catch(() => {});
   }, [open, runId, router]);
 
-  function act(kind: "pause" | "resume" | "cancel") {
+  async function act(kind: "pause" | "resume" | "cancel") {
+    // Ask first, outside the transition: React 19 holds the state updates made at the start of an async transition until it
+    // ends, so a dialog opened inside it never shows, and the transition never ends because it waits for the answer (the
+    // buttons stay shut for good). Same order as the signature card.
+    if (kind === "cancel") {
+      const sure = await confirm({
+        description: t("run.confirmCancel"),
+        confirmLabel: t("run.confirmCancelYes"),
+        cancelLabel: t("run.keep"),
+        variant: "danger",
+      });
+      if (!sure) return;
+    }
     start(async () => {
-      if (kind === "cancel") {
-        const sure = await confirm({
-          description: t("run.confirmCancel"),
-          confirmLabel: t("run.confirmCancelYes"),
-          cancelLabel: t("run.keep"),
-          variant: "danger",
-        });
-        if (!sure) return;
-      }
       try {
         const call = kind === "pause" ? pauseGroupAddAction : kind === "resume" ? resumeGroupAddAction : cancelGroupAddAction;
         const result = await call(runId);
