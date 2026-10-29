@@ -294,10 +294,10 @@ async function emailFixture(tag: string, f1 = ctx.fa1, f2 = ctx.fa2) {
 }
 
 check("e-mail: a contact in two chosen folders gets one e-mail", async () => {
-  const { o, xEmail, oEmail } = await emailFixture("e1");
-  await addLink(ctx.orgA, o, ctx.fa2); // the opted-out contact is in the chosen folder too
-  // x sits in fa2 through a link alone (its legacy folderId is fa1), so only the new code finds it.
-  const { recipients } = await resolveAudience(ctx.orgA, { ...EMPTY_AUDIENCE, contactFolderIds: [ctx.fa2] });
+  const { x, o, xEmail, oEmail } = await emailFixture("e1");
+  await addLink(ctx.orgA, x, ctx.fa3); // x: fa2 and fa3 by link alone (legacy folderId is fa1)
+  await addLink(ctx.orgA, o, ctx.fa2); // the opted-out contact is in a chosen folder too
+  const { recipients } = await resolveAudience(ctx.orgA, { ...EMPTY_AUDIENCE, contactFolderIds: [ctx.fa2, ctx.fa3] });
   assert.equal(recipients.filter((r) => r.email === xEmail).length, 1);
   assert.equal(recipients.filter((r) => r.email === oEmail).length, 0);
 });

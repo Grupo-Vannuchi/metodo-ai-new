@@ -78,7 +78,7 @@ export async function mergeContacts(primaryId: string, loserIds: string[]): Prom
         },
       });
       // Before the delete: the losers' folder links would cascade away with them.
-      await mergeContactFolderLinks(tx, primaryId, losers);
+      await mergeContactFolderLinks(tx, primaryId, others.map((o) => o.id));
       await tx.contact.deleteMany({ where: { id: { in: losers } } });
     });
 

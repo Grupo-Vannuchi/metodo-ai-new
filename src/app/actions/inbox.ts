@@ -418,18 +418,21 @@ async function createContacts(
   folderId: string,
 ): Promise<void> {
   for (let i = 0; i < rows.length; i += 500) {
-    const created = await db.contact.createManyAndReturn({
-      data: rows.slice(i, i + 500).map((r) => ({
-        organizationId,
-        name: r.name,
-        phone: r.phone,
-        tags: ["whatsapp"],
-        source: "whatsapp-import",
-      })),
-      select: { id: true },
-    });
-    await db.contactFolderLink.createMany({
-      data: created.map((c) => ({ organizationId, contactId: c.id, folderId })),
+    // One transaction per chunk: contacts without their folder link would be skipped on a retry.
+    await db.$transaction(async (tx) => {
+      const created = await tx.contact.createManyAndReturn({
+        data: rows.slice(i, i + 500).map((r) => ({
+          organizationId,
+          name: r.name,
+          phone: r.phone,
+          tags: ["whatsapp"],
+          source: "whatsapp-import",
+        })),
+        select: { id: true },
+      });
+      await tx.contactFolderLink.createMany({
+        data: created.map((c) => ({ organizationId, contactId: c.id, folderId })),
+      });
     });
   }
 }
