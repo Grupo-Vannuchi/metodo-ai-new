@@ -35,6 +35,12 @@ banco nem rede. Rode sempre que mexer em `src/lib/email-broadcast/`.
 horário de Brasília, posição entre cards, nome de coluna, coluna da tarefa nova pela data, para onde vai
 o card ao concluir, reabrir ou arrastar para a coluna de concluídas). Rode sempre que mexer nesse arquivo.
 
+`npm run check:folders` faz o mesmo para as regras puras de contato em várias pastas
+([src/lib/crm/contact-folders-core.ts](../../src/lib/crm/contact-folders-core.ts): o que muda ao soltar
+contatos numa pasta, mover ou adicionar, inclusive para "Sem pasta" e a partir dela; as colunas do quadro
+de contatos, com o contato em cada pasta dele; e o que apagar e o que repontar nos vínculos ao mesclar
+contatos). Não usa banco nem rede. Rode sempre que mexer nesse arquivo.
+
 `npm run check:automation` cobre as regras puras da automação de WhatsApp. Em
 [src/lib/automation/types.ts](../../src/lib/automation/types.ts), confere a leitura e a validação da regra:
 início por palavra ou por qualquer mensagem, menu de opções, regras salvas antes do menu e a troca entre
