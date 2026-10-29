@@ -78,7 +78,10 @@ diferentes (com ou sem 55, com ou sem o 9, com máscara) dando a mesma chave e o
 celular antigo de 8 dígitos ganha o 9 e conta como celular); quem entra na rodada e quem fica de fora, na ordem
 das regras (opt-out, que vale para o número e não só para o registro: bloqueia todo contato da seleção com o mesmo
 telefone, em qualquer ordem; sem telefone, número que não é de celular, já no grupo, saiu do grupo depois de uma
-rodada anterior, já recebeu o convite e número repetido na pasta) e as contagens da conferência; o código
+rodada anterior, já recebeu o convite, ficou em dúvida numa rodada anterior e número repetido na pasta; quem ficou em
+dúvida, porque a adição ou o texto do convite pode ter saído (`interrupted`, `uncertain` e `invite_uncertain`), fica de
+fora com `previous_uncertain`, ou é `ALREADY_IN` se já está no grupo, e nunca é refeito sozinho) e as contagens da
+conferência; o código
 da resposta de cada adição virando adicionado, convite ou já estava; o horário das 8h às 20h de São Paulo, a
 próxima tentativa depois da pausa de 30 a 90 s e a retomada às 8h do dia seguinte quando o teto de 100 por dia
 acaba; o texto do convite com `{{nome}}` e `{{grupo}}` e o link sempre no fim; e a previsão de término).
@@ -132,7 +135,9 @@ cancelamento ou de uma retomada espera a pausa da última tentativa do número, 
 desconectado, Evolution fora do ar e não ser admin (pausam sem adicionar ninguém); a trava (dois executores ao mesmo
 tempo, trava vencida, trava perdida no meio de uma espera) com uma chamada por número e quem ficou em andamento
 virando `interrupted` sem ser refeito; resposta sem código, erro de HTTP e sem resposta da adição; o link do grupo
-pedido uma vez, o texto do convite e o link que falta; dois cliques em "Começar" dando uma rodada só; o excedente de
+pedido uma vez, o texto do convite e o link que falta; o texto do convite sem resposta virando `invite_uncertain` (a
+recusa continua `invite_failed`) e a rodada seguinte do grupo pulando, sem chamada, quem ficou `interrupted`,
+`uncertain` ou `invite_uncertain`, só do mesmo grupo e da mesma empresa; dois cliques em "Começar" dando uma rodada só; o excedente de
 1.024 participantes como `group_full`; pausar, retomar e cancelar, inclusive no meio de uma chamada; a lista de
 rodadas devidas do cron e o `pokeGroupAdd`; a rodada pausada porque o grupo não deu para ler (`not_admin` com a nota
 `group_unreadable`), que volta sozinha na lista do cron e no `pokeGroupAdd` quando o grupo lê de novo e o número é admin,

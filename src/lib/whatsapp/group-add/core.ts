@@ -46,7 +46,14 @@ export type GroupAddItemStatus =
 /** The statuses that count against a number's day: WhatsApp was asked about the person. */
 export const CAP_COUNTED: readonly GroupAddItemStatus[] = ["ADDED", "INVITED", "FAILED"];
 
-export type SkipReason = "no_phone" | "opted_out" | "not_mobile" | "duplicate";
+export type SkipReason = "no_phone" | "opted_out" | "not_mobile" | "duplicate" | "previous_uncertain";
+
+/**
+ * The reasons that leave a FAILED item in doubt, because the add or the text may have gone out at WhatsApp all the same:
+ * the runner died on the person ("interrupted"), the add got no answer ("uncertain"), the text with the link got no
+ * answer ("invite_uncertain"). A later round for the group never redoes them by itself.
+ */
+export const UNCERTAIN_REASONS = ["interrupted", "uncertain", "invite_uncertain"] as const;
 
 /**
  * The number to dial for a phone typed in the CRM: country-coded digits, with
@@ -74,8 +81,11 @@ export function phoneMatchKey(raw: string | null | undefined): string | null {
 /** `phone` is as typed in the CRM. */
 export type CandidateInput = { contactId: string; name: string; phone: string | null; optedOut: boolean };
 
-/** A number an earlier round for the same group added or sent the link to, as `phoneMatchKey`. */
-export type PreviousOutcome = { phoneKey: string; status: "ADDED" | "INVITED" };
+/**
+ * A number an earlier round for the same group added, sent the link to, or left in doubt about (UNCERTAIN: an item that
+ * FAILED for one of UNCERTAIN_REASONS, so it may have been added or invited), as `phoneMatchKey`.
+ */
+export type PreviousOutcome = { phoneKey: string; status: "ADDED" | "INVITED" | "UNCERTAIN" };
 
 export type PlannedItem = {
   contactId: string;
@@ -93,8 +103,10 @@ export type PlannedItem = {
  * selection with the same number); no phone (no digits at all); not a mobile
  * (judged on the number to dial); already in the group (`participantKeys`);
  * added by an earlier round, so left the group; invited by an earlier round, so
- * did not join; the same number as an earlier contact; otherwise pending.
- * `participantKeys` and `previous` hold `phoneMatchKey` values.
+ * did not join; left in doubt by an earlier round (the add or the text may have gone
+ * out), so skipped as previous_uncertain; the same number as an earlier contact;
+ * otherwise pending. Someone in doubt who is in the group today is ALREADY_IN, by
+ * the rule before. `participantKeys` and `previous` hold `phoneMatchKey` values.
  */
 export function planGroupAdd(
   contacts: readonly CandidateInput[],
@@ -103,9 +115,11 @@ export function planGroupAdd(
 ): PlannedItem[] {
   const addedBefore = new Set<string>();
   const invitedBefore = new Set<string>();
+  const uncertainBefore = new Set<string>();
   for (const outcome of previous) {
     if (outcome.status === "ADDED") addedBefore.add(outcome.phoneKey);
     else if (outcome.status === "INVITED") invitedBefore.add(outcome.phoneKey);
+    else uncertainBefore.add(outcome.phoneKey);
   }
   // An opt-out belongs to the person: it blocks every contact of the selection with the same number.
   const optedOutKeys = new Set<string>();
@@ -133,6 +147,7 @@ export function planGroupAdd(
     if (participantKeys.has(phoneKey)) return item("ALREADY_IN");
     if (addedBefore.has(phoneKey)) return item("LEFT_GROUP");
     if (invitedBefore.has(phoneKey)) return item("ALREADY_INVITED");
+    if (uncertainBefore.has(phoneKey)) return item("SKIPPED", "previous_uncertain");
     if (seen.has(phoneKey)) return item("SKIPPED", "duplicate");
     seen.add(phoneKey);
     return item("PENDING");

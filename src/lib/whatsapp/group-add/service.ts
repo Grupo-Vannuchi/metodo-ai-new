@@ -14,6 +14,7 @@ import {
   type GroupAddCounts,
   type PlannedItem,
   type PreviousOutcome,
+  UNCERTAIN_REASONS,
 } from "./core";
 import {
   countUsedToday,
@@ -155,13 +156,21 @@ async function planFor(
     const key = phoneMatchKey(p.number);
     if (key !== null) members.add(key);
   }
+  // What earlier rounds of the organization did with the group: added, invited, or left in doubt (FAILED with a reason that
+  // does not say whether it happened), which counts as maybe done and is never redone by itself.
   const earlier = await db.whatsappGroupAddItem.findMany({
-    where: { status: { in: ["ADDED", "INVITED"] }, phoneKey: { not: null }, run: { groupJid, organizationId } },
+    where: {
+      phoneKey: { not: null },
+      run: { groupJid, organizationId },
+      OR: [{ status: { in: ["ADDED", "INVITED"] } }, { status: "FAILED", reason: { in: [...UNCERTAIN_REASONS] } }],
+    },
     select: { phoneKey: true, status: true },
   });
-  const previous: PreviousOutcome[] = earlier.flatMap((i) =>
-    i.phoneKey !== null && (i.status === "ADDED" || i.status === "INVITED") ? [{ phoneKey: i.phoneKey, status: i.status }] : [],
-  );
+  const previous = earlier.flatMap((i): PreviousOutcome[] => {
+    if (i.phoneKey === null) return [];
+    if (i.status === "ADDED" || i.status === "INVITED") return [{ phoneKey: i.phoneKey, status: i.status }];
+    return i.status === "FAILED" ? [{ phoneKey: i.phoneKey, status: "UNCERTAIN" as const }] : [];
+  });
   return { ok: true, plan: planGroupAdd(candidates, members, previous) };
 }
 

@@ -2077,6 +2077,92 @@ check("the invite text is what the person typed with {{nome}} and {{grupo}} fill
   assert.equal((await runOf(w, runId)).status, "DONE");
 });
 
+// ── What an earlier round left in doubt ──────────────────────────────────────
+
+/** A done round of org A for the group, long ago, whose people ended like this. */
+const earlierRound = (w: World, items: SeedItem[]) =>
+  seedRun(w, { items: items.map((item) => ({ processedAt: at("2026-10-20T12:00:00.000Z"), ...item })) });
+
+// A person whose add or invite may have gone out (the runner died on them, the add or the text got no answer) is never tried again by itself.
+for (const reason of ["interrupted", "uncertain", "invite_uncertain"] as const) {
+  check(`an earlier round's ${reason} item for a number that is not in the group is SKIPPED / previous_uncertain with no call, and one that is in the group is ALREADY_IN`, async (ctx) => {
+    const { fake, w } = await scenario(ctx);
+    const folderId = await folderOf(w, "Clientes");
+    await contactOf(w, { name: "Em dúvida", phone: N(1), folderId });
+    await contactOf(w, { name: "Em dúvida e no grupo", phone: "(11) 91234-5678", folderId }); // a member of the group today
+    await contactOf(w, { name: "Recusado", phone: N(2), folderId }); // a definite failure: tried again
+    await earlierRound(w, [
+      { name: "Em dúvida", phone: N(1), status: "FAILED", reason },
+      { name: "Em dúvida e no grupo", phone: FRIEND_NUMBER, status: "FAILED", reason },
+      { name: "Recusado", phone: N(2), status: "FAILED", reason: "http_500" },
+    ]);
+
+    const preview = await previewGroupAdd(w.orgA, w.userA, { kind: "folder", folderId }, GROUP);
+    assert.ok(preview.ok);
+    assert.deepEqual(preview.counts, { total: 3, pending: 1, alreadyIn: 1, noWhatsapp: 0, skipped: 1, leftGroup: 0, alreadyInvited: 0 });
+
+    const runId = await begin(w, { source: { kind: "folder", folderId } });
+    await drain();
+    assert.deepEqual(await verdicts(w, runId), [
+      ["Em dúvida", "SKIPPED", "previous_uncertain"],
+      ["Em dúvida e no grupo", "ALREADY_IN", null],
+      ["Recusado", "ADDED", null],
+    ]);
+    // Nobody was asked about the first two; the one that failed for sure was tried again.
+    assert.deepEqual(addedNumbers(fake), [N(2)]);
+    assert.deepEqual(callsTo(fake, "whatsappNumbers").map(numberOf), [N(2)]);
+    assert.ok(!JSON.stringify(fake.calls).includes(N(1)), "the person in doubt reached Evolution");
+    assert.equal((await itemsOf(w, runId))[0]?.processedAt, null);
+    assert.equal((await runOf(w, runId)).status, "DONE");
+  });
+}
+
+check("a doubt counts only for the same group and the same organization", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const [one, two] = await people(w, 2);
+  const longAgo = at("2026-10-20T12:00:00.000Z");
+  // Another group of the same organization, and the same group of another organization.
+  await seedRun(w, { group: OTHER_GROUP, items: [{ name: "x", phone: N(1), status: "FAILED", reason: "uncertain", processedAt: longAgo }] });
+  await seedRun(w, { org: w.orgB, items: [{ name: "y", phone: N(2), status: "FAILED", reason: "interrupted", processedAt: longAgo }] });
+  const runId = await begin(w, { source: ofContacts([one, two]) });
+  await drain();
+  assert.deepEqual(await verdicts(w, runId), [["Pessoa 1", "ADDED", null], ["Pessoa 2", "ADDED", null]]);
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2)]);
+});
+
+check("an invite send that gets no answer is FAILED / invite_uncertain, a refused one is invite_failed, and the next round for the group leaves the first one alone", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const ids = await people(w, 3);
+  fake.set("updateParticipant", (call) => {
+    const number = numberOf(call);
+    return number === N(3) ? addReply(number, "200") : addReply(number, "403", PRIVACY);
+  });
+  // The text of the first person gets no answer at all (it may have gone out); the second person's is refused.
+  fake.set("sendText", (call) => (numberOf(call) === N(1) ? "drop" : { status: 500, json: { error: "boom" } }));
+  const first = await begin(w, { source: ofContacts(ids) });
+  await drain();
+  assert.deepEqual(
+    (await itemsOf(w, first)).map((i) => [i.status, i.reason, i.code]),
+    [["FAILED", "invite_uncertain", "403"], ["FAILED", "invite_failed", "403"], ["ADDED", null, "200"]],
+  );
+  assert.deepEqual(callsTo(fake, "sendText").map(numberOf), [N(1), N(2)]);
+
+  // The next round for the group, with the same people, once everything answers: the first is left alone, the refused one is tried again.
+  fake.set("updateParticipant", (call) => addReply(numberOf(call), "200"));
+  fake.set("sendText", { status: 201, json: {} });
+  const asked = fake.calls.length;
+  const second = await begin(w, { source: ofContacts(ids) });
+  await drain();
+  assert.deepEqual(await verdicts(w, second), [
+    ["Pessoa 1", "SKIPPED", "previous_uncertain"],
+    ["Pessoa 2", "ADDED", null],
+    ["Pessoa 3", "LEFT_GROUP", null],
+  ]);
+  const again = fake.calls.slice(asked);
+  assert.deepEqual(again.filter((c) => c.route === "updateParticipant").map(numberOf), [N(2)]);
+  assert.ok(!JSON.stringify(again).includes(N(1)), "the person who may have got the text was asked about again");
+});
+
 check("startGroupAdd twice: the second answers already_running; two clicks at once make one round; a canceled one frees the group", async (ctx) => {
   const { w } = await scenario(ctx);
   const ids = await people(w, 3);

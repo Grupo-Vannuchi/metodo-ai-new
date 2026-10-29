@@ -849,7 +849,8 @@ model WhatsappGroupAddItem {
   /// WhatsApp's per-number code from the add call ("200", "403", …).
   code           String?
   /// SkipReason | "interrupted" | "uncertain" | "unknown_answer" | "http_<n>" | "no_invite_link" | "invite_failed"
-  /// | "group_full" (the group would pass 1,024 participants)
+  /// | "invite_uncertain" (the text got no answer: it may have gone out) | "group_full" (the group would pass 1,024 participants)
+  /// "interrupted", "uncertain" and "invite_uncertain" are in doubt: a later round for the group skips them (previous_uncertain).
   reason         String?
   processedAt    DateTime?
   updatedAt      DateTime                   @updatedAt

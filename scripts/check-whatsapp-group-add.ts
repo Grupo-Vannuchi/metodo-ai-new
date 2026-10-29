@@ -37,6 +37,7 @@ import {
   pickPauseSeconds,
   planGroupAdd,
   renderInvite,
+  UNCERTAIN_REASONS,
   WHATSAPP_GROUP_MAX,
   type CandidateInput,
   type PlannedItem,
@@ -258,6 +259,50 @@ check("planGroupAdd: ADDED outranks INVITED when both are recorded for the numbe
   assert.deepEqual(verdict(item), { status: "LEFT_GROUP", reason: null });
 });
 
+check("planGroupAdd: a number an earlier round left in doubt and that is not in the group is SKIPPED / previous_uncertain", () => {
+  const previous: PreviousOutcome[] = [{ phoneKey: "11987654321", status: "UNCERTAIN" }];
+  // Whatever the way the number is written in the CRM.
+  for (const phone of ["(11) 98765-4321", "5511987654321", "+55 11 98765-4321", "11987654321"]) {
+    const [item] = planGroupAdd([contact("c1", phone)], new Set(), previous);
+    assert.deepEqual(verdict(item), { status: "SKIPPED", reason: "previous_uncertain" }, phone);
+  }
+  // Another number is not touched by it.
+  const [other] = planGroupAdd([contact("c2", "(11) 91111-2222")], new Set(), previous);
+  assert.deepEqual(verdict(other), { status: "PENDING", reason: null });
+});
+
+check("planGroupAdd: a number left in doubt that is in the group today is ALREADY_IN", () => {
+  const previous: PreviousOutcome[] = [{ phoneKey: "11987654321", status: "UNCERTAIN" }];
+  const [item] = planGroupAdd([contact("c1", "(11) 98765-4321")], new Set(["11987654321"]), previous);
+  assert.deepEqual(verdict(item), { status: "ALREADY_IN", reason: null });
+});
+
+check("planGroupAdd: the doubt rule sits right after ALREADY_INVITED and before duplicate", () => {
+  const key = "11987654321";
+  const doubt: PreviousOutcome = { phoneKey: key, status: "UNCERTAIN" };
+  const one = (phone: string | null, inGroup: string[], previous: PreviousOutcome[], optedOut = false) =>
+    verdict(planGroupAdd([contact("c1", phone, optedOut)], new Set(inGroup), previous)[0]);
+  // Before it, every earlier rule still wins over the doubt.
+  assert.deepEqual(one("(11) 98765-4321", [], [doubt], true), { status: "SKIPPED", reason: "opted_out" });
+  assert.deepEqual(one(null, [], [doubt]), { status: "SKIPPED", reason: "no_phone" });
+  assert.deepEqual(one("(11) 3333-4444", [], [{ phoneKey: "1133334444", status: "UNCERTAIN" }]), { status: "NO_WHATSAPP", reason: "not_mobile" });
+  assert.deepEqual(one("(11) 98765-4321", [key], [doubt]), { status: "ALREADY_IN", reason: null });
+  assert.deepEqual(one("(11) 98765-4321", [], [doubt, { phoneKey: key, status: "ADDED" }]), { status: "LEFT_GROUP", reason: null });
+  assert.deepEqual(one("(11) 98765-4321", [], [doubt, { phoneKey: key, status: "INVITED" }]), { status: "ALREADY_INVITED", reason: null });
+  // The order the earlier outcomes are listed in changes nothing.
+  assert.deepEqual(one("(11) 98765-4321", [], [{ phoneKey: key, status: "INVITED" }, doubt]), { status: "ALREADY_INVITED", reason: null });
+  // After it: a second contact with the same number is skipped for the doubt as well, not called a duplicate.
+  const twins = planGroupAdd([contact("c1", "(11) 98765-4321"), contact("c2", "5511987654321")], new Set(), [doubt]);
+  assert.deepEqual(twins.map(verdict), [
+    { status: "SKIPPED", reason: "previous_uncertain" },
+    { status: "SKIPPED", reason: "previous_uncertain" },
+  ]);
+});
+
+check("the reasons that leave a FAILED item in doubt are the three the runner writes", () => {
+  assert.deepEqual([...UNCERTAIN_REASONS], ["interrupted", "uncertain", "invite_uncertain"]);
+});
+
 check("planGroupAdd: a second contact with the same number is a duplicate, whatever the format", () => {
   const plan = planGroupAdd(
     [contact("c1", "(11) 98765-4321"), contact("c2", "+55 11 98765-4321"), contact("c3", "5511987654321")],
@@ -302,15 +347,17 @@ const folder = [
   contact("c05", "(11) 99999-0002"), // ADDED before, gone from the group
   contact("c06", "(11) 99999-0003"), // INVITED before, not in the group
   contact("c07", "(11) 99999-0004"), // INVITED before, in the group today
-  contact("c08", "(11) 99999-0005"), // new
-  contact("c09", "+55 11 99999-0005"), // same number as c08
-  contact("c10", "(11) 99999-0006"), // new
+  contact("c08", "(11) 99999-0007"), // left in doubt by an earlier round, not in the group
+  contact("c09", "(11) 99999-0005"), // new
+  contact("c10", "+55 11 99999-0005"), // same number as c09
+  contact("c11", "(11) 99999-0006"), // new
 ];
 const folderGroup = new Set(["11987654321", "11999990001", "11999990004"]);
 const folderPrevious: PreviousOutcome[] = [
   { phoneKey: "11999990002", status: "ADDED" },
   { phoneKey: "11999990003", status: "INVITED" },
   { phoneKey: "11999990004", status: "INVITED" },
+  { phoneKey: "11999990007", status: "UNCERTAIN" },
 ];
 
 check("planGroupAdd keeps the input order and the shape of each item", () => {
@@ -327,6 +374,7 @@ check("planGroupAdd keeps the input order and the shape of each item", () => {
     { status: "LEFT_GROUP", reason: null },
     { status: "ALREADY_INVITED", reason: null },
     { status: "ALREADY_IN", reason: null },
+    { status: "SKIPPED", reason: "previous_uncertain" },
     { status: "PENDING", reason: null },
     { status: "SKIPPED", reason: "duplicate" },
     { status: "PENDING", reason: null },
@@ -343,11 +391,11 @@ check("planGroupAdd keeps the input order and the shape of each item", () => {
 
 check("countPlan adds up the plan of that folder", () => {
   assert.deepEqual(countPlan(planGroupAdd(folder, folderGroup, folderPrevious)), {
-    total: 10,
+    total: 11,
     pending: 2,
     alreadyIn: 2,
     noWhatsapp: 1,
-    skipped: 3,
+    skipped: 4,
     leftGroup: 1,
     alreadyInvited: 1,
   });

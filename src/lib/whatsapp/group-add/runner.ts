@@ -428,7 +428,8 @@ function classifyAdd(res: { httpStatus: number; code: string | null }): Added {
 /**
  * The private text with the link for a person whose privacy settings refuse an add. The link is
  * asked once per run and kept on it; the text is never built without it. The window is read again:
- * an add that took the clock past 20:00 does not send the text.
+ * an add that took the clock past 20:00 does not send the text. A send that gets no answer at all
+ * may have gone out: it is invite_uncertain, which no later round redoes; a refusal is invite_failed.
  */
 async function inviteByText(
   v: Visit,
@@ -450,7 +451,8 @@ async function inviteByText(
   await beat(v);
   const text = renderInvite(run.inviteText, { nome: item.contactName, grupo: run.groupName }, url);
   const sent = await sendPlainText(creds, number, text);
-  return sent.ok ? { status: "INVITED", reason: null } : { status: "FAILED", reason: "invite_failed" };
+  if (sent.ok) return { status: "INVITED", reason: null };
+  return { status: "FAILED", reason: sent.httpStatus === 0 ? "invite_uncertain" : "invite_failed" };
 }
 
 /**
