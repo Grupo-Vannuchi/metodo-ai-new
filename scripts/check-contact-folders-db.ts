@@ -18,6 +18,8 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { getContactsBoard } from "@/lib/queries/contact-folders";
+import { getContact } from "@/lib/queries/contacts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is not set");
@@ -109,6 +111,45 @@ check("trigger: moving folderId onto an already linked folder leaves one link th
   await addLink(ctx.orgA, t, ctx.fa2);
   await prisma.$executeRaw`UPDATE "contacts" SET "folderId" = ${ctx.fa2} WHERE "id" = ${t}`;
   assert.deepEqual(await linksOf(t), [ctx.fa2]);
+});
+
+check("board: a contact in two folders shows in both", async () => {
+  const x = await makeContact(ctx.orgA, `b1-${stamp}`, ctx.fa1);
+  await addLink(ctx.orgA, x, ctx.fa2);
+  const { columns } = await getContactsBoard(ctx.orgA);
+  const col = (id: string | null) => columns.find((c) => c.id === id)!;
+  const card = col(ctx.fa1).contacts.find((c) => c.id === x);
+  assert.ok(card, "missing from FA1");
+  assert.ok(col(ctx.fa2).contacts.some((c) => c.id === x), "missing from FA2");
+  assert.ok(!col(ctx.fa3).contacts.some((c) => c.id === x));
+  assert.ok(!col(null).contacts.some((c) => c.id === x), "must not be in Sem pasta");
+  assert.deepEqual(card.folderNames, [`FA1-${stamp}`, `FA2-${stamp}`]);
+});
+
+check("board: a contact without links is in Sem pasta", async () => {
+  const x = await makeContact(ctx.orgA, `b2-${stamp}`, null);
+  const { columns } = await getContactsBoard(ctx.orgA);
+  const card = columns.find((c) => c.id === null)!.contacts.find((c) => c.id === x);
+  assert.ok(card, "missing from Sem pasta");
+  assert.deepEqual(card.folderNames, []);
+  for (const c of columns.filter((c) => c.id !== null)) {
+    assert.ok(!c.contacts.some((k) => k.id === x), `must not be in ${c.name}`);
+  }
+});
+
+check("board: a link pointing at another org's contact never shows it", async () => {
+  const y = await makeContact(ctx.orgB, `b3-${stamp}`, null);
+  await addLink(ctx.orgA, y, ctx.fa1);
+  const { columns } = await getContactsBoard(ctx.orgA);
+  for (const c of columns) assert.ok(!c.contacts.some((k) => k.id === y), `leaked into ${c.name}`);
+});
+
+check("getContact lists the contact's folders", async () => {
+  const x = await makeContact(ctx.orgA, `b4-${stamp}`, ctx.fa1);
+  await addLink(ctx.orgA, x, ctx.fa2);
+  const c = await getContact(ctx.orgA, x);
+  assert.ok(c);
+  assert.deepEqual(c.folderLinks.map((l) => l.folder.name).sort(), [`FA1-${stamp}`, `FA2-${stamp}`]);
 });
 
 async function main() {

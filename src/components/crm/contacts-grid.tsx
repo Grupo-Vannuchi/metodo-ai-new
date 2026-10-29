@@ -17,7 +17,26 @@ import type { ContactCard, ContactColumn } from "@/lib/queries/contact-folders";
 
 const GRID_CLS = "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]";
 
-type ListLabels = { name: string; company: string; phone: string; email: string };
+type ListLabels = {
+  name: string;
+  company: string;
+  phone: string;
+  email: string;
+  folderBadge: (count: number) => string;
+};
+
+/** "N folders" pill, only for contacts in two or more folders. */
+function FolderBadge({ card, labels }: { card: ContactCard; labels: ListLabels }) {
+  if (card.folderNames.length < 2) return null;
+  return (
+    <span
+      className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+      title={card.folderNames.join(", ")}
+    >
+      {labels.folderBadge(card.folderNames.length)}
+    </span>
+  );
+}
 
 /** A folder's contacts as summary cards (grid) or a detailed list. */
 function ContactList({
@@ -86,6 +105,7 @@ function ContactList({
               <div className="flex min-w-0 flex-1 items-center gap-2.5">
                 <Avatar name={card.name} className="size-8 shrink-0 text-xs" />
                 <span className="truncate text-sm font-medium">{card.name}</span>
+                <FolderBadge card={card} labels={labels} />
               </div>
               <span className="hidden w-40 shrink-0 truncate text-xs text-muted-foreground sm:block">{card.companyName ?? "—"}</span>
               <span className="hidden w-36 shrink-0 truncate text-xs text-muted-foreground sm:block">{card.phone ?? "—"}</span>
@@ -116,7 +136,10 @@ function ContactList({
           <div className="flex items-start gap-3">
             <Avatar name={card.name} className="size-10 shrink-0" />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{card.name}</p>
+              <div className="flex items-center gap-2">
+                <p className="truncate text-sm font-medium">{card.name}</p>
+                <FolderBadge card={card} labels={labels} />
+              </div>
               {card.companyName ? (
                 <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
                   <Building2 className="size-3 shrink-0" />
@@ -206,7 +229,9 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
     dragHint: tc("dragHint"),
     folderCount: (count) => t("folderCount", { count }),
   };
-  const listLabels: ListLabels = { name: t("name"), company: t("company"), phone: t("phone"), email: t("email") };
+  const listLabels: ListLabels = { name: t("name"), company: t("company"), phone: t("phone"), email: t("email"),
+    folderBadge: (count) => t("folderBadge", { count }),
+  };
 
   const onDeleteContact = (id: string) => deleteWithUndo([id], () => deleteContact(id));
 

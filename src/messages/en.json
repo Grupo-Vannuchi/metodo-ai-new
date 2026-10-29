@@ -1422,6 +1422,8 @@
       "company": "Company",
       "noCompany": "— No company —",
       "tags": "Tags",
+      "folders": "Folders",
+      "folderBadge": "{count} folders",
       "tagsHint": "Separate with commas.",
       "optedOut": "Unsubscribed (exclude from campaigns)",
       "create": "Create",

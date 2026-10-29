@@ -1422,6 +1422,8 @@
       "company": "Empresa",
       "noCompany": "— Sem empresa —",
       "tags": "Tags",
+      "folders": "Pastas",
+      "folderBadge": "{count} pastas",
       "tagsHint": "Separe por vírgula.",
       "optedOut": "Descadastrado (não receber campanhas)",
       "create": "Criar",
