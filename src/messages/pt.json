@@ -1301,6 +1301,8 @@
     "bulk": {
       "selected": "{count} selecionado(s)",
       "moveTo": "Mover para…",
+      "addTo": "Adicionar à pasta…",
+      "removeFromFolder": "Tirar desta pasta",
       "unfiled": "Sem pasta",
       "tag": "Marcar",
       "addTag": "Aplicar",
@@ -1424,6 +1426,7 @@
       "tags": "Tags",
       "folders": "Pastas",
       "folderBadge": "{count} pastas",
+      "copyHint": "Ctrl ao soltar mantém também na pasta atual",
       "tagsHint": "Separe por vírgula.",
       "optedOut": "Descadastrado (não receber campanhas)",
       "create": "Criar",

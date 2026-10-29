@@ -12,7 +12,13 @@ import { FolderExplorer, type FolderColumn, type ExplorerLabels } from "@/compon
 import { BulkBar } from "@/components/crm/bulk-bar";
 import { createFolder, renameFolder, deleteFolder } from "@/app/actions/contact-folders";
 import { deleteContact } from "@/app/actions/contacts";
-import { bulkDeleteContacts, bulkMoveContacts, bulkTagContacts } from "@/app/actions/bulk";
+import {
+  bulkAddContactsToFolder,
+  bulkDeleteContacts,
+  bulkMoveContacts,
+  bulkRemoveContactsFromFolder,
+  bulkTagContacts,
+} from "@/app/actions/bulk";
 import type { ContactCard, ContactColumn } from "@/lib/queries/contact-folders";
 
 const GRID_CLS = "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]";
@@ -227,6 +233,7 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
     confirmDeleteFolder: t("confirmDeleteFolder"),
     save: t("save"),
     dragHint: tc("dragHint"),
+    copyHint: t("copyHint"),
     folderCount: (count) => t("folderCount", { count }),
   };
   const listLabels: ListLabels = { name: t("name"), company: t("company"), phone: t("phone"), email: t("email"),
@@ -244,6 +251,7 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
       onRenameFolder={(id, name) => renameFolder(id, { name })}
       onDeleteFolder={(id) => deleteFolder(id)}
       onMoveItems={(ids, to, from) => bulkMoveContacts(ids, to, from)}
+      onAddItems={(ids, to) => bulkAddContactsToFolder(ids, to)}
       renderItems={({ items, view, onDragStart, onDragEnd, selected }) => (
         <ContactList
           contacts={items}
@@ -266,6 +274,21 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
             clear();
             router.refresh();
           }}
+          openFolderId={openFolderId}
+          onAdd={async (folderId) => {
+            await bulkAddContactsToFolder(ids, folderId);
+            clear();
+            router.refresh();
+          }}
+          onRemoveFromFolder={
+            openFolderId !== null
+              ? async () => {
+                  await bulkRemoveContactsFromFolder(ids, openFolderId);
+                  clear();
+                  router.refresh();
+                }
+              : undefined
+          }
           onTag={async (tag) => {
             await bulkTagContacts(ids, tag);
             clear();

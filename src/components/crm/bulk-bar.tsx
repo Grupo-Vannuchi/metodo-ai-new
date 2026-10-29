@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { FolderInput, Tag, Trash2, X } from "lucide-react";
+import { FolderInput, FolderMinus, FolderPlus, Tag, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -16,6 +16,9 @@ export function BulkBar({
   count,
   folders,
   onMove,
+  onAdd,
+  onRemoveFromFolder,
+  openFolderId = null,
   onTag,
   onDelete,
   onClear,
@@ -23,6 +26,12 @@ export function BulkBar({
   count: number;
   folders: { id: string; name: string }[];
   onMove: (folderId: string | null) => Promise<unknown>;
+  /** Contacts only: add to a folder, keeping the current ones. */
+  onAdd?: (folderId: string) => Promise<unknown>;
+  /** Contacts only, and only inside a real folder: take out of the open one. */
+  onRemoveFromFolder?: () => Promise<unknown>;
+  /** The open folder, left out of the "add to" list. */
+  openFolderId?: string | null;
   onTag?: (tag: string) => Promise<unknown>;
   onDelete: () => Promise<unknown>;
   onClear: () => void;
@@ -35,6 +44,20 @@ export function BulkBar({
   function move(folderId: string | null) {
     start(async () => {
       await onMove(folderId);
+    });
+  }
+
+  function add(folderId: string) {
+    if (!onAdd) return;
+    start(async () => {
+      await onAdd(folderId);
+    });
+  }
+
+  function removeFromFolder() {
+    if (!onRemoveFromFolder) return;
+    start(async () => {
+      await onRemoveFromFolder();
     });
   }
 
@@ -80,6 +103,39 @@ export function BulkBar({
           ))}
         </select>
       </label>
+
+      {onAdd ? (
+        <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <FolderPlus className="size-4" />
+          <select
+            value=""
+            disabled={pending}
+            onChange={(e) => {
+              const id = e.target.value;
+              if (id) add(id);
+            }}
+            className="h-8 max-w-40 rounded-md border border-border bg-card px-2 text-sm focus-visible:border-brand focus-visible:outline-none"
+          >
+            <option value="" disabled>
+              {t("addTo")}
+            </option>
+            {folders
+              .filter((f) => f.id !== openFolderId)
+              .map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+          </select>
+        </label>
+      ) : null}
+
+      {onRemoveFromFolder ? (
+        <Button type="button" size="sm" variant="outline" disabled={pending} onClick={removeFromFolder}>
+          <FolderMinus className="size-4" />
+          {t("removeFromFolder")}
+        </Button>
+      ) : null}
 
       {onTag ? (
         taggingOpen ? (

@@ -21,7 +21,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { getContactsBoard } from "@/lib/queries/contact-folders";
 import { getContact } from "@/lib/queries/contacts";
 import { tenantDb } from "@/lib/tenant-db";
-import { moveContactsToFolder } from "@/lib/crm/contact-folder-links";
+import { addContactsToFolder, moveContactsToFolder, removeContactsFromFolder } from "@/lib/crm/contact-folder-links";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is not set");
@@ -205,6 +205,52 @@ check("move: foreign contact", async () => {
   assert.equal(n, 1);
   assert.deepEqual(await linksOf(x), [ctx.fa2]);
   assert.deepEqual(await linksOf(y), []);
+});
+
+check("add: keeps the current folders", async () => {
+  const x = await makeContact(ctx.orgA, `a1-${stamp}`, ctx.fa1);
+  const n = await addContactsToFolder(tenantDb(ctx.orgA), ctx.orgA, [x], ctx.fa2);
+  assert.equal(n, 1);
+  assert.deepEqual(await linksOf(x), [ctx.fa1, ctx.fa2].sort());
+});
+
+check("add: twice is harmless", async () => {
+  const x = await makeContact(ctx.orgA, `a2-${stamp}`, ctx.fa1);
+  await addContactsToFolder(tenantDb(ctx.orgA), ctx.orgA, [x], ctx.fa2);
+  const n = await addContactsToFolder(tenantDb(ctx.orgA), ctx.orgA, [x], ctx.fa2);
+  assert.equal(n, 0);
+  assert.deepEqual(await linksOf(x), [ctx.fa1, ctx.fa2].sort());
+});
+
+check("add: another org's folder is refused", async () => {
+  const x = await makeContact(ctx.orgA, `a3-${stamp}`, ctx.fa1);
+  const n = await addContactsToFolder(tenantDb(ctx.orgA), ctx.orgA, [x], ctx.fb1);
+  assert.equal(n, null);
+  assert.deepEqual(await linksOf(x), [ctx.fa1]);
+});
+
+check("add: foreign contact", async () => {
+  const y = await makeContact(ctx.orgB, `a4-${stamp}`, null);
+  const n = await addContactsToFolder(tenantDb(ctx.orgA), ctx.orgA, [y], ctx.fa2);
+  assert.equal(n, 0);
+  assert.deepEqual(await linksOf(y), []);
+});
+
+check("remove: only from that folder", async () => {
+  const x = await makeContact(ctx.orgA, `r1-${stamp}`, ctx.fa1);
+  await addLink(ctx.orgA, x, ctx.fa2);
+  const n = await removeContactsFromFolder(tenantDb(ctx.orgA), [x], ctx.fa1);
+  assert.equal(n, 1);
+  assert.deepEqual(await linksOf(x), [ctx.fa2]);
+});
+
+check("remove: the last folder sends it to Sem pasta", async () => {
+  const x = await makeContact(ctx.orgA, `r2-${stamp}`, ctx.fa1);
+  await removeContactsFromFolder(tenantDb(ctx.orgA), [x], ctx.fa1);
+  assert.deepEqual(await linksOf(x), []);
+  const { columns } = await getContactsBoard(ctx.orgA);
+  assert.ok(columns.find((c) => c.id === null)!.contacts.some((c) => c.id === x), "missing from Sem pasta");
+  assert.ok(!columns.find((c) => c.id === ctx.fa1)!.contacts.some((c) => c.id === x));
 });
 
 async function main() {

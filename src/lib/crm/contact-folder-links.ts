@@ -56,3 +56,44 @@ export async function moveContactsToFolder(
   });
   return own.length;
 }
+
+/**
+ * Adds contacts to `folderId`, keeping the folders they are already in. Returns
+ * null when the folder is not one of this organization's, otherwise how many
+ * links were new (contacts already there, or of another organization, count 0).
+ */
+export async function addContactsToFolder(
+  db: Db,
+  organizationId: string,
+  ids: readonly string[],
+  folderId: string,
+): Promise<number | null> {
+  const folder = await db.contactFolder.findFirst({ where: { id: folderId }, select: { id: true } });
+  if (!folder) return null;
+
+  const own = await ownContactIds(db, ids);
+  if (own.length === 0) return 0;
+
+  const res = await db.contactFolderLink.createMany({
+    data: own.map((contactId) => ({ organizationId, contactId, folderId })),
+    skipDuplicates: true,
+  });
+  return res.count;
+}
+
+/**
+ * Takes contacts out of one folder only. A contact left with no folder falls
+ * into "Sem pasta" by itself (the board derives it). Returns how many links
+ * were deleted; a folder of another organization simply deletes 0.
+ */
+export async function removeContactsFromFolder(
+  db: Db,
+  ids: readonly string[],
+  folderId: string,
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const res = await db.contactFolderLink.deleteMany({
+    where: { contactId: { in: [...ids] }, folderId },
+  });
+  return res.count;
+}

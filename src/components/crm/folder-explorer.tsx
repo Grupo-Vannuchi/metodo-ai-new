@@ -38,6 +38,8 @@ export type ExplorerLabels = {
   confirmDeleteFolder: string;
   save: string;
   dragHint: string;
+  /** Shown after `dragHint` when the explorer supports `onAddItems`. */
+  copyHint?: string;
   folderCount: (count: number) => string;
 };
 
@@ -80,6 +82,7 @@ export function FolderExplorer<T extends { id: string }>({
   onRenameFolder,
   onDeleteFolder,
   onMoveItems,
+  onAddItems,
   renderItems,
   renderBulkBar,
 }: {
@@ -93,6 +96,9 @@ export function FolderExplorer<T extends { id: string }>({
   /** Move one or many items to a folder (`null` = unfiled) in a single call;
    *  `fromFolderId` is the folder they are taken from (the open one). */
   onMoveItems: (itemIds: string[], folderId: string | null, fromFolderId: string | null) => Promise<unknown> | void;
+  /** Optional: add items to a folder while keeping them where they are. When
+   *  present, dropping with Ctrl held calls this instead of `onMoveItems`. */
+  onAddItems?: (itemIds: string[], folderId: string) => Promise<unknown> | void;
   renderItems: (args: RenderItemsArgs<T>) => React.ReactNode;
   /** Optional bulk-action bar, shown while items are selected. */
   renderBulkBar?: (ctx: BulkContext) => React.ReactNode;
@@ -205,7 +211,7 @@ export function FolderExplorer<T extends { id: string }>({
     window.addEventListener("mouseup", onUp);
   }
 
-  function onDrop(toId: string | null) {
+  function onDrop(toId: string | null, ctrl: boolean) {
     setOverTile(null);
     const draggedId = dragId;
     setDragId(null);
@@ -219,11 +225,15 @@ export function FolderExplorer<T extends { id: string }>({
     // Items are taken from the open folder; applyFolderDrop returns the same
     // array when nothing changes, so there is no server call to make.
     if (openId === undefined) return;
-    const next = applyFolderDrop(cols, ids, openId, toId, "move");
+    // Ctrl keeps the items in the open folder too ("add"); only where the
+    // entity supports it, and never onto "unfiled" (that is not a folder).
+    const mode = onAddItems && ctrl && toId !== null ? "add" : "move";
+    const next = applyFolderDrop(cols, ids, openId, toId, mode);
     if (next === cols) return;
     setCols(next);
     start(async () => {
-      await onMoveItems(ids, toId, openId);
+      if (mode === "add") await onAddItems!(ids, toId!);
+      else await onMoveItems(ids, toId, openId);
       router.refresh();
     });
   }
@@ -268,10 +278,11 @@ export function FolderExplorer<T extends { id: string }>({
         key={keyOf(id)}
         onDragOver={(e) => {
           e.preventDefault();
+          e.dataTransfer.dropEffect = onAddItems && e.ctrlKey ? "copy" : "move";
           setOverTile(keyOf(id));
         }}
         onDragLeave={() => setOverTile((c) => (c === keyOf(id) ? null : c))}
-        onDrop={() => onDrop(id)}
+        onDrop={(e) => onDrop(id, e.ctrlKey)}
         onClick={() => setSelectedId(id)}
         onDoubleClick={() => {
           // Toggle: double-clicking an already-open folder closes it.
@@ -401,7 +412,7 @@ export function FolderExplorer<T extends { id: string }>({
             setOverTile(keyOf(openCol.id));
           }}
           onDragLeave={() => setOverTile((c) => (c === keyOf(openCol.id) ? null : c))}
-          onDrop={() => onDrop(openCol.id)}
+          onDrop={(e) => onDrop(openCol.id, e.ctrlKey)}
           className={cn(
             "glass relative rounded-xl border p-4 shadow-sm transition-colors",
             marquee && "select-none",
@@ -413,7 +424,10 @@ export function FolderExplorer<T extends { id: string }>({
             <h2 className="text-sm font-semibold">{openCol.id === null ? labels.unfiled : openCol.name}</h2>
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{labels.folderCount(openCol.items.length)}</span>
             {renderBulkBar && openCol.items.length > 0 ? (
-              <span className="ml-1 hidden text-xs text-muted-foreground sm:inline">{labels.dragHint}</span>
+              <span className="ml-1 hidden text-xs text-muted-foreground sm:inline">
+                {labels.dragHint}
+                {onAddItems && labels.copyHint ? ` ${labels.copyHint}` : ""}
+              </span>
             ) : null}
           </div>
 

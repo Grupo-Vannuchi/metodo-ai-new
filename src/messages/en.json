@@ -1301,6 +1301,8 @@
     "bulk": {
       "selected": "{count} selected",
       "moveTo": "Move to…",
+      "addTo": "Add to folder…",
+      "removeFromFolder": "Remove from this folder",
       "unfiled": "No folder",
       "tag": "Tag",
       "addTag": "Apply",
@@ -1424,6 +1426,7 @@
       "tags": "Tags",
       "folders": "Folders",
       "folderBadge": "{count} folders",
+      "copyHint": "Hold Ctrl when dropping to keep it here too",
       "tagsHint": "Separate with commas.",
       "optedOut": "Unsubscribed (exclude from campaigns)",
       "create": "Create",
