@@ -5,9 +5,9 @@
  * call in pipeline.ts, to open the agent to everyone again.
  */
 const AGENT_TEST_NUMBERS: Record<string, readonly string[]> = {
-  // NILLOW's number (agent "N8tão"): only Rafael's phone, with and without the
-  // 9th digit, since WhatsApp may send either form for a Brazilian mobile.
-  cmuh6jbhj001hvq40rotj0vzv: ["5513981427399", "551381427399"],
+  // NILLOW's number (agent "N8tão"): only the test phones, each with and without
+  // the 9th digit, since WhatsApp may send either form for a Brazilian mobile.
+  cmuh6jbhj001hvq40rotj0vzv: ["5513981427399", "551381427399", "5513991646323", "551391646323"],
 };
 
 /** True when this connection has a test lock and the sender isn't on it. */
