@@ -811,7 +811,7 @@ model WhatsappGroupAddRun {
   inviteText     String                 @db.Text
   inviteUrl      String?
   status         WhatsappGroupAddStatus @default(QUEUED)
-  /// "manual" | "disconnected" | "not_admin" | "no_connection" | "error"
+  /// "manual" | "disconnected" | "not_admin" | "no_connection" | "number_changed" (the instance is linked to another phone) | "error"
   pausedReason   String?
   /// "pace" | "window" | "cap" | "unavailable" — why nextAttemptAt is in the future
   waitReason     String?

@@ -11,6 +11,7 @@ import {
   connectionState,
   fetchGroupInviteUrl,
   fetchGroupSummary,
+  fetchOwnerJid,
   sendPlainText,
   type EvoCreds,
   type EvoState,
@@ -22,12 +23,14 @@ import {
   GROUP_ADD_DAILY_CAP,
   capResumeAt,
   isInsideWindow,
+  linkedNumber,
   nextAttemptAt,
   nextWindowStart,
   outcomeFromCode,
   phoneMatchKey,
   pickPauseSeconds,
   renderInvite,
+  type LinkedNumber,
 } from "./core";
 
 /**
@@ -110,13 +113,29 @@ export function credsFromEnc(credentialsEnc: string): EvoCreds | null {
   }
 }
 
-/** The run's own connection, found inside the run's organization before anything is decrypted. */
-async function loadRunCreds(run: { connectionId: string; organizationId: string }): Promise<EvoCreds | null> {
+/**
+ * The run's own connection, found inside the run's organization before anything is decrypted: its credentials, and
+ * whether the row is ACTIVE ("Desconectar" in Conversas deletes the instance at Evolution and marks the row INACTIVE;
+ * a reconnect, with any phone, marks it ACTIVE again). Null when it is gone or its credentials can't be read.
+ */
+async function loadRunConnection(run: {
+  connectionId: string;
+  organizationId: string;
+}): Promise<{ creds: EvoCreds; active: boolean } | null> {
   const conn = await prisma.integrationConnection.findFirst({
     where: { id: run.connectionId, organizationId: run.organizationId, provider: "EVOLUTION" },
-    select: { credentialsEnc: true },
+    select: { credentialsEnc: true, status: true },
   });
-  return conn ? credsFromEnc(conn.credentialsEnc) : null;
+  const creds = conn ? credsFromEnc(conn.credentialsEnc) : null;
+  return conn && creds ? { creds, active: conn.status === "ACTIVE" } : null;
+}
+
+/**
+ * Whether the instance is still linked to the run's number (`senderKey`): a reconnect in Conversas keeps the instance
+ * and can bring another phone, under which the run must not go on. One fetchInstances.
+ */
+export async function checkLinkedNumber(creds: EvoCreds, senderKey: string): Promise<LinkedNumber> {
+  return linkedNumber(await fetchOwnerJid(creds), senderKey);
 }
 
 /** connectionState, given up on (not ok) when it takes longer than STATE_TIMEOUT_MS. */
@@ -244,12 +263,27 @@ export async function reactivateRun(
 }
 
 /**
+ * A paused run whose instance is now linked to another phone: paused for that ("number_changed"), which nothing
+ * takes back by itself; "Retomar" does, once the run's own number is linked again. Only while it is still paused as
+ * `only` says (a pause made by hand meanwhile stays).
+ */
+function pauseForChangedNumber(run: { id: string; organizationId: string }, only: { pausedReason: string; lastError?: string }) {
+  return prisma.whatsappGroupAddRun.updateMany({
+    where: { id: run.id, organizationId: run.organizationId, status: "PAUSED", ...only },
+    data: { pausedReason: "number_changed", lastError: null },
+  });
+}
+
+/**
  * The runs the cron (or a poke) should kick now: RUNNING, with the time of the next person
  * come (or none yet) and the lease free. Before that, in system context (the connection of each run
  * is found inside its organization before its credentials are opened), a paused run is taken back
  * (reactivateRun) when the number answers open again ("disconnected"), or when the group that could not
  * be read can be now and the number is admin of it (not_admin with the note "group_unreadable"; a
- * definite not_admin stays for "Retomar"). A number with runs QUEUED and nobody holding it, which a
+ * definite not_admin stays for "Retomar"). Only a run whose connection row is ACTIVE is looked at: a
+ * number disconnected in the app costs no call until it is reconnected. And before it is taken back, the
+ * instance must still be linked to the run's number: another phone pauses it as number_changed, and one
+ * that can't be read leaves it as it is. A number with runs QUEUED and nobody holding it, which a
  * crash between two runs can leave, gets the oldest. `scope` narrows every read to some runs (a poke: one run).
  */
 export async function findDueGroupAddRuns(now: Date, scope: Prisma.WhatsappGroupAddRunWhereInput = {}): Promise<string[]> {
@@ -265,18 +299,20 @@ export async function findDueGroupAddRuns(now: Date, scope: Prisma.WhatsappGroup
   });
   for (const run of paused) {
     try {
-      const creds = await loadRunCreds(run);
-      if (!creds) continue;
+      const conn = await loadRunConnection(run);
+      if (!conn?.active) continue;
+      const only = run.pausedReason === "disconnected" ? { pausedReason: "disconnected" } : { pausedReason: "not_admin", lastError: GROUP_UNREADABLE };
       if (run.pausedReason === "disconnected") {
-        const state = await liveState(creds);
-        if (state.ok && state.state === "open") await reactivateRun(run, { pausedReason: "disconnected" });
+        const state = await liveState(conn.creds);
+        if (!state.ok || state.state !== "open") continue;
       } else {
         // Readable and the number admin: back. Unreadable, not admin or can't be told: left exactly as it is.
-        const group = await fetchGroupSummary(creds, run.groupJid);
-        if (group && isAdminOf(group, run.senderKey) === true) {
-          await reactivateRun(run, { pausedReason: "not_admin", lastError: GROUP_UNREADABLE });
-        }
+        const group = await fetchGroupSummary(conn.creds, run.groupJid);
+        if (!group || isAdminOf(group, run.senderKey) !== true) continue;
       }
+      const linked = await checkLinkedNumber(conn.creds, run.senderKey);
+      if (linked === "same") await reactivateRun(run, only);
+      else if (linked === "changed") await pauseForChangedNumber(run, only);
     } catch (e) {
       console.error("[group-add] could not take a run back", run.id, errorTag(e));
     }
@@ -542,8 +578,9 @@ type Visited = { done: boolean; retryAfterSec?: number };
  * Paulo) and below the number's cap of a day. A wait of the pace (shorter than the lease) is slept
  * here, renewing the lease; a longer one (the window, the cap, an unreachable Evolution) releases
  * the lease and answers `retryAfterSec` for the queue (the cron, a poke or "Retomar" take it up
- * where there is no queue). `budgetMs` ends the visit in time for a queue job. Never throws once it
- * holds the lease: an unexpected error pauses the run as "error".
+ * where there is no queue). Before its first person a visit asks that the instance is still linked to
+ * the run's number: another phone pauses the run as "number_changed". `budgetMs` ends the visit in
+ * time for a queue job. Never throws once it holds the lease: an unexpected error pauses the run as "error".
  */
 export async function runGroupAddRun(runId: string, opts: { budgetMs?: number } = {}): Promise<Visited> {
   const rt = groupAddRuntime;
@@ -558,7 +595,12 @@ export async function runGroupAddRun(runId: string, opts: { budgetMs?: number } 
     if (!(await leave(v, { nextAttemptAt: until, waitReason: reason }))) return { done: true };
     return { done: false, retryAfterSec: Math.max(1, Math.ceil((until.getTime() - rt.now().getTime()) / 1000)) };
   };
-  const pause = async (reason: "no_connection" | "disconnected" | "not_admin", lastError: string | null = null): Promise<Visited> => {
+  /** Evolution can't say what is needed now: asked again in a few minutes. */
+  const unavailable = () => park("unavailable", new Date(rt.now().getTime() + UNAVAILABLE_WAIT_MS));
+  const pause = async (
+    reason: "no_connection" | "disconnected" | "not_admin" | "number_changed",
+    lastError: string | null = null,
+  ): Promise<Visited> => {
     await leave(v, { status: "PAUSED", pausedReason: reason, waitReason: null, lastError });
     return { done: true };
   };
@@ -567,6 +609,8 @@ export async function runGroupAddRun(runId: string, opts: { budgetMs?: number } 
     // Only the lease owner sweeps, and before anything can stop the visit.
     await sweepInterrupted(v.id, v.org);
     const deadline = opts.budgetMs ? rt.now().getTime() + opts.budgetMs : Number.POSITIVE_INFINITY;
+    // Asked once a visit, before its first person: a run parked for hours does not go on under another phone.
+    let numberChecked = false;
     // Asked again for the first person of a visit (a start, a resume, the next day) and after a person who failed.
     let adminChecked = false;
 
@@ -605,12 +649,22 @@ export async function runGroupAddRun(runId: string, opts: { budgetMs?: number } 
         continue; // the run, the hour and the cap are looked at again
       }
 
-      const creds = await loadRunCreds(run);
-      if (!creds) return await pause("no_connection");
+      const conn = await loadRunConnection(run);
+      if (!conn) return await pause("no_connection");
+      const { creds } = conn;
       await beat(v);
       const state = await liveState(creds);
-      if (!state.ok) return await park("unavailable", new Date(rt.now().getTime() + UNAVAILABLE_WAIT_MS));
+      // No answer about the state: an outage while the row says the number is connected, but a number disconnected in the
+      // app (row INACTIVE, instance deleted, so Evolution answers 404) is paused, not waited for.
+      if (!state.ok) return conn.active ? await unavailable() : await pause("disconnected");
       if (state.state !== "open") return await pause("disconnected");
+      if (!numberChecked) {
+        await beat(v);
+        const linked = await checkLinkedNumber(creds, run.senderKey);
+        if (linked === "changed") return await pause("number_changed");
+        if (linked === "unknown") return await unavailable();
+        numberChecked = true;
+      }
       if (!adminChecked) {
         await beat(v);
         const group = await fetchGroupSummary(creds, run.groupJid);

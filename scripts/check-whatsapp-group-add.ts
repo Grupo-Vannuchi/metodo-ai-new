@@ -30,6 +30,7 @@ import {
   GROUP_ADD_WINDOW,
   INVITE_TEXT_MAX,
   isInsideWindow,
+  linkedNumber,
   nextAttemptAt,
   nextWindowStart,
   outcomeFromCode,
@@ -308,6 +309,20 @@ check("planGroupAdd: the doubt rule sits right after ALREADY_INVITED and before 
 
 check("the reasons that leave a FAILED item in doubt are the three the runner writes", () => {
   assert.deepEqual([...UNCERTAIN_REASONS], ["interrupted", "uncertain", "invite_uncertain"]);
+});
+
+check("linkedNumber: the instance's number against the round's is the same, changed (another phone), or unknown (none to read)", () => {
+  const round = "5511987654321";
+  assert.equal(linkedNumber("5511987654321@s.whatsapp.net", round), "same");
+  // The owner JID of an instance carries ":device": still the same number.
+  assert.equal(linkedNumber("5511987654321:12@s.whatsapp.net", round), "same");
+  // Conversas reconnected with another phone: the instance names that one now.
+  assert.equal(linkedNumber("5511911112222@s.whatsapp.net", round), "changed");
+  assert.equal(linkedNumber("5511911112222:3@s.whatsapp.net", round), "changed");
+  // Nothing that can be read as a phone: the read failed (null), nothing is linked yet, or a LID. Never "changed".
+  for (const jid of [null, "", "123456789012345@lid", "120363000000000001@g.us"]) {
+    assert.equal(linkedNumber(jid, round), "unknown", String(jid));
+  }
 });
 
 check("planGroupAdd: a second contact with the same number is a duplicate, whatever the format", () => {

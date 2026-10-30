@@ -17,6 +17,7 @@ import {
   UNCERTAIN_REASONS,
 } from "./core";
 import {
+  checkLinkedNumber,
   countUsedToday,
   credsFromEnc,
   errorTag,
@@ -44,7 +45,9 @@ export type GroupAddError =
   | "not_admin"
   | "not_found"
   | "empty"
-  | "already_running";
+  | "already_running"
+  /** "Retomar" of a run whose instance is linked to another phone than the one it was planned with. */
+  | "number_changed";
 type Failure = { ok: false; error: GroupAddError };
 
 /** A round in one of these holds its group: no second round starts for it. */
@@ -316,7 +319,9 @@ export async function pauseGroupAdd(organizationId: string, runId: string): Prom
 
 /**
  * PAUSED to RUNNING, or to QUEUED when another round has the number. Asks again what a pause may
- * have changed: the run's own connection must be open and its number still admin of the group.
+ * have changed: the run's own connection must be connected in the app (ACTIVE: one disconnected in
+ * Conversas answers as one that is gone) and open, still linked to the run's number (another phone is
+ * number_changed; one that can't be read, unavailable), and that number still admin of the group.
  */
 export async function resumeGroupAdd(organizationId: string, runId: string): Promise<{ ok: true } | Failure> {
   const db = tenantDb(organizationId);
@@ -329,7 +334,7 @@ export async function resumeGroupAdd(organizationId: string, runId: string): Pro
   if (run.status !== "PAUSED") return { ok: false, error: "not_found" };
 
   const conn = await db.integrationConnection.findFirst({
-    where: { id: run.connectionId, provider: "EVOLUTION" },
+    where: { id: run.connectionId, provider: "EVOLUTION", status: "ACTIVE" },
     select: { credentialsEnc: true },
   });
   const creds = conn ? credsFromEnc(conn.credentialsEnc) : null;
@@ -337,6 +342,9 @@ export async function resumeGroupAdd(organizationId: string, runId: string): Pro
   const state = await liveState(creds);
   if (!state.ok) return { ok: false, error: "unavailable" };
   if (state.state !== "open") return { ok: false, error: "disconnected" };
+  const linked = await checkLinkedNumber(creds, run.senderKey);
+  if (linked === "changed") return { ok: false, error: "number_changed" };
+  if (linked === "unknown") return { ok: false, error: "unavailable" };
   const group = await fetchGroupSummary(creds, run.groupJid);
   if (!group) return { ok: false, error: "not_found" };
   if (isAdminOf(group, run.senderKey) !== true) return { ok: false, error: "not_admin" };

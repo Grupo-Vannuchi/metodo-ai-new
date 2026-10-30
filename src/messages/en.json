@@ -1322,6 +1322,7 @@
         "not_found": "We could not find the group, the folder or the round. Refresh the page and try again.",
         "empty": "There are no contacts to add.",
         "already_running": "This group already has a round that is running, queued or paused.",
+        "number_changed": "The WhatsApp connected now is a different number. Reconnect this round's number in Inbox to resume it.",
         "unauthorized": "Session expired.",
         "forbidden": "You don't have permission to do that.",
         "invalid": "Invalid data.",
@@ -1401,12 +1402,14 @@
           "not_admin": "Your number is no longer an admin of the group",
           "unreadable": "We couldn't read the group right now. The round goes on by itself when the group answers again.",
           "no_connection": "Connection removed",
+          "number_changed": "The WhatsApp connected now is a different number",
           "error": "Unexpected error",
           "other": "Round paused"
         },
         "pausedHint": {
           "disconnected": "Reconnect the number in Inbox. The round goes on by itself when it is back.",
           "not_admin": "The round only goes on when your number is an admin of the group again.",
+          "number_changed": "This round uses the previous number: reconnect that number in Inbox, or cancel and start a new round.",
           "no_connection": "The WhatsApp connection of this round was removed, so it can't go on. Cancel it and start another.",
           "error": "Something failed along the way. Resume the round to try again."
         },

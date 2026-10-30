@@ -680,9 +680,17 @@ const groupJson = (jid: string, subject: string, members: Member[], extra: Recor
 /** The groups a fake serves, by JID. A check changes them to change what Evolution answers. */
 type Groups = Record<string, unknown>;
 
+/** Links every instance of the fake to the phone `owner` from now on (what fetchInstances names as its ownerJid). */
+function linkTo(fake: FakeEvolution, owner: string): void {
+  fake.set("fetchInstances", (call) => ({ status: 200, json: [{ name: call.instance ?? "", ownerJid: `${owner}@s.whatsapp.net` }] }));
+}
+
+/** Another phone than the number of this run, for Conversas reconnected with it: a BR mobile, new on each run of this script. */
+const anotherPhone = (w: World) => `5511977${w.owner.slice(-6)}`;
+
 /** Links the fake's instances to the number of this run and serves `groups`. */
 function wire(w: World, fake: FakeEvolution, groups: Groups): void {
-  fake.set("fetchInstances", (call) => ({ status: 200, json: [{ name: call.instance ?? "", ownerJid: `${w.owner}@s.whatsapp.net` }] }));
+  linkTo(fake, w.owner);
   fake.set("findGroupInfos", (call) => {
     const group = groups[call.query.groupJid ?? ""];
     return group
@@ -895,6 +903,33 @@ const notOnWhatsapp = (number: string): FakeEvoReply => ({
   status: 200,
   json: [{ exists: false, jid: `${number}@s.whatsapp.net`, number }],
 });
+
+/** What Evolution answers about an instance that is not there: "Desconectar" in Conversas deletes it (and marks the row INACTIVE). */
+const INSTANCE_GONE: FakeEvoReply = {
+  status: 404,
+  json: { status: 404, error: "Not Found", response: { message: ['The "wga-a" instance does not exist'] } },
+};
+
+/** "Desconectar" (INACTIVE) or a reconnect (ACTIVE) of org A's number in Conversas, as the row says it. */
+const markConnA = (w: World, status: "ACTIVE" | "INACTIVE") =>
+  w.prisma.integrationConnection.update({ where: { id: w.connA }, data: { status } });
+
+/** A connection of org A of its own, ACTIVE, on this check's fake under `instance`; its id. wipe() removes it with the check's data. */
+async function connectionOn(w: World, fake: StartedFake, instance: string): Promise<string> {
+  const created = await w.prisma.integrationConnection.create({
+    data: {
+      organizationId: w.orgA,
+      ownerId: w.userA,
+      provider: "EVOLUTION",
+      label: `wga ${instance}`,
+      status: "ACTIVE",
+      credentialsEnc: encryptCredentials({ baseUrl: fake.creds.baseUrl, apiKey: "e2e", instance }),
+    },
+    select: { id: true },
+  });
+  await assertConnectionsLoopback(w);
+  return created.id;
+}
 
 /** The cron's list, limited to the throwaway organizations (the database may hold runs of someone's manual tests). */
 const dueIn = (w: World, now = groupAddRuntime.now()) =>
@@ -1407,18 +1442,24 @@ check("the pause between people holds when a paused round is resumed right after
 });
 
 check("a run that starts again owes its number the pause from the last try, keeps its own later time, and owes nothing for an old try", async (ctx) => {
-  const { w } = await scenario(ctx);
+  const { fake, w } = await scenario(ctx);
   const triedAgo = (seconds: number): SeedItem[] => [
     { name: "x", phone: null, status: "ADDED", processedAt: new Date(clock.at.getTime() - seconds * 1000) },
   ];
   const mine: SeedItem[] = [{ name: "Pessoa 1", phone: N(1), status: "PENDING" }];
   const key = (n: number) => `${w.owner}${n}`; // one number per case
+  // A paused run is taken back only under its own number: each paused case has an instance of its own, linked to its number.
+  const linked: Record<string, string> = { "wga-k1": key(1), "wga-k2": key(2) };
+  fake.set("fetchInstances", (call) => ({
+    status: 200,
+    json: [{ name: call.instance ?? "", ownerJid: `${linked[call.instance ?? ""] ?? w.owner}@s.whatsapp.net` }],
+  }));
   // Case 1: another round tried someone on the number 10 s ago; the paused run's own time is long gone.
   await seedRun(w, { org: w.orgB, group: OTHER_GROUP, senderKey: key(1), items: triedAgo(10) });
-  const stale = await seedRun(w, { status: "PAUSED", pausedReason: "disconnected", senderKey: key(1), nextAttemptAt: new Date(clock.at.getTime() - 3_600_000), items: mine });
+  const stale = await seedRun(w, { status: "PAUSED", pausedReason: "disconnected", senderKey: key(1), connectionId: await connectionOn(w, fake, "wga-k1"), nextAttemptAt: new Date(clock.at.getTime() - 3_600_000), items: mine });
   // Case 2: the same, but the paused run's own time is later than the pause owed (80 s from now against 20 s).
   await seedRun(w, { org: w.orgB, group: OTHER_GROUP, senderKey: key(2), items: triedAgo(10) });
-  const own = await seedRun(w, { status: "PAUSED", pausedReason: "disconnected", senderKey: key(2), nextAttemptAt: new Date(clock.at.getTime() + 80_000), items: mine });
+  const own = await seedRun(w, { status: "PAUSED", pausedReason: "disconnected", senderKey: key(2), connectionId: await connectionOn(w, fake, "wga-k2"), nextAttemptAt: new Date(clock.at.getTime() + 80_000), items: mine });
   // Case 3: the last try on the number was two hours ago, and a queued run rises.
   await seedRun(w, { org: w.orgB, group: OTHER_GROUP, senderKey: key(3), items: triedAgo(7200) });
   const queued = await seedRun(w, { status: "QUEUED", senderKey: key(3), items: mine });
@@ -1433,6 +1474,7 @@ check("a run that starts again owes its number the pause from the last try, keep
   assert.equal(await nextOf(queued), now - 7200_000 + 30_000, "an old try owes nothing");
   assert.equal(await nextOf(fresh), null);
   assert.equal((await runOf(w, stale)).status, "RUNNING");
+  assert.equal((await runOf(w, own)).status, "RUNNING");
   assert.equal((await runOf(w, queued)).status, "RUNNING");
   // Only the two that owe nothing now are due.
   assert.deepEqual([...due].sort(), [queued, fresh].sort());
@@ -1531,6 +1573,151 @@ check("disconnected: a manual pause stays paused when the number is open", async
   assert.deepEqual(await runGroupAddRun(runId), { done: true });
 });
 
+check("disconnected in the app: with the row INACTIVE a 404 on the state pauses the run as disconnected, while with the row ACTIVE the same 404 is an outage and waits", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 2);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+  const asked = fake.calls.length;
+  fake.set("connectionState", INSTANCE_GONE);
+
+  // The row still ACTIVE: as far as the app knows the number is connected and Evolution is not answering, so it waits 5 minutes.
+  assert.deepEqual(await runGroupAddRun(runId), { done: false, retryAfterSec: 300 });
+  let run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.waitReason, run.lastDispatchAt], ["RUNNING", "unavailable", null]);
+
+  // "Desconectar" in Conversas: the row is INACTIVE and the instance gone. The next visit pauses the run instead of waiting again.
+  await markConnA(w, "INACTIVE");
+  clock.at = new Date(clock.at.getTime() + 300_000);
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.pausedReason, run.waitReason, run.lastDispatchAt], ["PAUSED", "disconnected", null, null]);
+  // One question about the state per visit, and nothing else.
+  assert.deepEqual(fake.calls.slice(asked).map((c) => c.route), ["connectionState", "connectionState"]);
+  assert.deepEqual((await itemsOf(w, runId)).map((i) => i.status), ["PENDING", "PENDING"]);
+});
+
+check("disconnected in the app: while the row is INACTIVE neither the cron's list nor a poke asks Evolution about the run, Retomar answers no_connection, and once the number is reconnected it goes on", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const runId = await seedRun(w, {
+    status: "PAUSED",
+    pausedReason: "disconnected",
+    items: [
+      { name: "Pessoa 1", phone: N(1), status: "PENDING" },
+      { name: "Pessoa 2", phone: N(2), status: "PENDING" },
+    ],
+  });
+  await markConnA(w, "INACTIVE");
+  fake.set("connectionState", INSTANCE_GONE);
+  const before = await runOf(w, runId);
+  for (let tick = 0; tick < 3; tick++) {
+    assert.ok(!(await dueIn(w)).includes(runId));
+    await pokeGroupAdd(w.orgA, runId);
+  }
+  // Retomar refuses it the way it refuses a connection that is gone: the screen says to connect the number in Conversas.
+  assert.deepEqual(await resumeGroupAdd(w.orgA, runId), { ok: false, error: "no_connection" });
+  assert.equal(fake.calls.length, 0, "a number disconnected in the app cost a call to Evolution");
+  assert.deepEqual(await runOf(w, runId), before);
+  assert.equal(scheduled.length, 0);
+
+  // The row decides that the number is not back, even when the instance answers open again.
+  fake.set("connectionState", { status: 200, json: { instance: { state: "open" } } });
+  assert.ok(!(await dueIn(w)).includes(runId));
+  assert.equal(fake.calls.length, 0);
+
+  // Reconnected in Conversas (the row ACTIVE, the instance open): the cron's list takes it back, and it goes on.
+  await markConnA(w, "ACTIVE");
+  assert.ok((await dueIn(w)).includes(runId));
+  const back = await runOf(w, runId);
+  assert.deepEqual([back.status, back.pausedReason], ["RUNNING", null]);
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.equal((await runOf(w, runId)).status, "DONE");
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2)]);
+});
+
+check("another phone reconnected while the run was paused as disconnected: the cron pauses it as number_changed, nothing takes it back by itself, Retomar refuses it and nobody is added under the new phone; with its own number back, Retomar works", async (ctx) => {
+  const { fake, groups, w } = await scenario(ctx);
+  await people(w, 2);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+  fake.set("connectionState", { status: 200, json: { instance: { state: "close" } } });
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  const disconnected = await runOf(w, runId);
+  assert.deepEqual([disconnected.status, disconnected.pausedReason], ["PAUSED", "disconnected"]);
+  fake.set("connectionState", { status: 200, json: { instance: { state: "open" } } });
+
+  // Open again, but who is behind the instance can't be read (an error, or no number yet): left exactly as it is.
+  for (const reply of [{ status: 500, json: { error: "boom" } }, { status: 200, json: [{ name: "wga-a", ownerJid: null }] }] as const) {
+    fake.set("fetchInstances", reply);
+    assert.ok(!(await dueIn(w)).includes(runId));
+    assert.deepEqual(await runOf(w, runId), disconnected);
+  }
+
+  // Reconnected with another phone, on the same instance, which is admin of the group too (and the round's number still is).
+  const other = anotherPhone(w);
+  linkTo(fake, other);
+  groups[GROUP] = groupJson(GROUP, "Ofertas", [meIn(w, "superadmin"), { id: `${other}@s.whatsapp.net`, admin: "admin" }, FRIEND, NAMELESS]);
+  assert.ok(!(await dueIn(w)).includes(runId));
+  const changed = await runOf(w, runId);
+  assert.deepEqual([changed.status, changed.pausedReason, changed.lastError, changed.lastDispatchAt], ["PAUSED", "number_changed", null, null]);
+
+  // number_changed is never taken back by itself: the next pass of the cron and a poke ask Evolution nothing.
+  const calls = fake.calls.length;
+  assert.ok(!(await dueIn(w)).includes(runId));
+  await pokeGroupAdd(w.orgA, runId);
+  assert.equal(fake.calls.length, calls, "Evolution was asked about a round that needs Retomar");
+  // Retomar asks who is behind the instance again, and refuses.
+  assert.deepEqual(await resumeGroupAdd(w.orgA, runId), { ok: false, error: "number_changed" });
+  assert.deepEqual(await runOf(w, runId), changed);
+  assert.equal(scheduled.length, 0);
+  assert.deepEqual(callsTo(fake, "whatsappNumbers", "updateParticipant", "sendText"), [], "something went out under the new phone");
+
+  // The round's own number linked again: Retomar works and the round goes on.
+  linkTo(fake, w.owner);
+  assert.deepEqual(await resumeGroupAdd(w.orgA, runId), { ok: true });
+  assert.equal((await runOf(w, runId)).status, "RUNNING");
+  assert.equal(await drain(), 1);
+  assert.equal((await runOf(w, runId)).status, "DONE");
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2)]);
+});
+
+check("a round parked overnight does not wake up under another phone: a visit asks who is behind the instance, once; another number pauses it as number_changed, and one that can't be read waits as unavailable", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 3);
+  clock.at = at("2026-10-28T23:05:00.000Z"); // 20:05 in São Paulo
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  scheduled.length = 0;
+  assert.deepEqual(await runGroupAddRun(runId), { done: false, retryAfterSec: 42_900 });
+  assert.equal((await runOf(w, runId)).waitReason, "window");
+
+  // 08:00, and who is behind the instance can't be read (an error, then no number): it waits 5 minutes each time, nobody tried.
+  clock.at = at("2026-10-29T11:00:00.000Z");
+  for (const reply of [{ status: 500, json: { error: "boom" } }, { status: 200, json: [{ name: "wga-a", ownerJid: null }] }] as const) {
+    fake.set("fetchInstances", reply);
+    assert.deepEqual(await runGroupAddRun(runId), { done: false, retryAfterSec: 300 });
+    const waiting = await runOf(w, runId);
+    assert.deepEqual([waiting.status, waiting.waitReason, waiting.lastDispatchAt], ["RUNNING", "unavailable", null]);
+    clock.at = new Date(clock.at.getTime() + 300_000);
+  }
+
+  // Overnight Conversas was reconnected with another phone: the visit stops before its first person.
+  linkTo(fake, anotherPhone(w));
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  const run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.pausedReason, run.waitReason, run.lastDispatchAt], ["PAUSED", "number_changed", null, null]);
+  assert.deepEqual(callsTo(fake, "whatsappNumbers", "updateParticipant", "sendText"), []);
+  assert.deepEqual((await itemsOf(w, runId)).map((i) => i.status), ["PENDING", "PENDING", "PENDING"]);
+
+  // The round's own number back and Retomar: the visit that follows asks once, not once per person.
+  linkTo(fake, w.owner);
+  assert.deepEqual(await resumeGroupAdd(w.orgA, runId), { ok: true });
+  const asked = callsTo(fake, "fetchInstances").length;
+  assert.equal(await drain(), 1);
+  assert.equal(callsTo(fake, "fetchInstances").length - asked, 1, "the number was asked for more than once in a visit");
+  assert.deepEqual(addedNumbers(fake), [N(1), N(2), N(3)]);
+  assert.equal((await runOf(w, runId)).status, "DONE");
+});
+
 /**
  * A round that stopped because Evolution could not give the group at its first person: PAUSED, not_admin, with the note
  * "group_unreadable". The group is gone from `groups` (the fake answers 404); `readable` is what it was.
@@ -1617,6 +1804,19 @@ check("unreadable group: while it stays unreadable, or the number is not admin, 
   // Readable, but a member has no number to read and ours is not among the others: it could be that member.
   groups[GROUP] = groupJson(GROUP, "Ofertas", [FRIEND, NAMELESS]);
   await stays("readable, can't be told");
+});
+
+check("unreadable group: readable again with the round's number admin, but under another phone, the round is paused as number_changed and not taken back", async (ctx) => {
+  const { fake, groups, w, runId, readable } = await unreadablePause(ctx);
+  groups[GROUP] = readable; // the round's number is still listed as admin
+  linkTo(fake, anotherPhone(w));
+  assert.ok(!(await dueIn(w)).includes(runId));
+  const run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.pausedReason, run.lastError], ["PAUSED", "number_changed", null]);
+  await pokeGroupAdd(w.orgA, runId);
+  assert.equal((await runOf(w, runId)).pausedReason, "number_changed");
+  assert.equal(scheduled.length, 0);
+  assert.deepEqual(callsTo(fake, "whatsappNumbers", "updateParticipant", "sendText"), []);
 });
 
 check("a pause for a definite not_admin, or for any other reason, is never taken back by itself", async (ctx) => {

@@ -29,7 +29,7 @@ export type GroupAddRunProps = {
   runId: string;
   groupName: string;
   status: RunStatus;
-  /** "manual" | "disconnected" | "not_admin" | "no_connection" | "error" while PAUSED. */
+  /** "manual" | "disconnected" | "not_admin" | "no_connection" | "number_changed" | "error" while PAUSED. */
   pausedReason: string | null;
   /** A run paused as not_admin only because the group could not be read: it goes on by itself, so it is not "no longer admin". */
   unreadable: boolean;
@@ -100,9 +100,9 @@ const SUMMARY_ORDER: readonly GroupAddItemStatus[] = [
   "PENDING",
 ];
 
-const PAUSE_REASONS: readonly string[] = ["manual", "disconnected", "not_admin", "no_connection", "error"];
+const PAUSE_REASONS: readonly string[] = ["manual", "disconnected", "not_admin", "no_connection", "number_changed", "error"];
 /** The pauses that say what has to happen for the round to go on (the rest explain themselves). */
-const HINTED_PAUSES: readonly string[] = ["disconnected", "not_admin", "no_connection", "error"];
+const HINTED_PAUSES: readonly string[] = ["disconnected", "not_admin", "no_connection", "number_changed", "error"];
 const WAIT_REASONS: readonly string[] = ["pace", "window", "cap", "unavailable"];
 
 /** Reasons with a label of their own; any other (interrupted, uncertain, unknown_answer, http_<n>, or one that comes later) reads as the generic one. */

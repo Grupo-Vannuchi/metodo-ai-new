@@ -1322,6 +1322,7 @@
         "not_found": "Não encontramos o grupo, a pasta ou a rodada. Atualize a página e tente de novo.",
         "empty": "Não há contatos para adicionar.",
         "already_running": "Este grupo já tem uma rodada em andamento, na fila ou pausada.",
+        "number_changed": "O WhatsApp conectado agora é outro número. Reconecte em Conversas o número desta rodada para retomá-la.",
         "unauthorized": "Sessão expirada.",
         "forbidden": "Você não tem permissão para fazer isso.",
         "invalid": "Dados inválidos.",
@@ -1401,12 +1402,14 @@
           "not_admin": "Seu número não é mais admin do grupo",
           "unreadable": "Não foi possível ler o grupo agora. A rodada continua sozinha quando o grupo voltar a responder.",
           "no_connection": "Conexão removida",
+          "number_changed": "O WhatsApp conectado agora é outro número",
           "error": "Erro inesperado",
           "other": "Rodada pausada"
         },
         "pausedHint": {
           "disconnected": "Reconecte o número em Conversas. A rodada continua sozinha quando ele voltar.",
           "not_admin": "A rodada só continua quando o seu número voltar a ser admin do grupo.",
+          "number_changed": "Esta rodada usa o número de antes: reconecte esse número em Conversas, ou cancele e comece uma rodada nova.",
           "no_connection": "A conexão do WhatsApp desta rodada foi removida e ela não consegue continuar. Cancele e comece outra.",
           "error": "Algo falhou no meio do caminho. Retome a rodada para tentar de novo."
         },

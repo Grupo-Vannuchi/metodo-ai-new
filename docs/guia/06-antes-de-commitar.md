@@ -84,7 +84,9 @@ fora com `previous_uncertain`, ou é `ALREADY_IN` se já está no grupo, e nunca
 conferência; o código
 da resposta de cada adição virando adicionado, convite ou já estava; o horário das 8h às 20h de São Paulo, a
 próxima tentativa depois da pausa de 30 a 90 s e a retomada às 8h do dia seguinte quando o teto de 100 por dia
-acaba; o texto do convite com `{{nome}}` e `{{grupo}}` e o link sempre no fim; e a previsão de término).
+acaba; o texto do convite com `{{nome}}` e `{{grupo}}` e o link sempre no fim; a previsão de término; e se a instância
+ainda é do número da rodada (`linkedNumber`: o mesmo número, com ou sem o `:device`; outro telefone; ou nenhum que dê para
+ler, que nunca conta como outro)).
 Cobre também como as respostas da Evolution são lidas em
 [src/lib/integrations/evolution-groups.ts](../../src/lib/integrations/evolution-groups.ts): a lista de grupos, com os
 participantes `@lid` resolvidos pelo `phoneNumber` e a contagem dos que ficaram sem número; se o número da pessoa é admin
@@ -146,7 +148,13 @@ convite e falha, e a rodada que continua no dia seguinte; uma rodada por número
 pausada segurando a fila; a pausa de
 30 a 90 s entre as pessoas, que vale pelo número e não pela rodada (a que sobe depois do fim de outra, de um
 cancelamento ou de uma retomada espera a pausa da última tentativa do número, de qualquer empresa); número
-desconectado, Evolution fora do ar e não ser admin (pausam sem adicionar ninguém); a trava (dois executores ao mesmo
+desconectado, Evolution fora do ar e não ser admin (pausam sem adicionar ninguém); o número desconectado no app (conexão
+`INACTIVE` e instância apagada, que a Evolution responde com 404): pausa como desconectado em vez de esperar, e nem a lista
+do cron nem o `pokeGroupAdd` perguntam nada à Evolution sobre ele até a conexão voltar a `ACTIVE`, quando ele volta sozinho;
+o telefone trocado (Conversas reconectado com outro número na mesma instância): a rodada pausada que voltaria sozinha, e a
+que esperava a noite, pausam como `number_changed` sem adicionar ninguém pelo outro número, o "Retomar" recusa até o número
+de antes voltar, e o número que não dá para ler deixa a rodada como estava (ou esperando 5 min); a visita pergunta o número
+uma vez, não uma por pessoa; a trava (dois executores ao mesmo
 tempo, trava vencida, trava perdida no meio de uma espera) com uma chamada por número e quem ficou em andamento
 virando `interrupted` sem ser refeito; resposta sem código, erro de HTTP e sem resposta da adição; o link do grupo
 pedido uma vez, o texto do convite e o link que falta; o texto do convite sem resposta virando `invite_uncertain` (a

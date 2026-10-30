@@ -1,3 +1,4 @@
+import { jidDigits } from "@/lib/integrations/evolution-groups";
 import { brPhoneKey, looksLikeWhatsappMobile, normalizeWhatsappNumber } from "@/lib/phone";
 import { saoPauloDayStart } from "@/lib/tasks/board-core";
 import { normalizeGroupNumber } from "@/lib/whatsapp/group-import";
@@ -5,8 +6,9 @@ import { normalizeGroupNumber } from "@/lib/whatsapp/group-import";
 /**
  * Pure rules of "Adicionar a grupo do WhatsApp": who goes into a round, how the
  * answer to an add is read, when a round may run (08:00-20:00 in São Paulo, 100
- * people a day per number), the pause between people, the invite text and the
- * finish forecast. Free of `server-only` on purpose:
+ * people a day per number), the pause between people, the invite text, the
+ * finish forecast and whether the instance is still linked to the round's
+ * number. Free of `server-only` on purpose:
  * scripts/check-whatsapp-group-add.ts imports it.
  */
 
@@ -54,6 +56,21 @@ export type SkipReason = "no_phone" | "opted_out" | "not_mobile" | "duplicate" |
  * answer ("invite_uncertain"). A later round for the group never redoes them by itself.
  */
 export const UNCERTAIN_REASONS = ["interrupted", "uncertain", "invite_uncertain"] as const;
+
+/** Whether the phone behind an instance is still the one a round was planned with. */
+export type LinkedNumber = "same" | "changed" | "unknown";
+
+/**
+ * The number linked to the instance now (its `ownerJid`, as fetchOwnerJid reads it) against the round's (`senderKey`, the
+ * digits it was planned with): "same"; "changed" when the instance names another phone (Conversas was reconnected with
+ * it, on the same instance); "unknown" when it names none that can be read (the read failed, or nothing is linked yet).
+ * Only "changed" says the round must not go on: its cap, its queue and the admin check belong to the old number.
+ */
+export function linkedNumber(ownerJid: string | null, senderKey: string): LinkedNumber {
+  const digits = ownerJid ? jidDigits(ownerJid) : "";
+  if (!digits) return "unknown";
+  return digits === senderKey ? "same" : "changed";
+}
 
 /**
  * The number to dial for a phone typed in the CRM: country-coded digits, with
