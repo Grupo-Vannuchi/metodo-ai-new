@@ -4,14 +4,12 @@
  * non-zero on the first failure.
  */
 import assert from "node:assert/strict";
-import { parseGroupParticipants } from "../src/lib/integrations/evolution-groups";
 import {
-  CONTACT_NAME_PREFIX,
-  lastContactNumber,
-  normalizeGroupNumber,
-  phoneForContact,
-  planGroupImport,
-} from "../src/lib/whatsapp/group-import";
+  parseContactNames,
+  parseGroupParticipants,
+  withContactNames,
+} from "../src/lib/integrations/evolution-groups";
+import { normalizeGroupNumber, phoneForContact, planGroupImport } from "../src/lib/whatsapp/group-import";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -47,6 +45,64 @@ check("parseGroupParticipants drops members without a real number", () => {
   );
 });
 
+check("parseGroupParticipants keeps the name Evolution sends, not its digits-only fallback", () => {
+  const parts = parseGroupParticipants([
+    { id: "123456789012345@lid", phoneNumber: "5513991886920@s.whatsapp.net", name: "  Maria   Souza " },
+    { id: "5511987654321@s.whatsapp.net", name: "5511987654321" },
+    { id: "5511912345678@s.whatsapp.net", name: "123456789012345" },
+    { id: "5511955554444@s.whatsapp.net", notify: "Zé 🚀" },
+    { id: "5511933332222@s.whatsapp.net", name: "   " },
+    { id: "5511922221111@s.whatsapp.net", name: "+55 (11) 92222-1111" },
+  ]);
+  assert.deepEqual(parts, [
+    { number: "5513991886920", admin: false, name: "Maria Souza" },
+    { number: "5511987654321", admin: false },
+    { number: "5511912345678", admin: false },
+    { number: "5511955554444", admin: false, name: "Zé 🚀" },
+    { number: "5511933332222", admin: false },
+    { number: "5511922221111", admin: false },
+  ]);
+});
+
+check("parseContactNames maps phone JIDs to names and skips LIDs, groups and nameless contacts", () => {
+  const names = parseContactNames([
+    { remoteJid: "5513991886920@s.whatsapp.net", pushName: "Maria" },
+    { remoteJid: "5513991886920@s.whatsapp.net", pushName: "Maria (outra)" },
+    { remoteJid: "123456789012345@lid", pushName: "Só LID" },
+    { remoteJid: "120363000000000000@g.us", pushName: "Grupo" },
+    { remoteJid: "5511987654321@s.whatsapp.net", pushName: "5511987654321" },
+    { remoteJid: "5511912345678@s.whatsapp.net", pushName: null },
+    { remoteJid: "5511955554444@s.whatsapp.net", pushName: "João" },
+    null,
+  ]);
+  assert.deepEqual([...names], [
+    ["5513991886920", "Maria"],
+    ["5511955554444", "João"],
+  ]);
+});
+
+check("withContactNames fills only the members still without a name", () => {
+  const names = new Map([
+    ["5513991886920", "Maria"],
+    ["5511987654321", "Contato salvo"],
+  ]);
+  assert.deepEqual(
+    withContactNames(
+      [
+        { number: "5513991886920", admin: false },
+        { number: "5511987654321", admin: true, name: "Nome do grupo" },
+        { number: "5511912345678", admin: false },
+      ],
+      names,
+    ),
+    [
+      { number: "5513991886920", admin: false, name: "Maria" },
+      { number: "5511987654321", admin: true, name: "Nome do grupo" },
+      { number: "5511912345678", admin: false },
+    ],
+  );
+});
+
 check("normalizeGroupNumber adds the 9 to old 12-digit BR mobiles and keeps the rest", () => {
   assert.equal(normalizeGroupNumber("551391886920"), "5513991886920");
   assert.equal(normalizeGroupNumber("5513991886920"), "5513991886920");
@@ -62,32 +118,31 @@ check("phoneForContact formats BR numbers and keeps others international", () =>
   assert.equal(phoneForContact("447911123456"), "+447911123456");
 });
 
-check("lastContactNumber reads only names shaped like 'Contato #N'", () => {
-  assert.equal(CONTACT_NAME_PREFIX, "Contato #");
-  assert.equal(lastContactNumber([]), 0);
-  assert.equal(lastContactNumber(["Contato #3", "Contato #12", "Maria", "Contato #x", "Contato #7 (vip)"]), 12);
-});
-
-check("planGroupImport numbers new contacts after the last one and skips known numbers", () => {
+check("planGroupImport names contacts after the member, or the phone when there is no name", () => {
   const existing = new Set(["13991886920"]);
   const plan = planGroupImport(
-    ["5513991886920", "5511987654321", "551187654322", "5511987654321", "447911123456"],
+    [
+      { number: "5513991886920", name: "Já no CRM" },
+      { number: "5511987654321", name: "Maria Souza" },
+      { number: "551187654322" },
+      { number: "5511987654321", name: "Maria de novo" },
+      { number: "447911123456" },
+    ],
     existing,
-    7,
   );
   assert.deepEqual(plan.create, [
-    { name: "Contato #8", phone: "(11) 98765-4321", key: "11987654321" },
-    { name: "Contato #9", phone: "(11) 98765-4322", key: "11987654322" },
-    { name: "Contato #10", phone: "+447911123456", key: "47911123456" },
+    { name: "Maria Souza", phone: "(11) 98765-4321", key: "11987654321" },
+    { name: "(11) 98765-4322", phone: "(11) 98765-4322", key: "11987654322" },
+    { name: "+447911123456", phone: "+447911123456", key: "47911123456" },
   ]);
   assert.equal(plan.skipped, 2);
 });
 
 check("planGroupImport on a second run of the same group creates nothing", () => {
-  const first = planGroupImport(["5511987654321", "5511912345678"], new Set(), 0);
+  const members = [{ number: "5511987654321", name: "Maria" }, { number: "5511912345678" }];
+  const first = planGroupImport(members, new Set());
   const known = new Set(first.create.map((c) => c.key));
-  const second = planGroupImport(["5511987654321", "5511912345678"], known, 2);
-  assert.deepEqual(second, { create: [], skipped: 2 });
+  assert.deepEqual(planGroupImport(members, known), { create: [], skipped: 2 });
 });
 
 console.log(`\n✅ whatsapp-groups: ${passed} checks passed.`);

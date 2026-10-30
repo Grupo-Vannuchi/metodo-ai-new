@@ -1,11 +1,13 @@
 /**
- * Parsing of the participants in Evolution's group info, and of the answers of
- * the group calls of "Adicionar a grupo do WhatsApp". Pure and free of
- * `server-only` on purpose: scripts/check-whatsapp-groups.ts and
- * scripts/check-whatsapp-group-add.ts import it.
+ * Parsing of the participants in Evolution's group info, of the names in its
+ * contact list, and of the answers of the group calls of "Adicionar a grupo do
+ * WhatsApp". Pure and free of `server-only` on purpose:
+ * scripts/check-whatsapp-groups.ts and scripts/check-whatsapp-group-add.ts
+ * import it.
  */
 
-export type GroupParticipant = { number: string; admin: boolean };
+/** `name` only when Evolution knows one (see memberName). */
+export type GroupParticipant = { number: string; admin: boolean; name?: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -18,10 +20,22 @@ function phoneDigits(jid: string): string {
 }
 
 /**
+ * A name worth keeping, or undefined. Evolution fills a contact it has no name
+ * for with the digits of its id, so a value made only of digits and phone
+ * punctuation counts as no name.
+ */
+function memberName(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const name = raw.replace(/\s+/g, " ").trim();
+  return name && !/^[\d\s+().-]+$/.test(name) ? name : undefined;
+}
+
+/**
  * Members with a real phone number. Newer WhatsApp identifies members by a
  * LID (`…@lid`, a privacy id that is NOT a phone number) and sends the number
  * itself in `phoneNumber`; members with neither are dropped, since importing
- * them would create contacts that can't receive messages.
+ * them would create contacts that can't receive messages. `name` comes from
+ * Evolution's /group/participants, which fills it from the contacts it keeps.
  */
 export function parseGroupParticipants(raw: readonly unknown[]): GroupParticipant[] {
   const out: GroupParticipant[] = [];
@@ -32,7 +46,9 @@ export function parseGroupParticipants(raw: readonly unknown[]): GroupParticipan
     const jid = id.endsWith("@lid") ? String(p.phoneNumber ?? p.jid ?? p.pn ?? "").trim() : id;
     const number = phoneDigits(jid);
     if (!/^\d{10,15}$/.test(number)) continue;
-    out.push({ number, admin: p.admin === "admin" || p.admin === "superadmin" });
+    const admin = p.admin === "admin" || p.admin === "superadmin";
+    const name = memberName(p.name) ?? memberName(p.notify);
+    out.push(name ? { number, admin, name } : { number, admin });
   }
   return out;
 }
@@ -155,4 +171,36 @@ export function inviteUrlFrom(data: unknown): string | null {
   if (url) return INVITE_URL.test(url) ? url : null;
   const code = typeof data.inviteCode === "string" ? data.inviteCode.trim() : "";
   return INVITE_CODE.test(code) ? `https://chat.whatsapp.com/${code}` : null;
+}
+
+/**
+ * Names in Evolution's contact list (chat/findContacts) by the digits of their
+ * phone JID; the first one wins. Contacts kept under a LID or a group JID are
+ * left out: there is no number to match a member against.
+ */
+export function parseContactNames(raw: readonly unknown[]): Map<string, string> {
+  const names = new Map<string, string>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const c = item as Record<string, unknown>;
+    const number = phoneDigits(String(c.remoteJid ?? "").trim());
+    const name = memberName(c.pushName);
+    if (/^\d{10,15}$/.test(number) && name && !names.has(number)) names.set(number, name);
+  }
+  return names;
+}
+
+/**
+ * Members still without a name take the one Evolution keeps for their number.
+ * /group/participants matches contacts by the member's id, which for a LID
+ * member is not the number the contact was saved under.
+ */
+export function withContactNames(
+  members: readonly GroupParticipant[],
+  names: ReadonlyMap<string, string>,
+): GroupParticipant[] {
+  return members.map((m) => {
+    const name = m.name ? undefined : names.get(m.number);
+    return name ? { ...m, name } : m;
+  });
 }

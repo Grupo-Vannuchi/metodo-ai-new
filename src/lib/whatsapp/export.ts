@@ -2,8 +2,8 @@ import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
 import { WHATSAPP_PROVIDERS } from "@/lib/queries/connections";
 import { loadEvoCredsById } from "@/lib/integrations/evolution-creds";
-import { findGroupInfo } from "@/lib/integrations/evolution-client";
-import type { GroupParticipant } from "@/lib/integrations/evolution-groups";
+import { findContactNames, findGroupInfo, findGroupParticipants } from "@/lib/integrations/evolution-client";
+import { withContactNames, type GroupParticipant } from "@/lib/integrations/evolution-groups";
 import { formatBrPhone } from "@/lib/phone";
 
 /**
@@ -67,15 +67,20 @@ export async function listExportGroups(
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 }
 
+/** Evolution's contact names per connection id, so one run over many groups of a number fetches the list once. */
+export type ContactNamesCache = Map<string, Promise<Map<string, string> | null>>;
+
 /**
- * A group's members as country-coded numbers (Evolution gives numbers, not
- * names). `readable` is false when Evolution didn't answer, so callers can
- * tell "couldn't read the group" from "no members with a number".
+ * A group's members as country-coded numbers, with the names Evolution knows
+ * (none for a member it has no contact for). `readable` is false when Evolution
+ * didn't answer, so callers can tell "couldn't read the group" from "no members
+ * with a number".
  */
 export async function getGroupMembers(
   organizationId: string,
   conversationId: string,
   userId: string,
+  namesCache?: ContactNamesCache,
 ): Promise<{ title: string; readable: boolean; members: GroupParticipant[] } | null> {
   const db = tenantDb(organizationId);
   const ids = await ownedConnIds(db, userId);
@@ -86,10 +91,25 @@ export async function getGroupMembers(
   });
   if (!conv) return null;
 
-  const creds = await loadEvoCredsById(conv.connectionId);
-  const info = creds ? await findGroupInfo(creds, conv.remoteJid) : null;
   const title = conv.customName || conv.name || "Grupo";
-  return { title, readable: info !== null, members: info?.participants ?? [] };
+  const creds = await loadEvoCredsById(conv.connectionId);
+  if (!creds) return { title, readable: false, members: [] };
+  // /group/participants carries the names; findGroupInfos (numbers only) stays as the fallback.
+  let members =
+    (await findGroupParticipants(creds, conv.remoteJid)) ??
+    (await findGroupInfo(creds, conv.remoteJid))?.participants ??
+    null;
+  if (!members) return { title, readable: false, members: [] };
+  if (members.some((m) => !m.name)) {
+    let pending = namesCache?.get(conv.connectionId);
+    if (!pending) {
+      pending = findContactNames(creds);
+      namesCache?.set(conv.connectionId, pending);
+    }
+    const names = await pending;
+    if (names) members = withContactNames(members, names);
+  }
+  return { title, readable: true, members };
 }
 
 /** A group's members as export rows; `readable` as in getGroupMembers. */
@@ -102,7 +122,8 @@ export async function getGroupRows(
   if (!group) return null;
   const rows: ExportRow[] = group.members.map((p) => {
     const number = formatBrPhone(p.number) || p.number;
-    return { name: p.admin ? `${number} (admin)` : number, number };
+    const name = p.name ?? number;
+    return { name: p.admin ? `${name} (admin)` : name, number };
   });
   return { title: group.title, readable: group.readable, rows };
 }

@@ -3,6 +3,7 @@ import {
   existsOnWhatsapp,
   inviteUrlFrom,
   ownerJidFrom,
+  parseContactNames,
   parseGroupList,
   parseGroupParticipants,
   participantUpdateCode,
@@ -367,6 +368,42 @@ export async function sendPlainText(
     30000,
   );
   return { ok, httpStatus: status };
+}
+
+/**
+ * A group's members with the names Evolution knows: unlike findGroupInfos,
+ * /group/participants fills each member's `name` from the contacts it keeps.
+ * Returns null on failure.
+ */
+export async function findGroupParticipants(
+  creds: EvoCreds,
+  groupJid: string,
+): Promise<GroupParticipant[] | null> {
+  const { ok, data } = await req(
+    creds,
+    "GET",
+    `/group/participants/${encodeURIComponent(creds.instance)}?groupJid=${encodeURIComponent(groupJid)}`,
+    undefined,
+    20000,
+  );
+  if (!ok || !Array.isArray(data.participants)) return null;
+  return parseGroupParticipants(data.participants);
+}
+
+/**
+ * Names of the contacts Evolution keeps for the instance, by phone digits
+ * (see parseContactNames). One call returns the whole list. Null on failure.
+ */
+export async function findContactNames(creds: EvoCreds): Promise<Map<string, string> | null> {
+  const { ok, data } = await req(
+    creds,
+    "POST",
+    `/chat/findContacts/${encodeURIComponent(creds.instance)}`,
+    { where: {} },
+    20000,
+  );
+  if (!ok || !Array.isArray(data)) return null;
+  return parseContactNames(data);
 }
 
 /**
