@@ -45,7 +45,7 @@ import {
   type PlannedItem,
   type PreviousOutcome,
 } from "../src/lib/whatsapp/group-add/core";
-import { reasonNote } from "../src/components/crm/group-add-format";
+import { reasonNote, trackingRefreshMs } from "../src/components/crm/group-add-format";
 import enMessages from "../src/messages/en.json";
 import ptMessages from "../src/messages/pt.json";
 import {
@@ -849,6 +849,13 @@ check("reasonNote: a failure in doubt says it could not be confirmed, a definite
   }
   // A reason nobody writes has no note: the status says what it means, and it is not called a doubt.
   for (const reason of ["something_new", "http_", "http_abc", ""]) assert.equal(reasonNote(reason), null, reason);
+});
+
+check("trackingRefreshMs: the tracking screen reads the round again every 5 s, and once a minute through the long waits", () => {
+  // Hours (the window, the cap) or minutes at a time (an Evolution that did not answer): once a minute, so 08:00 is still seen.
+  for (const wait of ["window", "cap", "unavailable"]) assert.equal(trackingRefreshMs(wait), 60_000, wait);
+  // Going on, waiting the 30 to 90 s between people, or queued (no wait told): every 5 s.
+  for (const wait of ["pace", null]) assert.equal(trackingRefreshMs(wait), 5_000, String(wait));
 });
 
 check("every note reasonNote can give is a text in pt.json and en.json, and the refusal shows the code in both", () => {

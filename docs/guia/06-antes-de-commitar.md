@@ -93,7 +93,8 @@ Cobre também a nota que a tela de acompanhamento mostra embaixo de cada contato
 ([src/components/crm/group-add-format.ts](../../src/components/crm/group-add-format.ts), `reasonNote`), com os textos
 reais do `pt.json`: toda dúvida (`UNCERTAIN_REASONS`) diz "Não foi possível confirmar…", e só ela; um erro de HTTP
 definitivo diz "O WhatsApp recusou a adição (código N)"; os outros motivos mantêm a nota própria; um motivo que ninguém
-grava não tem nota; e toda chave que ela devolve existe no `pt.json` e no `en.json`.
+grava não tem nota; e toda chave que ela devolve existe no `pt.json` e no `en.json`. E de quanto em quanto tempo essa tela
+relê a rodada (`trackingRefreshMs`): a cada 5 s, e a cada minuto enquanto ela espera a janela, o teto ou a Evolution.
 Cobre também como as respostas da Evolution são lidas em
 [src/lib/integrations/evolution-groups.ts](../../src/lib/integrations/evolution-groups.ts): a lista de grupos, com os
 participantes `@lid` resolvidos pelo `phoneNumber` e a contagem dos que ficaram sem número; se o número da pessoa é admin

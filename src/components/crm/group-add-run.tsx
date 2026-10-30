@@ -21,7 +21,7 @@ import {
   WHATSAPP_GROUP_MAX,
   type GroupAddItemStatus,
 } from "@/lib/whatsapp/group-add/core";
-import { GROUP_ADD_TIME_ZONE, forecastValues, reasonNote } from "@/components/crm/group-add-format";
+import { GROUP_ADD_TIME_ZONE, forecastValues, reasonNote, trackingRefreshMs } from "@/components/crm/group-add-format";
 
 type RunStatus = "QUEUED" | "RUNNING" | "PAUSED" | "DONE" | "CANCELED";
 
@@ -118,8 +118,9 @@ type Notice = { warn: boolean; text: string; hint: string | null };
 
 /**
  * The tracking screen of a round of "Adicionar a grupo do WhatsApp": the state, why it is paused or waiting, how far it got,
- * a line per contact, and the buttons for who may steer it. It re-reads the page every 5 s while the round goes on
- * (AutoRefresh), and asks the server once, on opening, to take up a round that was waiting (pokeGroupAddAction): that is
+ * a line per contact, and the buttons for who may steer it. It re-reads the page every 5 s while the round goes on, and
+ * once a minute while it waits for the window, the cap or Evolution (AutoRefresh, trackingRefreshMs), and asks the server
+ * once, on opening, to take up a round that was waiting (pokeGroupAddAction): that is
  * what continues it where no cron is scheduled. Everything is told from the props; no clock is read while rendering.
  */
 export function GroupAddRun(props: GroupAddRunProps) {
@@ -212,7 +213,7 @@ export function GroupAddRun(props: GroupAddRunProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <AutoRefresh active={status === "QUEUED" || status === "RUNNING"} />
+      <AutoRefresh active={status === "QUEUED" || status === "RUNNING"} intervalMs={trackingRefreshMs(waitReason)} />
 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">

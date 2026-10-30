@@ -54,6 +54,18 @@ export function reasonNote(reason: string): ReasonNote | null {
   return http ? { key: "refused", code: http[1] } : null;
 }
 
+/** The waits of a running round that last minutes or hours: the window (until 08:00), the cap (until 08:00 tomorrow), Evolution. */
+const LONG_WAITS: ReadonlySet<string> = new Set(["window", "cap", "unavailable"]);
+
+/**
+ * How often the tracking screen reads a queued or running round again: every 5 s, and once a minute while the round waits
+ * for the window, the cap or Evolution (`waitReason`, as the page tells it: only while the wait lasts). Each read is a whole
+ * server render, so 5 s through a night is hundreds of them for nothing; once a minute still shows the round coming back.
+ */
+export function trackingRefreshMs(waitReason: string | null): number {
+  return waitReason !== null && LONG_WAITS.has(waitReason) ? 60_000 : 5_000;
+}
+
 /** The values the `forecast` message takes for a round that ends at `at`: which day, the time of day, and the date. */
 export function forecastValues(format: Formatter, at: Date, now: Date) {
   return {
