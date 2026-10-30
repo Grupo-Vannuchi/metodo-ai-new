@@ -5,8 +5,8 @@
  * local Postgres. The server modules (`server-only`, the `@/` alias) load through scripts/tsconfig.server.json.
  *
  * Creates its own data: two organizations (`wga-e2e-<stamp>` and `wga-e2e-<stamp>-b`) with their users, memberships and an
- * Evolution connection each, and ALWAYS deletes them (runs and their items, contacts, folders, connections, memberships,
- * users, organizations), even on failure. A run that is killed (Ctrl+C, a timeout) leaves them behind: delete the
+ * Evolution connection each, and ALWAYS deletes them (runs and their items, folder links, contacts, folders, connections,
+ * memberships, users, organizations), even on failure. A run that is killed (Ctrl+C, a timeout) leaves them behind: delete the
  * `wga-e2e-%` organizations by hand. Refuses to run against a database that isn't local. Every connection points at the
  * fake on loopback and the script refuses any request to another host, so the real Evolution of .env is never reached.
  * The queue (QStash) and after() are never reached either: the runner's scheduler is replaced by a capture the checks run
@@ -61,6 +61,7 @@ import {
   startGroupAdd,
   type GroupAddSource,
 } from "@/lib/whatsapp/group-add/service";
+import { getContactsBoard } from "@/lib/queries/contact-folders";
 import { getGroupAddRunView, listContactGroupAdds } from "@/lib/queries/whatsapp-group-add";
 import {
   FAKE_EVO_GROUP,
@@ -736,6 +737,7 @@ async function assertConnectionsLoopback(w: World): Promise<void> {
 async function wipe(w: World): Promise<void> {
   const inTest = { organizationId: { in: [w.orgA, w.orgB] } };
   await w.prisma.whatsappGroupAddRun.deleteMany({ where: inTest }); // the items go with it
+  await w.prisma.contactFolderLink.deleteMany({ where: inTest }); // the contacts and the folders would take them anyway
   await w.prisma.contact.deleteMany({ where: inTest });
   await w.prisma.contactFolder.deleteMany({ where: inTest });
   // A check that adds a connection of its own leaves it only until here.
@@ -763,19 +765,25 @@ async function scenario(ctx: Ctx) {
 
 let contactSeq = 0;
 
-/** A contact; creation times strictly increase, so the order in a folder is the order of the calls. */
+/**
+ * A contact; creation times strictly increase, so the order in a folder is the order of the calls. It goes in its folders
+ * the way the app puts it there, one ContactFolderLink per folder (`folderId` for one, `folderIds` for several, neither for
+ * "Sem pasta"), with the organization written by hand: the raw client has no extends, and a nested create never gets one.
+ */
 async function contactOf(
   w: World,
-  o: { name: string; phone: string | null; org?: string; optedOut?: boolean; folderId?: string | null },
+  o: { name: string; phone: string | null; org?: string; optedOut?: boolean; folderId?: string; folderIds?: string[] },
 ): Promise<string> {
+  const organizationId = o.org ?? w.orgA;
+  const folderIds = [...(o.folderId ? [o.folderId] : []), ...(o.folderIds ?? [])];
   const contact = await w.prisma.contact.create({
     data: {
-      organizationId: o.org ?? w.orgA,
+      organizationId,
       name: o.name,
       phone: o.phone,
       optedOut: o.optedOut ?? false,
-      folderId: o.folderId ?? null,
       createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, contactSeq++)),
+      folderLinks: { create: folderIds.map((folderId) => ({ organizationId, folderId })) },
     },
     select: { id: true },
   });
@@ -783,7 +791,7 @@ async function contactOf(
 }
 
 /** `count` contacts named "Pessoa n" with the numbers N(n), from `from`; their ids. */
-async function people(w: World, count: number, o: { org?: string; from?: number; folderId?: string | null } = {}): Promise<string[]> {
+async function people(w: World, count: number, o: { org?: string; from?: number; folderId?: string } = {}): Promise<string[]> {
   const ids: string[] = [];
   for (let n = o.from ?? 1; n < (o.from ?? 1) + count; n++) {
     ids.push(await contactOf(w, { name: `Pessoa ${n}`, phone: N(n), org: o.org, folderId: o.folderId }));
@@ -1125,6 +1133,90 @@ check("previewGroupAdd: a group that the number does not run is not_admin, and o
   assert.equal(preview.counts.pending, 6);
   // The forecast is for the 3 that fit.
   assert.equal(preview.forecastAt, "2026-10-28T13:03:00.000Z");
+});
+
+// ── The folder of a round, through the links (a contact sits in many folders) ──
+
+check("a folder is read through its links: a contact in two folders is in the preview and in the round of either one, as the screen counts them", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const clientes = await folderOf(w, "Clientes");
+  const eventos = await folderOf(w, "Eventos");
+  await contactOf(w, { name: "Só Clientes", phone: N(1), folderId: clientes });
+  await contactOf(w, { name: "Nas duas", phone: N(2), folderIds: [clientes, eventos] });
+  await contactOf(w, { name: "Só Eventos", phone: N(3), folderId: eventos });
+  await contactOf(w, { name: "Sem pasta", phone: N(4) });
+  // A folder of the other organization, with a contact of its own: not org A's to use.
+  const ofB = await folderOf(w, "Clientes", w.orgB);
+  await contactOf(w, { name: "Da outra empresa", phone: N(5), org: w.orgB, folderId: ofB });
+
+  // The screen counts each folder by its links (the contact in both counts in each), and the dialog opens with that count.
+  const board = await getContactsBoard(w.orgA);
+  const onScreen = (folderId: string | null) => board.columns.find((c) => c.id === folderId)?.contacts.length ?? -1;
+  assert.deepEqual([onScreen(clientes), onScreen(eventos), onScreen(null)], [2, 2, 1]);
+  // The preview counts the same people.
+  const allPending = (n: number) => ({ total: n, pending: n, alreadyIn: 0, noWhatsapp: 0, skipped: 0, leftGroup: 0, alreadyInvited: 0 });
+  for (const folderId of [clientes, eventos, null]) {
+    const preview = await previewGroupAdd(w.orgA, w.userA, { kind: "folder", folderId }, GROUP);
+    assert.ok(preview.ok, JSON.stringify(preview));
+    assert.deepEqual(preview.counts, allPending(onScreen(folderId)));
+  }
+  assert.deepEqual(await previewGroupAdd(w.orgA, w.userA, { kind: "folder", folderId: ofB }, GROUP), { ok: false, error: "not_found" });
+
+  // A round of each folder, one per group: the contact in both goes in both, in the order the contacts were created.
+  const fromClientes = await begin(w, { source: { kind: "folder", folderId: clientes } });
+  const fromEventos = await begin(w, { source: { kind: "folder", folderId: eventos }, group: OTHER_GROUP });
+  assert.deepEqual(await verdicts(w, fromClientes), [
+    ["Só Clientes", "PENDING", null],
+    ["Nas duas", "PENDING", null],
+  ]);
+  assert.deepEqual(await verdicts(w, fromEventos), [
+    ["Nas duas", "PENDING", null],
+    ["Só Eventos", "PENDING", null],
+  ]);
+  await drain();
+  assert.deepEqual([(await runOf(w, fromClientes)).status, (await runOf(w, fromEventos)).status], ["DONE", "DONE"]);
+  assert.deepEqual(
+    callsTo(fake, "updateParticipant").map((c) => [c.query.groupJid, numberOf(c)]),
+    [
+      [GROUP, N(1)],
+      [GROUP, N(2)],
+      [OTHER_GROUP, N(2)],
+      [OTHER_GROUP, N(3)],
+    ],
+  );
+});
+
+check("\"Sem pasta\" is only who has no folder link, the contact whose one folder was deleted included, as the screen shows it", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const clientes = await folderOf(w, "Clientes");
+  await contactOf(w, { name: "Na pasta", phone: N(1), folderId: clientes });
+  await contactOf(w, { name: "Solto", phone: N(2) });
+  await contactOf(w, { name: "Solto sem telefone", phone: null });
+  // Deleting a folder takes its links with it: the contact that was only there is "Sem pasta" again.
+  const apagada = await folderOf(w, "Apagada");
+  await contactOf(w, { name: "Era da apagada", phone: N(3), folderId: apagada });
+  await w.prisma.contactFolder.deleteMany({ where: { id: apagada } });
+  // In a folder of its own organization, and with none: either way not in org A's "Sem pasta".
+  await contactOf(w, { name: "Da outra empresa", phone: N(4), org: w.orgB });
+
+  const board = await getContactsBoard(w.orgA);
+  assert.deepEqual(
+    board.columns.find((c) => c.id === null)?.contacts.map((c) => c.name).sort(),
+    ["Era da apagada", "Solto", "Solto sem telefone"],
+  );
+  const loose = await previewGroupAdd(w.orgA, w.userA, { kind: "folder", folderId: null }, GROUP);
+  assert.ok(loose.ok, JSON.stringify(loose));
+  assert.deepEqual(loose.counts, { total: 3, pending: 2, alreadyIn: 0, noWhatsapp: 0, skipped: 1, leftGroup: 0, alreadyInvited: 0 });
+
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  assert.deepEqual(await verdicts(w, runId), [
+    ["Solto", "PENDING", null],
+    ["Solto sem telefone", "SKIPPED", "no_phone"],
+    ["Era da apagada", "PENDING", null],
+  ]);
+  await drain();
+  assert.equal((await runOf(w, runId)).status, "DONE");
+  assert.deepEqual(addedNumbers(fake), [N(2), N(3)]);
 });
 
 // ── The run ──────────────────────────────────────────────────────────────────
@@ -3244,10 +3336,11 @@ async function createWorld(prisma: PrismaClient): Promise<World> {
   };
 }
 
-/** Runs and their items, contacts, folders, connections, memberships, users and organizations; whatever was created. */
+/** Runs and their items, folder links, contacts, folders, connections, memberships, users and organizations; whatever was created. */
 async function destroyWorld(prisma: PrismaClient): Promise<void> {
   const inTest = { organizationId: { in: made.orgs } };
   await prisma.whatsappGroupAddRun.deleteMany({ where: inTest }); // the items go with it
+  await prisma.contactFolderLink.deleteMany({ where: inTest });
   await prisma.contact.deleteMany({ where: inTest });
   await prisma.contactFolder.deleteMany({ where: inTest });
   await prisma.integrationConnection.deleteMany({ where: inTest });

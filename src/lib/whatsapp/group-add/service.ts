@@ -104,15 +104,20 @@ export async function listMyGroups(
 
 // ── The plan of a round ──────────────────────────────────────────────────────
 
-/** The contacts of the source, in the order the round will go through them, from this organization only. */
+/**
+ * The contacts of the source, in the order the round will go through them, from this organization only. A folder is
+ * read through its links (ContactFolderLink: a contact sits in many folders), so a contact in two folders goes in a
+ * round of either one; "Sem pasta" (`folderId: null`) is who has no link at all, as the contacts screen counts them.
+ */
 async function sourceContacts(db: TenantDb, source: GroupAddSource) {
   const select = { id: true, name: true, phone: true, optedOut: true } as const;
   if (source.kind === "folder") {
+    // The folder is checked to be this organization's first: the link filter below is nested, and the extends never reaches it.
     if (source.folderId !== null && !(await db.contactFolder.findFirst({ where: { id: source.folderId }, select: { id: true } }))) {
       return null;
     }
     return db.contact.findMany({
-      where: { folderId: source.folderId },
+      where: source.folderId === null ? { folderLinks: { none: {} } } : { folderLinks: { some: { folderId: source.folderId } } },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       take: GROUP_ADD_MAX_CONTACTS,
       select,

@@ -153,7 +153,10 @@ agendador do próprio teste no lugar dos reais (`groupAddRuntime`: dormir só mo
 usado, nem a fila, a não ser no teste do job, que aponta o cliente para um QStash falso em loopback). Confere, entre
 outras coisas: os grupos do próprio número com `admin` verdadeiro, falso ou `null`, e
 `no_connection` para quem não tem número seu, mesmo com um colega da empresa conectado; a conferência com as contagens
-exatas (rodada anterior incluída) e sem escrever nada; uma rodada inteira (adicionado, convite por texto, já estava,
+exatas (rodada anterior incluída) e sem escrever nada; a pasta lida pelos vínculos (`ContactFolderLink`): um contato em
+duas pastas entra na conferência e na rodada de qualquer uma delas, "Sem pasta" é só quem não tem vínculo nenhum (o
+contato cuja única pasta foi apagada incluído, nunca o de outra empresa), e a conferência conta as mesmas pessoas que a
+tela de Contatos mostra na pasta (`getContactsBoard`); uma rodada inteira (adicionado, convite por texto, já estava,
 falha, sem WhatsApp) em que o contato com opt-out, e o de mesmo número de um opt-out fora da pasta, não aparecem em
 nenhuma requisição; um opt-out feito depois de começar (do próprio contato, ou de outro da empresa com o mesmo número)
 valendo na vez da pessoa, sem chamada nenhuma; o horário das 8h às 20h e o relógio lido de novo antes da adição e do
@@ -201,8 +204,9 @@ Precisa de um `.env` (o comando o carrega; o segredo do cron é do próprio test
 Postgres do Docker, e leva uns 30 s; não usa a internet. O banco é só o
 local, e o script recusa rodar contra outro. Cria duas empresas de teste (`wga-e2e-<carimbo>` e `wga-e2e-<carimbo>-b`),
 com usuários, vínculos e uma conexão Evolution cada, e apaga tudo no fim, mesmo se falhar (rodadas e itens, contatos,
-pastas, conexões, vínculos, usuários e empresas). Se o processo for morto no meio (Ctrl+C, queda do Docker), sobram as
-empresas `wga-e2e-%` e os usuários `wga-*@test.local`: apague só esses, à mão. Toda conexão aponta para a Evolution
+vínculos de contato com pasta, pastas, conexões, vínculos de membro, usuários e empresas). Se o processo for morto no
+meio (Ctrl+C, queda do Docker), sobram as empresas `wga-e2e-%` e os usuários `wga-*@test.local`: apague só esses, à
+mão. Toda conexão aponta para a Evolution
 falsa em loopback: o script lê cada uma de volta e confere que tem `baseUrl`, chave e instância próprias em loopback antes
 de qualquer chamada (uma conexão sem `baseUrl` cairia na Evolution real do `.env`), e recusa qualquer requisição a outro
 host. Os números dos testes só vão para a falsa. Roda com `tsx --tsconfig scripts/tsconfig.server.json`, como o
