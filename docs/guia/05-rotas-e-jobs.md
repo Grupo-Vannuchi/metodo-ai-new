@@ -256,7 +256,8 @@ visível quando não rodam, o que já as deixou passar despercebidas por um bom 
 `whatsapp-groups`, é de outra natureza: sem ela nada se perde nem se apaga, só que a rodada de
 "Adicionar a grupo do WhatsApp" que parou à espera (da janela das 8h, do teto do dia, de uma
 Evolution que não respondeu) ou num restart do servidor continua apenas quando alguém abre a tela
-de acompanhamento (ou, se estiver pausada, clica em "Retomar"). Quais valem a
+de acompanhamento (ou, se estiver pausada, clica em "Retomar"); por isso o README a dá como
+**recomendada** onde o recurso estiver em uso (o porquê está em "Passenger e o processo"). Quais valem a
 pena agendar, por quê, e o cuidado necessário na primeira execução de cada um está no quadro do
 [README, seção 8 (Runbook de produção)](../../README.md) — não repetido aqui para não ter duas
 versões da mesma tabela desatualizando em ritmos diferentes. Vá lá antes de agendar qualquer um:

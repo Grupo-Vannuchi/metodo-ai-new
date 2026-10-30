@@ -1414,7 +1414,7 @@
           "error": "Something failed along the way. Resume the round to try again."
         },
         "wait": {
-          "queued": "Queued: this number is already adding people to another group",
+          "queued": "Queued: this number already has another round (in progress or paused)",
           "pace": "The next person is added in a few seconds",
           "window": "Waiting for the allowed hours: back at {hour}:00",
           "cap": "Daily limit of {cap} reached: back tomorrow at {hour}:00",

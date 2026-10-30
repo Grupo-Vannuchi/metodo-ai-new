@@ -1414,7 +1414,7 @@
           "error": "Algo falhou no meio do caminho. Retome a rodada para tentar de novo."
         },
         "wait": {
-          "queued": "Na fila: este número já está adicionando pessoas a outro grupo",
+          "queued": "Na fila: este número já tem outra rodada (em andamento ou pausada)",
           "pace": "A próxima pessoa entra em alguns segundos",
           "window": "Aguardando o horário: volta às {hour}h",
           "cap": "Teto de {cap} por dia atingido: volta amanhã às {hour}h",

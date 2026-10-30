@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 /**
  * Takes up the "Adicionar a grupo do WhatsApp" rounds that stopped (external cron, every 5 minutes — see README §8;
- * optional). A round waits without a runner for the hour to come (08:00), for the cap of the day to free, for an
+ * recommended). A round waits without a runner for the hour to come (08:00), for the cap of the day to free, for an
  * Evolution that did not answer, or after a restart of the server; nothing sleeps for hours in the process. This lists
  * what is due (findDueGroupAddRuns: also takes back a round paused because the number was closed, or the group
  * unreadable, once they are fine again, and starts the oldest queued round of a number nobody holds) and kicks each.
