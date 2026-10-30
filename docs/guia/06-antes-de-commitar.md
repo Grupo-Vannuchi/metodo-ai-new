@@ -80,6 +80,144 @@ como sem nome) e, para o membro ainda sem nome, da lista de contatos dela pelo n
 dígitos, o contato com o nome do membro ou, sem nome, com o telefone no lugar, e os números que já estão no
 CRM sendo pulados). Rode sempre que mexer nesses dois arquivos.
 
+`npm run check:group-add` cobre as regras puras do "Adicionar a grupo do WhatsApp"
+([src/lib/whatsapp/group-add/core.ts](../../src/lib/whatsapp/group-add/core.ts): o mesmo telefone em formatos
+diferentes (com ou sem 55, com ou sem o 9, com máscara) dando a mesma chave e o mesmo número para discar (o
+celular antigo de 8 dígitos ganha o 9 e conta como celular); quem entra na rodada e quem fica de fora, na ordem
+das regras (opt-out, que vale para o número e não só para o registro: bloqueia todo contato da seleção com o mesmo
+telefone, em qualquer ordem; sem telefone, número que não é de celular, já no grupo, saiu do grupo depois de uma
+rodada anterior, já recebeu o convite, ficou em dúvida numa rodada anterior e número repetido na pasta; quem ficou em
+dúvida, porque a adição ou o texto do convite pode ter saído (`interrupted`; a adição sem resposta, `uncertain`, com um
+2xx sem código, `unknown_answer`, ou com o 502, 503 ou 504 de um gateway, `http_502`/`http_503`/`http_504`; e o texto sem
+resposta ou com um desses três, `invite_uncertain`), fica de
+fora com `previous_uncertain`, ou é `ALREADY_IN` se já está no grupo, e nunca é refeito sozinho) e as contagens da
+conferência; o código
+da resposta de cada adição virando adicionado, convite ou já estava; o horário das 8h às 20h de São Paulo, a
+próxima tentativa depois da pausa de 30 a 90 s e a retomada às 8h do dia seguinte quando o teto de 100 por dia
+acaba; o texto do convite com `{{nome}}` e `{{grupo}}` e o link sempre no fim; a previsão de término; e se a instância
+ainda é do número da rodada (`linkedNumber`: o mesmo número, com ou sem o `:device`; outro telefone; ou nenhum que dê para
+ler, que nunca conta como outro)).
+Cobre também a nota que a tela de acompanhamento mostra embaixo de cada contato
+([src/components/crm/group-add-format.ts](../../src/components/crm/group-add-format.ts), `reasonNote`), com os textos
+reais do `pt.json`: toda dúvida (`UNCERTAIN_REASONS`) diz "Não foi possível confirmar…", e só ela; um erro de HTTP
+definitivo diz "O WhatsApp recusou a adição (código N)"; os outros motivos mantêm a nota própria; um motivo que ninguém
+grava não tem nota; e toda chave que ela devolve existe no `pt.json` e no `en.json`. E de quanto em quanto tempo essa tela
+relê a rodada (`trackingRefreshMs`): a cada 5 s, e a cada minuto enquanto ela espera a janela, o teto ou a Evolution.
+Cobre também como as respostas da Evolution são lidas em
+[src/lib/integrations/evolution-groups.ts](../../src/lib/integrations/evolution-groups.ts): a lista de grupos, com os
+participantes `@lid` resolvidos pelo `phoneNumber` e a contagem dos que ficaram sem número; se o número da pessoa é admin
+do grupo (`null`, e não `false`, quando um membro sem número poderia ser ele); os dígitos de um JID sem o `:device`; o JID
+do próprio número, nas respostas v2 e v1 do `fetchInstances` e só o da instância pedida; o código de cada adição, que vem
+como texto ou como número; se o número tem WhatsApp; e o link do grupo, que só vale se for `https://chat.whatsapp.com/…`.
+Cobre também o que as actions aceitam
+([src/lib/validations/whatsapp-group-add.ts](../../src/lib/validations/whatsapp-group-add.ts)), porque elas são
+endpoints públicos: o JID do grupo (dígitos, ou dígitos-dígitos, e `@g.us`: `x@g.us` e o JID de uma pessoa,
+`…@s.whatsapp.net`, não passam), o texto do convite (aparado, de 1 a 1.000 caracteres: vazio e 1.001 não passam) e a
+origem da rodada (uma pasta, com `folderId` `null` para "sem pasta" e nunca omitido, ou de 1 a 1.000 contatos
+marcados: lista vazia e 1.001 não passam).
+E tem uma guarda estática, porque as únicas escritas no WhatsApp são adicionar um participante e mandar o texto do
+convite: ela falha se algum arquivo de `src/lib/whatsapp/group-add/` citar `sendInvite` ou `updateSetting` ou escrever
+`"remove"`, `"promote"` ou `"demote"` (comentários também contam), se o `evolution-client.ts` citar `sendInvite` ou
+`updateSetting` ou mandar `action` `remove`, `promote` ou `demote`, ou se ela não achar o `core.ts` para varrer.
+Tem uma segunda guarda estática, para a auditoria: lê [src/app/actions/whatsapp-group-add.ts](../../src/app/actions/whatsapp-group-add.ts)
+(sem os comentários) e falha se o `meta` de algum `audit(...)` citar JID, telefone ou convite (`jid`, `phone`, `invite`,
+em qualquer grafia), espalhar um objeto dentro dele (`...x`) ou não for um objeto literal, ou se faltar uma das quatro
+entradas (`started`, `paused`, `resumed`, `canceled`) no arquivo lido. O motivo: o JID antigo de grupo é
+`<telefone>-<carimbo>@g.us`, o número de quem criou o grupo (muitas vezes um terceiro), e a tabela de auditoria dura
+tanto quanto a empresa; as entradas levam o id da rodada e o NOME do grupo. Ela confere a regra em exemplos que têm de
+falhar e em exemplos que têm de passar antes de varrer o arquivo, para que um erro nela não vire um passe silencioso.
+Não usa banco nem rede. Rode sempre que mexer em `src/lib/whatsapp/group-add/`, em `src/lib/validations/whatsapp-group-add.ts`, em `src/app/actions/whatsapp-group-add.ts`, em `src/lib/integrations/evolution-groups.ts`, em `src/lib/integrations/evolution-client.ts`, em `src/components/crm/group-add-format.ts` ou nos textos `crm.groupAdd.reason` do `pt.json`/`en.json`.
+
+`npm run check:group-add:e2e` testa o código de servidor do "Adicionar a grupo do WhatsApp"
+([scripts/check-whatsapp-group-add-e2e.ts](../../scripts/check-whatsapp-group-add-e2e.ts)): o que fala com a
+Evolution e o que grava no banco. A Evolution é uma falsa em loopback
+([scripts/shims/fake-evolution.ts](../../scripts/shims/fake-evolution.ts)), então nada chega ao WhatsApp; o banco é o
+Postgres local. Primeiro cobre as chamadas novas de
+[src/lib/integrations/evolution-client.ts](../../src/lib/integrations/evolution-client.ts): a lista de grupos do número
+(`fetchAllGroups`), um grupo pelo JID (`fetchGroupSummary`, em todos os formatos de resposta que o `findGroupInfo` já
+aceita), o JID do próprio número (`fetchOwnerJid`, respostas v2 e v1), a adição (`addGroupParticipant`), a conferência de
+que o número tem WhatsApp (`checkOnWhatsapp`), o link do grupo (`fetchGroupInviteUrl`) e o envio do texto
+(`sendPlainText`). De cada uma confere o método, o caminho, a query e o corpo exatos que saem (o nome da instância vai
+codificado, mesmo com espaço ou barra, e o `apikey` vai no cabeçalho), o tempo limite próprio (30, 20, 15, 30, 15, 15 e
+30 s) e a resposta lida: a lista de grupos com os participantes, o código de cada adição (200, 403 pela privacidade da
+pessoa, 409, qualquer outro, ou nenhum) e o texto do convite, que sai sem mudar um espaço. Confere também o que acontece
+quando a Evolution falha: uma conexão fechada sem resposta, ou um servidor fora do ar, dá `httpStatus` 0 e nenhum código
+na adição, `ok` falso no envio e `null` nas leituras; um status de erro vale como erro mesmo com um corpo que parece
+certo, e uma resposta que não é uma lista de grupos não vira lista vazia; um 200 cujo corpo é só `null` não derruba
+nenhuma das sete chamadas; e um erro 500 que repete o número e o texto, como a Evolution faz, não deixa nenhum dos dois
+em nenhuma linha do console. Só duas escritas chegam à Evolution falsa: a adição (sempre `action: "add"`) e o texto, e
+nenhuma chamada cai fora das rotas que ela serve.
+Depois cobre o serviço, o executor e as consultas
+([src/lib/whatsapp/group-add/service.ts](../../src/lib/whatsapp/group-add/service.ts),
+[runner.ts](../../src/lib/whatsapp/group-add/runner.ts) e
+[src/lib/queries/whatsapp-group-add.ts](../../src/lib/queries/whatsapp-group-add.ts)), com um relógio e um
+agendador do próprio teste no lugar dos reais (`groupAddRuntime`: dormir só move o relógio, e o `after()` nunca é
+usado, nem a fila, a não ser no teste do job, que aponta o cliente para um QStash falso em loopback). Confere, entre
+outras coisas: os grupos do próprio número com `admin` verdadeiro, falso ou `null`, e
+`no_connection` para quem não tem número seu, mesmo com um colega da empresa conectado; a conferência com as contagens
+exatas (rodada anterior incluída) e sem escrever nada; a pasta lida pelos vínculos (`ContactFolderLink`): um contato em
+duas pastas entra na conferência e na rodada de qualquer uma delas, "Sem pasta" é só quem não tem vínculo nenhum (o
+contato cuja única pasta foi apagada incluído, nunca o de outra empresa), e a conferência conta as mesmas pessoas que a
+tela de Contatos mostra na pasta (`getContactsBoard`); uma rodada inteira (adicionado, convite por texto, já estava,
+falha, sem WhatsApp) em que o contato com opt-out, e o de mesmo número de um opt-out fora da pasta, não aparecem em
+nenhuma requisição; um opt-out feito depois de começar (do próprio contato, ou de outro da empresa com o mesmo número)
+valendo na vez da pessoa, sem chamada nenhuma; o horário das 8h às 20h e o relógio lido de novo antes da adição e do
+convite; o teto de 100 por dia contado por número em todas as empresas, no dia de São Paulo e só com adicionado,
+convite e falha, e a rodada que continua no dia seguinte; uma rodada por número com a fila subindo na ordem e a
+pausada segurando a fila; a pausa de
+30 a 90 s entre as pessoas, que vale pelo número e não pela rodada (a que sobe depois do fim de outra, de um
+cancelamento ou de uma retomada espera a pausa da última tentativa do número, de qualquer empresa); número
+desconectado, Evolution fora do ar e não ser admin (pausam sem adicionar ninguém); o número desconectado no app (conexão
+`INACTIVE` e instância apagada, que a Evolution responde com 404): pausa como desconectado em vez de esperar, e nem a lista
+do cron nem o `pokeGroupAdd` perguntam nada à Evolution sobre ele até a conexão voltar a `ACTIVE`, quando ele volta sozinho;
+o telefone trocado (Conversas reconectado com outro número na mesma instância): a rodada pausada que voltaria sozinha, e a
+que esperava a noite, pausam como `number_changed` sem adicionar ninguém pelo outro número, o "Retomar" recusa até o número
+de antes voltar, e o número que não dá para ler deixa a rodada como estava (ou esperando 5 min); a visita pergunta o número
+uma vez, não uma por pessoa; a trava (dois executores ao mesmo
+tempo, trava vencida, trava perdida no meio de uma espera) com uma chamada por número e quem ficou em andamento
+virando `interrupted` sem ser refeito; resposta sem código, erro de HTTP e sem resposta da adição; o link do grupo
+pedido uma vez, o texto do convite e o link que falta; o texto do convite sem resposta, ou com o 503 de um gateway,
+virando `invite_uncertain` (a recusa continua `invite_failed`); a adição com um 504 ou com um 2xx de corpo ilegível (uma
+página HTML) ficando em dúvida (`http_504`, `unknown_answer`), enquanto um 500 e um 4xx são recusas que a rodada seguinte
+tenta de novo; e a rodada seguinte do grupo pulando, sem chamada, quem ficou `interrupted`, `uncertain`,
+`unknown_answer`, `http_502`, `http_503`, `http_504` ou `invite_uncertain`, só do mesmo grupo e da mesma empresa; dois
+cliques em "Começar" dando uma rodada só; o
+nome do grupo que o começo devolve ao lado do id da rodada, o mesmo que a rodada guarda (`Grupo` se o grupo não tem nome,
+e nunca o JID, nem o antigo com o número de quem criou o grupo), que é o que a auditoria grava; o excedente de
+1.024 participantes como `group_full`; pausar, retomar e cancelar, inclusive no meio de uma chamada; a lista de
+rodadas devidas do cron e o `pokeGroupAdd`; a rota do cron (`/api/cron/whatsapp-groups`): sem o segredo, com um errado,
+de outro esquema ou com o segredo não configurado ela responde 401 e não toca em nada; com ele, chama só as rodadas
+devidas e deixa em paz a de trava ainda viva (até 90 s, o limite incluído) e a que um executor está trabalhando, e
+responde `{ ok: true, resumed }` (as chamadas autorizadas só rodam quando não há rodada aberta de outra empresa no
+banco, porque a rota lê todas, e o teste avisa quando as pula); o job da fila `whatsapp-group-add` (trabalha por 50 s,
+volta depois da espera que a rodada pede e é o nome que o `kickGroupAddRun` publica); a rodada pausada porque o grupo
+não deu para ler (`not_admin` com a nota
+`group_unreadable`), que volta sozinha na lista do cron e no `pokeGroupAdd` quando o grupo lê de novo e o número é admin,
+e que fica como estava, sem escrita nenhuma, enquanto o grupo não lê, o número não é admin ou não dá para saber (um
+`not_admin` de verdade, sem a nota, e qualquer outro motivo de pausa nunca voltam sozinhos, nem perguntam nada à
+Evolution, e uma rodada cuja conexão é de outra empresa não é aberta); o que as telas de acompanhamento leem (a nota
+da pausa na consulta da rodada; a data e a situação da rodada no registro do contato, para quem ficou de fora antes de
+qualquer chamada e para quem uma rodada cancelada nunca alcançou; e a previsão de término, `forecastGroupAddRun`, que é a
+mesma conta da conferência a partir do que o número já tentou no dia, em todas as rodadas dele, e que o teto empurra para
+as 8h do dia seguinte, sem dar data para rodada que não está rodando, sem ninguém esperando ou de outra empresa); e que
+outra empresa não vê, não pausa, não cancela nem retoma uma rodada, e que nenhum erro deixa número ou texto do convite no
+console nem no `lastError`.
+Precisa de um `.env` (o comando o carrega; o segredo do cron é do próprio teste, então o `.env` não precisa ter um) e do
+Postgres do Docker, e leva uns 30 s; não usa a internet. O banco é só o
+local, e o script recusa rodar contra outro. Cria duas empresas de teste (`wga-e2e-<carimbo>` e `wga-e2e-<carimbo>-b`),
+com usuários, vínculos e uma conexão Evolution cada, e apaga tudo no fim, mesmo se falhar (rodadas e itens, contatos,
+vínculos de contato com pasta, pastas, conexões, vínculos de membro, usuários e empresas). Se o processo for morto no
+meio (Ctrl+C, queda do Docker), sobram as empresas `wga-e2e-%` e os usuários `wga-*@test.local`: apague só esses, à
+mão. Toda conexão aponta para a Evolution
+falsa em loopback: o script lê cada uma de volta e confere que tem `baseUrl`, chave e instância próprias em loopback antes
+de qualquer chamada (uma conexão sem `baseUrl` cairia na Evolution real do `.env`), e recusa qualquer requisição a outro
+host. Os números dos testes só vão para a falsa. Roda com `tsx --tsconfig scripts/tsconfig.server.json`, como o
+`check:imap`: o shim `scripts/shims/server-only.ts` deixa os módulos `server-only` carregarem fora do Next, e o tsconfig
+traz o alias `@/`. A falsa serve também `connectionState` (padrão `open`) e `fetchInstances`, que o executor da rodada
+usa; cada rota tem uma resposta padrão, o teste troca a que quiser (`set`) e a falsa guarda método, caminho, query e
+corpo de toda chamada. Rode sempre que mexer em `src/lib/integrations/evolution-client.ts`, em
+`scripts/shims/fake-evolution.ts`, em `src/lib/whatsapp/group-add/` ou em `src/lib/queries/whatsapp-group-add.ts`.
+
 `npm run check:mcp` cobre as regras puras do servidor MCP de leitura
 ([src/lib/mcp/core.ts](../../src/lib/mcp/core.ts): comparação da chave com espaço ou quebra de linha
 colados, datas `AAAA-MM-DD` como dias UTC com o fim inclusivo, período invertido ou longo demais,

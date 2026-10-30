@@ -1309,7 +1309,175 @@
       "tagPlaceholder": "New tag",
       "delete": "Delete",
       "confirmDelete": "Delete {count} item(s)? This can't be undone.",
-      "clear": "Clear selection"
+      "clear": "Clear selection",
+      "addToGroup": "Add to a WhatsApp group"
+    },
+    "groupAdd": {
+      "button": "Add to a WhatsApp group",
+      "forecast": "{day, select, today {Forecast: done today around {time}} tomorrow {Forecast: done tomorrow around {time}} other {Forecast: done on {date} around {time}}}",
+      "inviteDefault": "Hi '{{nome}}'! Here is the link to join the group '{{grupo}}':",
+      "error": {
+        "no_connection": "Connect your WhatsApp in Inbox",
+        "disconnected": "Your WhatsApp is disconnected. Reconnect it in Inbox.",
+        "unavailable": "WhatsApp did not answer just now. Try again in a moment.",
+        "not_admin": "Your number is not an admin of this group.",
+        "not_found": "We could not find the group, the folder or the round. Refresh the page and try again.",
+        "empty": "There are no contacts to add.",
+        "already_running": "This group already has a round that is running, queued or paused.",
+        "number_changed": "The WhatsApp connected now is a different number. Reconnect this round's number in Inbox to resume it.",
+        "unauthorized": "Session expired.",
+        "forbidden": "You don't have permission to do that.",
+        "invalid": "Invalid data.",
+        "unknown": "Something went wrong. Try again."
+      },
+      "dialog": {
+        "title": "Add to a WhatsApp group",
+        "close": "Close",
+        "subtitleGroup": "Choose the group that will receive the contacts.",
+        "subtitleReview": "Check everything before you start.",
+        "tooMany": "You selected {count} contacts. A round takes at most {max}: select fewer contacts.",
+        "folderCut": "This folder has {count} contacts. A round takes at most {max}: the {max} oldest go in.",
+        "searchPlaceholder": "Search groups by name",
+        "loadingGroups": "Loading your groups…",
+        "noGroups": "Your number is not in any group.",
+        "noMatch": "No group with that name.",
+        "unnamedGroup": "Unnamed group",
+        "participants": "{count, plural, one {# participant} other {# participants}}",
+        "adminYes": "you are an admin",
+        "adminNo": "you are not an admin of this group",
+        "adminUnknown": "we could not confirm that you are an admin",
+        "openInbox": "Open Inbox",
+        "retry": "Try again",
+        "change": "Change group",
+        "checking": "Checking the group and the contacts…",
+        "counts": {
+          "total": "Contacts selected",
+          "pending": "Will be added",
+          "alreadyIn": "Already in the group",
+          "noWhatsapp": "No WhatsApp (not a mobile number)",
+          "skipped": "Skipped (no phone, opted out, duplicates, or uncertain from an earlier round)",
+          "leftGroup": "Left the group after an earlier round",
+          "alreadyInvited": "Already got the invite in an earlier round"
+        },
+        "privacy": "In a group, everyone can see everyone's phone number.",
+        "everyoneCanSend": "In this group everyone can send messages.",
+        "overLimit": "The group would go over {max} participants.",
+        "overLimitHint": "Only the people who fit are added; the rest show as “Couldn't add now”.",
+        "inviteLabel": "Invite message",
+        "inviteHelp": "Anyone WhatsApp won't let you add because of their privacy settings gets this message in private, from your number.",
+        "inviteVars": "Use '{{nome}}' and '{{grupo}}' to personalize.",
+        "inviteLinkHint": "The group link goes at the end of the message.",
+        "pace": "1 person every {min} to {max} seconds, only from {start}:00 to {end}:00, up to {cap} a day",
+        "usedToday": "Today your number has already tried {used} of {cap} people.",
+        "nothingToAdd": "Nobody to add: everyone is already in the group or was left out.",
+        "start": "Start",
+        "starting": "Starting…"
+      },
+      "run": {
+        "crumb": "Contacts",
+        "kicker": "Add to a WhatsApp group",
+        "status": {
+          "QUEUED": "Queued",
+          "RUNNING": "In progress",
+          "PAUSED": "Paused",
+          "DONE": "Done",
+          "CANCELED": "Canceled"
+        },
+        "startedAt": "Started {date}",
+        "finishedAt": "finished {date}",
+        "progress": "{done} of {total} contacts",
+        "pause": "Pause",
+        "resume": "Resume",
+        "cancel": "Cancel",
+        "confirmCancel": "Cancel this round? People not reached yet will not be added, and the round can't be resumed later.",
+        "confirmCancelYes": "Cancel round",
+        "keep": "Back",
+        "toast": {
+          "pause": "Round paused",
+          "resume": "Round resumed",
+          "cancel": "Round canceled"
+        },
+        "paused": {
+          "manual": "Paused by you",
+          "manualOther": "Paused manually",
+          "disconnected": "WhatsApp disconnected",
+          "not_admin": "Your number is no longer an admin of the group",
+          "unreadable": "We couldn't read the group right now. The round goes on by itself when the group answers again.",
+          "no_connection": "Connection removed",
+          "number_changed": "The WhatsApp connected now is a different number",
+          "error": "Unexpected error",
+          "other": "Round paused"
+        },
+        "pausedHint": {
+          "disconnected": "Reconnect the number in Inbox. The round goes on by itself when it is back.",
+          "not_admin": "The round only goes on when your number is an admin of the group again.",
+          "number_changed": "This round uses the previous number: reconnect that number in Inbox, or cancel and start a new round.",
+          "no_connection": "The WhatsApp connection of this round was removed, so it can't go on. Cancel it and start another.",
+          "error": "Something failed along the way. Resume the round to try again."
+        },
+        "wait": {
+          "queued": "Queued: this number already has another round (in progress or paused)",
+          "pace": "The next person is added in a few seconds",
+          "window": "Waiting for the allowed hours: back at {hour}:00",
+          "cap": "Daily limit of {cap} reached: back tomorrow at {hour}:00",
+          "unavailable": "The WhatsApp server is not answering. The round tries again shortly."
+        },
+        "col": {
+          "contact": "Contact",
+          "status": "Status",
+          "when": "When"
+        }
+      },
+      "item": {
+        "PENDING": "Queued",
+        "PROCESSING": "In progress",
+        "ADDED": "Added",
+        "INVITED": "Invite sent",
+        "ALREADY_IN": "Was already in the group",
+        "NO_WHATSAPP": "No WhatsApp",
+        "SKIPPED": "Skipped",
+        "LEFT_GROUP": "Left the group",
+        "ALREADY_INVITED": "Already got the invite",
+        "FAILED": "Couldn't add now",
+        "NOT_TRIED": "Not tried"
+      },
+      "itemHint": {
+        "INVITED": "WhatsApp would not let us add this person; the group link was sent in private.",
+        "NO_WHATSAPP": "This number has no WhatsApp account.",
+        "LEFT_GROUP": "An earlier round added this person and they are no longer in the group.",
+        "ALREADY_INVITED": "An earlier round sent the link and the person did not join.",
+        "FAILED": "WhatsApp did not accept adding this person."
+      },
+      "reason": {
+        "no_phone": "Contact has no phone",
+        "opted_out": "Asked not to receive messages",
+        "not_mobile": "The number is not a mobile",
+        "duplicate": "Same number as another contact in the round",
+        "previous_uncertain": "An earlier round may already have added or invited this person",
+        "unconfirmed": "We could not confirm whether the person was added",
+        "refused": "WhatsApp refused the add (code {code})",
+        "no_invite_link": "Could not get the group link to send the invite",
+        "invite_failed": "WhatsApp would not let us add them and the invite could not be sent",
+        "invite_uncertain": "We could not confirm that the invite was sent",
+        "group_full": "The group reached its limit of {max} participants"
+      },
+      "contact": {
+        "title": "WhatsApp groups",
+        "line": {
+          "PENDING": "Queued to join the group {group}",
+          "NOT_TRIED": "Never got to be added to the group {group}: round canceled",
+          "ADDED": "Added to the group {group}",
+          "INVITED": "Invite to the group {group} sent",
+          "ALREADY_IN": "Was already in the group {group}",
+          "NO_WHATSAPP": "No WhatsApp, did not join the group {group}",
+          "SKIPPED": "Left out of the round for the group {group}",
+          "LEFT_GROUP": "Left the group {group} and was not added again",
+          "ALREADY_INVITED": "Had already received the invite to the group {group}",
+          "FAILED": "Could not be added to the group {group}"
+        },
+        "when": "on {date}",
+        "whenBy": "on {date} by {who}"
+      }
     },
     "import": {
       "button": "Import CSV",
@@ -3031,6 +3199,12 @@
       "email_broadcast": { "started": "Started a bulk email send" },
       "email_sender": { "connected": "Connected an e-mail sending account", "replaced": "Replaced the e-mail sending account", "disconnected": "Disconnected an e-mail sending account", "replied": "Replied to an e-mail from the Microsoft account" },
       "task_board": { "entrance_changed": "Changed the task board's entrance column", "column_deleted": "Deleted a task board column" },
+      "whatsapp_group_add": {
+        "started": "Started adding contacts to a WhatsApp group",
+        "paused": "Paused adding contacts to a WhatsApp group",
+        "resumed": "Resumed adding contacts to a WhatsApp group",
+        "canceled": "Canceled adding contacts to a WhatsApp group"
+      },
       "connection": {
         "created": "Connected an integration",
         "updated": "Changed an integration",
@@ -3090,6 +3264,7 @@
       "AutomationRule": "Automation",
       "TeamChat": "Team chat",
       "TaskBoardColumn": "Task board",
+      "WhatsappGroupAddRun": "WhatsApp group add",
       "companies": "Companies",
       "contacts": "Contacts"
     }

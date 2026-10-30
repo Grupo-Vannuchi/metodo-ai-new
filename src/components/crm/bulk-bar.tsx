@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { FolderInput, FolderMinus, FolderPlus, Tag, Trash2, X } from "lucide-react";
+import { FolderInput, FolderMinus, FolderPlus, Tag, Trash2, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -10,7 +10,9 @@ import { Button } from "@/components/ui/button";
  * the parent grid supplies the async handlers (which run the bulk server action,
  * refresh, and clear the selection). Delete goes through the grid's undo flow (a
  * grace period + "Undo" toast), so there's no confirm here. `onTag` is optional —
- * companies don't have tags.
+ * companies don't have tags — and so is `onAddToGroup`, which only contacts have
+ * (and only where the Atendimento module is installed): it opens the dialog that
+ * adds the selection to a WhatsApp group.
  */
 export function BulkBar({
   count,
@@ -20,6 +22,7 @@ export function BulkBar({
   onRemoveFromFolder,
   openFolderId = null,
   onTag,
+  onAddToGroup,
   onDelete,
   onClear,
 }: {
@@ -33,6 +36,7 @@ export function BulkBar({
   /** The open folder, left out of the "add to" list. */
   openFolderId?: string | null;
   onTag?: (tag: string) => Promise<unknown>;
+  onAddToGroup?: () => void;
   onDelete: () => Promise<unknown>;
   onClear: () => void;
 }) {
@@ -166,6 +170,13 @@ export function BulkBar({
             {t("tag")}
           </Button>
         )
+      ) : null}
+
+      {onAddToGroup ? (
+        <Button type="button" size="sm" variant="outline" disabled={pending} onClick={onAddToGroup}>
+          <Users className="size-4" />
+          {t("addToGroup")}
+        </Button>
       ) : null}
 
       <Button type="button" size="sm" variant="outline" disabled={pending} onClick={del} className="text-red-600 hover:text-red-700">

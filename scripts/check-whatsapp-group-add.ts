@@ -1,0 +1,1200 @@
+/**
+ * Self-check for the pure rules of "Adicionar a grupo do WhatsApp" (no DB, no
+ * network, no env): the rules in src/lib/whatsapp/group-add/core.ts, how
+ * Evolution's answers are read (src/lib/integrations/evolution-groups.ts) and a
+ * static guard on what the feature may write to WhatsApp. Run with
+ * `npm run check:group-add`; exits non-zero on the first failure.
+ */
+import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
+import {
+  existsOnWhatsapp,
+  inviteUrlFrom,
+  isAdminOf,
+  jidDigits,
+  ownerJidFrom,
+  parseGroupList,
+  participantUpdateCode,
+  type EvoGroupSummary,
+} from "../src/lib/integrations/evolution-groups";
+import {
+  CAP_COUNTED,
+  capResumeAt,
+  countPlan,
+  forecastFinish,
+  GROUP_ADD_DAILY_CAP,
+  GROUP_ADD_FORECAST_SECONDS,
+  GROUP_ADD_MAX_CONTACTS,
+  GROUP_ADD_PAUSE_SECONDS,
+  GROUP_ADD_WINDOW,
+  INVITE_TEXT_MAX,
+  isInsideWindow,
+  linkedNumber,
+  nextAttemptAt,
+  nextWindowStart,
+  outcomeFromCode,
+  phoneMatchKey,
+  pickPauseSeconds,
+  planGroupAdd,
+  renderInvite,
+  UNCERTAIN_HTTP_STATUSES,
+  UNCERTAIN_REASONS,
+  WHATSAPP_GROUP_MAX,
+  type CandidateInput,
+  type PlannedItem,
+  type PreviousOutcome,
+} from "../src/lib/whatsapp/group-add/core";
+import { reasonNote, trackingRefreshMs } from "../src/components/crm/group-add-format";
+import enMessages from "../src/messages/en.json";
+import ptMessages from "../src/messages/pt.json";
+import {
+  GROUP_JID_PATTERN,
+  groupAddPreviewSchema,
+  groupAddRunIdSchema,
+  groupAddSourceSchema,
+  groupAddStartSchema,
+} from "../src/lib/validations/whatsapp-group-add";
+
+let passed = 0;
+function check(name: string, fn: () => void): void {
+  fn();
+  passed++;
+  console.log(`  ✓ ${name}`);
+}
+
+const at = (iso: string) => new Date(iso);
+const iso = (d: Date) => d.toISOString();
+
+function contact(contactId: string, phone: string | null, optedOut = false): CandidateInput {
+  return { contactId, name: `Contato ${contactId}`, phone, optedOut };
+}
+const verdict = (item: PlannedItem) => ({ status: item.status, reason: item.reason });
+function keyOf(phone: string): string {
+  const key = phoneMatchKey(phone);
+  assert.ok(key, `no key for ${phone}`);
+  return key;
+}
+
+check("the pacing, cap and size constants are the agreed ones", () => {
+  assert.equal(GROUP_ADD_DAILY_CAP, 100);
+  assert.deepEqual(GROUP_ADD_WINDOW, { startHour: 8, endHour: 20 });
+  assert.deepEqual(GROUP_ADD_PAUSE_SECONDS, { min: 30, max: 90 });
+  assert.equal(GROUP_ADD_FORECAST_SECONDS, 60);
+  assert.equal(WHATSAPP_GROUP_MAX, 1024);
+  assert.equal(GROUP_ADD_MAX_CONTACTS, 1000);
+  assert.equal(INVITE_TEXT_MAX, 1000);
+  // Only people the WhatsApp was actually asked about count against the day.
+  assert.deepEqual([...CAP_COUNTED], ["ADDED", "INVITED", "FAILED"]);
+});
+
+check("phoneMatchKey gives one key to the same BR mobile in any format", () => {
+  const formats = [
+    "(11) 98765-4321",
+    "5511987654321",
+    "+55 11 98765-4321",
+    "551187654321", // 12 digits: the old form without the 9
+    "(11) 8765-4321", // the same old form, local and masked
+  ];
+  for (const raw of formats) assert.equal(phoneMatchKey(raw), "11987654321", raw);
+  // A foreign number still gets a key (last 11 digits), like in the group import.
+  assert.equal(phoneMatchKey("+44 7911 123456"), "47911123456");
+});
+
+check("phoneMatchKey is null when there is no usable number", () => {
+  for (const raw of [null, undefined, "", "   ", "abc", "12345"]) assert.equal(phoneMatchKey(raw), null, String(raw));
+});
+
+check("planGroupAdd: opt-out is skipped even when the number is in the group", () => {
+  const plan = planGroupAdd(
+    [contact("c1", "(11) 98765-4321", true), contact("c2", null, true)],
+    new Set(["11987654321"]),
+    [],
+  );
+  assert.deepEqual(plan.map(verdict), [
+    { status: "SKIPPED", reason: "opted_out" },
+    { status: "SKIPPED", reason: "opted_out" }, // opt-out outranks having no phone
+  ]);
+});
+
+check("planGroupAdd: an opt-out blocks every record of the same number, the opted-out one first", () => {
+  const plan = planGroupAdd(
+    [
+      contact("c1", "(11) 98765-4321", true),
+      contact("c2", "5511987654321"),
+      contact("c3", "(11) 8765-4321"), // the older 8-digit form of the same number
+      contact("c4", "(11) 91111-2222"), // someone else
+    ],
+    new Set(["11987654321"]), // the number is even in the group: the opt-out still comes first
+    [],
+  );
+  assert.deepEqual(plan.map(verdict), [
+    { status: "SKIPPED", reason: "opted_out" },
+    { status: "SKIPPED", reason: "opted_out" },
+    { status: "SKIPPED", reason: "opted_out" },
+    { status: "PENDING", reason: null },
+  ]);
+});
+
+check("planGroupAdd: an opt-out blocks every record of the same number, the opted-out one last", () => {
+  const plan = planGroupAdd(
+    [
+      contact("c1", "5511987654321"),
+      contact("c2", "(11) 91111-2222"), // someone else
+      contact("c3", "+55 11 98765-4321"),
+      contact("c4", "(11) 98765-4321", true),
+    ],
+    new Set(),
+    [],
+  );
+  assert.deepEqual(plan.map(verdict), [
+    { status: "SKIPPED", reason: "opted_out" },
+    { status: "PENDING", reason: null },
+    { status: "SKIPPED", reason: "opted_out" },
+    { status: "SKIPPED", reason: "opted_out" },
+  ]);
+});
+
+check("planGroupAdd: an opt-out with no usable number blocks nobody else", () => {
+  const plan = planGroupAdd(
+    [
+      contact("c1", null, true), // opted out, no phone
+      contact("c2", null), // no phone: not touched by c1
+      contact("c3", "12345", true), // opted out, digits that make no number
+      contact("c4", "12345"), // same digits: still just not a mobile
+    ],
+    new Set(),
+    [],
+  );
+  assert.deepEqual(plan.map(verdict), [
+    { status: "SKIPPED", reason: "opted_out" },
+    { status: "SKIPPED", reason: "no_phone" },
+    { status: "SKIPPED", reason: "opted_out" },
+    { status: "NO_WHATSAPP", reason: "not_mobile" },
+  ]);
+});
+
+check("planGroupAdd: no phone is skipped as no_phone", () => {
+  // A phone field with no digits at all (a dash, a note) counts as empty.
+  const blanks = [contact("c1", null), contact("c2", ""), contact("c3", "   "), contact("c4", "-")];
+  const plan = planGroupAdd(blanks, new Set(), []);
+  for (const item of plan) assert.deepEqual(verdict(item), { status: "SKIPPED", reason: "no_phone" });
+  assert.deepEqual(
+    plan.map((i) => i.phoneKey),
+    [null, null, null, null],
+  );
+});
+
+check("planGroupAdd: a landline or a malformed number is NO_WHATSAPP / not_mobile", () => {
+  // Even when the landline's key is (wrongly) among the participants: not a mobile comes first.
+  const plan = planGroupAdd([contact("c1", "(11) 3333-4444"), contact("c2", "12345")], new Set(["1133334444"]), []);
+  assert.deepEqual(plan.map(verdict), [
+    { status: "NO_WHATSAPP", reason: "not_mobile" },
+    { status: "NO_WHATSAPP", reason: "not_mobile" },
+  ]);
+  assert.deepEqual(
+    plan.map((i) => i.phoneKey),
+    ["1133334444", null],
+  );
+});
+
+check("planGroupAdd: the older 8-digit mobile is a mobile, dialed with the 9", () => {
+  const [pending] = planGroupAdd([contact("c1", "(11) 8765-4321")], new Set(), []);
+  assert.deepEqual(verdict(pending), { status: "PENDING", reason: null });
+  assert.equal(pending.phone, "5511987654321");
+  assert.equal(pending.phoneKey, "11987654321");
+  // The same number when it is in the group, whichever form the group lists it in.
+  for (const listed of ["5511987654321", "551187654321"]) {
+    const [inGroup] = planGroupAdd([contact("c1", "(11) 8765-4321")], new Set([keyOf(listed)]), []);
+    assert.deepEqual(verdict(inGroup), { status: "ALREADY_IN", reason: null });
+  }
+  // A landline (it starts with 2 to 5) gets no 9 and is still not a mobile.
+  const [landline] = planGroupAdd([contact("c2", "(11) 3333-4444")], new Set(), []);
+  assert.deepEqual(verdict(landline), { status: "NO_WHATSAPP", reason: "not_mobile" });
+  assert.equal(landline.phone, "551133334444");
+});
+
+check("planGroupAdd: phone is the number to dial when there is one, the typed value otherwise", () => {
+  const typed = ["(11) 98765-4321", "+55 11 98765-4321", "(11) 3333-4444", "+44 7911 123456", "12345", "-", "", null];
+  const plan = planGroupAdd(
+    typed.map((phone, i) => contact(`c${i}`, phone)),
+    new Set(),
+    [],
+  );
+  assert.deepEqual(
+    plan.map((i) => i.phone),
+    ["5511987654321", "5511987654321", "551133334444", "447911123456", "12345", "-", "", null],
+  );
+});
+
+check("planGroupAdd: someone in the group is ALREADY_IN, whatever the format on each side", () => {
+  // The group lists the old 12-digit form; the CRM has the 9 and a mask.
+  const inGroup = new Set([keyOf("551187654321"), keyOf("5511999990000")]);
+  const plan = planGroupAdd([contact("c1", "(11) 98765-4321"), contact("c2", "(11) 91111-2222")], inGroup, []);
+  assert.deepEqual(plan.map(verdict), [
+    { status: "ALREADY_IN", reason: null },
+    { status: "PENDING", reason: null },
+  ]);
+});
+
+check("planGroupAdd: ADDED before and gone from the group is LEFT_GROUP, and never added again", () => {
+  const previous: PreviousOutcome[] = [{ phoneKey: "11987654321", status: "ADDED" }];
+  const [item] = planGroupAdd([contact("c1", "5511987654321")], new Set(), previous);
+  assert.deepEqual(verdict(item), { status: "LEFT_GROUP", reason: null });
+});
+
+check("planGroupAdd: INVITED before and not in the group is ALREADY_INVITED", () => {
+  const previous: PreviousOutcome[] = [{ phoneKey: "11987654321", status: "INVITED" }];
+  const [item] = planGroupAdd([contact("c1", "(11) 98765-4321")], new Set(), previous);
+  assert.deepEqual(verdict(item), { status: "ALREADY_INVITED", reason: null });
+});
+
+check("planGroupAdd: INVITED or ADDED before and in the group today is ALREADY_IN", () => {
+  const previous: PreviousOutcome[] = [
+    { phoneKey: "11987654321", status: "INVITED" },
+    { phoneKey: "11911112222", status: "ADDED" },
+  ];
+  const inGroup = new Set(["11987654321", "11911112222"]);
+  const plan = planGroupAdd([contact("c1", "(11) 98765-4321"), contact("c2", "(11) 91111-2222")], inGroup, previous);
+  assert.deepEqual(plan.map(verdict), [
+    { status: "ALREADY_IN", reason: null },
+    { status: "ALREADY_IN", reason: null },
+  ]);
+});
+
+check("planGroupAdd: ADDED outranks INVITED when both are recorded for the number", () => {
+  const previous: PreviousOutcome[] = [
+    { phoneKey: "11987654321", status: "INVITED" },
+    { phoneKey: "11987654321", status: "ADDED" },
+  ];
+  const [item] = planGroupAdd([contact("c1", "(11) 98765-4321")], new Set(), previous);
+  assert.deepEqual(verdict(item), { status: "LEFT_GROUP", reason: null });
+});
+
+check("planGroupAdd: a number an earlier round left in doubt and that is not in the group is SKIPPED / previous_uncertain", () => {
+  const previous: PreviousOutcome[] = [{ phoneKey: "11987654321", status: "UNCERTAIN" }];
+  // Whatever the way the number is written in the CRM.
+  for (const phone of ["(11) 98765-4321", "5511987654321", "+55 11 98765-4321", "11987654321"]) {
+    const [item] = planGroupAdd([contact("c1", phone)], new Set(), previous);
+    assert.deepEqual(verdict(item), { status: "SKIPPED", reason: "previous_uncertain" }, phone);
+  }
+  // Another number is not touched by it.
+  const [other] = planGroupAdd([contact("c2", "(11) 91111-2222")], new Set(), previous);
+  assert.deepEqual(verdict(other), { status: "PENDING", reason: null });
+});
+
+check("planGroupAdd: a number left in doubt that is in the group today is ALREADY_IN", () => {
+  const previous: PreviousOutcome[] = [{ phoneKey: "11987654321", status: "UNCERTAIN" }];
+  const [item] = planGroupAdd([contact("c1", "(11) 98765-4321")], new Set(["11987654321"]), previous);
+  assert.deepEqual(verdict(item), { status: "ALREADY_IN", reason: null });
+});
+
+check("planGroupAdd: the doubt rule sits right after ALREADY_INVITED and before duplicate", () => {
+  const key = "11987654321";
+  const doubt: PreviousOutcome = { phoneKey: key, status: "UNCERTAIN" };
+  const one = (phone: string | null, inGroup: string[], previous: PreviousOutcome[], optedOut = false) =>
+    verdict(planGroupAdd([contact("c1", phone, optedOut)], new Set(inGroup), previous)[0]);
+  // Before it, every earlier rule still wins over the doubt.
+  assert.deepEqual(one("(11) 98765-4321", [], [doubt], true), { status: "SKIPPED", reason: "opted_out" });
+  assert.deepEqual(one(null, [], [doubt]), { status: "SKIPPED", reason: "no_phone" });
+  assert.deepEqual(one("(11) 3333-4444", [], [{ phoneKey: "1133334444", status: "UNCERTAIN" }]), { status: "NO_WHATSAPP", reason: "not_mobile" });
+  assert.deepEqual(one("(11) 98765-4321", [key], [doubt]), { status: "ALREADY_IN", reason: null });
+  assert.deepEqual(one("(11) 98765-4321", [], [doubt, { phoneKey: key, status: "ADDED" }]), { status: "LEFT_GROUP", reason: null });
+  assert.deepEqual(one("(11) 98765-4321", [], [doubt, { phoneKey: key, status: "INVITED" }]), { status: "ALREADY_INVITED", reason: null });
+  // The order the earlier outcomes are listed in changes nothing.
+  assert.deepEqual(one("(11) 98765-4321", [], [{ phoneKey: key, status: "INVITED" }, doubt]), { status: "ALREADY_INVITED", reason: null });
+  // After it: a second contact with the same number is skipped for the doubt as well, not called a duplicate.
+  const twins = planGroupAdd([contact("c1", "(11) 98765-4321"), contact("c2", "5511987654321")], new Set(), [doubt]);
+  assert.deepEqual(twins.map(verdict), [
+    { status: "SKIPPED", reason: "previous_uncertain" },
+    { status: "SKIPPED", reason: "previous_uncertain" },
+  ]);
+});
+
+check("the reasons that leave a FAILED item in doubt are the ones the runner writes when the add or the text may have gone out", () => {
+  assert.deepEqual(
+    [...UNCERTAIN_REASONS],
+    ["interrupted", "uncertain", "unknown_answer", "http_502", "http_503", "http_504", "invite_uncertain"],
+  );
+  // A gateway's answer leaves the add in doubt as much as the text: each of those statuses is among the reasons.
+  assert.deepEqual([...UNCERTAIN_HTTP_STATUSES], [502, 503, 504]);
+  for (const status of UNCERTAIN_HTTP_STATUSES) {
+    assert.ok((UNCERTAIN_REASONS as readonly string[]).includes(`http_${status}`), String(status));
+  }
+});
+
+check("linkedNumber: the instance's number against the round's is the same, changed (another phone), or unknown (none to read)", () => {
+  const round = "5511987654321";
+  assert.equal(linkedNumber("5511987654321@s.whatsapp.net", round), "same");
+  // The owner JID of an instance carries ":device": still the same number.
+  assert.equal(linkedNumber("5511987654321:12@s.whatsapp.net", round), "same");
+  // Conversas reconnected with another phone: the instance names that one now.
+  assert.equal(linkedNumber("5511911112222@s.whatsapp.net", round), "changed");
+  assert.equal(linkedNumber("5511911112222:3@s.whatsapp.net", round), "changed");
+  // Nothing that can be read as a phone: the read failed (null), nothing is linked yet, or a LID. Never "changed".
+  for (const jid of [null, "", "123456789012345@lid", "120363000000000001@g.us"]) {
+    assert.equal(linkedNumber(jid, round), "unknown", String(jid));
+  }
+});
+
+check("planGroupAdd: a second contact with the same number is a duplicate, whatever the format", () => {
+  const plan = planGroupAdd(
+    [contact("c1", "(11) 98765-4321"), contact("c2", "+55 11 98765-4321"), contact("c3", "5511987654321")],
+    new Set(),
+    [],
+  );
+  assert.deepEqual(plan.map(verdict), [
+    { status: "PENDING", reason: null },
+    { status: "SKIPPED", reason: "duplicate" },
+    { status: "SKIPPED", reason: "duplicate" },
+  ]);
+});
+
+check("planGroupAdd: the group and earlier rounds outrank duplicates", () => {
+  const twins = [contact("c1", "(11) 98765-4321"), contact("c2", "5511987654321")];
+  const inGroup = planGroupAdd(twins, new Set(["11987654321"]), []);
+  assert.deepEqual(inGroup.map(verdict), [
+    { status: "ALREADY_IN", reason: null },
+    { status: "ALREADY_IN", reason: null },
+  ]);
+  const left = planGroupAdd(twins, new Set(), [{ phoneKey: "11987654321", status: "ADDED" }]);
+  assert.deepEqual(left.map(verdict), [
+    { status: "LEFT_GROUP", reason: null },
+    { status: "LEFT_GROUP", reason: null },
+  ]);
+});
+
+check("planGroupAdd: everyone else is PENDING, foreign mobiles included", () => {
+  const plan = planGroupAdd([contact("c1", "(11) 98765-4321"), contact("c2", "+44 7911 123456")], new Set(), []);
+  assert.deepEqual(plan.map(verdict), [
+    { status: "PENDING", reason: null },
+    { status: "PENDING", reason: null },
+  ]);
+});
+
+// One folder with every rule in it, in the order the rules are listed.
+const folder = [
+  contact("c01", "(11) 98765-4321", true), // opt-out, and in the group
+  contact("c02", null), // no phone
+  contact("c03", "(11) 3333-4444"), // landline
+  contact("c04", "(11) 99999-0001"), // in the group
+  contact("c05", "(11) 99999-0002"), // ADDED before, gone from the group
+  contact("c06", "(11) 99999-0003"), // INVITED before, not in the group
+  contact("c07", "(11) 99999-0004"), // INVITED before, in the group today
+  contact("c08", "(11) 99999-0007"), // left in doubt by an earlier round, not in the group
+  contact("c09", "(11) 99999-0005"), // new
+  contact("c10", "+55 11 99999-0005"), // same number as c09
+  contact("c11", "(11) 99999-0006"), // new
+];
+const folderGroup = new Set(["11987654321", "11999990001", "11999990004"]);
+const folderPrevious: PreviousOutcome[] = [
+  { phoneKey: "11999990002", status: "ADDED" },
+  { phoneKey: "11999990003", status: "INVITED" },
+  { phoneKey: "11999990004", status: "INVITED" },
+  { phoneKey: "11999990007", status: "UNCERTAIN" },
+];
+
+check("planGroupAdd keeps the input order and the shape of each item", () => {
+  const plan = planGroupAdd(folder, folderGroup, folderPrevious);
+  assert.deepEqual(
+    plan.map((i) => i.contactId),
+    folder.map((c) => c.contactId),
+  );
+  assert.deepEqual(plan.map(verdict), [
+    { status: "SKIPPED", reason: "opted_out" },
+    { status: "SKIPPED", reason: "no_phone" },
+    { status: "NO_WHATSAPP", reason: "not_mobile" },
+    { status: "ALREADY_IN", reason: null },
+    { status: "LEFT_GROUP", reason: null },
+    { status: "ALREADY_INVITED", reason: null },
+    { status: "ALREADY_IN", reason: null },
+    { status: "SKIPPED", reason: "previous_uncertain" },
+    { status: "PENDING", reason: null },
+    { status: "SKIPPED", reason: "duplicate" },
+    { status: "PENDING", reason: null },
+  ]);
+  assert.deepEqual(plan[3], {
+    contactId: "c04",
+    name: "Contato c04",
+    phone: "5511999990001", // the number to dial, not the typed "(11) 99999-0001"
+    phoneKey: "11999990001",
+    status: "ALREADY_IN",
+    reason: null,
+  });
+});
+
+check("countPlan adds up the plan of that folder", () => {
+  assert.deepEqual(countPlan(planGroupAdd(folder, folderGroup, folderPrevious)), {
+    total: 11,
+    pending: 2,
+    alreadyIn: 2,
+    noWhatsapp: 1,
+    skipped: 4,
+    leftGroup: 1,
+    alreadyInvited: 1,
+  });
+});
+
+check("countPlan counts other statuses only in the total", () => {
+  assert.deepEqual(countPlan([]), {
+    total: 0,
+    pending: 0,
+    alreadyIn: 0,
+    noWhatsapp: 0,
+    skipped: 0,
+    leftGroup: 0,
+    alreadyInvited: 0,
+  });
+  const running = [{ status: "PENDING" }, { status: "PROCESSING" }, { status: "ADDED" }, { status: "FAILED" }] as const;
+  assert.deepEqual(countPlan(running), {
+    total: 4,
+    pending: 1,
+    alreadyIn: 0,
+    noWhatsapp: 0,
+    skipped: 0,
+    leftGroup: 0,
+    alreadyInvited: 0,
+  });
+});
+
+check("outcomeFromCode: 200 added, 403 needs the invite, 409 already in, anything else failed", () => {
+  assert.equal(outcomeFromCode("200"), "ADDED");
+  assert.equal(outcomeFromCode("403"), "NEEDS_INVITE");
+  assert.equal(outcomeFromCode("409"), "ALREADY_IN");
+  for (const code of ["408", "500", "", "abc", null]) assert.equal(outcomeFromCode(code), "FAILED", String(code));
+});
+
+check("isInsideWindow is 08:00 to 19:59:59 in São Paulo", () => {
+  assert.equal(isInsideWindow(at("2026-10-28T10:59:59Z")), false); // 07:59:59
+  assert.equal(isInsideWindow(at("2026-10-28T11:00:00Z")), true); // 08:00:00
+  assert.equal(isInsideWindow(at("2026-10-28T15:30:00Z")), true); // 12:30:00
+  assert.equal(isInsideWindow(at("2026-10-28T22:59:59Z")), true); // 19:59:59
+  assert.equal(isInsideWindow(at("2026-10-28T23:00:00Z")), false); // 20:00:00
+  assert.equal(isInsideWindow(at("2026-10-29T02:00:00Z")), false); // 23:00 of Oct 28, already Oct 29 in UTC
+  assert.equal(isInsideWindow(at("2026-10-28T03:00:00Z")), false); // São Paulo midnight
+});
+
+check("nextWindowStart is 08:00 São Paulo: today when it is early, tomorrow when it is late", () => {
+  assert.equal(iso(nextWindowStart(at("2026-10-28T23:30:00Z"))), "2026-10-29T11:00:00.000Z");
+  assert.equal(iso(nextWindowStart(at("2026-10-28T08:00:00Z"))), "2026-10-28T11:00:00.000Z");
+  // 23:30 in São Paulo is already Oct 29 in UTC; the next window is still the next São Paulo morning.
+  assert.equal(iso(nextWindowStart(at("2026-10-29T02:30:00Z"))), "2026-10-29T11:00:00.000Z");
+});
+
+check("nextWindowStart keeps an instant that is already inside the window", () => {
+  for (const when of ["2026-10-28T11:00:00Z", "2026-10-28T15:30:15Z", "2026-10-28T22:59:59Z"]) {
+    assert.equal(iso(nextWindowStart(at(when))), iso(at(when)));
+  }
+});
+
+check("nextAttemptAt adds the pause, and waits for the next morning when it ends after 20:00", () => {
+  assert.equal(iso(nextAttemptAt(at("2026-10-28T22:59:30Z"), 60)), "2026-10-29T11:00:00.000Z");
+  assert.equal(iso(nextAttemptAt(at("2026-10-28T12:00:00Z"), 45)), "2026-10-28T12:00:45.000Z");
+  // A pause that ends exactly at 20:00 is already outside the window.
+  assert.equal(iso(nextAttemptAt(at("2026-10-28T22:59:00Z"), 60)), "2026-10-29T11:00:00.000Z");
+  // A pause that ends before 08:00 waits for 08:00.
+  assert.equal(iso(nextAttemptAt(at("2026-10-28T08:00:00Z"), 30)), "2026-10-28T11:00:00.000Z");
+});
+
+check("capResumeAt is 08:00 of the next São Paulo day", () => {
+  assert.equal(iso(capResumeAt(at("2026-10-28T12:00:00Z"))), "2026-10-29T11:00:00.000Z");
+  // 23:00 of Oct 28 in São Paulo is Oct 29 in UTC: the next São Paulo day is still Oct 29.
+  assert.equal(iso(capResumeAt(at("2026-10-29T02:00:00Z"))), "2026-10-29T11:00:00.000Z");
+});
+
+check("pickPauseSeconds spans 30 to 90 s, always in whole seconds", () => {
+  assert.equal(pickPauseSeconds(() => 0), 30);
+  assert.equal(pickPauseSeconds(() => 0.999999), 90);
+  const seen = new Set<number>();
+  for (let i = 0; i < 1000; i++) {
+    const seconds = pickPauseSeconds(() => i / 1000);
+    assert.ok(Number.isInteger(seconds) && seconds >= 30 && seconds <= 90, `out of range: ${seconds}`);
+    seen.add(seconds);
+  }
+  assert.equal(seen.size, 61); // every second from 30 to 90 can be picked
+});
+
+const INVITE_URL = "https://chat.whatsapp.com/AbC";
+const INVITE_VARS = { nome: "Ana", grupo: "Ofertas" };
+
+check("renderInvite fills {{nome}} and {{grupo}} and puts the link alone on the last line", () => {
+  assert.equal(
+    renderInvite("Oi {{nome}}! Este é o link para entrar no grupo {{grupo}}:", INVITE_VARS, INVITE_URL),
+    "Oi Ana! Este é o link para entrar no grupo Ofertas:\n\nhttps://chat.whatsapp.com/AbC",
+  );
+});
+
+check("renderInvite does not repeat a link the text already ends with", () => {
+  assert.equal(
+    renderInvite("Entre aqui: https://chat.whatsapp.com/AbC", INVITE_VARS, INVITE_URL),
+    "Entre aqui: https://chat.whatsapp.com/AbC",
+  );
+  assert.equal(
+    renderInvite("Oi!\n\nhttps://chat.whatsapp.com/AbC\n", INVITE_VARS, INVITE_URL),
+    "Oi!\n\nhttps://chat.whatsapp.com/AbC",
+  );
+  // A link in the middle, or another group's link at the end, is not the closing link.
+  assert.equal(
+    renderInvite("Veja https://chat.whatsapp.com/AbC e entre", INVITE_VARS, INVITE_URL),
+    "Veja https://chat.whatsapp.com/AbC e entre\n\nhttps://chat.whatsapp.com/AbC",
+  );
+  assert.equal(
+    renderInvite("Entre: https://chat.whatsapp.com/Outro", INVITE_VARS, INVITE_URL),
+    "Entre: https://chat.whatsapp.com/Outro\n\nhttps://chat.whatsapp.com/AbC",
+  );
+});
+
+check("renderInvite replaces placeholders with spaces or capitals, and inserts values as typed", () => {
+  assert.equal(
+    renderInvite("{{ nome }} / {{NOME}} / {{ grupo}}", INVITE_VARS, INVITE_URL),
+    "Ana / Ana / Ofertas\n\nhttps://chat.whatsapp.com/AbC",
+  );
+  // No "$&" replacement patterns, and no second pass over a value that looks like a placeholder.
+  assert.equal(
+    renderInvite("Oi {{nome}}", { nome: "Ana $& {{grupo}}", grupo: "Ofertas" }, INVITE_URL),
+    "Oi Ana $& {{grupo}}\n\nhttps://chat.whatsapp.com/AbC",
+  );
+});
+
+check("renderInvite with an empty text sends just the link, and refuses to build an invite without one", () => {
+  assert.equal(renderInvite("  \n", INVITE_VARS, INVITE_URL), INVITE_URL);
+  assert.throws(() => renderInvite("Oi {{nome}}", INVITE_VARS, ""), /link/);
+  assert.throws(() => renderInvite("Oi {{nome}}", INVITE_VARS, "   "), /link/);
+});
+
+check("forecastFinish: 60 s per person from now when the day has room", () => {
+  assert.equal(iso(forecastFinish(at("2026-10-28T12:00:00Z"), 50, 0)), "2026-10-28T12:50:00.000Z");
+});
+
+check("forecastFinish: the cap of the day sends the rest to 08:00 of the next day", () => {
+  // 20 more fit today (80 used), then 30 on Oct 29 from 11:00Z.
+  assert.equal(iso(forecastFinish(at("2026-10-28T12:00:00Z"), 50, 80)), "2026-10-29T11:30:00.000Z");
+  // Already at the cap: everyone waits for tomorrow.
+  assert.equal(iso(forecastFinish(at("2026-10-28T12:00:00Z"), 3, 100)), "2026-10-29T11:03:00.000Z");
+});
+
+check("forecastFinish: the window closing at 20:00 sends the rest to 08:00 of the next day", () => {
+  // 19:30 in São Paulo: 30 fit before 20:00, the other 20 start at 11:00Z the next day.
+  assert.equal(iso(forecastFinish(at("2026-10-28T22:30:00Z"), 50, 0)), "2026-10-29T11:20:00.000Z");
+  // 05:00 in São Paulo: the first one waits for 08:00.
+  assert.equal(iso(forecastFinish(at("2026-10-28T08:00:00Z"), 10, 0)), "2026-10-28T11:10:00.000Z");
+});
+
+check("forecastFinish: the count starts over on each São Paulo day", () => {
+  // 100 a day: Oct 28 from 12:00Z, Oct 29 from 11:00Z, then the last 50 on Oct 30.
+  assert.equal(iso(forecastFinish(at("2026-10-28T12:00:00Z"), 250, 0)), "2026-10-30T11:50:00.000Z");
+  // 50 used at 19:50: 10 fit before 20:00 (60 used), then a fresh day takes 100 and Oct 30 the last 10.
+  assert.equal(iso(forecastFinish(at("2026-10-28T22:50:00Z"), 120, 50)), "2026-10-30T11:10:00.000Z");
+});
+
+check("forecastFinish with nobody left is now", () => {
+  const now = at("2026-10-28T12:00:00Z");
+  assert.equal(iso(forecastFinish(now, 0, 0)), iso(now));
+  assert.equal(iso(forecastFinish(now, 0, 100)), iso(now));
+});
+
+// ── How Evolution's answers are read (evolution-groups.ts) ───────────────────
+
+const GROUP_JID = "120363000000000001@g.us";
+
+/** `GET /group/fetchAllGroups` of Evolution v2: a group of 3 (one member is a LID with no number) and a chat that is not a group. */
+const GROUPS_V2 = [
+  {
+    id: GROUP_JID,
+    subject: "Ofertas",
+    size: 3,
+    announce: true,
+    participants: [
+      { id: "5511987654321@s.whatsapp.net", admin: "superadmin" },
+      { id: "1@lid", phoneNumber: "5511912345678@s.whatsapp.net", admin: null },
+      { id: "2@lid", admin: null },
+    ],
+  },
+  { id: "x@s.whatsapp.net" },
+];
+
+function sampleGroup(): EvoGroupSummary {
+  const [group] = parseGroupList(GROUPS_V2);
+  assert.ok(group, "the sample group was not parsed");
+  return group;
+}
+
+check("parseGroupList keeps the groups, resolves @lid members through phoneNumber and counts the ones it can't", () => {
+  assert.deepEqual(parseGroupList(GROUPS_V2), [
+    {
+      jid: GROUP_JID,
+      subject: "Ofertas",
+      size: 3,
+      announce: true,
+      participants: [
+        { number: "5511987654321", admin: true },
+        { number: "5511912345678", admin: false },
+      ],
+      unresolved: 1,
+    },
+  ]);
+});
+
+check("parseGroupList takes { groups: [...] } as well, and gives [] for an answer that is not a list of groups", () => {
+  assert.deepEqual(parseGroupList({ groups: GROUPS_V2 }), parseGroupList(GROUPS_V2));
+  const notGroups: unknown[] = [
+    undefined,
+    null,
+    "x",
+    3,
+    {},
+    { groups: "x" },
+    [null, "x", 3, [], {}, { id: 5 }, { id: "@g.us" }, { id: "1@lid" }, { id: "5511987654321@s.whatsapp.net" }],
+  ];
+  for (const data of notGroups) assert.deepEqual(parseGroupList(data), [], JSON.stringify(data));
+});
+
+check("parseGroupList fills in what the group doesn't say, and reads subject, size and announce only as the right type", () => {
+  assert.deepEqual(parseGroupList([{ id: GROUP_JID }]), [
+    { jid: GROUP_JID, subject: "", size: 0, announce: null, participants: [], unresolved: 0 },
+  ]);
+  const [odd] = parseGroupList([
+    {
+      id: GROUP_JID,
+      subject: "  Ofertas  ",
+      size: "3",
+      announce: "yes",
+      participants: [{ id: "5511987654321@s.whatsapp.net" }, null, "x"],
+    },
+  ]);
+  // A size that is not a number is unknown (the members listed stand in for it), and so is an announce that is not a boolean.
+  assert.deepEqual(odd, {
+    jid: GROUP_JID,
+    subject: "Ofertas",
+    size: 3,
+    announce: null,
+    participants: [{ number: "5511987654321", admin: false }],
+    unresolved: 2,
+  });
+  assert.equal(parseGroupList([{ id: GROUP_JID, announce: false }])[0]?.announce, false);
+});
+
+check("isAdminOf: true for an admin, false for a member, null when the number could be a member it couldn't read", () => {
+  const group = sampleGroup();
+  assert.equal(isAdminOf(group, "5511987654321"), true); // the superadmin
+  assert.equal(isAdminOf(group, "5511912345678"), false); // listed and not an admin: the answer holds with 1 member unread
+  assert.equal(isAdminOf(group, "5511900000000"), null); // not listed, and 1 member has no number: it may be that one
+  assert.equal(isAdminOf({ ...group, unresolved: 0 }, "5511900000000"), false); // everybody has a number: not in the group
+});
+
+check("isAdminOf: a plain admin counts, and a number of our own that is unknown is never an answer", () => {
+  const group = { participants: [{ number: "5511900000000", admin: true }], unresolved: 0 };
+  assert.equal(isAdminOf(group, "5511900000000"), true);
+  // No digits (a @lid owner, no owner at all): can't be placed, whatever the list says.
+  assert.equal(isAdminOf(group, ""), null);
+  assert.equal(isAdminOf({ participants: [], unresolved: 0 }, ""), null);
+  // The owner JID of an instance carries ":device"; its digits are still the member's number.
+  assert.equal(isAdminOf(sampleGroup(), jidDigits("5511987654321:12@s.whatsapp.net")), true);
+  assert.equal(isAdminOf(sampleGroup(), jidDigits("123456789012345@lid")), null);
+});
+
+check("jidDigits keeps the digits of a phone JID, without the device or the domain, and nothing for any other JID", () => {
+  assert.equal(jidDigits("5511987654321:12@s.whatsapp.net"), "5511987654321");
+  assert.equal(jidDigits("5511987654321@s.whatsapp.net"), "5511987654321");
+  assert.equal(jidDigits("5511987654321@c.us"), "5511987654321");
+  assert.equal(jidDigits("5511987654321"), "5511987654321");
+  for (const jid of ["123456789012345@lid", "123456789012345:3@lid", GROUP_JID, "abc@s.whatsapp.net", "@s.whatsapp.net", ""]) {
+    assert.equal(jidDigits(jid), "", jid);
+  }
+});
+
+check("ownerJidFrom reads the JID of the instance's own number from the v2 and the v1 answer, and only for that instance", () => {
+  const jid = "5511987654321@s.whatsapp.net";
+  const other = "5511911112222@s.whatsapp.net";
+  const v2 = [{ name: "inst", ownerJid: jid }];
+  const v1 = [{ instance: { instanceName: "inst", owner: jid } }];
+  assert.equal(ownerJidFrom(v2, "inst"), jid);
+  assert.equal(ownerJidFrom(v1, "inst"), jid);
+  // Another instance's number is never ours.
+  assert.equal(ownerJidFrom(v2, "other"), null);
+  assert.equal(ownerJidFrom(v1, "other"), null);
+  // An answer that lists several instances: the one asked for.
+  assert.equal(ownerJidFrom([{ name: "other", ownerJid: other }, ...v2], "inst"), jid);
+  assert.equal(ownerJidFrom([{ instance: { instanceName: "other", owner: other } }, ...v1], "inst"), jid);
+  // An instance that isn't linked to a number has no owner, and anything else is not an answer.
+  const noOwner: unknown[] = [
+    [{ name: "inst", ownerJid: null }],
+    [{ name: "inst", ownerJid: "  " }],
+    [{ name: "inst" }],
+    [{ instance: { instanceName: "inst" } }],
+    [],
+    {},
+    null,
+    undefined,
+    "x",
+  ];
+  for (const data of noOwner) assert.equal(ownerJidFrom(data, "inst"), null, JSON.stringify(data));
+});
+
+check("participantUpdateCode reads the status of the first update, as text", () => {
+  assert.equal(participantUpdateCode({ updateParticipants: [{ status: "403" }] }), "403");
+  assert.equal(participantUpdateCode({ updateParticipants: [{ status: 200 }] }), "200");
+  // The answer for a number whose privacy settings ask for the link.
+  const privacy = {
+    updateParticipants: [
+      {
+        status: "403",
+        jid: "5511987654321@s.whatsapp.net",
+        content: { tag: "add_request", attrs: { code: "XyZ", expiration: "1700000000" } },
+      },
+    ],
+  };
+  assert.equal(participantUpdateCode(privacy), "403");
+  // One person per call, so there is one update; if more ever come, the first is the one.
+  assert.equal(participantUpdateCode({ updateParticipants: [{ status: "403" }, { status: "200" }] }), "403");
+  const noCode: unknown[] = [
+    {},
+    null,
+    undefined,
+    "x",
+    [],
+    [{ status: "200" }],
+    { updateParticipants: [] },
+    { updateParticipants: "x" },
+    { updateParticipants: [null] },
+    { updateParticipants: [{}] },
+    { updateParticipants: [{ status: null }] },
+    { updateParticipants: [{ status: "" }] },
+    { updateParticipants: [{ status: {} }] },
+  ];
+  for (const data of noCode) assert.equal(participantUpdateCode(data), null, JSON.stringify(data));
+});
+
+check("existsOnWhatsapp reads the first answer of whatsappNumbers", () => {
+  assert.equal(existsOnWhatsapp([{ exists: false }]), false);
+  assert.equal(existsOnWhatsapp([{ exists: true, jid: "5511987654321@s.whatsapp.net", number: "5511987654321" }]), true);
+  const noAnswer: unknown[] = [{}, null, undefined, [], [null], [{}], [{ exists: "true" }], [{ exists: 1 }], { exists: true }];
+  for (const data of noAnswer) assert.equal(existsOnWhatsapp(data), null, JSON.stringify(data));
+});
+
+check("inviteUrlFrom accepts only a https://chat.whatsapp.com/ link, and builds it from the code", () => {
+  assert.equal(inviteUrlFrom({ inviteUrl: "https://chat.whatsapp.com/AbC" }), "https://chat.whatsapp.com/AbC");
+  assert.equal(inviteUrlFrom({ inviteCode: "AbC" }), "https://chat.whatsapp.com/AbC");
+  // What Evolution sends: both, agreeing.
+  assert.equal(inviteUrlFrom({ inviteUrl: "https://chat.whatsapp.com/AbC", inviteCode: "AbC" }), "https://chat.whatsapp.com/AbC");
+  assert.equal(inviteUrlFrom({ inviteUrl: "http://evil.example/x" }), null);
+  const notOurs = [
+    "http://chat.whatsapp.com/AbC",
+    "https://chat.whatsapp.com/",
+    "https://chat.whatsapp.com",
+    "https://chat.whatsapp.com.evil.example/AbC",
+    "https://evil.example/https://chat.whatsapp.com/AbC",
+    "https://chat.whatsapp.com/AbC extra",
+    "https://chat.whatsapp.com/AbC\nhttp://evil.example/x",
+    "javascript:alert(1)",
+    "AbC",
+  ];
+  for (const inviteUrl of notOurs) assert.equal(inviteUrlFrom({ inviteUrl }), null, inviteUrl);
+  // A link that is not ours is not rescued by the code beside it.
+  assert.equal(inviteUrlFrom({ inviteUrl: "http://evil.example/x", inviteCode: "AbC" }), null);
+  for (const inviteCode of ["", "  ", "A b", "AbC/../x", "AbC?x=1", 5, null]) {
+    assert.equal(inviteUrlFrom({ inviteCode }), null, String(inviteCode));
+  }
+  const noLink: unknown[] = [{}, null, undefined, "x", [], [{ inviteCode: "AbC" }]];
+  for (const data of noLink) assert.equal(inviteUrlFrom(data), null, JSON.stringify(data));
+});
+
+// ── What the tracking screen says of each reason (src/components/crm/group-add-format.ts) ─
+
+type ReasonCatalog = { crm: { groupAdd: { reason: Record<string, unknown> } } };
+
+/** The note the tracking screen shows for `reason`, from a catalog, with its values filled in. Null when it shows none. */
+function noteText(catalog: ReasonCatalog, reason: string): string | null {
+  const note = reasonNote(reason);
+  if (!note) return null;
+  const message = catalog.crm.groupAdd.reason[note.key];
+  assert.equal(typeof message, "string", `crm.groupAdd.reason.${note.key} is not a text`);
+  return String(message).replace("{code}", note.code ?? "").replace("{max}", "1.024");
+}
+
+const OWN_NOTES = [
+  "no_phone",
+  "opted_out",
+  "not_mobile",
+  "duplicate",
+  "previous_uncertain",
+  "no_invite_link",
+  "invite_failed",
+  "invite_uncertain",
+  "group_full",
+] as const;
+
+check("reasonNote: a failure in doubt says it could not be confirmed, a definite HTTP error says WhatsApp refused it with the code, the other reasons keep their notes", () => {
+  const pt = ptMessages as ReasonCatalog;
+  // Every doubt the planner skips reads as one, so the screen and the next round can't disagree again.
+  for (const reason of UNCERTAIN_REASONS) {
+    if (reason === "invite_uncertain") continue; // a doubt with a note of its own, below
+    assert.deepEqual(reasonNote(reason), { key: "unconfirmed" }, reason);
+    assert.equal(noteText(pt, reason), "Não foi possível confirmar se a pessoa foi adicionada", reason);
+  }
+  assert.equal(noteText(pt, "invite_uncertain"), "Não foi possível confirmar o envio do convite");
+  // A definite HTTP error (a 4xx, a plain 500, any 5xx that is not a gateway's) is a refusal, with its code.
+  for (const code of ["400", "403", "429", "500", "501"]) {
+    assert.deepEqual(reasonNote(`http_${code}`), { key: "refused", code });
+    assert.equal(noteText(pt, `http_${code}`), `O WhatsApp recusou a adição (código ${code})`);
+  }
+  // The rest keep the note of their own.
+  for (const reason of OWN_NOTES) assert.deepEqual(reasonNote(reason), { key: reason }, reason);
+  assert.equal(noteText(pt, "opted_out"), "Pediu para não receber mensagens");
+  assert.equal(noteText(pt, "group_full"), "O grupo chegou ao limite de 1.024 participantes");
+  // Only the doubts say they could not be confirmed.
+  for (const reason of [...OWN_NOTES, "http_400", "http_500"]) {
+    if ((UNCERTAIN_REASONS as readonly string[]).includes(reason)) continue;
+    assert.ok(!String(noteText(pt, reason)).startsWith("Não foi possível confirmar"), reason);
+  }
+  // A reason nobody writes has no note: the status says what it means, and it is not called a doubt.
+  for (const reason of ["something_new", "http_", "http_abc", ""]) assert.equal(reasonNote(reason), null, reason);
+});
+
+check("trackingRefreshMs: the tracking screen reads the round again every 5 s, and once a minute through the long waits", () => {
+  // Hours (the window, the cap) or minutes at a time (an Evolution that did not answer): once a minute, so 08:00 is still seen.
+  for (const wait of ["window", "cap", "unavailable"]) assert.equal(trackingRefreshMs(wait), 60_000, wait);
+  // Going on, waiting the 30 to 90 s between people, or queued (no wait told): every 5 s.
+  for (const wait of ["pace", null]) assert.equal(trackingRefreshMs(wait), 5_000, String(wait));
+});
+
+check("every note reasonNote can give is a text in pt.json and en.json, and the refusal shows the code in both", () => {
+  const keys = [...new Set([...OWN_NOTES, "unconfirmed", "refused"])];
+  for (const [name, catalog] of [["pt.json", ptMessages], ["en.json", enMessages]] as const) {
+    const reasons = (catalog as ReasonCatalog).crm.groupAdd.reason;
+    for (const key of keys) assert.equal(typeof reasons[key], "string", `${name}: crm.groupAdd.reason.${key}`);
+    assert.ok(String(reasons.refused).includes("{code}"), `${name}: the refusal does not show the code`);
+  }
+});
+
+// ── What the actions accept ──────────────────────────────────────────────────
+//
+// The server actions are public endpoints: whatever arrives is parsed by these schemas before anything is read or
+// written, and an input that does not fit is `invalid`.
+
+const GROUP = "120363000000000001@g.us";
+const ONE_CONTACT = { kind: "contacts", contactIds: ["c1"] } as const;
+const startOf = (patch: Record<string, unknown>) => ({ source: ONE_CONTACT, groupJid: GROUP, inviteText: "Oi {{nome}}", ...patch });
+/** The ids `c1`..`cN`. */
+const idsUpTo = (n: number) => Array.from({ length: n }, (_, i) => `c${i + 1}`);
+
+check("groupAddStartSchema: the group is digits, optionally a dash and digits, then @g.us (the old and the new JID)", () => {
+  for (const groupJid of [GROUP, "5511987654321-1618000000@g.us", "1@g.us", `${"1".repeat(59)}@g.us`]) {
+    assert.ok(groupAddStartSchema.safeParse(startOf({ groupJid })).success, groupJid);
+  }
+  // A person's JID, a group name, a missing or an extra part, another case, and anything around it.
+  const notAGroup = [
+    "x@g.us",
+    "@g.us",
+    "5511987654321@s.whatsapp.net",
+    "5511987654321@lid",
+    "120363000000000001",
+    "120363000000000001@g.us@g.us",
+    "120363000000000001@G.US",
+    "120363000000000001@g.usx",
+    "120363000000000001@g.u",
+    "120363000000000001@gXus",
+    "12-34-56@g.us",
+    "-12@g.us",
+    "12-@g.us",
+    "x120363000000000001@g.us",
+    " 120363000000000001@g.us",
+    "120363000000000001@g.us ",
+    "120363000000000001@g.us\n",
+    "120363000000000001@g.us\nx@g.us",
+    "",
+    // Longer than any JID is: the pattern alone would take it.
+    `${"1".repeat(60)}@g.us`,
+  ];
+  for (const groupJid of notAGroup) assert.ok(!groupAddStartSchema.safeParse(startOf({ groupJid })).success, JSON.stringify(groupJid));
+  for (const groupJid of [null, undefined, 120363000000000001, ["120363000000000001@g.us"]]) {
+    assert.ok(!groupAddStartSchema.safeParse(startOf({ groupJid })).success, String(groupJid));
+  }
+  assert.ok(!groupAddStartSchema.safeParse({ source: ONE_CONTACT, inviteText: "Oi" }).success, "no groupJid at all");
+  // The pattern itself, as the screens may reuse it.
+  assert.ok(GROUP_JID_PATTERN.test(GROUP) && !GROUP_JID_PATTERN.test("x@g.us"));
+});
+
+check("groupAddStartSchema: the invite text is trimmed, 1 to 1,000 characters", () => {
+  assert.equal(INVITE_TEXT_MAX, 1000);
+  const parse = (inviteText: unknown) => groupAddStartSchema.safeParse(startOf({ inviteText }));
+  for (const length of [1, 2, 500, INVITE_TEXT_MAX]) assert.ok(parse("a".repeat(length)).success, `${length} characters`);
+  // 1,001 characters, and none at all, or nothing but spaces and line breaks.
+  for (const text of ["a".repeat(INVITE_TEXT_MAX + 1), "", " ", "   \n\t  "]) {
+    assert.ok(!parse(text).success, `${text.length} characters of ${JSON.stringify(text.slice(0, 4))}`);
+  }
+  // Trimmed first: the spaces around the text are not part of the count, and they are not kept.
+  const padded = parse(`  ${"a".repeat(INVITE_TEXT_MAX)}\n `);
+  assert.ok(padded.success);
+  assert.equal(padded.data.inviteText, "a".repeat(INVITE_TEXT_MAX));
+  assert.ok(!parse(`  ${"a".repeat(INVITE_TEXT_MAX + 1)}  `).success, "1,001 characters once trimmed");
+  assert.equal(parse("  Oi {{nome}}!  \n").data?.inviteText, "Oi {{nome}}!");
+  for (const text of [null, undefined, 5, ["Oi"], { text: "Oi" }]) assert.ok(!parse(text).success, String(text));
+  assert.ok(!groupAddStartSchema.safeParse({ source: ONE_CONTACT, groupJid: GROUP }).success, "no inviteText at all");
+});
+
+check("groupAddSourceSchema: the contacts of a folder (or of none), or 1 to 1,000 marked contacts", () => {
+  assert.equal(GROUP_ADD_MAX_CONTACTS, 1000);
+  const parse = (source: unknown) => groupAddSourceSchema.safeParse(source);
+  // A folder, and "no folder" (the contacts in no folder) which is a null and not a missing key.
+  assert.deepEqual(parse({ kind: "folder", folderId: "f1" }).data, { kind: "folder", folderId: "f1" });
+  assert.deepEqual(parse({ kind: "folder", folderId: null }).data, { kind: "folder", folderId: null });
+  for (const source of [
+    { kind: "folder" },
+    { kind: "folder", folderId: "" },
+    { kind: "folder", folderId: 5 },
+    { kind: "folder", folderId: "f".repeat(65) },
+    { kind: "folder", contactIds: ["c1"] },
+  ]) {
+    assert.ok(!parse(source).success, JSON.stringify(source));
+  }
+  // Marked contacts: at least one, at most the 1,000 a round takes.
+  for (const n of [1, 2, GROUP_ADD_MAX_CONTACTS]) {
+    assert.ok(parse({ kind: "contacts", contactIds: idsUpTo(n) }).success, `${n} ids`);
+  }
+  for (const n of [0, GROUP_ADD_MAX_CONTACTS + 1, 5000]) {
+    assert.ok(!parse({ kind: "contacts", contactIds: idsUpTo(n) }).success, `${n} ids`);
+  }
+  for (const contactIds of [undefined, null, "c1", [""], [5], [null], ["c".repeat(65)], ["c1", ""]]) {
+    assert.ok(!parse({ kind: "contacts", contactIds }).success, JSON.stringify(contactIds));
+  }
+  // Only the two kinds there are; a union does not guess.
+  for (const source of [null, undefined, "folder", [], {}, { kind: "all" }, { kind: "company", companyIds: ["x"] }, { folderId: "f1" }]) {
+    assert.ok(!parse(source).success, JSON.stringify(source));
+  }
+  // The same source as the start takes, and as the preview takes.
+  assert.ok(groupAddStartSchema.safeParse(startOf({ source: { kind: "folder", folderId: null } })).success);
+  assert.ok(!groupAddStartSchema.safeParse(startOf({ source: { kind: "contacts", contactIds: idsUpTo(GROUP_ADD_MAX_CONTACTS + 1) } })).success);
+});
+
+check("groupAddPreviewSchema: the same group and source as the start, without a text", () => {
+  assert.ok(groupAddPreviewSchema.safeParse({ source: ONE_CONTACT, groupJid: GROUP }).success);
+  assert.ok(groupAddPreviewSchema.safeParse({ source: { kind: "folder", folderId: null }, groupJid: GROUP }).success);
+  assert.ok(!groupAddPreviewSchema.safeParse({ source: ONE_CONTACT, groupJid: "x@g.us" }).success);
+  assert.ok(!groupAddPreviewSchema.safeParse({ source: ONE_CONTACT, groupJid: "5511987654321@s.whatsapp.net" }).success);
+  assert.ok(!groupAddPreviewSchema.safeParse({ source: { kind: "contacts", contactIds: [] }, groupJid: GROUP }).success);
+  assert.ok(!groupAddPreviewSchema.safeParse({ source: { kind: "contacts", contactIds: idsUpTo(1001) }, groupJid: GROUP }).success);
+  assert.ok(!groupAddPreviewSchema.safeParse({ groupJid: GROUP }).success, "no source at all");
+  assert.ok(!groupAddPreviewSchema.safeParse(null).success);
+  // The preview writes nothing and sends nothing: a text that comes along is not read.
+  assert.deepEqual(groupAddPreviewSchema.safeParse({ source: ONE_CONTACT, groupJid: GROUP, inviteText: "Oi" }).data, {
+    source: ONE_CONTACT,
+    groupJid: GROUP,
+  });
+});
+
+check("groupAddRunIdSchema: a round's id is a non-empty string of at most 64 characters", () => {
+  for (const id of ["x", "cmabc123def456ghi789jkl012", "a".repeat(64)]) assert.ok(groupAddRunIdSchema.safeParse(id).success, id);
+  for (const id of ["", "a".repeat(65), null, undefined, 5, { id: "x" }, ["x"]]) {
+    assert.ok(!groupAddRunIdSchema.safeParse(id).success, JSON.stringify(id));
+  }
+});
+
+// ── What the feature may write to WhatsApp ───────────────────────────────────
+//
+// Two writes only: add one participant and send the invite text. The link goes out with the text, one person at a time, so
+// the call that sends it to a whole list at once is out, and so is any other action on the group or on its settings.
+
+/** Every .ts file under `dir`, recursively. A folder that isn't there throws: a scan that finds nothing must not pass. */
+function sourcesUnder(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return sourcesUnder(path);
+    return /\.tsx?$/.test(entry.name) ? [path] : [];
+  });
+}
+
+type Rule = { rule: string; re: RegExp; trips: string[] };
+
+const NO_SEND_INVITE: Rule = {
+  rule: "name sendInvite",
+  re: /sendInvite/i,
+  trips: ["POST /group/sendInvite/e2e", "evo.sendInvite(1)", "// not sendinvite"],
+};
+const NO_UPDATE_SETTING: Rule = {
+  rule: "name updateSetting",
+  re: /updateSetting/i,
+  trips: ["POST /group/updateSetting/e2e", "// no updatesetting"],
+};
+const NO_MEMBER_ACTION_STRING: Rule = {
+  rule: 'write "remove", "promote" or "demote" as a string',
+  re: /["'`](?:remove|promote|demote)["'`]/,
+  trips: ['action: "remove"', "action: 'promote'", "const A = `demote`", '["add", "remove"]'],
+};
+const NO_MEMBER_ACTION_FIELD: Rule = {
+  rule: 'send action: "remove", "promote" or "demote"',
+  re: /\baction["']?\s*:\s*["'`](?:remove|promote|demote)["'`]/,
+  trips: ['{ action: "remove", participants: [number] }', "{action:'promote'}", "action : `demote`", '{ "action": "remove" }'],
+};
+/** What the code is allowed to say, so a rule can't be loosened into tripping on it. */
+const ALLOWED_CODE = [
+  '{ action: "add", participants: [number] }',
+  "// remove the item from the plan",
+  "const removed = items.filter(Boolean)",
+  "participants: [number]",
+  "await sendPlainText(creds, number, text)",
+];
+
+/** The patterns themselves, so a typo in one can't turn a scan below into a silent pass. */
+function assertRulesWork(rules: Rule[]): void {
+  for (const { rule, re, trips } of rules) {
+    for (const sample of trips) assert.ok(re.test(sample), `${rule}: ${sample}`);
+  }
+  for (const sample of ALLOWED_CODE) {
+    for (const { rule, re } of rules) assert.ok(!re.test(sample), `${rule} wrongly trips on ${sample}`);
+  }
+}
+
+check("nothing in group-add/ names sendInvite or updateSetting, or writes remove, promote or demote (comments included)", () => {
+  const rules = [NO_SEND_INVITE, NO_UPDATE_SETTING, NO_MEMBER_ACTION_STRING];
+  assertRulesWork(rules);
+  const dir = join(__dirname, "..", "src", "lib", "whatsapp", "group-add");
+  const files = sourcesUnder(dir);
+  // Not a silent pass: the module this folder is known to hold has to be among the files read.
+  const read = files.map((file) => relative(dir, file));
+  assert.ok(read.includes("core.ts"), `core.ts was not read (read: ${read.join(", ") || "nothing"})`);
+  for (const file of files) {
+    const text = readFileSync(file, "utf8");
+    for (const { rule, re } of rules) assert.ok(!re.test(text), `${relative(dir, file)} must not ${rule}`);
+  }
+});
+
+check("the Evolution client sends no member action but add, and never names sendInvite or updateSetting", () => {
+  const rules = [NO_SEND_INVITE, NO_UPDATE_SETTING, NO_MEMBER_ACTION_FIELD];
+  assertRulesWork(rules);
+  const text = readFileSync(join(__dirname, "..", "src", "lib", "integrations", "evolution-client.ts"), "utf8");
+  // It has to be the file with the group calls, or this scan proves nothing. (Not assert.match: its message would print the file.)
+  assert.ok(/\/group\/updateParticipant\//.test(text), "evolution-client.ts has no add call to scan");
+  assert.ok(/\baction: "add"/.test(text), "evolution-client.ts does not send action add");
+  for (const { rule, re } of rules) assert.ok(!re.test(text), `evolution-client.ts must not ${rule}`);
+});
+
+// ── What the audit entries of the actions may carry ──────────────────────────
+//
+// `AuditLog.meta` is free-form JSON in a table that lives as long as the organization does. The old form of a group's JID is
+// `<phone>-<timestamp>@g.us`: the number of whoever created the group, who is often someone else. The numbers of the people and
+// the invite text are theirs too. So an entry of the actions names the round (`entityId`) and the group by its NAME, and that is
+// all: no JID, no phone, no invite, and no object spread into it that could carry any of them.
+
+/** `source` without its comments, which never reach the audit table (a word in one is no finding). Strings stay as they are. */
+function withoutComments(source: string): string {
+  let out = "";
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i];
+    if (c === '"' || c === "'" || c === "`") {
+      const start = i;
+      for (i++; i < source.length && source[i] !== c; i++) if (source[i] === "\\") i++;
+      out += source.slice(start, i + 1);
+    } else if (c === "/" && source[i + 1] === "/") {
+      while (i < source.length && source[i] !== "\n") i++;
+      out += "\n";
+    } else if (c === "/" && source[i + 1] === "*") {
+      const end = source.indexOf("*/", i + 2);
+      i = end < 0 ? source.length : end + 1;
+      out += " ";
+    } else {
+      out += c;
+    }
+  }
+  return out;
+}
+
+/** The text from the `(` or `{` at `open` through its matching close. Strings are skipped (a brace in one is no bracket). */
+function balancedFrom(code: string, open: number): string {
+  let depth = 0;
+  for (let i = open; i < code.length; i++) {
+    const c = code[i];
+    if (c === '"' || c === "'" || c === "`") {
+      for (i++; i < code.length && code[i] !== c; i++) if (code[i] === "\\") i++;
+    } else if (c === "(" || c === "{") {
+      depth++;
+    } else if (c === ")" || c === "}") {
+      if (--depth === 0) return code.slice(open, i + 1);
+    }
+  }
+  throw new Error("unbalanced brackets in the source being scanned");
+}
+
+type AuditEntry = { action: string; meta: { kind: "none" } | { kind: "literal"; text: string } | { kind: "dynamic" } };
+
+/** Every `audit(ctx, { … })` of `source`: its action, and what its `meta` is: absent, an object literal (with its text), or anything else. */
+function auditEntriesOf(source: string): AuditEntry[] {
+  const code = withoutComments(source);
+  const entries: AuditEntry[] = [];
+  for (const found of code.matchAll(/\baudit\(/g)) {
+    const call = balancedFrom(code, (found.index ?? 0) + "audit".length);
+    const brace = call.indexOf("{");
+    if (brace < 0) {
+      entries.push({ action: "(an entry that is not an object literal)", meta: { kind: "dynamic" } });
+      continue;
+    }
+    const entry = balancedFrom(call, brace);
+    const action = /\baction\s*:\s*["'`]([^"'`]+)["'`]/.exec(entry)?.[1] ?? "(an entry with no action)";
+    const at = entry.search(/\bmeta\s*:/);
+    if (at < 0) {
+      entries.push({ action, meta: { kind: "none" } });
+      continue;
+    }
+    const value = entry.slice(at).replace(/^meta\s*:\s*/, "");
+    entries.push({ action, meta: value.startsWith("{") ? { kind: "literal", text: balancedFrom(value, 0) } : { kind: "dynamic" } });
+  }
+  return entries;
+}
+
+/** A JID (the group's too), a phone, or the invite (its text or its link), by any name that says so. */
+const AUDIT_META_FORBIDDEN = /jid|phone|invite/i;
+
+/** What the entries of `source` carry that they must not; empty when nothing of the kind is there. */
+function auditMetaLeaks(source: string): string[] {
+  const leaks: string[] = [];
+  for (const { action, meta } of auditEntriesOf(source)) {
+    if (meta.kind === "dynamic") leaks.push(`${action}: its meta is not an object literal, so it can't be told what it carries`);
+    else if (meta.kind === "literal" && meta.text.includes("...")) leaks.push(`${action}: its meta has an object spread into it`);
+    else if (meta.kind === "literal" && AUDIT_META_FORBIDDEN.test(meta.text)) leaks.push(`${action}: its meta names a JID, a phone or the invite`);
+  }
+  return leaks;
+}
+
+check("the audit entries of the actions carry no JID, phone or invite text in their meta", () => {
+  // The rule and the scan first, so a typo in either can't turn the real scan below into a silent pass.
+  const entry = (action: string, rest: string) => `await audit(g.ctx, { action: "${action}", entity: "WhatsappGroupAddRun", entityId: id, ${rest} });`;
+  const leaking = [
+    entry("whatsapp_group_add.started", "meta: { groupJid: parsed.data.groupJid }"),
+    entry("whatsapp_group_add.started", "meta: { source: parsed.data.source.kind, groupJid }"),
+    entry("x", "meta: { jid }"),
+    entry("x", "meta: { phone: contact.phone }"),
+    entry("x", "meta: { phoneKey }"),
+    entry("x", "meta: { inviteText: parsed.data.inviteText }"),
+    entry("x", "meta: { inviteUrl }"),
+    // A name after a nested object, and a name that is only the value.
+    entry("x", "meta: { counts: { added: 1 }, groupJid }"),
+    entry("x", "meta: { groupName: parsed.data.groupJid }"),
+    // Anything that can carry them without saying so.
+    entry("x", "meta: { ...parsed.data }"),
+    entry("x", "meta: parsed.data"),
+    "await audit(g.ctx, entry);",
+  ];
+  const clean = [
+    entry("whatsapp_group_add.paused", "meta: { groupName: own.run.groupName }"),
+    entry("whatsapp_group_add.started", "meta: { groupName: res.groupName }"),
+    entry("x", ""),
+    entry("x", "meta: { counts: { added: 1 }, groupName }"),
+    // A comment never reaches the table.
+    `// await audit(ctx, { action: "x", meta: { phone } });\n${entry("y", "meta: { groupName }")}`,
+    `/* audit(ctx, { meta: { inviteText } }) */ ${entry("y", "meta: { groupName }")}`,
+    // A brace in a string is not a bracket.
+    entry("x", 'meta: { groupName: "}{" }'),
+  ];
+  for (const sample of leaking) assert.notDeepEqual(auditMetaLeaks(sample), [], sample);
+  for (const sample of clean) assert.deepEqual(auditMetaLeaks(sample), [], sample);
+
+  const text = readFileSync(join(__dirname, "..", "src", "app", "actions", "whatsapp-group-add.ts"), "utf8");
+  // Not a silent pass: the four entries of the actions are in the file that was read.
+  const found = auditEntriesOf(text).map((e) => e.action);
+  for (const action of ["started", "paused", "resumed", "canceled"]) {
+    assert.ok(found.includes(`whatsapp_group_add.${action}`), `no audit entry for whatsapp_group_add.${action} (found: ${found.join(", ") || "none"})`);
+  }
+  assert.deepEqual(auditMetaLeaks(text), []);
+});
+
+console.log(`\n✅ group-add: ${passed} checks passed.`);

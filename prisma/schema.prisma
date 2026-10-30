@@ -794,6 +794,102 @@ model ProposalTemplateItem {
 }
 
 // ---------------------------------------------------------------------------
+// WhatsApp group add (CRM) — a member adds CRM contacts to one WhatsApp group
+// through their own number. A run is one such job; its items are the contacts.
+// Both tables carry `organizationId`. See
+// docs/superpowers/specs/2026-10-28-crm-grupo-whatsapp-design.md.
+// ---------------------------------------------------------------------------
+
+enum WhatsappGroupAddStatus {
+  QUEUED
+  RUNNING
+  PAUSED
+  DONE
+  CANCELED
+}
+
+enum WhatsappGroupAddItemStatus {
+  PENDING
+  PROCESSING
+  ADDED
+  INVITED
+  ALREADY_IN
+  NO_WHATSAPP
+  SKIPPED
+  LEFT_GROUP
+  ALREADY_INVITED
+  FAILED
+}
+
+/// Adding a set of CRM contacts to one WhatsApp group through the member's own number (spec 2026-10-28).
+model WhatsappGroupAddRun {
+  id             String                 @id @default(cuid())
+  organizationId String
+  /// IntegrationConnection.id (loose: deleting the connection keeps the history).
+  connectionId   String
+  /// The phone behind the connection: the instance's ownerJid digits. Cap and queue are per senderKey.
+  senderKey      String
+  createdById    String
+  groupJid       String
+  groupName      String
+  inviteText     String                 @db.Text
+  inviteUrl      String?
+  status         WhatsappGroupAddStatus @default(QUEUED)
+  /// "manual" | "disconnected" | "not_admin" | "no_connection" | "number_changed" (the instance is linked to another phone) | "error"
+  pausedReason   String?
+  /// "pace" | "window" | "cap" | "unavailable" — why nextAttemptAt is in the future
+  waitReason     String?
+  nextAttemptAt  DateTime?
+  lastError      String?
+  /// Runner lease (src/lib/whatsapp/group-add/runner.ts).
+  lastDispatchAt DateTime?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  items WhatsappGroupAddItem[]
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+  @@index([organizationId, groupJid])
+  @@index([senderKey, status])
+  @@map("whatsapp_group_add_runs")
+}
+
+/// One contact in a run. Unique per (run, contact): nobody is processed twice in a run.
+model WhatsappGroupAddItem {
+  id             String                     @id @default(cuid())
+  organizationId String
+  runId          String
+  /// Loose reference: deleting the contact keeps the history.
+  contactId      String
+  contactName    String
+  position       Int
+  phone          String?
+  phoneKey       String?
+  senderKey      String
+  status         WhatsappGroupAddItemStatus @default(PENDING)
+  /// WhatsApp's per-number code from the add call ("200", "403", …).
+  code           String?
+  /// SkipReason | "interrupted" | "uncertain" | "unknown_answer" | "http_<n>" | "no_invite_link" | "invite_failed"
+  /// | "invite_uncertain" (the text got no answer: it may have gone out) | "group_full" (the group would pass 1,024 participants)
+  /// "interrupted", "uncertain", "unknown_answer", "http_502", "http_503", "http_504" and "invite_uncertain" are in doubt
+  /// (UNCERTAIN_REASONS in src/lib/whatsapp/group-add/core.ts): a later round for the group skips them (previous_uncertain).
+  reason         String?
+  processedAt    DateTime?
+  updatedAt      DateTime                   @updatedAt
+
+  run WhatsappGroupAddRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, contactId])
+  @@index([runId, status, position])
+  @@index([organizationId, contactId])
+  @@index([senderKey, processedAt])
+  @@map("whatsapp_group_add_items")
+}
+
+// ---------------------------------------------------------------------------
 // Connections & Webhooks (P4)
 // ---------------------------------------------------------------------------
 
