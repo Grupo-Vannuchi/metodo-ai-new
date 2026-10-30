@@ -179,7 +179,7 @@ para o tipo mas sem dono ainda — não gatear nada por elas por engano.
 
 ## Paridade de i18n
 
-`src/messages/pt.json` e `src/messages/en.json` têm **3382 chaves-folha cada um** (contagem
+`src/messages/pt.json` e `src/messages/en.json` têm **3391 chaves-folha cada um** (contagem
 própria, recursiva sobre os dois arquivos — batem exatamente). Não existe script no repositório
 que verifique a paridade inteira automaticamente: os dois arquivos em `scripts/` que leem
 `pt.json`/`en.json` só conferem as chaves de que dependem. O `check-email-broadcast.ts` (`npm run check:email`)
