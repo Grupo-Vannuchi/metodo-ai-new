@@ -54,7 +54,8 @@ export async function renameFolder(
   }
 }
 
-/** Delete a folder. Its contacts are kept and become unfiled (FK SET NULL). */
+/** Delete a folder. Its contacts are kept and only leave this folder (their links
+ * to it go by FK cascade); a contact in no other folder shows in "Sem pasta". */
 export async function deleteFolder(id: string): Promise<{ ok: boolean }> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false };
@@ -66,35 +67,6 @@ export async function deleteFolder(id: string): Promise<{ ok: boolean }> {
     return { ok: true };
   } catch (error) {
     console.error("Failed to delete folder", error);
-    return { ok: false };
-  }
-}
-
-/** Move a contact to a folder, or to "unfiled" when `folderId` is null. */
-export async function moveContactToFolder(
-  contactId: string,
-  folderId: string | null,
-): Promise<{ ok: boolean }> {
-  const ctx = await getOrgContext();
-  if (!ctx) return { ok: false };
-
-  try {
-    const db = tenantDb(ctx.organizationId);
-
-    // A target folder must belong to this org (tenantDb scopes the lookup).
-    if (folderId) {
-      const folder = await db.contactFolder.findFirst({
-        where: { id: folderId },
-        select: { id: true },
-      });
-      if (!folder) return { ok: false };
-    }
-
-    await db.contact.updateMany({ where: { id: contactId }, data: { folderId } });
-    revalidatePath("/app/contacts");
-    return { ok: true };
-  } catch (error) {
-    console.error("Failed to move contact", error);
     return { ok: false };
   }
 }

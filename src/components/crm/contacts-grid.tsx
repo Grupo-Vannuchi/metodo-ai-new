@@ -15,12 +15,37 @@ import { GroupAddDialog } from "@/components/crm/group-add-dialog";
 import type { GroupAddSource } from "@/lib/whatsapp/group-add/service";
 import { createFolder, renameFolder, deleteFolder } from "@/app/actions/contact-folders";
 import { deleteContact } from "@/app/actions/contacts";
-import { bulkDeleteContacts, bulkMoveContacts, bulkTagContacts } from "@/app/actions/bulk";
+import {
+  bulkAddContactsToFolder,
+  bulkDeleteContacts,
+  bulkMoveContacts,
+  bulkRemoveContactsFromFolder,
+  bulkTagContacts,
+} from "@/app/actions/bulk";
 import type { ContactCard, ContactColumn } from "@/lib/queries/contact-folders";
 
 const GRID_CLS = "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]";
 
-type ListLabels = { name: string; company: string; phone: string; email: string };
+type ListLabels = {
+  name: string;
+  company: string;
+  phone: string;
+  email: string;
+  folderBadge: (count: number) => string;
+};
+
+/** "N folders" pill, only for contacts in two or more folders. */
+function FolderBadge({ card, labels, className }: { card: ContactCard; labels: ListLabels; className?: string }) {
+  if (card.folderNames.length < 2) return null;
+  return (
+    <span
+      className={cn("shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground", className)}
+      title={card.folderNames.join(", ")}
+    >
+      {labels.folderBadge(card.folderNames.length)}
+    </span>
+  );
+}
 
 /** A folder's contacts as summary cards (grid) or a detailed list. */
 function ContactList({
@@ -89,6 +114,7 @@ function ContactList({
               <div className="flex min-w-0 flex-1 items-center gap-2.5">
                 <Avatar name={card.name} className="size-8 shrink-0 text-xs" />
                 <span className="truncate text-sm font-medium">{card.name}</span>
+                <FolderBadge card={card} labels={labels} />
               </div>
               <span className="hidden w-40 shrink-0 truncate text-xs text-muted-foreground sm:block">{card.companyName ?? "—"}</span>
               <span className="hidden w-36 shrink-0 truncate text-xs text-muted-foreground sm:block">{card.phone ?? "—"}</span>
@@ -126,6 +152,8 @@ function ContactList({
                   <span className="truncate">{card.companyName}</span>
                 </p>
               ) : null}
+              {/* Below the name, not beside it: the name keeps the card's full width. */}
+              <FolderBadge card={card} labels={labels} className="mt-1 inline-block" />
             </div>
             {actions(card)}
           </div>
@@ -216,9 +244,16 @@ export function ContactsGrid({ columns, canAddToGroup }: { columns: ContactColum
     confirmDeleteFolder: t("confirmDeleteFolder"),
     save: t("save"),
     dragHint: tc("dragHint"),
+    copyHint: t("copyHint"),
     folderCount: (count) => t("folderCount", { count }),
   };
-  const listLabels: ListLabels = { name: t("name"), company: t("company"), phone: t("phone"), email: t("email") };
+  const listLabels: ListLabels = {
+    name: t("name"),
+    company: t("company"),
+    phone: t("phone"),
+    email: t("email"),
+    folderBadge: (count) => t("folderBadge", { count }),
+  };
 
   const onDeleteContact = (id: string) => deleteWithUndo([id], () => deleteContact(id));
 
@@ -231,7 +266,8 @@ export function ContactsGrid({ columns, canAddToGroup }: { columns: ContactColum
         onCreateFolder={(name) => createFolder({ name })}
         onRenameFolder={(id, name) => renameFolder(id, { name })}
         onDeleteFolder={(id) => deleteFolder(id)}
-        onMoveItems={(ids, folderId) => bulkMoveContacts(ids, folderId)}
+        onMoveItems={(ids, to, from) => bulkMoveContacts(ids, to, from)}
+        onAddItems={(ids, to) => bulkAddContactsToFolder(ids, to)}
         renderItems={({ items, view, onDragStart, onDragEnd, selected }) => (
           <ContactList
             contacts={items}
@@ -261,15 +297,30 @@ export function ContactsGrid({ columns, canAddToGroup }: { columns: ContactColum
                 ) : null
             : undefined
         }
-        renderBulkBar={({ ids, folders, clear }) => (
+        renderBulkBar={({ ids, folders, clear, openFolderId }) => (
           <BulkBar
             count={ids.length}
             folders={folders}
             onMove={async (folderId) => {
-              await bulkMoveContacts(ids, folderId);
+              await bulkMoveContacts(ids, folderId, openFolderId);
               clear();
               router.refresh();
             }}
+            openFolderId={openFolderId}
+            onAdd={async (folderId) => {
+              await bulkAddContactsToFolder(ids, folderId);
+              clear();
+              router.refresh();
+            }}
+            onRemoveFromFolder={
+              openFolderId !== null
+                ? async () => {
+                    await bulkRemoveContactsFromFolder(ids, openFolderId);
+                    clear();
+                    router.refresh();
+                  }
+                : undefined
+            }
             onTag={async (tag) => {
               await bulkTagContacts(ids, tag);
               clear();

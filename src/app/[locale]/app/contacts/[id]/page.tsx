@@ -79,6 +79,19 @@ export default async function ContactViewPage({
     { label: t("role"), value: contact.role || "—" },
     { label: t("company"), value: contact.company?.name ?? "—" },
     { label: t("tags"), value: contact.tags.length ? contact.tags.join(", ") : "—" },
+    {
+      label: t("folders"),
+      value: contact.folderLinks.length
+        ? [...contact.folderLinks]
+            .sort(
+              (a, b) =>
+                a.folder.order - b.folder.order ||
+                a.folder.createdAt.getTime() - b.folder.createdAt.getTime(),
+            )
+            .map((l) => l.folder.name)
+            .join(", ")
+        : "—",
+    },
     { label: t("optedOut"), value: contact.optedOut ? t("optedOutYes") : t("optedOutNo") },
     { label: t("source"), value: contact.source || "—" },
     { label: t("createdAt"), value: fmtDate(contact.createdAt) },

@@ -19,7 +19,7 @@ export async function resolveAudience(organizationId: string, sel: AudienceSelec
 
   const contactOr: Prisma.ContactWhereInput[] = [];
   if (sel.contactTags.length) contactOr.push({ tags: { hasSome: sel.contactTags } });
-  if (sel.contactFolderIds.length) contactOr.push({ folderId: { in: sel.contactFolderIds } });
+  if (sel.contactFolderIds.length) contactOr.push({ folderLinks: { some: { folderId: { in: sel.contactFolderIds } } } });
   if (sel.contactIds.length) contactOr.push({ id: { in: sel.contactIds } });
   const wantContacts = sel.allContacts || contactOr.length > 0;
 

@@ -8,6 +8,7 @@ import { hasFeatureByModules } from "@/config/modules";
 import { isAgentOverDailyLimit } from "@/lib/whatsapp-agent/quota";
 import { agentToolset, runAgentTool, type BotContext } from "@/lib/whatsapp-agent/tools";
 import { isTranscriptionConfigured, transcribeAudio } from "@/lib/whatsapp-agent/transcribe";
+import { blockedByAgentTestLock } from "@/lib/whatsapp-agent/test-lock";
 import { getBase64FromMediaMessage } from "@/lib/integrations/evolution-client";
 import type { ParsedInbound } from "@/lib/whatsapp/inbound";
 
@@ -36,6 +37,7 @@ type Turn = { role: "user" | "assistant"; content: string };
  */
 export function scheduleAgentReply(organizationId: string, connectionId: string, m: ParsedInbound): void {
   if (m.fromMe || m.isGroup) return;
+  if (blockedByAgentTestLock(connectionId, m.remoteJid)) return;
   // Let text through, and audio too — voice notes are transcribed downstream
   // (before the agent runs), so an empty body isn't the whole story for audio.
   const isAudio = m.type === "AUDIO" || (m.media?.mime ?? "").toLowerCase().startsWith("audio/");
