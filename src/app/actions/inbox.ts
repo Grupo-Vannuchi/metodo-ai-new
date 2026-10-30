@@ -10,15 +10,10 @@ import { getChannelAdapter } from "@/lib/integrations/channels";
 import type { SendInput } from "@/lib/integrations/channels/types";
 import { normalizeWhatsappNumber, formatBrPhone, brPhoneKey, looksLikeWhatsappMobile } from "@/lib/phone";
 import { onlyDigits } from "@/lib/cnpj";
-import { getContactRows, getGroupMembers } from "@/lib/whatsapp/export";
+import { getContactRows, getGroupMembers, type ContactNamesCache } from "@/lib/whatsapp/export";
 import { ensureContactFolder, findContactFolder, whatsappFolderName } from "@/lib/crm/import-folders";
 import { createWhatsappContacts, type WhatsappContactRow } from "@/lib/crm/whatsapp-import-contacts";
-import {
-  CONTACT_NAME_PREFIX,
-  MAX_IMPORT_GROUPS,
-  lastContactNumber,
-  planGroupImport,
-} from "@/lib/whatsapp/group-import";
+import { MAX_IMPORT_GROUPS, planGroupImport } from "@/lib/whatsapp/group-import";
 import { purgeConversationMedia } from "@/lib/whatsapp/media";
 import { applyReaction, myReaction } from "@/lib/whatsapp/reactions";
 
@@ -437,33 +432,23 @@ async function importConversationContacts(
   return { id: "contacts", label: "Contatos", created: picked.length, skipped };
 }
 
-/** A group's members as "Contato #N" in the folder named after the group, numbered after the last one there. */
+/** A group's members, under the names Evolution knows (the phone when it knows none), in the folder named after the group. */
 async function importGroup(
   db: Db,
   organizationId: string,
   userId: string,
   conversationId: string,
   known: Set<string>,
+  namesCache: ContactNamesCache,
 ): Promise<ImportLine> {
-  const group = await getGroupMembers(organizationId, conversationId, userId);
+  const group = await getGroupMembers(organizationId, conversationId, userId, namesCache);
   if (!group || !group.readable) {
     return { id: conversationId, label: group?.title ?? "", created: 0, skipped: 0, failed: true };
   }
 
-  const existingFolder = await findContactFolder(db, group.title);
-  const numbered = existingFolder
-    ? await db.contact.findMany({
-        where: { folderLinks: { some: { folderId: existingFolder } }, name: { startsWith: CONTACT_NAME_PREFIX } },
-        select: { name: true },
-      })
-    : [];
-  const plan = planGroupImport(
-    group.members.map((m) => m.number),
-    known,
-    lastContactNumber(numbered.map((c) => c.name)),
-  );
+  const plan = planGroupImport(group.members, known);
   if (plan.create.length > 0) {
-    const folderId = existingFolder ?? (await ensureContactFolder(db, organizationId, group.title));
+    const folderId = (await findContactFolder(db, group.title)) ?? (await ensureContactFolder(db, organizationId, group.title));
     await createWhatsappContacts(db, organizationId, plan.create.map((c) => ({ name: c.name, phone: c.phone })), folderId);
     for (const c of plan.create) known.add(c.key);
   }
@@ -495,8 +480,9 @@ export async function importWhatsappContactsToCrm(target: {
     if (parsed.data.contacts) {
       lines.push(await importConversationContacts(db, ctx.organizationId, ctx.userId, known));
     }
+    const namesCache: ContactNamesCache = new Map();
     for (const id of groupIds) {
-      lines.push(await importGroup(db, ctx.organizationId, ctx.userId, id, known));
+      lines.push(await importGroup(db, ctx.organizationId, ctx.userId, id, known, namesCache));
     }
 
     revalidatePath("/app/contacts");
