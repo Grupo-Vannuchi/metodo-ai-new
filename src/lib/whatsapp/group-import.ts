@@ -2,17 +2,13 @@ import { brPhoneKey, formatBrPhone } from "@/lib/phone";
 
 /**
  * Pure rules of "Adicionar aos contatos" for WhatsApp groups: members become
- * contacts named "Contato #N" in the group's folder, numbered after the last
- * one already there, and numbers already in the CRM are skipped. Free of
- * `server-only` on purpose: scripts/check-whatsapp-groups.ts imports it.
+ * contacts in the group's folder under the name Evolution knows for them (the
+ * phone when it knows none), and numbers already in the CRM are skipped. Free
+ * of `server-only` on purpose: scripts/check-whatsapp-groups.ts imports it.
  */
-
-export const CONTACT_NAME_PREFIX = "Contato #";
 
 /** Groups per click: each one is an Evolution call, and the request must finish in time. */
 export const MAX_IMPORT_GROUPS = 20;
-
-const NUMBERED_NAME = /^Contato #(\d+)$/;
 
 /**
  * Country-coded digits of a member's number, or null when it can't be one.
@@ -32,42 +28,31 @@ export function phoneForContact(digits: string): string {
   return br ? formatBrPhone(digits) : `+${digits}`;
 }
 
-/** Highest N among names exactly like "Contato #N"; 0 when there is none. */
-export function lastContactNumber(names: readonly string[]): number {
-  let max = 0;
-  for (const name of names) {
-    const m = NUMBERED_NAME.exec(name.trim());
-    if (m) max = Math.max(max, Number(m[1]));
-  }
-  return max;
-}
-
 export type PlannedContact = { name: string; phone: string; key: string };
 
 /**
- * What one group adds: a contact per new number, numbered after `lastNumber`.
- * Skips invalid numbers, repeats within the group and keys in `existingKeys`
+ * What one group adds: a contact per new number, named after the member or,
+ * when Evolution has no name, after the phone (a contact needs a name). Skips
+ * invalid numbers, repeats within the group and keys in `existingKeys`
  * (brPhoneKey of every phone already in the CRM).
  */
 export function planGroupImport(
-  numbers: readonly string[],
+  members: readonly { number: string; name?: string }[],
   existingKeys: ReadonlySet<string>,
-  lastNumber: number,
 ): { create: PlannedContact[]; skipped: number } {
   const seen = new Set<string>();
   const create: PlannedContact[] = [];
   let skipped = 0;
-  let n = lastNumber;
-  for (const raw of numbers) {
-    const digits = normalizeGroupNumber(raw);
+  for (const m of members) {
+    const digits = normalizeGroupNumber(m.number);
     const key = digits ? brPhoneKey(digits) : "";
     if (!digits || !key || seen.has(key) || existingKeys.has(key)) {
       skipped++;
       continue;
     }
     seen.add(key);
-    n++;
-    create.push({ name: `${CONTACT_NAME_PREFIX}${n}`, phone: phoneForContact(digits), key });
+    const phone = phoneForContact(digits);
+    create.push({ name: m.name ?? phone, phone, key });
   }
   return { create, skipped };
 }

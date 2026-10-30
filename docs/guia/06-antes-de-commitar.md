@@ -74,9 +74,11 @@ item da proposta. Rode sempre que mexer nesse arquivo.
 
 `npm run check:groups` cobre o "Adicionar aos contatos" com grupos do WhatsApp
 ([src/lib/integrations/evolution-groups.ts](../../src/lib/integrations/evolution-groups.ts): o número do
-membro vem de `phoneNumber` quando o id é um LID; [src/lib/whatsapp/group-import.ts](../../src/lib/whatsapp/group-import.ts):
-o 9 nos celulares antigos de 12 dígitos, o nome "Contato #N" continuando a numeração da pasta do grupo e os
-números que já estão no CRM sendo pulados). Rode sempre que mexer nesses dois arquivos.
+membro vem de `phoneNumber` quando o id é um LID, o nome vem do que a Evolution manda (só dígitos conta
+como sem nome) e, para o membro ainda sem nome, da lista de contatos dela pelo número;
+[src/lib/whatsapp/group-import.ts](../../src/lib/whatsapp/group-import.ts): o 9 nos celulares antigos de 12
+dígitos, o contato com o nome do membro ou, sem nome, com o telefone no lugar, e os números que já estão no
+CRM sendo pulados). Rode sempre que mexer nesses dois arquivos.
 
 `npm run check:mcp` cobre as regras puras do servidor MCP de leitura
 ([src/lib/mcp/core.ts](../../src/lib/mcp/core.ts): comparação da chave com espaço ou quebra de linha

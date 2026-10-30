@@ -1,5 +1,5 @@
 import "server-only";
-import { parseGroupParticipants, type GroupParticipant } from "./evolution-groups";
+import { parseContactNames, parseGroupParticipants, type GroupParticipant } from "./evolution-groups";
 
 /**
  * Thin REST client for the Evolution API (v2) instance lifecycle. Endpoints and
@@ -239,6 +239,42 @@ export async function findGroupInfo(
   const participants = parseGroupParticipants(Array.isArray(g.participants) ? g.participants : []);
 
   return { subject, pictureUrl, participants };
+}
+
+/**
+ * A group's members with the names Evolution knows: unlike findGroupInfos,
+ * /group/participants fills each member's `name` from the contacts it keeps.
+ * Returns null on failure.
+ */
+export async function findGroupParticipants(
+  creds: EvoCreds,
+  groupJid: string,
+): Promise<GroupParticipant[] | null> {
+  const { ok, data } = await req(
+    creds,
+    "GET",
+    `/group/participants/${encodeURIComponent(creds.instance)}?groupJid=${encodeURIComponent(groupJid)}`,
+    undefined,
+    20000,
+  );
+  if (!ok || !Array.isArray(data.participants)) return null;
+  return parseGroupParticipants(data.participants);
+}
+
+/**
+ * Names of the contacts Evolution keeps for the instance, by phone digits
+ * (see parseContactNames). One call returns the whole list. Null on failure.
+ */
+export async function findContactNames(creds: EvoCreds): Promise<Map<string, string> | null> {
+  const { ok, data } = await req(
+    creds,
+    "POST",
+    `/chat/findContacts/${encodeURIComponent(creds.instance)}`,
+    { where: {} },
+    20000,
+  );
+  if (!ok || !Array.isArray(data)) return null;
+  return parseContactNames(data);
 }
 
 /**
