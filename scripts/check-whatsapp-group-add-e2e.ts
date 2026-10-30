@@ -343,6 +343,7 @@ check("addGroupParticipant: the code of the number is read whatever its type, an
     ["201 with no updateParticipants", { status: 201, json: {} }, { httpStatus: 201, code: null }],
     ["201 with an empty list", { status: 201, json: { updateParticipants: [] } }, { httpStatus: 201, code: null }],
     ["201 with no JSON", { status: 201 }, { httpStatus: 201, code: null }],
+    ["201 with a body that is not JSON", { status: 201, text: "<html><body>OK</body></html>" }, { httpStatus: 201, code: null }],
     ["201 with null", { status: 201, json: null }, { httpStatus: 201, code: null }],
     ["a refusal of the request", { status: 400, json: { status: 400, error: "Bad Request" } }, { httpStatus: 400, code: null }],
     ["500", { status: 500, json: { error: "boom" } }, { httpStatus: 500, code: null }],
@@ -2292,8 +2293,9 @@ check("the invite text is what the person typed with {{nome}} and {{grupo}} fill
 const earlierRound = (w: World, items: SeedItem[]) =>
   seedRun(w, { items: items.map((item) => ({ processedAt: at("2026-10-20T12:00:00.000Z"), ...item })) });
 
-// A person whose add or invite may have gone out (the runner died on them, the add or the text got no answer) is never tried again by itself.
-for (const reason of ["interrupted", "uncertain", "invite_uncertain"] as const) {
+// A person whose add or invite may have gone out (the runner died on them; the add got no answer, a gateway's 502, 503 or
+// 504, or a 2xx with no code; the text got no answer or a gateway's) is never tried again by itself.
+for (const reason of ["interrupted", "uncertain", "unknown_answer", "http_502", "http_503", "http_504", "invite_uncertain"] as const) {
   check(`an earlier round's ${reason} item for a number that is not in the group is SKIPPED / previous_uncertain with no call, and one that is in the group is ALREADY_IN`, async (ctx) => {
     const { fake, w } = await scenario(ctx);
     const folderId = await folderOf(w, "Clientes");
@@ -2370,6 +2372,51 @@ check("an invite send that gets no answer is FAILED / invite_uncertain, a refuse
   const again = fake.calls.slice(asked);
   assert.deepEqual(again.filter((c) => c.route === "updateParticipant").map(numberOf), [N(2)]);
   assert.ok(!JSON.stringify(again).includes(N(1)), "the person who may have got the text was asked about again");
+});
+
+check("a 504 or a 2xx that can't be read on the add, and a 503 on the invite text, are left in doubt and the next round skips them with no call; a plain 500 and a 4xx are definite and tried again", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  const ids = await people(w, 5);
+  fake.set("updateParticipant", (call) => {
+    const number = numberOf(call);
+    if (number === N(1)) return { status: 504, json: { error: "Gateway Timeout" } };
+    if (number === N(2)) return { status: 201, text: "<html><body>upstream answered something else</body></html>" };
+    if (number === N(3)) return { status: 500, json: { status: 500, error: "Internal Server Error" } };
+    if (number === N(4)) return { status: 400, json: { status: 400, error: "Bad Request" } };
+    return addReply(number, "403", PRIVACY); // the fifth person's privacy asks for the link
+  });
+  fake.set("sendText", { status: 503, json: { error: "Service Unavailable" } });
+  const first = await begin(w, { source: ofContacts(ids) });
+  await drain();
+  assert.deepEqual(
+    (await itemsOf(w, first)).map((i) => [i.status, i.reason, i.code]),
+    [
+      ["FAILED", "http_504", null],
+      ["FAILED", "unknown_answer", null],
+      ["FAILED", "http_500", null],
+      ["FAILED", "http_400", null],
+      ["FAILED", "invite_uncertain", "403"],
+    ],
+  );
+  assert.deepEqual(callsTo(fake, "sendText").map(numberOf), [N(5)]);
+
+  // The next round for the group, with the same people, once everything answers: the doubts are left alone, the refusals tried again.
+  fake.set("updateParticipant", (call) => addReply(numberOf(call), "200"));
+  fake.set("sendText", { status: 201, json: {} });
+  const asked = fake.calls.length;
+  const second = await begin(w, { source: ofContacts(ids) });
+  await drain();
+  assert.deepEqual(await verdicts(w, second), [
+    ["Pessoa 1", "SKIPPED", "previous_uncertain"],
+    ["Pessoa 2", "SKIPPED", "previous_uncertain"],
+    ["Pessoa 3", "ADDED", null],
+    ["Pessoa 4", "ADDED", null],
+    ["Pessoa 5", "SKIPPED", "previous_uncertain"],
+  ]);
+  const again = fake.calls.slice(asked);
+  assert.deepEqual(again.filter((c) => c.route === "updateParticipant").map(numberOf), [N(3), N(4)]);
+  assert.deepEqual(again.filter((c) => c.route === "sendText"), [], "the person who may have got the text was texted again");
+  for (const n of [1, 2, 5]) assert.ok(!JSON.stringify(again).includes(N(n)), `a person in doubt (${n}) was asked about again`);
 });
 
 check("startGroupAdd twice: the second answers already_running; two clicks at once make one round; a canceled one frees the group", async (ctx) => {

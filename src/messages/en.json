@@ -1453,6 +1453,7 @@
         "duplicate": "Same number as another contact in the round",
         "previous_uncertain": "An earlier round may already have added or invited this person",
         "unconfirmed": "We could not confirm whether the person was added",
+        "refused": "WhatsApp refused the add (code {code})",
         "no_invite_link": "Could not get the group link to send the invite",
         "invite_failed": "WhatsApp would not let us add them and the invite could not be sent",
         "invite_uncertain": "We could not confirm that the invite was sent",

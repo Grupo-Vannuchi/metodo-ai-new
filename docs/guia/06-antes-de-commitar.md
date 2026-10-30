@@ -79,7 +79,9 @@ celular antigo de 8 dígitos ganha o 9 e conta como celular); quem entra na roda
 das regras (opt-out, que vale para o número e não só para o registro: bloqueia todo contato da seleção com o mesmo
 telefone, em qualquer ordem; sem telefone, número que não é de celular, já no grupo, saiu do grupo depois de uma
 rodada anterior, já recebeu o convite, ficou em dúvida numa rodada anterior e número repetido na pasta; quem ficou em
-dúvida, porque a adição ou o texto do convite pode ter saído (`interrupted`, `uncertain` e `invite_uncertain`), fica de
+dúvida, porque a adição ou o texto do convite pode ter saído (`interrupted`; a adição sem resposta, `uncertain`, com um
+2xx sem código, `unknown_answer`, ou com o 502, 503 ou 504 de um gateway, `http_502`/`http_503`/`http_504`; e o texto sem
+resposta ou com um desses três, `invite_uncertain`), fica de
 fora com `previous_uncertain`, ou é `ALREADY_IN` se já está no grupo, e nunca é refeito sozinho) e as contagens da
 conferência; o código
 da resposta de cada adição virando adicionado, convite ou já estava; o horário das 8h às 20h de São Paulo, a
@@ -87,6 +89,11 @@ próxima tentativa depois da pausa de 30 a 90 s e a retomada às 8h do dia segui
 acaba; o texto do convite com `{{nome}}` e `{{grupo}}` e o link sempre no fim; a previsão de término; e se a instância
 ainda é do número da rodada (`linkedNumber`: o mesmo número, com ou sem o `:device`; outro telefone; ou nenhum que dê para
 ler, que nunca conta como outro)).
+Cobre também a nota que a tela de acompanhamento mostra embaixo de cada contato
+([src/components/crm/group-add-format.ts](../../src/components/crm/group-add-format.ts), `reasonNote`), com os textos
+reais do `pt.json`: toda dúvida (`UNCERTAIN_REASONS`) diz "Não foi possível confirmar…", e só ela; um erro de HTTP
+definitivo diz "O WhatsApp recusou a adição (código N)"; os outros motivos mantêm a nota própria; um motivo que ninguém
+grava não tem nota; e toda chave que ela devolve existe no `pt.json` e no `en.json`.
 Cobre também como as respostas da Evolution são lidas em
 [src/lib/integrations/evolution-groups.ts](../../src/lib/integrations/evolution-groups.ts): a lista de grupos, com os
 participantes `@lid` resolvidos pelo `phoneNumber` e a contagem dos que ficaram sem número; se o número da pessoa é admin
@@ -110,7 +117,7 @@ entradas (`started`, `paused`, `resumed`, `canceled`) no arquivo lido. O motivo:
 `<telefone>-<carimbo>@g.us`, o número de quem criou o grupo (muitas vezes um terceiro), e a tabela de auditoria dura
 tanto quanto a empresa; as entradas levam o id da rodada e o NOME do grupo. Ela confere a regra em exemplos que têm de
 falhar e em exemplos que têm de passar antes de varrer o arquivo, para que um erro nela não vire um passe silencioso.
-Não usa banco nem rede. Rode sempre que mexer em `src/lib/whatsapp/group-add/`, em `src/lib/validations/whatsapp-group-add.ts`, em `src/app/actions/whatsapp-group-add.ts`, em `src/lib/integrations/evolution-groups.ts` ou em `src/lib/integrations/evolution-client.ts`.
+Não usa banco nem rede. Rode sempre que mexer em `src/lib/whatsapp/group-add/`, em `src/lib/validations/whatsapp-group-add.ts`, em `src/app/actions/whatsapp-group-add.ts`, em `src/lib/integrations/evolution-groups.ts`, em `src/lib/integrations/evolution-client.ts`, em `src/components/crm/group-add-format.ts` ou nos textos `crm.groupAdd.reason` do `pt.json`/`en.json`.
 
 `npm run check:group-add:e2e` testa o código de servidor do "Adicionar a grupo do WhatsApp"
 ([scripts/check-whatsapp-group-add-e2e.ts](../../scripts/check-whatsapp-group-add-e2e.ts)): o que fala com a
@@ -157,9 +164,12 @@ de antes voltar, e o número que não dá para ler deixa a rodada como estava (o
 uma vez, não uma por pessoa; a trava (dois executores ao mesmo
 tempo, trava vencida, trava perdida no meio de uma espera) com uma chamada por número e quem ficou em andamento
 virando `interrupted` sem ser refeito; resposta sem código, erro de HTTP e sem resposta da adição; o link do grupo
-pedido uma vez, o texto do convite e o link que falta; o texto do convite sem resposta virando `invite_uncertain` (a
-recusa continua `invite_failed`) e a rodada seguinte do grupo pulando, sem chamada, quem ficou `interrupted`,
-`uncertain` ou `invite_uncertain`, só do mesmo grupo e da mesma empresa; dois cliques em "Começar" dando uma rodada só; o
+pedido uma vez, o texto do convite e o link que falta; o texto do convite sem resposta, ou com o 503 de um gateway,
+virando `invite_uncertain` (a recusa continua `invite_failed`); a adição com um 504 ou com um 2xx de corpo ilegível (uma
+página HTML) ficando em dúvida (`http_504`, `unknown_answer`), enquanto um 500 e um 4xx são recusas que a rodada seguinte
+tenta de novo; e a rodada seguinte do grupo pulando, sem chamada, quem ficou `interrupted`, `uncertain`,
+`unknown_answer`, `http_502`, `http_503`, `http_504` ou `invite_uncertain`, só do mesmo grupo e da mesma empresa; dois
+cliques em "Começar" dando uma rodada só; o
 nome do grupo que o começo devolve ao lado do id da rodada, o mesmo que a rodada guarda (`Grupo` se o grupo não tem nome,
 e nunca o JID, nem o antigo com o número de quem criou o grupo), que é o que a auditoria grava; o excedente de
 1.024 participantes como `group_full`; pausar, retomar e cancelar, inclusive no meio de uma chamada; a lista de

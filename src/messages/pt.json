@@ -1453,6 +1453,7 @@
         "duplicate": "Mesmo número de outro contato da rodada",
         "previous_uncertain": "Uma rodada anterior pode já ter adicionado ou convidado esta pessoa",
         "unconfirmed": "Não foi possível confirmar se a pessoa foi adicionada",
+        "refused": "O WhatsApp recusou a adição (código {code})",
         "no_invite_link": "Não foi possível pegar o link do grupo para mandar o convite",
         "invite_failed": "O WhatsApp não deixou adicionar e o convite não pôde ser enviado",
         "invite_uncertain": "Não foi possível confirmar o envio do convite",

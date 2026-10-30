@@ -21,7 +21,7 @@ import {
   WHATSAPP_GROUP_MAX,
   type GroupAddItemStatus,
 } from "@/lib/whatsapp/group-add/core";
-import { GROUP_ADD_TIME_ZONE, forecastValues } from "@/components/crm/group-add-format";
+import { GROUP_ADD_TIME_ZONE, forecastValues, reasonNote } from "@/components/crm/group-add-format";
 
 type RunStatus = "QUEUED" | "RUNNING" | "PAUSED" | "DONE" | "CANCELED";
 
@@ -105,21 +105,7 @@ const PAUSE_REASONS: readonly string[] = ["manual", "disconnected", "not_admin",
 const HINTED_PAUSES: readonly string[] = ["disconnected", "not_admin", "no_connection", "number_changed", "error"];
 const WAIT_REASONS: readonly string[] = ["pace", "window", "cap", "unavailable"];
 
-/** Reasons with a label of their own; any other (interrupted, uncertain, unknown_answer, http_<n>, or one that comes later) reads as the generic one. */
-const KNOWN_REASONS: ReadonlySet<string> = new Set([
-  "no_phone",
-  "opted_out",
-  "not_mobile",
-  "duplicate",
-  "previous_uncertain",
-  "no_invite_link",
-  "invite_failed",
-  "invite_uncertain",
-  "group_full",
-]);
-const reasonKey = (reason: string) => (KNOWN_REASONS.has(reason) ? reason : "unconfirmed");
-
-/** The statuses that, with no reason written, still get a line saying what they mean (the others say it by their name). */
+/** The statuses that, with no note for their reason, still get a line saying what they mean (the others say it by their name). */
 const EXPLAINED_STATUSES: ReadonlySet<GroupAddItemStatus> = new Set([
   "INVITED",
   "NO_WHATSAPP",
@@ -219,7 +205,8 @@ export function GroupAddRun(props: GroupAddRunProps) {
 
   const itemLabel = (s: GroupAddItemStatus) => t(`item.${s === "PENDING" && status === "CANCELED" ? "NOT_TRIED" : s}`);
   const noteOf = (item: GroupAddRunProps["items"][number]): string | null => {
-    if (item.reason) return t(`reason.${reasonKey(item.reason)}`, { max: format.number(WHATSAPP_GROUP_MAX) });
+    const note = item.reason ? reasonNote(item.reason) : null;
+    if (note) return t(`reason.${note.key}`, { max: format.number(WHATSAPP_GROUP_MAX), code: note.code ?? "" });
     return EXPLAINED_STATUSES.has(item.status) ? t(`itemHint.${item.status}`) : null;
   };
 

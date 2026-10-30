@@ -30,6 +30,7 @@ import {
   phoneMatchKey,
   pickPauseSeconds,
   renderInvite,
+  UNCERTAIN_HTTP_STATUSES,
   type LinkedNumber,
 } from "./core";
 
@@ -455,7 +456,11 @@ async function waitFor(v: Visit, ms: number): Promise<boolean> {
 
 type Added = { outcome: "ADDED" | "NEEDS_INVITE" | "ALREADY_IN" | "FAILED"; reason: string | null };
 
-/** How the answer to an add reads: no answer at all is uncertain (it may have been added), then the HTTP status, then the code of the number. */
+/**
+ * How the answer to an add reads: no answer at all is uncertain (it may have been added), then the HTTP status, then the
+ * code of the number. A gateway's 502, 503 or 504 and a 2xx with no code are written as they came (`http_<n>`,
+ * `unknown_answer`) and are doubts all the same (UNCERTAIN_REASONS): no later round redoes them.
+ */
 function classifyAdd(res: { httpStatus: number; code: string | null }): Added {
   if (res.httpStatus === 0) return { outcome: "FAILED", reason: "uncertain" };
   if (res.httpStatus < 200 || res.httpStatus > 299) return { outcome: "FAILED", reason: `http_${res.httpStatus}` };
@@ -467,8 +472,9 @@ function classifyAdd(res: { httpStatus: number; code: string | null }): Added {
 /**
  * The private text with the link for a person whose privacy settings refuse an add. The link is
  * asked once per run and kept on it; the text is never built without it. The window is read again:
- * an add that took the clock past 20:00 does not send the text. A send that gets no answer at all
- * may have gone out: it is invite_uncertain, which no later round redoes; a refusal is invite_failed.
+ * an add that took the clock past 20:00 does not send the text. A send that gets no answer at all, or
+ * a gateway's (UNCERTAIN_HTTP_STATUSES), may have gone out: it is invite_uncertain, which no later round
+ * redoes; any other refusal is invite_failed.
  */
 async function inviteByText(
   v: Visit,
@@ -491,7 +497,8 @@ async function inviteByText(
   const text = renderInvite(run.inviteText, { nome: item.contactName, grupo: run.groupName }, url);
   const sent = await sendPlainText(creds, number, text);
   if (sent.ok) return { status: "INVITED", reason: null };
-  return { status: "FAILED", reason: sent.httpStatus === 0 ? "invite_uncertain" : "invite_failed" };
+  const mayHaveGone = sent.httpStatus === 0 || (UNCERTAIN_HTTP_STATUSES as readonly number[]).includes(sent.httpStatus);
+  return { status: "FAILED", reason: mayHaveGone ? "invite_uncertain" : "invite_failed" };
 }
 
 /**

@@ -51,11 +51,28 @@ export const CAP_COUNTED: readonly GroupAddItemStatus[] = ["ADDED", "INVITED", "
 export type SkipReason = "no_phone" | "opted_out" | "not_mobile" | "duplicate" | "previous_uncertain";
 
 /**
- * The reasons that leave a FAILED item in doubt, because the add or the text may have gone out at WhatsApp all the same:
- * the runner died on the person ("interrupted"), the add got no answer ("uncertain"), the text with the link got no
- * answer ("invite_uncertain"). A later round for the group never redoes them by itself.
+ * The HTTP statuses a gateway in front of Evolution answers when it could not pass the answer back (502 bad gateway, 503
+ * unavailable, 504 timeout): the call may have reached WhatsApp all the same, so an add or a text answered with one of
+ * them is in doubt, like one that got no answer at all.
  */
-export const UNCERTAIN_REASONS = ["interrupted", "uncertain", "invite_uncertain"] as const;
+export const UNCERTAIN_HTTP_STATUSES = [502, 503, 504] as const;
+
+/**
+ * The reasons that leave a FAILED item in doubt, because the add or the text may have gone out at WhatsApp all the same:
+ * the runner died on the person ("interrupted"); the add got no answer ("uncertain"), a 2xx with no code for the number
+ * ("unknown_answer") or a gateway's answer ("http_502", "http_503", "http_504"); the text with the link got no answer or
+ * a gateway's ("invite_uncertain"). A later round for the group never redoes them by itself, and the tracking screen
+ * says they could not be confirmed. Any other `http_<n>` is a definite refusal, tried again by a later round.
+ */
+export const UNCERTAIN_REASONS = [
+  "interrupted",
+  "uncertain",
+  "unknown_answer",
+  "http_502",
+  "http_503",
+  "http_504",
+  "invite_uncertain",
+] as const;
 
 /** Whether the phone behind an instance is still the one a round was planned with. */
 export type LinkedNumber = "same" | "changed" | "unknown";

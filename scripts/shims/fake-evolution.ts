@@ -1,7 +1,8 @@
 /**
  * The Evolution API (v2) of scripts/check-whatsapp-group-add-e2e.ts, on loopback: it answers the calls of "Adicionar a
  * grupo do WhatsApp" in the shapes the real one answers them, writes down every call it gets and lets a check swap what
- * any route answers (an error, a refusal for privacy, a connection dropped without a word). Nothing reaches WhatsApp.
+ * any route answers (an error, a refusal for privacy, a body that is not JSON, a connection dropped without a word).
+ * Nothing reaches WhatsApp.
  * It lives outside the check script only to keep that readable.
  *
  * Every route has a default answer; `set` replaces it for the rest of that fake's life. A path or method the fake
@@ -60,8 +61,11 @@ export type FakeEvoCall = {
   apikey: string | null;
 };
 
-/** What a route answers: a JSON body with a status, or "drop" to close the connection without a word. */
-export type FakeEvoReply = { status: number; json?: unknown } | "drop";
+/**
+ * What a route answers: a JSON body with a status; a body that is not JSON (`text`, sent as it is, as a proxy's error page
+ * would be); or "drop" to close the connection without a word.
+ */
+export type FakeEvoReply = { status: number; json?: unknown } | { status: number; text: string } | "drop";
 export type FakeEvoHandler = (call: FakeEvoCall) => FakeEvoReply | Promise<FakeEvoReply>;
 
 export type FakeEvolution = {
@@ -183,6 +187,11 @@ export async function listenFakeEvolution(): Promise<FakeEvolution> {
       : { status: 404, json: { status: 404, error: "Not Found", response: { message: ["Cannot " + method + " " + url.pathname] } } };
     if (reply === "drop") {
       req.socket.destroy();
+      return;
+    }
+    if ("text" in reply) {
+      res.writeHead(reply.status, { "Content-Type": "text/html" });
+      res.end(reply.text);
       return;
     }
     res.writeHead(reply.status, { "Content-Type": "application/json" });

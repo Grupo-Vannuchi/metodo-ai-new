@@ -38,12 +38,16 @@ import {
   pickPauseSeconds,
   planGroupAdd,
   renderInvite,
+  UNCERTAIN_HTTP_STATUSES,
   UNCERTAIN_REASONS,
   WHATSAPP_GROUP_MAX,
   type CandidateInput,
   type PlannedItem,
   type PreviousOutcome,
 } from "../src/lib/whatsapp/group-add/core";
+import { reasonNote } from "../src/components/crm/group-add-format";
+import enMessages from "../src/messages/en.json";
+import ptMessages from "../src/messages/pt.json";
 import {
   GROUP_JID_PATTERN,
   groupAddPreviewSchema,
@@ -307,8 +311,16 @@ check("planGroupAdd: the doubt rule sits right after ALREADY_INVITED and before 
   ]);
 });
 
-check("the reasons that leave a FAILED item in doubt are the three the runner writes", () => {
-  assert.deepEqual([...UNCERTAIN_REASONS], ["interrupted", "uncertain", "invite_uncertain"]);
+check("the reasons that leave a FAILED item in doubt are the ones the runner writes when the add or the text may have gone out", () => {
+  assert.deepEqual(
+    [...UNCERTAIN_REASONS],
+    ["interrupted", "uncertain", "unknown_answer", "http_502", "http_503", "http_504", "invite_uncertain"],
+  );
+  // A gateway's answer leaves the add in doubt as much as the text: each of those statuses is among the reasons.
+  assert.deepEqual([...UNCERTAIN_HTTP_STATUSES], [502, 503, 504]);
+  for (const status of UNCERTAIN_HTTP_STATUSES) {
+    assert.ok((UNCERTAIN_REASONS as readonly string[]).includes(`http_${status}`), String(status));
+  }
 });
 
 check("linkedNumber: the instance's number against the round's is the same, changed (another phone), or unknown (none to read)", () => {
@@ -785,6 +797,67 @@ check("inviteUrlFrom accepts only a https://chat.whatsapp.com/ link, and builds 
   }
   const noLink: unknown[] = [{}, null, undefined, "x", [], [{ inviteCode: "AbC" }]];
   for (const data of noLink) assert.equal(inviteUrlFrom(data), null, JSON.stringify(data));
+});
+
+// ── What the tracking screen says of each reason (src/components/crm/group-add-format.ts) ─
+
+type ReasonCatalog = { crm: { groupAdd: { reason: Record<string, unknown> } } };
+
+/** The note the tracking screen shows for `reason`, from a catalog, with its values filled in. Null when it shows none. */
+function noteText(catalog: ReasonCatalog, reason: string): string | null {
+  const note = reasonNote(reason);
+  if (!note) return null;
+  const message = catalog.crm.groupAdd.reason[note.key];
+  assert.equal(typeof message, "string", `crm.groupAdd.reason.${note.key} is not a text`);
+  return String(message).replace("{code}", note.code ?? "").replace("{max}", "1.024");
+}
+
+const OWN_NOTES = [
+  "no_phone",
+  "opted_out",
+  "not_mobile",
+  "duplicate",
+  "previous_uncertain",
+  "no_invite_link",
+  "invite_failed",
+  "invite_uncertain",
+  "group_full",
+] as const;
+
+check("reasonNote: a failure in doubt says it could not be confirmed, a definite HTTP error says WhatsApp refused it with the code, the other reasons keep their notes", () => {
+  const pt = ptMessages as ReasonCatalog;
+  // Every doubt the planner skips reads as one, so the screen and the next round can't disagree again.
+  for (const reason of UNCERTAIN_REASONS) {
+    if (reason === "invite_uncertain") continue; // a doubt with a note of its own, below
+    assert.deepEqual(reasonNote(reason), { key: "unconfirmed" }, reason);
+    assert.equal(noteText(pt, reason), "Não foi possível confirmar se a pessoa foi adicionada", reason);
+  }
+  assert.equal(noteText(pt, "invite_uncertain"), "Não foi possível confirmar o envio do convite");
+  // A definite HTTP error (a 4xx, a plain 500, any 5xx that is not a gateway's) is a refusal, with its code.
+  for (const code of ["400", "403", "429", "500", "501"]) {
+    assert.deepEqual(reasonNote(`http_${code}`), { key: "refused", code });
+    assert.equal(noteText(pt, `http_${code}`), `O WhatsApp recusou a adição (código ${code})`);
+  }
+  // The rest keep the note of their own.
+  for (const reason of OWN_NOTES) assert.deepEqual(reasonNote(reason), { key: reason }, reason);
+  assert.equal(noteText(pt, "opted_out"), "Pediu para não receber mensagens");
+  assert.equal(noteText(pt, "group_full"), "O grupo chegou ao limite de 1.024 participantes");
+  // Only the doubts say they could not be confirmed.
+  for (const reason of [...OWN_NOTES, "http_400", "http_500"]) {
+    if ((UNCERTAIN_REASONS as readonly string[]).includes(reason)) continue;
+    assert.ok(!String(noteText(pt, reason)).startsWith("Não foi possível confirmar"), reason);
+  }
+  // A reason nobody writes has no note: the status says what it means, and it is not called a doubt.
+  for (const reason of ["something_new", "http_", "http_abc", ""]) assert.equal(reasonNote(reason), null, reason);
+});
+
+check("every note reasonNote can give is a text in pt.json and en.json, and the refusal shows the code in both", () => {
+  const keys = [...new Set([...OWN_NOTES, "unconfirmed", "refused"])];
+  for (const [name, catalog] of [["pt.json", ptMessages], ["en.json", enMessages]] as const) {
+    const reasons = (catalog as ReasonCatalog).crm.groupAdd.reason;
+    for (const key of keys) assert.equal(typeof reasons[key], "string", `${name}: crm.groupAdd.reason.${key}`);
+    assert.ok(String(reasons.refused).includes("{code}"), `${name}: the refusal does not show the code`);
+  }
 });
 
 // ── What the actions accept ──────────────────────────────────────────────────

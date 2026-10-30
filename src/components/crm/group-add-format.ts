@@ -1,8 +1,10 @@
 import type { useFormatter } from "next-intl";
 import { saoPauloDayStart } from "@/lib/tasks/board-core";
+import { UNCERTAIN_REASONS } from "@/lib/whatsapp/group-add/core";
 
 /**
- * Times of "Adicionar a grupo do WhatsApp" on the screens. The window (8h to 20h) and the day of the cap are São Paulo's, so
+ * What the screens of "Adicionar a grupo do WhatsApp" show that is decided apart from React, so `check:group-add` can pin it:
+ * the times, and the note under each contact of a round. The window (8h to 20h) and the day of the cap are São Paulo's, so
  * every time is told in that zone, whatever the zone of the browser or of the server: the markup is the same on both sides.
  */
 export const GROUP_ADD_TIME_ZONE = "America/Sao_Paulo";
@@ -19,6 +21,37 @@ export function dayOf(at: Date, now: Date): "today" | "tomorrow" | "other" {
   const days = Math.round((saoPauloDayStart(at).getTime() - saoPauloDayStart(now).getTime()) / DAY_MS);
   if (days <= 0) return "today";
   return days === 1 ? "tomorrow" : "other";
+}
+
+/** The reasons with a note of their own under `crm.groupAdd.reason`, by the same name. */
+const OWN_NOTES: ReadonlySet<string> = new Set([
+  "no_phone",
+  "opted_out",
+  "not_mobile",
+  "duplicate",
+  "previous_uncertain",
+  "no_invite_link",
+  "invite_failed",
+  "invite_uncertain",
+  "group_full",
+]);
+
+const HTTP_REASON = /^http_(\d+)$/;
+
+/** The note under a contact's status: the key of a message of `crm.groupAdd.reason`, and the code it shows (a refusal's). */
+export type ReasonNote = { key: string; code?: string };
+
+/**
+ * The note under a contact's status on the tracking screen, from the reason its item records. A reason left in doubt
+ * (UNCERTAIN_REASONS, the ones no later round redoes) says it could not be confirmed, so the screen and the next round
+ * always agree; any other HTTP error says WhatsApp refused the add, with its code; the rest have a note of their own. Null
+ * for a reason with none (one nobody writes yet): the status explains it, and it is not called a doubt.
+ */
+export function reasonNote(reason: string): ReasonNote | null {
+  if (OWN_NOTES.has(reason)) return { key: reason };
+  if ((UNCERTAIN_REASONS as readonly string[]).includes(reason)) return { key: "unconfirmed" };
+  const http = HTTP_REASON.exec(reason);
+  return http ? { key: "refused", code: http[1] } : null;
 }
 
 /** The values the `forecast` message takes for a round that ends at `at`: which day, the time of day, and the date. */
