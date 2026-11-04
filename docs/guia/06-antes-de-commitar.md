@@ -249,9 +249,11 @@ mensagem termina com a linha de co-autoria. Exemplo real:
 [README.md](../../README.md), seção "9. Convenções", para a lista completa ao lado das outras
 convenções do projeto (sem repetir aqui).
 
-## `dev` → PR → `main`
+## Branch → PR → `main`
 
-Trabalha-se na `dev`. **Mergear na `main` publica em produção automaticamente** — a Hostinger
+Trabalha-se numa branch `feature/<nome>` ou `fix/<nome>` criada a partir da `main`, com PR para a
+`main` (a `dev` não é usada desde 01/10/2026; fluxo completo no
+[guia 07](07-como-trabalhamos.md)). **Mergear na `main` publica em produção automaticamente** — a Hostinger
 observa a branch e implanta a cada push, rodando `npm install` (com `prisma generate` no
 `postinstall`) e depois `npm run build`. Não existe passo manual depois do merge, nem revisão
 humana entre ele e o ar: **o CI verde é o único portão**. Por isso vale a pena rodar as cinco

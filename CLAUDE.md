@@ -17,6 +17,7 @@ Não leia todos. Cada um carrega quando a tarefa pede; os gatilhos ao longo dest
 | [04-modulos-e-permissoes](docs/guia/04-modulos-e-permissoes.md) | mexer em módulo, tela, permissão ou i18n |
 | [05-rotas-e-jobs](docs/guia/05-rotas-e-jobs.md) | criar ou alterar rota em `src/app/api/` |
 | [06-antes-de-commitar](docs/guia/06-antes-de-commitar.md) | uma validação falhou e você não sabe por quê |
+| [07-como-trabalhamos](docs/guia/07-como-trabalhamos.md) | fluxo de branch e PR, migration em produção, commits, combinados do time |
 
 ## Comandos
 
@@ -100,9 +101,11 @@ aviso pro npm. `.nvmrc` é a fonte da verdade do major ([detalhe](docs/guia/06-a
 
 ## Convenções
 
-- **Branch:** trabalha-se na `dev`. **Mergear na `main` publica em produção automaticamente** —
+- **Branch:** `feature/<nome>` ou `fix/<nome>` a partir da `main`, PR para a `main` (a `dev` não é
+  usada desde 01/10/2026). **Mergear na `main` publica em produção automaticamente** —
   a Hostinger implanta a cada push (`npm install` → `prisma generate` → `npm run build`). Ela **não**
-  roda `prisma migrate deploy`: mudou schema, aplique a migration no Supabase **antes** do merge.
+  roda migration: mudou schema, aplique a migration no Supabase **antes** do merge, com
+  `db execute` + `migrate resolve --applied` — nunca `migrate deploy` ([guia 07](docs/guia/07-como-trabalhamos.md)).
 - **Commits:** `[ÁREA] - Verbo + Tarefa`, corpo estruturado, terminando com a linha de co-autoria.
   Ex.: `[CRM] - Adiciona autofill de CEP na empresa`.
 - **Sem drawer para criação no CRM** — foi testado e descartado a pedido.
