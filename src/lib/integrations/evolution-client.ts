@@ -1,5 +1,15 @@
 import "server-only";
-import { parseContactNames, parseGroupParticipants, type GroupParticipant } from "./evolution-groups";
+import {
+  existsOnWhatsapp,
+  inviteUrlFrom,
+  ownerJidFrom,
+  parseContactNames,
+  parseGroupList,
+  parseGroupParticipants,
+  participantUpdateCode,
+  type EvoGroupSummary,
+  type GroupParticipant,
+} from "./evolution-groups";
 
 /**
  * Thin REST client for the Evolution API (v2) instance lifecycle. Endpoints and
@@ -239,6 +249,125 @@ export async function findGroupInfo(
   const participants = parseGroupParticipants(Array.isArray(g.participants) ? g.participants : []);
 
   return { subject, pictureUrl, participants };
+}
+
+/*
+ * The calls of "Adicionar a grupo do WhatsApp". Reads, and the only two writes the feature may make: add one
+ * participant to a group, and send a text message. Nothing else about a group or its members is touched.
+ * None of them logs: a number or a text must not reach a log, and Evolution's own errors repeat both, so the
+ * caller records what happened against the item it was working on.
+ */
+
+/**
+ * Every group the linked number is in, with the participants of each. Null when the call fails or the answer is
+ * not a list of groups; an empty list is a real answer (the number is in none).
+ */
+export async function fetchAllGroups(creds: EvoCreds): Promise<EvoGroupSummary[] | null> {
+  const { ok, data } = await req(
+    creds,
+    "GET",
+    `/group/fetchAllGroups/${encodeURIComponent(creds.instance)}?getParticipants=true`,
+    undefined,
+    30000,
+  );
+  if (!ok) return null;
+  // `req` only replaces a body that fails to parse: a JSON null comes through as the data, and has no `groups` to read.
+  if (data === null || typeof data !== "object") return null;
+  // The list is an array (cast to Json by `req`) or `{ groups }`. Anything else, an empty body included, is not a list.
+  if (!Array.isArray(data) && !Array.isArray(data.groups)) return null;
+  return parseGroupList(data);
+}
+
+/** One group by its JID, with its participants: what `findGroupInfo` reads, in the shape of the group list. Null on failure. */
+export async function fetchGroupSummary(creds: EvoCreds, groupJid: string): Promise<EvoGroupSummary | null> {
+  const { ok, data } = await req(
+    creds,
+    "GET",
+    `/group/findGroupInfos/${encodeURIComponent(creds.instance)}?groupJid=${encodeURIComponent(groupJid)}`,
+    undefined,
+    20000,
+  );
+  if (!ok) return null;
+  // As in fetchAllGroups: a JSON null comes through `req` as the data, and has no `group` to read.
+  if (data === null || typeof data !== "object") return null;
+  // The envelopes findGroupInfo accepts: the group alone, in an array, or under `group` / `groupInfo`.
+  const g: unknown = Array.isArray(data) ? data[0] : (data.group ?? data.groupInfo ?? data);
+  return parseGroupList([g])[0] ?? null;
+}
+
+/** The JID of the number this instance is linked to (the `ownerJid` of fetchInstances). Null when it has none or the call fails. */
+export async function fetchOwnerJid(creds: EvoCreds): Promise<string | null> {
+  const { ok, data } = await req(
+    creds,
+    "GET",
+    `/instance/fetchInstances?instanceName=${encodeURIComponent(creds.instance)}`,
+    undefined,
+    15000,
+  );
+  return ok ? ownerJidFrom(data, creds.instance) : null;
+}
+
+/**
+ * Adds one number to a group. `httpStatus` is Evolution's, 0 when no answer came (the add may or may not have
+ * happened). `code` is the status Baileys gave that number ("200" added, "403" the person's privacy settings ask for
+ * the link instead), null when the answer has none.
+ */
+export async function addGroupParticipant(
+  creds: EvoCreds,
+  groupJid: string,
+  number: string,
+): Promise<{ httpStatus: number; code: string | null }> {
+  const { status, data } = await req(
+    creds,
+    "POST",
+    `/group/updateParticipant/${encodeURIComponent(creds.instance)}?groupJid=${encodeURIComponent(groupJid)}`,
+    { action: "add", participants: [number] },
+    30000,
+  );
+  return { httpStatus: status, code: participantUpdateCode(data) };
+}
+
+/** Whether the number has a WhatsApp account. Null when Evolution doesn't say: the call failed, or it gave no answer for the number. */
+export async function checkOnWhatsapp(creds: EvoCreds, number: string): Promise<boolean | null> {
+  const { ok, data } = await req(
+    creds,
+    "POST",
+    `/chat/whatsappNumbers/${encodeURIComponent(creds.instance)}`,
+    { numbers: [number] },
+    15000,
+  );
+  return ok ? existsOnWhatsapp(data) : null;
+}
+
+/** The group's invite link (https://chat.whatsapp.com/…). Null when the call fails or what comes back is not such a link. */
+export async function fetchGroupInviteUrl(creds: EvoCreds, groupJid: string): Promise<string | null> {
+  const { ok, data } = await req(
+    creds,
+    "GET",
+    `/group/inviteCode/${encodeURIComponent(creds.instance)}?groupJid=${encodeURIComponent(groupJid)}`,
+    undefined,
+    15000,
+  );
+  return ok ? inviteUrlFrom(data) : null;
+}
+
+/**
+ * Sends a text message. Unlike the channel adapter, it keeps the number and the text out of everything it could
+ * write: it logs nothing, and returns only the HTTP status (0 when no answer came: the text may have gone out).
+ */
+export async function sendPlainText(
+  creds: EvoCreds,
+  number: string,
+  text: string,
+): Promise<{ ok: boolean; httpStatus: number }> {
+  const { ok, status } = await req(
+    creds,
+    "POST",
+    `/message/sendText/${encodeURIComponent(creds.instance)}`,
+    { number, text },
+    30000,
+  );
+  return { ok, httpStatus: status };
 }
 
 /**

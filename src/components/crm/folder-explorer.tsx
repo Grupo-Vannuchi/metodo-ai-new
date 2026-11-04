@@ -85,6 +85,7 @@ export function FolderExplorer<T extends { id: string }>({
   onAddItems,
   renderItems,
   renderBulkBar,
+  renderOpenFolderActions,
 }: {
   /** Distinguishes this explorer's session memory (e.g. "contacts"). */
   storageKey: string;
@@ -102,6 +103,8 @@ export function FolderExplorer<T extends { id: string }>({
   renderItems: (args: RenderItemsArgs<T>) => React.ReactNode;
   /** Optional bulk-action bar, shown while items are selected. */
   renderBulkBar?: (ctx: BulkContext) => React.ReactNode;
+  /** Optional actions for the folder that is open (e.g. a button that takes all its items), at the right of its header. Return null for none. */
+  renderOpenFolderActions?: (column: FolderColumn<T>) => React.ReactNode;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -145,6 +148,7 @@ export function FolderExplorer<T extends { id: string }>({
   const folders = cols.filter((c) => c.id !== null);
   // When closed (openId === undefined) nothing is shown below the tiles.
   const openCol = openId === undefined ? undefined : cols.find((c) => c.id === openId) ?? undefined;
+  const folderActions = openCol && renderOpenFolderActions ? renderOpenFolderActions(openCol) : null;
 
   const clearSelection = () => setSelected(new Set());
   const folderItemIds = openCol ? openCol.items.map((i) => i.id) : [];
@@ -420,7 +424,7 @@ export function FolderExplorer<T extends { id: string }>({
             overTile === keyOf(openCol.id) ? "border-brand" : "border-border",
           )}
         >
-          <div className="mb-3 flex items-center gap-2">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             {openCol.id === null ? <Inbox className="size-4 text-muted-foreground" /> : <FolderOpen className="size-4 text-brand" />}
             <h2 className="text-sm font-semibold">{openCol.id === null ? labels.unfiled : openCol.name}</h2>
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{labels.folderCount(openCol.items.length)}</span>
@@ -430,6 +434,7 @@ export function FolderExplorer<T extends { id: string }>({
                 {onAddItems && labels.copyHint ? ` · ${labels.copyHint}` : ""}
               </span>
             ) : null}
+            {folderActions ? <div className="ml-auto flex items-center gap-2">{folderActions}</div> : null}
           </div>
 
           {/* The rubber-band rectangle. */}
