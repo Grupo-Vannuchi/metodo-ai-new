@@ -132,7 +132,9 @@ checagem prova e o que fazer quando falha: [06-antes-de-commitar](06-antes-de-co
 - **Teste em produção não envia mensagem real de WhatsApp** para contatos de clientes.
 - **Dado fictício nunca chega perto do WhatsApp.** Em 28/10/2026, telefones inventados num CSV de
   teste adicionaram 18 desconhecidos a um grupo real. Planilha ou contato fictício leva essa
-  marcação no nome e não entra em fluxo que fale com a Evolution.
+  marcação no nome e não entra em fluxo que fale com a Evolution. Desde 04/11/2026 o código também
+  segura: fora de produção, o WhatsApp só envia para os números de `WHATSAPP_DEV_ALLOWED_NUMBERS`
+  (veja "Dicas de ambiente").
 - **O `.env` nunca vai para o git.** Ele tem as chaves reais. Passe para outra máquina por pendrive
   ou gerenciador de senhas, nunca por e-mail ou WhatsApp.
 
@@ -145,3 +147,8 @@ checagem prova e o que fazer quando falha: [06-antes-de-commitar](06-antes-de-co
   client do Prisma sozinho.
 - Webhook (WhatsApp, e-mail) não chega em `localhost`: precisa de túnel (ngrok) com
   `NEXT_PUBLIC_SITE_URL` apontando para ele.
+- **WhatsApp em desenvolvimento é real:** o `.env` local aponta para a mesma VPS do Evolution da
+  produção. Por isso, fora de produção, texto, mídia, áudio e reação só saem para os números de
+  `WHATSAPP_DEV_ALLOWED_NUMBERS` (separados por vírgula, em qualquer formato; grupo pelo JID
+  `...@g.us`). Vazia ou ausente, nada sai, e a tela mostra "Envio de WhatsApp bloqueado fora de
+  produção". Para testar, ponha só o seu celular. Em produção a variável é ignorada.

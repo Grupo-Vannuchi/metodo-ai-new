@@ -83,7 +83,10 @@ Vale para scripts avulsos (`prisma/seed.ts`, `scripts/*.ts`) tanto quanto para a
 **Evolution/WhatsApp.** Sempre resolva credenciais com `resolveEvoCreds()`
 ([src/lib/integrations/evolution-creds.ts](src/lib/integrations/evolution-creds.ts)). Conexões "de
 plataforma" guardam só o `instance`; `baseUrl`/`apiKey` vêm do env. Passar credencial crua quebra o envio
-com "Conexão Evolution incompleta".
+com "Conexão Evolution incompleta". **Fora de produção, mensagem só sai para os números de
+`WHATSAPP_DEV_ALLOWED_NUMBERS`** (lista vazia = nada sai), pela trava de
+[src/lib/whatsapp/dev-guard.ts](src/lib/whatsapp/dev-guard.ts): o `.env` local aponta para a VPS real.
+Envio novo que fale com pessoas passa pelo adaptador de [channels/evolution.ts](src/lib/integrations/channels/evolution.ts) ou chama `devGuardBlocks` antes.
 
 **Rotas `/api/*` são públicas por padrão** — nenhum middleware protege endpoint de API, cada rota se
 protege sozinha.
