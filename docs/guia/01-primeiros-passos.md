@@ -76,19 +76,25 @@ pequena: não exige entender nenhuma regra de negócio, e dá para confirmar soz
    `localhost:3000` — o rótulo novo aparece no topo do menu lateral. Se não aparecer, confira se
    salvou os dois arquivos.
 5. **Rode as 5 validações** (seção acima). Todas verdes.
-6. **Commit**, seguindo a convenção do `CLAUDE.md` (`[ÁREA] - Verbo + Tarefa`, corpo curto):
+6. **Commit numa branch própria**, seguindo a convenção do `CLAUDE.md` (`[ÁREA] - Verbo + Tarefa`,
+   corpo curto). Trabalha-se em `feature/<nome>` ou `fix/<nome>` criada a partir da `main` — a `dev`
+   não é usada desde 01/10/2026:
    ```bash
+   git switch -c feature/rotulo-painel
    git add src/messages/pt.json src/messages/en.json
    git commit -m "[UI] - Ajusta rotulo do Painel no menu lateral"
    ```
-7. **Push direto na `dev`** — é onde se trabalha neste repositório. `main` é produção, protegida
-   por regra do GitHub, e recusa push direto:
+7. **Suba a branch e abra o PR para a `main`.** `main` é produção, protegida por regra do GitHub, e
+   recusa push direto — o caminho é o PR (fluxo completo no [guia 07](07-como-trabalhamos.md)):
    ```bash
-   git push origin dev
+   git push -u origin feature/rotulo-painel
    ```
-8. **Veja o CI verde.** O push sozinho já dispara o workflow — o gatilho em
-   [.github/workflows/ci.yml:3-7](../../.github/workflows/ci.yml#L3-L7) roda em `push` para `dev`
-   e `main`, não só em pull request. Abra a aba **Actions** do repositório no GitHub
+   Abra o PR pelo `gh pr create` ou por
+   `github.com/Grupo-Vannuchi/metodo-ai-new/compare/main...feature/rotulo-painel?expand=1`.
+   Para este exercício, feche o PR sem mergear: mergear publica em produção.
+8. **Veja o CI verde.** Abrir o PR dispara o workflow — o gatilho em
+   [.github/workflows/ci.yml:3-7](../../.github/workflows/ci.yml#L3-L7) roda em `pull_request` para
+   a `main`. Abra a aba **Actions** do repositório no GitHub
    (`github.com/Grupo-Vannuchi/metodo-ai-new/actions`) e acompanhe o job `validate`
    ([.github/workflows/ci.yml:17-18](../../.github/workflows/ci.yml#L17-L18)): ele repete as
    mesmas cinco checagens (`typecheck`, `lint`, `check:node`, `build` e `check:isolation`), numa
