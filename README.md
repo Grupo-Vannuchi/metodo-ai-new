@@ -163,6 +163,7 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 | `INTEGRATION_ENC_KEY` | **sim** | AES-256-GCM p/ credenciais (64 hex = 32 bytes) |
 | `NEXT_PUBLIC_SITE_URL` | **recomendada** | URL pública (webhooks, links de e-mail) |
 | `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE` | p/ WhatsApp | servidor Evolution compartilhado (VPS) |
+| `WHATSAPP_DEV_ALLOWED_NUMBERS` | só fora de produção | números (ou JIDs de grupo), separados por vírgula, que podem receber WhatsApp em desenvolvimento; vazia = nada sai. Ignorada em produção. Trava em `src/lib/whatsapp/dev-guard.ts` |
 | `ANTHROPIC_API_KEY` | p/ IA | copiloto + agente WhatsApp |
 | `OPENAI_API_KEY` | p/ IA | transcrição de áudio, geração de imagem |
 | `RESEND_API_KEY`, `EMAIL_FROM` | p/ e-mail | verificação, convites, reset e o envio em massa do submenu E-mail |

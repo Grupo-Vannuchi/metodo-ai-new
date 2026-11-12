@@ -80,6 +80,14 @@ como sem nome) e, para o membro ainda sem nome, da lista de contatos dela pelo n
 dígitos, o contato com o nome do membro ou, sem nome, com o telefone no lugar, e os números que já estão no
 CRM sendo pulados). Rode sempre que mexer nesses dois arquivos.
 
+`npm run check:devguard` cobre a trava de desenvolvimento do WhatsApp
+([src/lib/whatsapp/dev-guard.ts](../../src/lib/whatsapp/dev-guard.ts)): em produção nada é segurado;
+fora dela (inclusive `NODE_ENV` vazio dos scripts `tsx`), só sai mensagem para quem está em
+`WHATSAPP_DEV_ALLOWED_NUMBERS`, em qualquer formato (com ou sem 55, com ou sem o 9, `@s.whatsapp.net`),
+grupo só pelo JID listado, LID e destino vazio segurados, e uma Evolution em loopback (a falsa dos e2e)
+liberada. Não usa banco nem rede; todos os números do teste são inventados e não saem do processo. Rode
+sempre que mexer nesse arquivo ou em [channels/evolution.ts](../../src/lib/integrations/channels/evolution.ts).
+
 `npm run check:mcp` cobre as regras puras do servidor MCP de leitura
 ([src/lib/mcp/core.ts](../../src/lib/mcp/core.ts): comparação da chave com espaço ou quebra de linha
 colados, datas `AAAA-MM-DD` como dias UTC com o fim inclusivo, período invertido ou longo demais,
