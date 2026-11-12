@@ -84,8 +84,9 @@ check("the pacing, cap and size constants are the agreed ones", () => {
   assert.equal(WHATSAPP_GROUP_MAX, 1024);
   assert.equal(GROUP_ADD_MAX_CONTACTS, 1000);
   assert.equal(INVITE_TEXT_MAX, 1000);
-  // Only people the WhatsApp was actually asked about count against the day.
-  assert.deepEqual([...CAP_COUNTED], ["ADDED", "INVITED", "FAILED"]);
+  // Only people the WhatsApp was actually asked about count against the day: the lookup that found no account too (stamped by
+  // the runner), never the not_mobile the plan leaves out (no processedAt).
+  assert.deepEqual([...CAP_COUNTED], ["ADDED", "INVITED", "FAILED", "NO_WHATSAPP"]);
 });
 
 check("phoneMatchKey gives one key to the same BR mobile in any format", () => {
@@ -1195,6 +1196,24 @@ check("the audit entries of the actions carry no JID, phone or invite text in th
     assert.ok(found.includes(`whatsapp_group_add.${action}`), `no audit entry for whatsapp_group_add.${action} (found: ${found.join(", ") || "none"})`);
   }
   assert.deepEqual(auditMetaLeaks(text), []);
+});
+
+check("only who started a round resumes it: an admin stops a colleague's round but never sends from the colleague's number", () => {
+  const text = readFileSync(join(__dirname, "..", "src", "app", "actions", "whatsapp-group-add.ts"), "utf8");
+  // The body of resumeGroupAddAction, up to the next exported action.
+  const start = text.indexOf("export async function resumeGroupAddAction");
+  assert.ok(start >= 0, "resumeGroupAddAction not found");
+  const end = text.indexOf("export async function", start + 1);
+  const body = text.slice(start, end < 0 ? undefined : end);
+  const guard = body.indexOf("own.run.createdById !== g.ctx.userId");
+  assert.ok(guard >= 0, "resumeGroupAddAction no longer checks that the caller started the round");
+  assert.ok(guard < body.indexOf("resumeGroupAdd("), "the check must come before the round is resumed");
+  // Pause and cancel keep the admin's way: they only stop the round.
+  for (const name of ["pauseGroupAddAction", "cancelGroupAddAction"]) {
+    const at = text.indexOf(`export async function ${name}`);
+    const next = text.indexOf("export async function", at + 1);
+    assert.ok(!text.slice(at, next < 0 ? undefined : next).includes("createdById !=="), `${name} should let an admin stop the round`);
+  }
 });
 
 console.log(`\n✅ group-add: ${passed} checks passed.`);

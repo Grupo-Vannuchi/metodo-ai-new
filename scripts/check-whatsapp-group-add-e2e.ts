@@ -1257,10 +1257,18 @@ check("a full run: added, invited by text, already in, failed, no WhatsApp; the 
   ]);
   const items = await itemsOf(w, runId);
   assert.deepEqual(items.map((i) => i.code), ["200", "403", "409", null, null, null]);
-  // Every try is stamped; the person Evolution found no account for, and the one who was left out, are not.
+  // Every try is stamped, the lookup that found no account included (it asked WhatsApp, so it counts for the day and the
+  // pause follows it); the one who was left out is not.
   assert.deepEqual(
     items.map((i) => i.processedAt?.toISOString() ?? null),
-    ["2026-10-28T13:00:00.000Z", "2026-10-28T13:00:30.000Z", "2026-10-28T13:01:00.000Z", "2026-10-28T13:01:30.000Z", null, null],
+    [
+      "2026-10-28T13:00:00.000Z",
+      "2026-10-28T13:00:30.000Z",
+      "2026-10-28T13:01:00.000Z",
+      "2026-10-28T13:01:30.000Z",
+      "2026-10-28T13:02:00.000Z",
+      null,
+    ],
   );
   const run = await runOf(w, runId);
   assert.equal(run.status, "DONE");
@@ -1285,6 +1293,44 @@ check("a full run: added, invited by text, already in, failed, no WhatsApp; the 
   // The opted-out contact is in no request: not the number, not the name.
   const traffic = JSON.stringify(fake.calls);
   assert.ok(!traffic.includes(N(6)) && !traffic.includes("911110006") && !traffic.includes("Fábio"), "the opted-out contact reached Evolution");
+});
+
+check("a pause made while the number is looked up holds back the add: the person goes back to the queue, untried", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 2);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  fake.set("whatsappNumbers", async (call) => {
+    const number = numberOf(call);
+    // The member clicks "Pausar" while the lookup of the first person is on its way.
+    if (number === N(1)) assert.equal(await pauseGroupAdd(w.orgA, runId), true);
+    return { status: 200, json: [{ exists: true, jid: `${number}@s.whatsapp.net`, number }] };
+  });
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.deepEqual(addedNumbers(fake), [], "the add went out after the pause");
+  assert.deepEqual(texts(fake), []);
+  const run = await runOf(w, runId);
+  assert.deepEqual([run.status, run.pausedReason, run.lastDispatchAt], ["PAUSED", "manual", null]);
+  // Not counted for the day and taken up again by a resume.
+  assert.deepEqual((await itemsOf(w, runId)).map((i) => [i.status, i.processedAt]), [["PENDING", null], ["PENDING", null]]);
+});
+
+check("a cancel made between a refused add and the invite holds back the text: nothing reaches the person", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 2);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  fake.set("updateParticipant", async (call) => {
+    const number = numberOf(call);
+    if (number !== N(1)) return addReply(number, "200");
+    // The member cancels while the add of the first person is on its way; WhatsApp asks for the link (privacy).
+    assert.equal(await cancelGroupAdd(w.orgA, runId), true);
+    return addReply(number, "403", PRIVACY);
+  });
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.deepEqual(addedNumbers(fake), [N(1)], "only the add that was already on its way");
+  assert.deepEqual(texts(fake), [], "the invite went out after the cancel");
+  assert.equal((await runOf(w, runId)).status, "CANCELED");
+  // Both not reached: PENDING, which a canceled round shows as "not tried".
+  assert.deepEqual((await itemsOf(w, runId)).map((i) => [i.status, i.processedAt]), [["PENDING", null], ["PENDING", null]]);
 });
 
 check("window: outside 08:00-20:00 in São Paulo nothing goes out, the run waits for 08:00 and goes on then", async (ctx) => {
@@ -1393,7 +1439,11 @@ check("cap: a try that ended in an invite or in a failure counts as much as an a
   );
 });
 
-check("cap: only ADDED, INVITED and FAILED tried today count; yesterday (São Paulo) and the people left out do not", async (ctx) => {
+check("cap: a lookup that found no account counts as much as an add", async (ctx) => {
+  await expectCapWait(ctx, (w) => otherOrgTried(w, [...triedToday("ADDED", 50), ...triedToday("NO_WHATSAPP", 50)]));
+});
+
+check("cap: only ADDED, INVITED, FAILED and looked-up NO_WHATSAPP tried today count; yesterday (São Paulo) and the people left out do not", async (ctx) => {
   const { fake, w } = await scenario(ctx);
   const many = (status: GroupAddItemStatus, processedAt: Date | null): SeedItem[] =>
     Array.from({ length: 100 }, (_, i) => ({ name: `x${status}${i}`, phone: null, status, processedAt }));
@@ -1404,7 +1454,8 @@ check("cap: only ADDED, INVITED and FAILED tried today count; yesterday (São Pa
       // One millisecond before the São Paulo day started: yesterday.
       ...many("ADDED", at("2026-10-28T02:59:59.999Z")),
       ...many("ALREADY_IN", at("2026-10-28T12:00:00.000Z")),
-      ...many("NO_WHATSAPP", at("2026-10-28T12:00:00.000Z")),
+      // Left out by the plan (not_mobile): never looked up, so never stamped.
+      ...many("NO_WHATSAPP", null),
       ...many("SKIPPED", null),
     ],
   });

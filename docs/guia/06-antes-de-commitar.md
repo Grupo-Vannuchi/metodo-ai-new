@@ -163,7 +163,8 @@ falha, sem WhatsApp) em que o contato com opt-out, e o de mesmo número de um op
 nenhuma requisição; um opt-out feito depois de começar (do próprio contato, ou de outro da empresa com o mesmo número)
 valendo na vez da pessoa, sem chamada nenhuma; o horário das 8h às 20h e o relógio lido de novo antes da adição e do
 convite; o teto de 100 por dia contado por número em todas as empresas, no dia de São Paulo e só com adicionado,
-convite e falha, e a rodada que continua no dia seguinte; uma rodada por número com a fila subindo na ordem e a
+convite, falha e a consulta que achou o número sem WhatsApp (ela também leva a pausa entre as pessoas), e a rodada que
+continua no dia seguinte; uma rodada por número com a fila subindo na ordem e a
 pausada segurando a fila; a pausa de
 30 a 90 s entre as pessoas, que vale pelo número e não pela rodada (a que sobe depois do fim de outra, de um
 cancelamento ou de uma retomada espera a pausa da última tentativa do número, de qualquer empresa); número
@@ -184,7 +185,9 @@ tenta de novo; e a rodada seguinte do grupo pulando, sem chamada, quem ficou `in
 cliques em "Começar" dando uma rodada só; o
 nome do grupo que o começo devolve ao lado do id da rodada, o mesmo que a rodada guarda (`Grupo` se o grupo não tem nome,
 e nunca o JID, nem o antigo com o número de quem criou o grupo), que é o que a auditoria grava; o excedente de
-1.024 participantes como `group_full`; pausar, retomar e cancelar, inclusive no meio de uma chamada; a lista de
+1.024 participantes como `group_full`; pausar, retomar e cancelar, inclusive no meio de uma chamada (a pausa feita durante a
+consulta do número segura a adição, e o cancelamento entre a adição recusada e o convite segura o texto: a pessoa volta
+para a fila sem contar no dia); a lista de
 rodadas devidas do cron e o `pokeGroupAdd`; a rota do cron (`/api/cron/whatsapp-groups`): sem o segredo, com um errado,
 de outro esquema ou com o segredo não configurado ela responde 401 e não toca em nada; com ele, chama só as rodadas
 devidas e deixa em paz a de trava ainda viva (até 90 s, o limite incluído) e a que um executor está trabalhando, e

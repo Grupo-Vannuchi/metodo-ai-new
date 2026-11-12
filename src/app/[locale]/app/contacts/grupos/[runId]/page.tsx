@@ -55,6 +55,7 @@ export default async function GroupAddRunPage({
       forecastAt={forecastAt?.toISOString() ?? null}
       now={now.toISOString()}
       canSteer={run.createdById === ctx.userId || hasRole(ctx.role, "ADMIN")}
+      canResume={run.createdById === ctx.userId}
     />
   );
 }

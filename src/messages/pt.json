@@ -1388,6 +1388,7 @@
         "progress": "{done} de {total} contatos",
         "pause": "Pausar",
         "resume": "Retomar",
+        "resumeOwnerOnly": "Só quem começou a rodada pode retomá-la: ela sai do WhatsApp dessa pessoa.",
         "cancel": "Cancelar",
         "confirmCancel": "Cancelar esta rodada? Quem ainda não foi alcançado não será adicionado, e a rodada não pode ser retomada depois.",
         "confirmCancelYes": "Cancelar rodada",

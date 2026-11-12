@@ -43,8 +43,13 @@ export type GroupAddRunProps = {
   forecastAt: string | null;
   /** When the server read the run: the day words of the forecast are told from it, so the markup is the same on both sides. */
   now: string;
-  /** Whether the viewer may pause, resume and cancel: who started the round, or an admin. Decided by the server. */
+  /** Whether the viewer may pause and cancel: who started the round, or an admin. Decided by the server. */
   canSteer: boolean;
+  /**
+   * Whether the viewer may resume: only who started the round, since it goes out from that member's own WhatsApp. An admin
+   * stops a colleague's round but never sets it going again. Decided by the server (resumeGroupAddAction checks it too).
+   */
+  canResume: boolean;
 };
 
 type Tone = "neutral" | "info" | "good" | "warn" | "bad";
@@ -124,7 +129,7 @@ type Notice = { warn: boolean; text: string; hint: string | null };
  * what continues it where no cron is scheduled. Everything is told from the props; no clock is read while rendering.
  */
 export function GroupAddRun(props: GroupAddRunProps) {
-  const { runId, groupName, status, pausedReason, unreadable, waitReason, counts, items, canSteer } = props;
+  const { runId, groupName, status, pausedReason, unreadable, waitReason, counts, items, canSteer, canResume } = props;
   const t = useTranslations("crm.groupAdd");
   const format = useFormatter();
   const router = useRouter();
@@ -240,10 +245,14 @@ export function GroupAddRun(props: GroupAddRunProps) {
         {canSteer && open ? (
           <div className="flex flex-wrap items-center gap-2">
             {status === "PAUSED" ? (
-              <Button type="button" size="sm" disabled={busy} onClick={() => act("resume")}>
-                <Play className="size-4" />
-                {t("run.resume")}
-              </Button>
+              canResume ? (
+                <Button type="button" size="sm" disabled={busy} onClick={() => act("resume")}>
+                  <Play className="size-4" />
+                  {t("run.resume")}
+                </Button>
+              ) : (
+                <span className="text-sm text-muted-foreground">{t("run.resumeOwnerOnly")}</span>
+              )
             ) : (
               <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => act("pause")}>
                 <Pause className="size-4" />

@@ -54,7 +54,8 @@ type Loaded = { ok: true; id: string; run: GroupAddRunView } | GroupAddActionFai
 /**
  * The round the caller names: the id parsed, then read through `tenantDb`, so the id of another company's round is as good as
  * none (`not_found`, never `forbidden`: it does not say the round exists). With `steer`, only the member who started it, or
- * an admin or the owner, goes on: pause, resume and cancel. Looking (poke) takes the gate alone.
+ * an admin or the owner, goes on: pause, resume and cancel. Resume asks more (resumeGroupAddAction): only who started it.
+ * Looking (poke) takes the gate alone.
  */
 async function loadRun(ctx: OrgContext, runId: unknown, steer: boolean): Promise<Loaded> {
   const id = groupAddRunIdSchema.safeParse(runId);
@@ -146,6 +147,9 @@ export async function resumeGroupAddAction(runId: string): Promise<{ ok: true } 
   try {
     const own = await loadRun(g.ctx, runId, true);
     if (!own.ok) return own;
+    // A round goes out from the personal WhatsApp of who started it (WhatsApp is per member, see inbox.ts). An admin may stop
+    // a colleague's round (pause, cancel), never set it going again: that would send from the colleague's number.
+    if (own.run.createdById !== g.ctx.userId) return { ok: false, error: "forbidden" };
     const res = await resumeGroupAdd(g.ctx.organizationId, own.id);
     if (!res.ok) return res;
     await audit(g.ctx, {

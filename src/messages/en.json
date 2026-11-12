@@ -1388,6 +1388,7 @@
         "progress": "{done} of {total} contacts",
         "pause": "Pause",
         "resume": "Resume",
+        "resumeOwnerOnly": "Only who started the round can resume it: it goes out from that person's WhatsApp.",
         "cancel": "Cancel",
         "confirmCancel": "Cancel this round? People not reached yet will not be added, and the round can't be resumed later.",
         "confirmCancelYes": "Cancel round",

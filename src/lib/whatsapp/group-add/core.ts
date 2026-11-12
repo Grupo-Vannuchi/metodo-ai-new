@@ -45,8 +45,12 @@ export type GroupAddItemStatus =
   | "ALREADY_INVITED"
   | "FAILED";
 
-/** The statuses that count against a number's day: WhatsApp was asked about the person. */
-export const CAP_COUNTED: readonly GroupAddItemStatus[] = ["ADDED", "INVITED", "FAILED"];
+/**
+ * The statuses that count against a number's day: WhatsApp was asked about the person. NO_WHATSAPP counts when the runner's
+ * lookup found no account (the item is stamped with processedAt); the ones the plan leaves out as not_mobile are never looked
+ * up, have no processedAt, and so never count.
+ */
+export const CAP_COUNTED: readonly GroupAddItemStatus[] = ["ADDED", "INVITED", "FAILED", "NO_WHATSAPP"];
 
 export type SkipReason = "no_phone" | "opted_out" | "not_mobile" | "duplicate" | "previous_uncertain";
 

@@ -440,6 +440,20 @@ function settle(v: Visit, itemId: string, data: Prisma.WhatsappGroupAddItemUpdat
   return prisma.whatsappGroupAddItem.updateMany({ where: { id: itemId, organizationId: v.org, status: "PROCESSING" }, data });
 }
 
+/** Gives the person in our hands back to the queue, untried: not counted for the day, and taken up again by a resume. */
+function backToPending(v: Visit, itemId: string) {
+  return settle(v, itemId, { status: "PENDING", processedAt: null });
+}
+
+/**
+ * Whether the run is still RUNNING, read right before a call that reaches a person (the add, the invite text). The lookups
+ * before them take seconds, and a pause or a cancel made meanwhile must hold back this person too, not only the next one.
+ */
+async function stillRunning(v: Visit): Promise<boolean> {
+  const run = await prisma.whatsappGroupAddRun.findFirst({ where: { id: v.id, organizationId: v.org }, select: { status: true } });
+  return run?.status === "RUNNING";
+}
+
 /** Sleeps `ms` in pieces of at most chunkMs, renewing the lease before each. False when the run stopped being RUNNING meanwhile. */
 async function waitFor(v: Visit, ms: number): Promise<boolean> {
   const rt = groupAddRuntime;
@@ -474,7 +488,8 @@ function classifyAdd(res: { httpStatus: number; code: string | null }): Added {
  * asked once per run and kept on it; the text is never built without it. The window is read again:
  * an add that took the clock past 20:00 does not send the text. A send that gets no answer at all, or
  * a gateway's (UNCERTAIN_HTTP_STATUSES), may have gone out: it is invite_uncertain, which no later round
- * redoes; any other refusal is invite_failed.
+ * redoes; any other refusal is invite_failed. STOPPED when the run was paused or canceled before the text went:
+ * nothing reached the person (the add was refused), and the caller gives them back to the queue.
  */
 async function inviteByText(
   v: Visit,
@@ -482,7 +497,7 @@ async function inviteByText(
   creds: EvoCreds,
   item: { contactName: string },
   number: string,
-): Promise<{ status: "INVITED" | "FAILED"; reason: string | null }> {
+): Promise<{ status: "INVITED" | "FAILED" | "STOPPED"; reason: string | null }> {
   let url = run.inviteUrl;
   if (!url) {
     await beat(v);
@@ -493,6 +508,7 @@ async function inviteByText(
   }
   if (!url) return { status: "FAILED", reason: "no_invite_link" };
   if (!isInsideWindow(groupAddRuntime.now())) return { status: "FAILED", reason: "invite_failed" };
+  if (!(await stillRunning(v))) return { status: "STOPPED", reason: null };
   await beat(v);
   const text = renderInvite(run.inviteText, { nome: item.contactName, grupo: run.groupName }, url);
   const sent = await sendPlainText(creds, number, text);
@@ -515,16 +531,17 @@ async function optedOutNow(organizationId: string, item: { contactId: string; ph
 
 /**
  * One person: reserved, looked up, added and, when WhatsApp asks for the link instead, sent the
- * link by text. "again" when nothing was asked of the add (someone else reserved the person, the
- * person has no WhatsApp account, the window closed first): no pause follows. Otherwise the status
- * the person ended in; the pause between people is the caller's.
+ * link by text. "again" when WhatsApp was asked nothing (someone else reserved the person, the window
+ * closed first, the run was paused or canceled before the add): no pause follows. Otherwise the status
+ * the person ended in, NO_WHATSAPP included (the lookup asked WhatsApp about the number); the pause
+ * between people is the caller's.
  */
 async function tryPerson(
   v: Visit,
   run: Run,
   creds: EvoCreds,
   item: { id: string; contactId: string; contactName: string; phone: string | null; phoneKey: string | null },
-): Promise<"again" | "ADDED" | "INVITED" | "ALREADY_IN" | "FAILED"> {
+): Promise<"again" | "ADDED" | "INVITED" | "ALREADY_IN" | "NO_WHATSAPP" | "FAILED"> {
   const rt = groupAddRuntime;
   // An opt-out made since the plan: nothing is asked of WhatsApp about this person, and no pause is spent on them.
   if (await optedOutNow(v.org, item)) {
@@ -549,15 +566,21 @@ async function tryPerson(
 
   await beat(v);
   if ((await checkOnWhatsapp(creds, number)) === false) {
-    await settle(v, item.id, { status: "NO_WHATSAPP", processedAt: null });
-    return "again";
+    // The lookup asked WhatsApp about the number, so it is stamped: it counts for the day (CAP_COUNTED) and the pause between
+    // people follows it, like a try. Otherwise a folder full of numbers without an account fires lookups back to back, a
+    // pattern that gets the member's number banned.
+    await settle(v, item.id, { status: "NO_WHATSAPP", processedAt: rt.now() });
+    return "NO_WHATSAPP";
   }
   // The clock is read again: the calls above may have taken it past 20:00. The person goes back to PENDING.
   if (!isInsideWindow(rt.now())) {
-    await prisma.whatsappGroupAddItem.updateMany({
-      where: { id: item.id, organizationId: v.org, status: "PROCESSING" },
-      data: { status: "PENDING", processedAt: null },
-    });
+    await backToPending(v, item.id);
+    return "again";
+  }
+  // And the run: a pause or a cancel made during the lookup holds this person back too. Back to PENDING (a cancel leaves the
+  // people not reached PENDING as well), and the loop sees the run stopped.
+  if (!(await stillRunning(v))) {
+    await backToPending(v, item.id);
     return "again";
   }
 
@@ -568,6 +591,11 @@ async function tryPerson(
   let reason = added.reason;
   if (added.outcome === "NEEDS_INVITE") {
     const invited = await inviteByText(v, run, creds, item, number);
+    if (invited.status === "STOPPED") {
+      // Paused or canceled between the add (refused: the person's privacy asks for the link) and the text: nothing reached them.
+      await backToPending(v, item.id);
+      return "again";
+    }
     status = invited.status;
     reason = invited.reason;
   } else {
