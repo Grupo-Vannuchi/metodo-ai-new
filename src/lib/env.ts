@@ -89,6 +89,10 @@ const serverSchema = z.object({
   EVOLUTION_API_KEY: z.string().optional(),
   // Legacy single default instance (pre-multi-user); no longer required.
   EVOLUTION_INSTANCE: z.string().optional(),
+  // Outside production, the only numbers (or group JIDs) a WhatsApp message may
+  // go to, comma-separated. Unset or empty = nothing goes out. Ignored in
+  // production. Guard: src/lib/whatsapp/dev-guard.ts.
+  WHATSAPP_DEV_ALLOWED_NUMBERS: z.string().optional(),
   // Platform Google Places key (prospecting) — a single shared key so tenants
   // don't have to bring their own. Falls back to a per-tenant key when unset.
   GOOGLE_PLACES_API_KEY: z.string().optional(),

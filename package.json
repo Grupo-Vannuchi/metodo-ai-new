@@ -31,6 +31,7 @@
     "check:groups": "tsx scripts/check-whatsapp-groups.ts",
     "check:group-add": "tsx scripts/check-whatsapp-group-add.ts",
     "check:group-add:e2e": "tsx --tsconfig scripts/tsconfig.server.json --env-file=.env scripts/check-whatsapp-group-add-e2e.ts",
+    "check:devguard": "tsx scripts/check-whatsapp-dev-guard.ts",
     "check:mcp": "tsx scripts/check-mcp.ts",
     "check:mcp:e2e": "tsx --env-file=.env scripts/check-mcp-e2e.ts",
     "email:dominio": "tsx --env-file=.env scripts/email-domain.ts",

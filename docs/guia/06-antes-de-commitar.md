@@ -218,6 +218,14 @@ usa; cada rota tem uma resposta padrão, o teste troca a que quiser (`set`) e a 
 corpo de toda chamada. Rode sempre que mexer em `src/lib/integrations/evolution-client.ts`, em
 `scripts/shims/fake-evolution.ts`, em `src/lib/whatsapp/group-add/` ou em `src/lib/queries/whatsapp-group-add.ts`.
 
+`npm run check:devguard` cobre a trava de desenvolvimento do WhatsApp
+([src/lib/whatsapp/dev-guard.ts](../../src/lib/whatsapp/dev-guard.ts)): em produção nada é segurado;
+fora dela (inclusive `NODE_ENV` vazio dos scripts `tsx`), só sai mensagem para quem está em
+`WHATSAPP_DEV_ALLOWED_NUMBERS`, em qualquer formato (com ou sem 55, com ou sem o 9, `@s.whatsapp.net`),
+grupo só pelo JID listado, LID e destino vazio segurados, e uma Evolution em loopback (a falsa dos e2e)
+liberada. Não usa banco nem rede; todos os números do teste são inventados e não saem do processo. Rode
+sempre que mexer nesse arquivo ou em [channels/evolution.ts](../../src/lib/integrations/channels/evolution.ts).
+
 `npm run check:mcp` cobre as regras puras do servidor MCP de leitura
 ([src/lib/mcp/core.ts](../../src/lib/mcp/core.ts): comparação da chave com espaço ou quebra de linha
 colados, datas `AAAA-MM-DD` como dias UTC com o fim inclusivo, período invertido ou longo demais,
@@ -387,9 +395,11 @@ mensagem termina com a linha de co-autoria. Exemplo real:
 [README.md](../../README.md), seção "9. Convenções", para a lista completa ao lado das outras
 convenções do projeto (sem repetir aqui).
 
-## `dev` → PR → `main`
+## Branch → PR → `main`
 
-Trabalha-se na `dev`. **Mergear na `main` publica em produção automaticamente** — a Hostinger
+Trabalha-se numa branch `feature/<nome>` ou `fix/<nome>` criada a partir da `main`, com PR para a
+`main` (a `dev` não é usada desde 01/10/2026; fluxo completo no
+[guia 07](07-como-trabalhamos.md)). **Mergear na `main` publica em produção automaticamente** — a Hostinger
 observa a branch e implanta a cada push, rodando `npm install` (com `prisma generate` no
 `postinstall`) e depois `npm run build`. Não existe passo manual depois do merge, nem revisão
 humana entre ele e o ar: **o CI verde é o único portão**. Por isso vale a pena rodar as cinco

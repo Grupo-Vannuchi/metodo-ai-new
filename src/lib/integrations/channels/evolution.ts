@@ -1,8 +1,23 @@
 import "server-only";
-import type { ChannelAdapter } from "./types";
+import type { ChannelAdapter, SendResult } from "./types";
+import { env } from "@/lib/env";
 import { normalizeWhatsappNumber } from "@/lib/phone";
+import { devGuardBlocks, parseDevAllowlist } from "@/lib/whatsapp/dev-guard";
 
 type EvoResponse = { key?: { id?: string } };
+
+/** Outside production, holds back a message whose destination is not on
+ * WHATSAPP_DEV_ALLOWED_NUMBERS (rules and why: src/lib/whatsapp/dev-guard.ts).
+ * Null when the message may go out. */
+function heldByDevGuard(baseUrl: string, target: string): SendResult | null {
+  const allowed = parseDevAllowlist(env.WHATSAPP_DEV_ALLOWED_NUMBERS);
+  if (!devGuardBlocks({ nodeEnv: env.NODE_ENV, baseUrl, target, allowed })) return null;
+  console.warn(`[evolution] dev guard held back a message to ${target} (not in WHATSAPP_DEV_ALLOWED_NUMBERS)`);
+  return {
+    ok: false,
+    error: "Envio de WhatsApp bloqueado fora de produção: o número não está em WHATSAPP_DEV_ALLOWED_NUMBERS.",
+  };
+}
 
 /** Evolution nests error details in different shapes across versions — dig out a
  * human-readable message (falling back to the status code). */
@@ -25,6 +40,8 @@ const adapter: ChannelAdapter = {
     if (!creds.baseUrl || !creds.apiKey || !creds.instance) {
       return { ok: false, error: "Conexão Evolution incompleta." };
     }
+    const held = heldByDevGuard(creds.baseUrl, input.to);
+    if (held) return held;
     // Instance names may contain spaces (e.g. "METODO AI") — encode the segment.
     const url = `${creds.baseUrl.replace(/\/$/, "")}/message/sendText/${encodeURIComponent(creds.instance)}`;
     try {
@@ -64,6 +81,8 @@ const adapter: ChannelAdapter = {
     if (!creds.baseUrl || !creds.apiKey || !creds.instance) {
       return { ok: false, error: "Conexão Evolution incompleta." };
     }
+    const held = heldByDevGuard(creds.baseUrl, input.to);
+    if (held) return held;
     const base = creds.baseUrl.replace(/\/$/, "");
     const inst = encodeURIComponent(creds.instance);
     const number = normalizeWhatsappNumber(input.to);
@@ -104,6 +123,8 @@ const adapter: ChannelAdapter = {
     if (!creds.baseUrl || !creds.apiKey || !creds.instance) {
       return { ok: false, error: "Conexão Evolution incompleta." };
     }
+    const held = heldByDevGuard(creds.baseUrl, input.remoteJid);
+    if (held) return held;
     const url = `${creds.baseUrl.replace(/\/$/, "")}/message/sendReaction/${encodeURIComponent(creds.instance)}`;
     try {
       const res = await fetch(url, {

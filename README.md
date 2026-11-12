@@ -5,7 +5,7 @@ Plataforma **SaaS modular** de CRM/ERP multi-tenant para PMEs brasileiras: o cli
 > **Este README é o documento de handoff.** Foi escrito para um dev novo conseguir rodar, entender a arquitetura e fazer deploy do zero. Leia a seção **Runbook de produção** com atenção — ela concentra o conhecimento operacional que mais dá dor de cabeça.
 
 - **Repositório:** `Grupo-Vannuchi/metodo-ai-new`
-- **Branches:** trabalha-se na `dev`; `main` = produção (deploy sai da `main`).
+- **Branches:** `feature/<nome>` ou `fix/<nome>` a partir da `main`, com PR para a `main` = produção (deploy sai da `main`). A `dev` não é usada desde 01/10/2026. Fluxo completo: [docs/guia/07-como-trabalhamos.md](docs/guia/07-como-trabalhamos.md).
 - **Node:** ≥ 20.9
 
 ---
@@ -164,6 +164,7 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 | `INTEGRATION_ENC_KEY` | **sim** | AES-256-GCM p/ credenciais (64 hex = 32 bytes) |
 | `NEXT_PUBLIC_SITE_URL` | **recomendada** | URL pública (webhooks, links de e-mail) |
 | `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE` | p/ WhatsApp | servidor Evolution compartilhado (VPS) |
+| `WHATSAPP_DEV_ALLOWED_NUMBERS` | só fora de produção | números (ou JIDs de grupo), separados por vírgula, que podem receber WhatsApp em desenvolvimento; vazia = nada sai. Ignorada em produção. Trava em `src/lib/whatsapp/dev-guard.ts` |
 | `ANTHROPIC_API_KEY` | p/ IA | copiloto + agente WhatsApp |
 | `OPENAI_API_KEY` | p/ IA | transcrição de áudio, geração de imagem |
 | `RESEND_API_KEY`, `EMAIL_FROM` | p/ e-mail | verificação, convites, reset e o envio em massa do submenu E-mail |
@@ -229,13 +230,13 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 > de produção de lá estava apontada para a `dev`, não para a `main`.
 
 ### Migrações (Supabase) — processo MANUAL
-Nunca rode `prisma migrate dev` contra produção. As migrations são aplicadas manualmente:
+Nunca rode `prisma migrate dev`, `migrate deploy` ou `migrate reset` contra produção: a tabela
+`_prisma_migrations` do Supabase não tem o histórico completo, então o Prisma toma por pendentes
+migrations já aplicadas e tenta rodá-las de novo. As migrations são aplicadas manualmente, uma a uma:
 ```bash
 # com DATABASE_URL apontando pro Supabase:
-npx prisma migrate deploy        # aplica as pendentes na ordem, idempotente
-# (alternativa manual, uma a uma:)
-# npx prisma db execute --file prisma/migrations/<nome>/migration.sql --schema prisma/schema.prisma
-# npx prisma migrate resolve --applied <nome>
+npx prisma db execute --file prisma/migrations/<nome>/migration.sql --schema prisma/schema.prisma
+npx prisma migrate resolve --applied <nome>
 ```
 **Antes do merge da branch `feature/email-em-massa`:** aplicar no Supabase o SQL de `prisma/migrations/20261006120000_email_broadcasts/migration.sql` (só cria tabelas, índices e a FK da tabela nova — nada destrutivo). A Hostinger não roda migrations.
 
@@ -295,7 +296,9 @@ colocadas (sem coluna; caíam na entrada) na coluna da data delas **no dia da mi
 as concluídas em "Concluídas" e, sem a coluna, na entrada. Não apaga nada, e o código anterior continua funcionando com ela.
 **Não** use `migrate deploy`.
 
-Sempre **backup antes** de migração destrutiva. Confira com `npx prisma migrate status`.
+Sempre **backup antes** de migração destrutiva. Não confie no `npx prisma migrate status` em produção:
+pelo mesmo histórico incompleto, ele lista como pendentes migrations que já estão aplicadas. Confira a
+tabela ou coluna nova direto no Supabase.
 
 **Antes do merge da branch `feature/email-conta-microsoft`:**
 
@@ -593,6 +596,10 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/wha
 
 ## 9. Convenções
 
+> Resumo de tudo numa página (fluxo de branch e PR, migration, commits, combinados do time):
+> [docs/guia/07-como-trabalhamos.md](docs/guia/07-como-trabalhamos.md).
+
+- **Branches:** `feature/<nome>` ou `fix/<nome>` a partir da `main`, PR para a `main`. A `dev` não é mais usada.
 - **Commits:** `[ÁREA] - Verbo + Tarefa`, com corpo estruturado, terminando com a linha de co-autoria. Ex.: `[CRM] - Adiciona autofill de CEP na empresa`.
 - **Validação por entrega:** `typecheck` + `lint` + `build` + `check:isolation` + `check:node` antes de commitar; manter **paridade de chaves** entre `pt.json` e `en.json`.
 - **Gating sempre pelas fontes de verdade:** `config/modules.ts` (módulos), `config/screens.ts` (telas), `config/limits.ts` (limites). Não espalhe `if` de módulo/permissão pelo código.
