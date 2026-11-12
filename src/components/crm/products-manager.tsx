@@ -17,6 +17,7 @@ import {
 import type { ProductServiceRow } from "@/lib/queries/crm";
 
 type Kind = "PRODUCT" | "SERVICE";
+type Filter = "ALL" | Kind;
 type Result = { ok: boolean; error?: string };
 
 function buildForm(fields: { name: string; kind: Kind; price: number | null; active: boolean }): FormData {
@@ -37,6 +38,20 @@ export function ProductsManager({ items }: { items: ProductServiceRow[] }) {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<Kind>("PRODUCT");
   const [price, setPrice] = useState(0);
+  const [filter, setFilter] = useState<Filter>("ALL");
+
+  // The page loads the whole catalog, so the type filter runs here, with no round trip.
+  const counts: Record<Filter, number> = {
+    ALL: items.length,
+    PRODUCT: items.filter((i) => i.kind === "PRODUCT").length,
+    SERVICE: items.filter((i) => i.kind === "SERVICE").length,
+  };
+  const visible = filter === "ALL" ? items : items.filter((i) => i.kind === filter);
+  const filters: { value: Filter; label: string }[] = [
+    { value: "ALL", label: t("filterAll") },
+    { value: "PRODUCT", label: t("filterProducts") },
+    { value: "SERVICE", label: t("filterServices") },
+  ];
 
   function run(fn: () => Promise<Result>) {
     setError(null);
@@ -58,38 +73,42 @@ export function ProductsManager({ items }: { items: ProductServiceRow[] }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* The title keeps this form's "Tipo" from passing for the list's filter. */}
       <form
         onSubmit={onCreate}
-        className="flex flex-wrap items-end gap-2 rounded-xl border border-border bg-card p-4"
+        className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
       >
-        <div className="flex flex-1 flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">{t("name")}</label>
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t("namePlaceholder")}
-            className="h-10"
-          />
+        <p className="text-sm font-semibold text-brand">{t("addTitle")}</p>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-1 flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">{t("name")}</label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t("namePlaceholder")}
+              className="h-10"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">{t("kind")}</label>
+            <select
+              value={kind}
+              onChange={(e) => setKind(e.target.value as Kind)}
+              className="h-10 rounded-lg border border-border bg-background px-3 text-sm"
+            >
+              <option value="PRODUCT">{t("kindProduct")}</option>
+              <option value="SERVICE">{t("kindService")}</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">{t("price")}</label>
+            <MoneyInput defaultValue={0} onValueChange={setPrice} className="h-10 w-40" />
+          </div>
+          <Button type="submit" disabled={pending}>
+            <Plus className="size-4" />
+            {t("add")}
+          </Button>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">{t("kind")}</label>
-          <select
-            value={kind}
-            onChange={(e) => setKind(e.target.value as Kind)}
-            className="h-10 rounded-lg border border-border bg-background px-3 text-sm"
-          >
-            <option value="PRODUCT">{t("kindProduct")}</option>
-            <option value="SERVICE">{t("kindService")}</option>
-          </select>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">{t("price")}</label>
-          <MoneyInput defaultValue={0} onValueChange={setPrice} className="h-10 w-40" />
-        </div>
-        <Button type="submit" disabled={pending}>
-          <Plus className="size-4" />
-          {t("add")}
-        </Button>
       </form>
 
       {error ? <p role="alert" className="text-sm text-red-500">{error}</p> : null}
@@ -99,23 +118,68 @@ export function ProductsManager({ items }: { items: ProductServiceRow[] }) {
           {t("empty")}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-card">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-border text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 font-medium">{t("name")}</th>
-                <th className="px-4 py-3 font-medium">{t("kind")}</th>
-                <th className="px-4 py-3 font-medium">{t("price")}</th>
-                <th className="px-4 py-3 font-medium">{t("status")}</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <ItemRow key={item.id} item={item} pending={pending} run={run} />
-              ))}
-            </tbody>
-          </table>
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span id="productsKindFilter" className="text-xs font-medium text-muted-foreground">
+                {t("filterLabel")}
+              </span>
+              <div role="group" aria-labelledby="productsKindFilter" className="inline-flex gap-1 rounded-lg bg-muted p-1">
+                {filters.map((f) => (
+                  <button
+                    key={f.value}
+                    type="button"
+                    aria-pressed={filter === f.value}
+                    onClick={() => setFilter(f.value)}
+                    className={cn(
+                      "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      filter === f.value ? "bg-card text-brand shadow-sm" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {f.label}
+                    <span
+                      className={cn(
+                        "min-w-5 rounded-full px-1.5 text-center text-xs font-semibold",
+                        filter === f.value ? "bg-brand text-brand-foreground" : "bg-border text-foreground/70",
+                      )}
+                    >
+                      {counts[f.value]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {filter === "ALL"
+                ? t("totalItems", { count: items.length })
+                : t("shownOf", { shown: visible.length, total: items.length })}
+            </span>
+          </div>
+
+          {visible.length === 0 ? (
+            <p className="p-10 text-center text-sm text-muted-foreground">
+              {filter === "PRODUCT" ? t("emptyProducts") : t("emptyServices")}
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-border text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">{t("name")}</th>
+                    <th className="px-4 py-3 font-medium">{t("kind")}</th>
+                    <th className="px-4 py-3 font-medium">{t("price")}</th>
+                    <th className="px-4 py-3 font-medium">{t("status")}</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((item) => (
+                    <ItemRow key={item.id} item={item} pending={pending} run={run} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -162,7 +226,8 @@ function ItemRow({
   return (
     <tr className={cn("border-b border-border last:border-0", !active && "opacity-60")}>
       <td className="px-4 py-3">
-        <Input value={name} onChange={(e) => setName(e.target.value)} className="h-9" />
+        {/* min-w: in a narrow window the table scrolls instead of squeezing names to one letter. */}
+        <Input value={name} onChange={(e) => setName(e.target.value)} className="h-9 min-w-60" />
       </td>
       <td className="px-4 py-3">
         <select

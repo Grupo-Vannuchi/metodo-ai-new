@@ -33,6 +33,14 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: allowedOrigins,
   experimental: {
     serverActions: { allowedOrigins },
+    /**
+     * Cap the build's worker processes. By default Next spawns one per CPU
+     * minus one — 63 on Hostinger's build machine — and on 19/10/2026 the
+     * "Collecting page data" step died there with SIGABRT: "OS can't spawn
+     * worker thread: Resource temporarily unavailable (os error 11)", i.e. the
+     * shared host's thread/process limit, not our code. 4 is plenty for ~145 pages.
+     */
+    cpus: 4,
   },
   images: {
     // Remote image sources. Add a tenant's CDN / avatar host here as needed.
@@ -40,6 +48,20 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "images.unsplash.com" },
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
     ],
+  },
+  /**
+   * Ship Prisma's query compiler with every server route.
+   *
+   * The client is engine-free (`engineType = "client"`, see schema.prisma): it
+   * compiles queries with `query_compiler_bg.wasm`, which it reads from disk at
+   * runtime. The webpack build's file tracing doesn't see that read, so the
+   * `.nft.json` traces list the `.js` glue but not the `.wasm` — and Hostinger
+   * deploys only the traced files. Without this, every query in production dies
+   * with `ENOENT … .prisma/client/query_compiler_bg.wasm` (login 500, /app down),
+   * while local runs work because the full node_modules is there.
+   */
+  outputFileTracingIncludes: {
+    "/*": ["./node_modules/.prisma/client/*.wasm"],
   },
   /**
    * Cache policy — fixes the "broken landing on some devices after a deploy".

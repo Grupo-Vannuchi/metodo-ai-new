@@ -17,6 +17,7 @@ Não leia todos. Cada um carrega quando a tarefa pede; os gatilhos ao longo dest
 | [04-modulos-e-permissoes](docs/guia/04-modulos-e-permissoes.md) | mexer em módulo, tela, permissão ou i18n |
 | [05-rotas-e-jobs](docs/guia/05-rotas-e-jobs.md) | criar ou alterar rota em `src/app/api/` |
 | [06-antes-de-commitar](docs/guia/06-antes-de-commitar.md) | uma validação falhou e você não sabe por quê |
+| [07-como-trabalhamos](docs/guia/07-como-trabalhamos.md) | fluxo de branch e PR, migration em produção, commits, combinados do time |
 
 ## Comandos
 
@@ -63,7 +64,7 @@ Nunca consulte tabela de negócio sem esse filtro.
 - Desinstalar módulo = `OrganizationModule` vira `DORMANT`, **nunca apagar**.
 
 **3. Paridade de i18n.** `src/messages/pt.json` e `src/messages/en.json` têm exatamente as mesmas
-chaves (2727 hoje). Adicionou de um lado, adiciona do outro.
+chaves (3529 hoje). Adicionou de um lado, adiciona do outro.
 
 ## Armadilhas específicas deste repo
 
@@ -82,7 +83,10 @@ Vale para scripts avulsos (`prisma/seed.ts`, `scripts/*.ts`) tanto quanto para a
 **Evolution/WhatsApp.** Sempre resolva credenciais com `resolveEvoCreds()`
 ([src/lib/integrations/evolution-creds.ts](src/lib/integrations/evolution-creds.ts)). Conexões "de
 plataforma" guardam só o `instance`; `baseUrl`/`apiKey` vêm do env. Passar credencial crua quebra o envio
-com "Conexão Evolution incompleta".
+com "Conexão Evolution incompleta". **Fora de produção, mensagem só sai para os números de
+`WHATSAPP_DEV_ALLOWED_NUMBERS`** (lista vazia = nada sai), pela trava de
+[src/lib/whatsapp/dev-guard.ts](src/lib/whatsapp/dev-guard.ts): o `.env` local aponta para a VPS real.
+Envio novo que fale com pessoas passa pelo adaptador de [channels/evolution.ts](src/lib/integrations/channels/evolution.ts) ou chama `devGuardBlocks` antes.
 
 **WhatsApp oficial (Cloud API).** A tela "Conversas (Oficial)" tem código e tabelas próprios
 (`src/lib/whatsapp-cloud/`, `WhatsappCloud*`) e só aparece para empresas em
@@ -106,9 +110,11 @@ aviso pro npm. `.nvmrc` é a fonte da verdade do major ([detalhe](docs/guia/06-a
 
 ## Convenções
 
-- **Branch:** trabalha-se na `dev`. **Mergear na `main` publica em produção automaticamente** —
+- **Branch:** `feature/<nome>` ou `fix/<nome>` a partir da `main`, PR para a `main` (a `dev` não é
+  usada desde 01/10/2026). **Mergear na `main` publica em produção automaticamente** —
   a Hostinger implanta a cada push (`npm install` → `prisma generate` → `npm run build`). Ela **não**
-  roda `prisma migrate deploy`: mudou schema, aplique a migration no Supabase **antes** do merge.
+  roda migration: mudou schema, aplique a migration no Supabase **antes** do merge, com
+  `db execute` + `migrate resolve --applied` — nunca `migrate deploy` ([guia 07](docs/guia/07-como-trabalhamos.md)).
 - **Commits:** `[ÁREA] - Verbo + Tarefa`, corpo estruturado, terminando com a linha de co-autoria.
   Ex.: `[CRM] - Adiciona autofill de CEP na empresa`.
 - **Sem drawer para criação no CRM** — foi testado e descartado a pedido.

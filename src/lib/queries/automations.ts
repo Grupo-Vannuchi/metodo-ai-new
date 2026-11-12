@@ -29,3 +29,15 @@ export async function listAutomationRules(organizationId: string): Promise<Autom
     config: parseConfig(r.config),
   }));
 }
+
+export type WhatsappConnectionOption = { id: string; label: string; active: boolean };
+
+/** The org's WhatsApp (Evolution) numbers a "whatsapp_message" rule can listen on. */
+export async function listWhatsappConnections(organizationId: string): Promise<WhatsappConnectionOption[]> {
+  const rows = await tenantDb(organizationId).integrationConnection.findMany({
+    where: { provider: "EVOLUTION" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, label: true, status: true },
+  });
+  return rows.map((r) => ({ id: r.id, label: r.label, active: r.status === "ACTIVE" }));
+}

@@ -43,6 +43,7 @@ export async function getContact(organizationId: string, id: string) {
       source: true,
       createdAt: true,
       company: { select: { name: true } },
+      folderLinks: { select: { folder: { select: { name: true, order: true, createdAt: true } } } },
     },
   });
 }

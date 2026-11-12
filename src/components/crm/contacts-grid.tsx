@@ -2,22 +2,50 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Trash2, Phone, Mail, Building2 } from "lucide-react";
+import { Trash2, Phone, Mail, Building2, Users } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/app/avatar";
+import { Button } from "@/components/ui/button";
 import { useUndo } from "@/components/ui/undo";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { FolderExplorer, type FolderColumn, type ExplorerLabels } from "@/components/crm/folder-explorer";
 import { BulkBar } from "@/components/crm/bulk-bar";
+import { GroupAddDialog } from "@/components/crm/group-add-dialog";
+import type { GroupAddSource } from "@/lib/whatsapp/group-add/service";
 import { createFolder, renameFolder, deleteFolder } from "@/app/actions/contact-folders";
 import { deleteContact } from "@/app/actions/contacts";
-import { bulkDeleteContacts, bulkMoveContacts, bulkTagContacts } from "@/app/actions/bulk";
+import {
+  bulkAddContactsToFolder,
+  bulkDeleteContacts,
+  bulkMoveContacts,
+  bulkRemoveContactsFromFolder,
+  bulkTagContacts,
+} from "@/app/actions/bulk";
 import type { ContactCard, ContactColumn } from "@/lib/queries/contact-folders";
 
 const GRID_CLS = "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]";
 
-type ListLabels = { name: string; company: string; phone: string; email: string };
+type ListLabels = {
+  name: string;
+  company: string;
+  phone: string;
+  email: string;
+  folderBadge: (count: number) => string;
+};
+
+/** "N folders" pill, only for contacts in two or more folders. */
+function FolderBadge({ card, labels, className }: { card: ContactCard; labels: ListLabels; className?: string }) {
+  if (card.folderNames.length < 2) return null;
+  return (
+    <span
+      className={cn("shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground", className)}
+      title={card.folderNames.join(", ")}
+    >
+      {labels.folderBadge(card.folderNames.length)}
+    </span>
+  );
+}
 
 /** A folder's contacts as summary cards (grid) or a detailed list. */
 function ContactList({
@@ -86,6 +114,7 @@ function ContactList({
               <div className="flex min-w-0 flex-1 items-center gap-2.5">
                 <Avatar name={card.name} className="size-8 shrink-0 text-xs" />
                 <span className="truncate text-sm font-medium">{card.name}</span>
+                <FolderBadge card={card} labels={labels} />
               </div>
               <span className="hidden w-40 shrink-0 truncate text-xs text-muted-foreground sm:block">{card.companyName ?? "—"}</span>
               <span className="hidden w-36 shrink-0 truncate text-xs text-muted-foreground sm:block">{card.phone ?? "—"}</span>
@@ -123,6 +152,8 @@ function ContactList({
                   <span className="truncate">{card.companyName}</span>
                 </p>
               ) : null}
+              {/* Below the name, not beside it: the name keeps the card's full width. */}
+              <FolderBadge card={card} labels={labels} className="mt-1 inline-block" />
             </div>
             {actions(card)}
           </div>
@@ -148,11 +179,21 @@ function ContactList({
   );
 }
 
-export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
+/**
+ * `canAddToGroup` comes from the server (the Atendimento module is installed and the organization is on the pilot list,
+ * WHATSAPP_GROUP_ADD_ORG_IDS): it turns on the two entries of "Adicionar a
+ * grupo do WhatsApp", the button of the open folder and the one of the selection bar, which open the same dialog.
+ */
+export function ContactsGrid({ columns, canAddToGroup }: { columns: ContactColumn[]; canAddToGroup: boolean }) {
   const t = useTranslations("crm.contacts");
   const tc = useTranslations("crm.common");
+  const tg = useTranslations("crm.groupAdd");
   const router = useRouter();
   const undo = useUndo();
+
+  // What the dialog is open for: the source of the round and how many contacts the member sees in it. Kept here, outside the
+  // explorer, so the dialog is not inside the open folder's section (whose mouse handler starts the selection box).
+  const [groupAdd, setGroupAdd] = useState<{ source: GroupAddSource; count: number } | null>(null);
 
   // Ids hidden optimistically while an undoable delete is pending. Reconciled
   // against fresh server data: keep only ids still present (i.e. not yet
@@ -204,55 +245,102 @@ export function ContactsGrid({ columns }: { columns: ContactColumn[] }) {
     confirmDeleteFolder: t("confirmDeleteFolder"),
     save: t("save"),
     dragHint: tc("dragHint"),
+    copyHint: t("copyHint"),
     folderCount: (count) => t("folderCount", { count }),
   };
-  const listLabels: ListLabels = { name: t("name"), company: t("company"), phone: t("phone"), email: t("email") };
+  const listLabels: ListLabels = {
+    name: t("name"),
+    company: t("company"),
+    phone: t("phone"),
+    email: t("email"),
+    folderBadge: (count) => t("folderBadge", { count }),
+  };
 
   const onDeleteContact = (id: string) => deleteWithUndo([id], () => deleteContact(id));
 
   return (
-    <FolderExplorer<ContactCard>
-      storageKey="contacts"
-      columns={cols}
-      labels={labels}
-      onCreateFolder={(name) => createFolder({ name })}
-      onRenameFolder={(id, name) => renameFolder(id, { name })}
-      onDeleteFolder={(id) => deleteFolder(id)}
-      onMoveItems={(ids, folderId) => bulkMoveContacts(ids, folderId)}
-      renderItems={({ items, view, onDragStart, onDragEnd, selected }) => (
-        <ContactList
-          contacts={items}
-          view={view}
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          onOpen={(id) => router.push(`/app/contacts/${id}`)}
-          onDelete={onDeleteContact}
-          deleteLabel={tc("delete")}
-          labels={listLabels}
-          selected={selected}
-        />
-      )}
-      renderBulkBar={({ ids, folders, clear }) => (
-        <BulkBar
-          count={ids.length}
-          folders={folders}
-          onMove={async (folderId) => {
-            await bulkMoveContacts(ids, folderId);
-            clear();
-            router.refresh();
-          }}
-          onTag={async (tag) => {
-            await bulkTagContacts(ids, tag);
-            clear();
-            router.refresh();
-          }}
-          onDelete={async () => {
-            clear();
-            deleteWithUndo(ids, () => bulkDeleteContacts(ids));
-          }}
-          onClear={clear}
-        />
-      )}
-    />
+    <>
+      <FolderExplorer<ContactCard>
+        storageKey="contacts"
+        columns={cols}
+        labels={labels}
+        onCreateFolder={(name) => createFolder({ name })}
+        onRenameFolder={(id, name) => renameFolder(id, { name })}
+        onDeleteFolder={(id) => deleteFolder(id)}
+        onMoveItems={(ids, to, from) => bulkMoveContacts(ids, to, from)}
+        onAddItems={(ids, to) => bulkAddContactsToFolder(ids, to)}
+        renderItems={({ items, view, onDragStart, onDragEnd, selected }) => (
+          <ContactList
+            contacts={items}
+            view={view}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onOpen={(id) => router.push(`/app/contacts/${id}`)}
+            onDelete={onDeleteContact}
+            deleteLabel={tc("delete")}
+            labels={listLabels}
+            selected={selected}
+          />
+        )}
+        renderOpenFolderActions={
+          canAddToGroup
+            ? (column) =>
+                column.items.length > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setGroupAdd({ source: { kind: "folder", folderId: column.id }, count: column.items.length })}
+                  >
+                    <Users className="size-4" />
+                    {tg("button")}
+                  </Button>
+                ) : null
+            : undefined
+        }
+        renderBulkBar={({ ids, folders, clear, openFolderId }) => (
+          <BulkBar
+            count={ids.length}
+            folders={folders}
+            onMove={async (folderId) => {
+              await bulkMoveContacts(ids, folderId, openFolderId);
+              clear();
+              router.refresh();
+            }}
+            openFolderId={openFolderId}
+            onAdd={async (folderId) => {
+              await bulkAddContactsToFolder(ids, folderId);
+              clear();
+              router.refresh();
+            }}
+            onRemoveFromFolder={
+              openFolderId !== null
+                ? async () => {
+                    await bulkRemoveContactsFromFolder(ids, openFolderId);
+                    clear();
+                    router.refresh();
+                  }
+                : undefined
+            }
+            onTag={async (tag) => {
+              await bulkTagContacts(ids, tag);
+              clear();
+              router.refresh();
+            }}
+            onAddToGroup={
+              canAddToGroup ? () => setGroupAdd({ source: { kind: "contacts", contactIds: ids }, count: ids.length }) : undefined
+            }
+            onDelete={async () => {
+              clear();
+              deleteWithUndo(ids, () => bulkDeleteContacts(ids));
+            }}
+            onClear={clear}
+          />
+        )}
+      />
+      {canAddToGroup && groupAdd ? (
+        <GroupAddDialog source={groupAdd.source} count={groupAdd.count} onClose={() => setGroupAdd(null)} />
+      ) : null}
+    </>
   );
 }

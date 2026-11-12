@@ -44,11 +44,19 @@ const serverSchema = z.object({
     .string()
     .min(32, "CRON_SECRET must be at least 32 characters")
     .optional(),
+  // Key of the read-only MCP server (/api/mcp): `Authorization: Bearer` or the last path segment.
+  // No min length here on purpose: a key under 32 chars just closes the MCP (keysMatch in
+  // src/lib/mcp/core.ts), instead of failing validation and taking the whole site down.
+  MCP_API_KEY: z.string().optional(),
   // Transactional email (Resend, platform key) — verification, invites, reset.
   // Optional so the app boots without it; `sendEmail` no-ops with a warning.
   RESEND_API_KEY: z.string().optional(),
   // Verified sender, e.g. `MétodoAI <nao-responda@metodotia.com>`.
   EMAIL_FROM: z.string().optional(),
+  // Signing secret of the platform's Resend webhook (dashboard → Webhooks →
+  // https://<site>/api/email/webhook). Optional: without it the mass e-mail
+  // still sends, but delivery statuses stay "Sent".
+  RESEND_WEBHOOK_SECRET: z.string().optional(),
   // Social sign-in. Each provider is independent: the button only shows up once
   // its id + secret are present, so you can enable them one at a time. The
   // redirect URI to register is `${NEXT_PUBLIC_SITE_URL}/api/auth/<provider>/callback`.
@@ -59,6 +67,19 @@ const serverSchema = z.object({
   // Entra tenant: "common" (work/school + personal), "organizations" (work only),
   // or a specific tenant id. Defaults to "common".
   MICROSOFT_TENANT_ID: z.string().optional(),
+  // Mass e-mail through the company's own Microsoft mailbox (spec 2026-10-15):
+  // the "MetodoIA" Entra app (any tenant + personal accounts), delegated
+  // Mail.Send + Mail.ReadWrite. Separate from the sign-in app above. Optional:
+  // without both, the "Pela conta Microsoft" option doesn't show up.
+  MICROSOFT_MAIL_CLIENT_ID: z.string().optional(),
+  MICROSOFT_MAIL_CLIENT_SECRET: z.string().optional(),
+  // Mass e-mail through the company's own Google account (spec 2026-10-19):
+  // a Google Cloud project separate from the sign-in one above, with the
+  // gmail.send scope. PILOT_ORG_IDS (comma-separated organization ids) keeps the
+  // option to those companies until Google approves the app; empty = everyone.
+  GOOGLE_MAIL_CLIENT_ID: z.string().optional(),
+  GOOGLE_MAIL_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_MAIL_PILOT_ORG_IDS: z.string().optional(),
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   // Platform WhatsApp (Evolution API) — one shared server used by every tenant,
@@ -80,6 +101,13 @@ const serverSchema = z.object({
   // Ids de Organization liberados para a tela oficial durante o piloto,
   // separados por vírgula. Vazio = ninguém vê.
   WHATSAPP_CLOUD_ORG_IDS: z.string().optional(),
+  // Outside production, the only numbers (or group JIDs) a WhatsApp message may
+  // go to, comma-separated. Unset or empty = nothing goes out. Ignored in
+  // production. Guard: src/lib/whatsapp/dev-guard.ts.
+  WHATSAPP_DEV_ALLOWED_NUMBERS: z.string().optional(),
+  // Organization ids, comma-separated, that see "Adicionar a grupo do WhatsApp" while it is a pilot. Unset or empty =
+  // no organization (the opposite of GOOGLE_MAIL_PILOT_ORG_IDS). Gate: src/lib/whatsapp/group-add/pilot.ts.
+  WHATSAPP_GROUP_ADD_ORG_IDS: z.string().optional(),
   // Platform Google Places key (prospecting) — a single shared key so tenants
   // don't have to bring their own. Falls back to a per-tenant key when unset.
   GOOGLE_PLACES_API_KEY: z.string().optional(),

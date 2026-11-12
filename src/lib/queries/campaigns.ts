@@ -20,7 +20,7 @@ export function audienceWhere(channel: ChannelKey, f: AudienceFilter): Prisma.Co
     CHANNEL_META[channel].target === "phone" ? { phone: { not: null } } : { email: { not: null } };
   where.optedOut = false;
   if (f.tags && f.tags.length > 0) where.tags = { hasSome: f.tags };
-  if (f.folderId) where.folderId = f.folderId;
+  if (f.folderId) where.folderLinks = { some: { folderId: f.folderId } };
   if (f.source) where.source = f.source;
   const opp: Prisma.OpportunityWhereInput = {};
   if (f.stageId) opp.stageId = f.stageId;

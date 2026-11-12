@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { parseInboundMessages, parseInboundReactions } from "@/lib/whatsapp/inbound";
 import { ingestInbound, applyInboundReaction } from "@/lib/whatsapp/ingest";
-import { scheduleAgentReply } from "@/lib/whatsapp-agent/pipeline";
+import { scheduleInboundAutomation } from "@/lib/automation/whatsapp-flow";
 import { parseDeliveryUpdates } from "@/lib/integrations/webhooks/delivery";
 import {
   applyCampaignDeliveryUpdates,
@@ -75,9 +75,9 @@ export async function POST(
     if (ev.includes("messages.upsert") || ev.includes("messages_upsert")) {
       for (const m of parseInboundMessages(payload)) {
         await ingestInbound(conn.organizationId, conn.id, m);
-        // Auto-reply with the AI agent (if enabled). Fire-and-forget so the
-        // webhook returns fast; the debounce/guards live inside.
-        scheduleAgentReply(conn.organizationId, conn.id, m);
+        // Keyword automations first, else the AI agent (if enabled). Fire-and-
+        // forget so the webhook returns fast; the debounce/guards live inside.
+        scheduleInboundAutomation(conn.organizationId, conn.id, m);
       }
       for (const r of parseInboundReactions(payload)) {
         await applyInboundReaction(conn.organizationId, conn.id, r);

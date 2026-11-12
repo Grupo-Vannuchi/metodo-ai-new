@@ -43,19 +43,54 @@ Consequência direta, sem meio-termo: se você criou uma rota nova e não escrev
 dentro dela, ela está aberta para a internet. Não existe uma segunda camada que pegue o que
 sobrou.
 
-## Os cinco jeitos de autenticar uma rota neste repo
+## Os jeitos de autenticar uma rota neste repo
 
 | Quem chama | Mecanismo | Onde vive |
 |---|---|---|
 | Usuário logado (navegador) | cookie de sessão → `getOrgContext()` | [src/lib/tenant.ts](../../src/lib/tenant.ts) |
-| Cron do hPanel | header fixo → `isCronAuthorized(req)` | [src/lib/cron-auth.ts](../../src/lib/cron-auth.ts) |
+| Cron do hPanel (as cinco rotas de `/api/cron/*`: `campaigns`, `extractions`, `feed-cleanup`, `notifications` e `whatsapp-groups`) | header fixo → `isCronAuthorized(req)` | [src/lib/cron-auth.ts](../../src/lib/cron-auth.ts) |
 | QStash (fila de jobs) | assinatura HMAC → `verifyQStashSignature(...)` | [src/lib/queue.ts](../../src/lib/queue.ts) |
 | Evolution (webhook) | token embutido no caminho | rota de webhook, ver abaixo |
 | Meta (webhook do WhatsApp oficial) | assinatura HMAC `X-Hub-Signature-256` → `verifySignature(...)` com `META_APP_SECRET` | [src/lib/whatsapp-cloud/signature.ts](../../src/lib/whatsapp-cloud/signature.ts) |
+| Destinatário de e-mail em massa (link) | HMAC do id do destinatário no caminho → `verifyEmailUnsubscribeSig` | [src/lib/email-broadcast/unsubscribe.ts](../../src/lib/email-broadcast/unsubscribe.ts) |
+| Resend (webhook do e-mail em massa) | assinatura Svix com o segredo da plataforma (`RESEND_WEBHOOK_SECRET`) → `verifySvixSignature` | [src/app/api/email/webhook/route.ts](../../src/app/api/email/webhook/route.ts) |
+| Usuário logado conectando a caixa Microsoft do E-mail | sessão (`getOrgContext()`) + tela `email` + módulo `marketing`; o retorno confere `state`, verificador PKCE e empresa nos cookies `ms_mail_*` (10 min) | [src/app/api/email/microsoft/](../../src/app/api/email/microsoft/) |
+| Usuário logado conectando a conta Google do E-mail | sessão (`getOrgContext()`) + tela `email` + módulo `marketing` + empresa no piloto (`googleMailEnabledFor`); o retorno confere `state`, verificador PKCE e empresa nos cookies `gg_mail_*` (10 min) | [src/app/api/email/google/](../../src/app/api/email/google/) |
+| Usuário logado baixando anexo da caixa de entrada Microsoft | sessão (`getOrgContext()`) + telas `email` e `emailInbox` + módulo `marketing`; ids conferidos por `isGraphId`, e a mensagem precisa estar na pasta Caixa de Entrada da caixa da própria empresa | [src/app/api/email/microsoft/attachment/route.ts](../../src/app/api/email/microsoft/attachment/route.ts) |
+| Usuário logado baixando anexo da caixa de entrada IMAP (conta SMTP) | sessão (`getOrgContext()`) + telas `email` e `emailInbox` + módulo `marketing`; `m` conferido por `parseImapMessageRef` e `a` por `isAttachmentIndex`; a conta é a da empresa da sessão (`tenantDb`), e o arquivo precisa estar na lista do e-mail (a mesma que a tela mostra) na INBOX dessa caixa | [src/app/api/email/smtp/attachment/route.ts](../../src/app/api/email/smtp/attachment/route.ts) |
+| Claude (servidor MCP de leitura) | chave `MCP_API_KEY` no `Authorization: Bearer` ou como último segmento do caminho (`/api/mcp/<chave>`) → `isMcpAuthorized(req, pathKey)` | [src/lib/mcp/auth.ts](../../src/lib/mcp/auth.ts) |
 
-Não existe um "guard genérico" que sirva pra tudo — "quem pode chamar" muda por rota. O que os
-cinco têm em comum é onde a checagem acontece: **dentro do handler, como uma das primeiras
+`/api/email/microsoft/connect` e `/callback` (spec 2026-10-15) só redirecionam. `/api/email/microsoft/attachment` sempre responde como download (`application/octet-stream`, `Content-Disposition: attachment`, `nosniff`): um anexo HTML nunca é aberto na origem do app. O endereço de retorno cadastrado no app do Azure é `${NEXT_PUBLIC_SITE_URL}/api/email/microsoft/callback`, montado por `joinSiteUrl` sem barra dupla. As credenciais vão criptografadas para `email_sender_accounts` e nunca para o navegador ou para o log.
+
+`/api/email/smtp/attachment` (spec 2026-10-23) segue o molde do anexo da Microsoft, com os ids da caixa IMAP:
+`m=<uidvalidity>.<uid>` (só dígitos; uma numeração diferente da atual da caixa é "não encontrado") e
+`a=<índice do anexo na lista do e-mail>` (`^\d{1,3}$`; fora da lista, inclusive a imagem que o corpo já mostra,
+é 404). Respostas: sessão ausente 401, telas ou módulo 403, id mal formado 400, `not_found` 404,
+`reconnect`/`no_account` 409, o resto 502. Sempre download (`application/octet-stream`,
+`Content-Disposition: attachment`, `nosniff`, `no-store`). Diferente da Microsoft, o e-mail inteiro é baixado
+por IMAP (até 15 MB; acima disso nenhum anexo sai) e o arquivo sai da memória, não em fluxo. A senha da
+caixa nunca passa por aqui: quem abre a conexão é [src/lib/email-broadcast/imap/inbox.ts](../../src/lib/email-broadcast/imap/inbox.ts).
+Um login que o servidor IMAP recusa **pausa a conta** (`NEEDS_RECONNECT`, por `markNeedsReconnect`, com a
+`lastError` sem a senha) e responde `reconnect` (409); os pedidos seguintes respondem 409 sem abrir conexão, em
+vez de repetir a senha errada a cada tela aberta (um provedor que limita logins falhos poderia fechar a porta para
+o endereço da plataforma, para todas as empresas). A conta é a mesma do envio por SMTP: o envio pausa junto até o
+formulário ser salvo de novo, e por isso o login que o servidor recusa só por ora (`[UNAVAILABLE]`, `[LIMIT]` ou
+`[INUSE]`: provedor com problema ou conexões demais abertas, que o imapflow também chama de "falha de
+autenticação") não pausa nada e responde 502. Servidor fora do ar, conexão perdida ou cortada no meio do pedido e toda resposta
+que o imapflow engole (ele devolve `false`, `[]` ou `undefined` em vez de erro) são 502 (`temporary`), nunca um
+404 nem uma caixa vazia. Cada pedido tem teto de tempo (60 s), de bytes recebidos (15 MB e mais 8) e de linhas
+lidas; passou de um deles, a conexão é cortada e a resposta é 502.
+
+`/api/email/google/connect` e `/callback` (spec 2026-10-19) seguem o mesmo molde. O endereço de retorno cadastrado no projeto do Google Cloud é `${NEXT_PUBLIC_SITE_URL}/api/email/google/callback` (também por `joinSiteUrl`), e só o `access_type=offline` com `prompt=consent` faz o Google devolver o refresh token; o `select_account` apenas deixa a pessoa escolher a conta.
+
+`/api/email/unsubscribe/[recipientId]/[sig]` é **pública de propósito** (RFC 8058); a assinatura é a primeira checagem, só aceita POST, e a server action `confirmEmailUnsubscribe` segue o mesmo padrão (server actions também são endpoints públicos).
+
+Não existe um "guard genérico" que sirva pra tudo — "quem pode chamar" muda por rota. O que todos
+têm em comum é onde a checagem acontece: **dentro do handler, como uma das primeiras
 linhas**, antes de qualquer leitura ou efeito colateral.
+
+O webhook do Resend é configurado uma vez no painel do Resend da plataforma; sem o segredo, a rota
+responde 401 a tudo.
 
 ### Rota chamada pelo usuário logado
 
@@ -153,10 +188,31 @@ não responde 200, e o reenvio é seguro porque a deduplicação é pelo `wamid`
 mensagem e o contador da conversa são gravados numa transação só). Em desenvolvimento, `scripts/wa-cloud-webhook.ts` assina e envia payloads falsos para o
 app local — não precisa de túnel para testar o recebimento.
 
+### Servidor MCP de leitura (Claude)
+
+`/api/mcp` e `/api/mcp/[key]` (spec 2026-10-22) deixam o Claude consultar, só lendo, os dados de
+**todas** as organizações. Quem chama não tem sessão nem organização ativa: a chave `MCP_API_KEY` é
+a única barreira, e cada ferramenta recebe o `organizationId` como argumento ([guia 03](03-multi-tenancy.md)).
+
+- **Chave:** no `Authorization: Bearer <chave>` (Claude Code) ou como último segmento do caminho
+  (`/api/mcp/<chave>`), porque o conector do claude.ai só aceita uma URL. Comparação em tempo
+  constante, como no cron; sem `MCP_API_KEY` no ambiente, ou com menos de 32 caracteres, tudo responde
+  404 — e só o MCP: a chave não tem tamanho mínimo no `env.ts`, para uma chave cortada não derrubar o site.
+- **404, nunca 401:** o claude.ai trata 401 como "comece o OAuth", e este servidor não tem OAuth.
+  Chave errada recebe o mesmo 404 de uma rota que não existe.
+- **Só POST:** GET (o fluxo SSE opcional do MCP) e DELETE (fim de sessão) respondem 405. O
+  transporte é sem sessão e responde em JSON, porque cada merge na `main` reinicia o Passenger e
+  cortaria qualquer conexão longa.
+- **Limite:** 120 chamadas por minuto (`makeRateLimiter`, prefixo `mcp:<NODE_ENV>`); sem Redis, libera.
+- **A chave no caminho fica nos logs de acesso da Hostinger** (e no terminal do `next dev`). Se
+  vazar, gere outra e troque no hPanel e no conector do claude.ai.
+
+Guard e comportamento: [src/lib/mcp/handler.ts](../../src/lib/mcp/handler.ts).
+
 ## O guard de cron: por que é compartilhado, e não copiado
 
-As quatro rotas de `/api/cron/*` — `campaigns`, `extractions`, `feed-cleanup`, `notifications` —
-chamam a mesma função, `isCronAuthorized(req)` de
+As cinco rotas de `/api/cron/*` — `campaigns`, `extractions`, `feed-cleanup`, `notifications`,
+`whatsapp-groups` — chamam a mesma função, `isCronAuthorized(req)` de
 [src/lib/cron-auth.ts:18-31](../../src/lib/cron-auth.ts#L18-L31), como uma das primeiras linhas
 do handler:
 
@@ -214,13 +270,18 @@ despercebido — e importa ainda mais aqui porque este código não tem um revis
 
 ## Os crons não rodam sozinhos
 
-Nada neste repositório agenda essas quatro rotas — elas só executam se alguém criar o cron job
-correspondente no hPanel, batendo no endpoint com o header certo. Nenhuma delas dá sintoma
-visível quando não roda, o que já as deixou passar despercebidas por um bom tempo. Quais valem a
+Nada neste repositório agenda essas cinco rotas — elas só executam se alguém criar o cron job
+correspondente no hPanel, batendo no endpoint com o header certo. Quatro delas não dão sintoma
+visível quando não rodam, o que já as deixou passar despercebidas por um bom tempo. A quinta,
+`whatsapp-groups`, é de outra natureza: sem ela nada se perde nem se apaga, só que a rodada de
+"Adicionar a grupo do WhatsApp" que parou à espera (da janela das 8h, do teto do dia, de uma
+Evolution que não respondeu) ou num restart do servidor continua apenas quando alguém abre a tela
+de acompanhamento (ou, se estiver pausada, clica em "Retomar"); por isso o README a dá como
+**recomendada** onde o recurso estiver em uso (o porquê está em "Passenger e o processo"). Quais valem a
 pena agendar, por quê, e o cuidado necessário na primeira execução de cada um está no quadro do
 [README, seção 8 (Runbook de produção)](../../README.md) — não repetido aqui para não ter duas
 versões da mesma tabela desatualizando em ritmos diferentes. Vá lá antes de agendar qualquer um:
-três dos quatro apagam dados, e a primeira execução de um cron de limpeza que nunca rodou apaga
+três dos cinco apagam dados, e a primeira execução de um cron de limpeza que nunca rodou apaga
 tudo que acumulou desde sempre, de uma vez.
 
 ## Filas: sem `QSTASH_TOKEN`, o caminho vira no-op silencioso
@@ -252,6 +313,14 @@ deveria ser assíncrono parece não estar acontecendo, confira o `.env` antes de
 código. (`enqueue()` chamado direto, sem passar por `isQueueConfigured()` antes, lança erro
 explícito — o silêncio é escolha de quem chama, não um defeito de `enqueue`.)
 
+A exceção é [src/app/api/cron/whatsapp-groups/route.ts](../../src/app/api/cron/whatsapp-groups/route.ts):
+ele **não** sai cedo sem `QSTASH_TOKEN`, e não deve ganhar esse `if` por analogia com o `campaigns`. A
+produção não tem fila, então esse cron chama `kickGroupAddRun`, que usa a fila quando ela existe (job
+`whatsapp-group-add` em `JOB_HANDLERS`, entregue em `/api/jobs/whatsapp-group-add`) e cai para o `after()`
+do próprio processo quando não existe. Copiar o `return` do `campaigns` o desligaria justo onde ele é usado.
+O cron também não inicia um segundo executor: uma rodada cujo executor ainda segura a trava
+(`lastDispatchAt` de até 90 s atrás) não entra na lista que ele chama.
+
 `verifyQStashSignature` — usado nas rotas de job, não nas de cron — é o mecanismo irmão, mas com
 o efeito oposto: sem as chaves de assinatura configuradas, ele devolve `false` e a rota rejeita a
 chamada. Mesma biblioteca, dois comportamentos diferentes na ausência de configuração: uma fila
@@ -262,9 +331,9 @@ Vale saber qual das duas você está lendo antes de confiar num "funcionou".
 
 Antes de considerar uma rota em `src/app/api/` pronta:
 
-- **A tabela acima não é exaustiva.** Ela documenta os cinco padrões conhecidos, não todo
+- **A tabela acima não é exaustiva.** Ela documenta os padrões conhecidos, não todo
   `src/app/api/` — existe pelo menos uma rota real neste repositório que não se encaixa em
-  nenhuma das cinco linhas. Uma rota já existir no repositório não é prova de que o padrão dela
+  nenhuma das linhas. Uma rota já existir no repositório não é prova de que o padrão dela
   está certo: confira o guard de verdade (leia o handler), não copie um arquivo vizinho por
   analogia.
 - **Quem pode chamar isto?** Usuário logado, cron, fila, webhook de um provedor, ou é
@@ -272,7 +341,7 @@ Antes de considerar uma rota em `src/app/api/` pronta:
 - **Se é pública, por quê?** Isso precisa ser uma decisão registrada, não um esquecimento.
 - **Se não é pública, qual guard?** `getOrgContext()` com checagem de `null`,
   `isCronAuthorized(req)`, `verifyQStashSignature(...)`, `verifySignature(...)` da Meta, ou
-  comparação de token — uma das cinco linhas da tabela acima. Escreva a checagem como uma das
+  comparação de token — uma das linhas da tabela acima. Escreva a checagem como uma das
   primeiras linhas do handler.
 - **Toca dado de tenant?** Se a rota lê ou grava tabela de negócio, autenticar quem chama não
   basta — vale o [guia 03 (multi-tenancy)](03-multi-tenancy.md) também.

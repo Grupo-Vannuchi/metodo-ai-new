@@ -214,6 +214,10 @@ export async function updateOpportunity(
     const closedAt = status === "OPEN" || status === "ON_HOLD" ? null : (current.closedAt ?? new Date());
     const outcomeReason =
       status === "LOST" || status === "CANCELED" ? parsed.data.outcomeReason || null : null;
+    // A new stage (possibly in another pipeline) appends the card to the end of
+    // that column, like a drag on the board; otherwise it keeps its position.
+    const stageChanged = stage.id !== current.stageId;
+    const order = stageChanged ? await db.opportunity.count({ where: { stageId: stage.id } }) : undefined;
 
     const res = await db.opportunity.updateMany({
       where: { id },
@@ -222,6 +226,7 @@ export async function updateOpportunity(
         value: parsed.data.value,
         stageId: stage.id,
         pipelineId: stage.pipelineId,
+        order,
         status,
         companyId,
         contactId,
@@ -255,7 +260,7 @@ export async function updateOpportunity(
       await runAutomations(org, { type: "opportunity_lost", opportunityId: id }, ctx.user.name);
     } else if ((status === "OPEN" || status === "ON_HOLD") && wasClosed) {
       await runAutomations(org, { type: "opportunity_reopened", opportunityId: id }, ctx.user.name);
-    } else if (stage.id !== current.stageId && (status === "OPEN" || status === "ON_HOLD")) {
+    } else if (stageChanged && (status === "OPEN" || status === "ON_HOLD")) {
       await runAutomations(org, { type: "stage_entered", opportunityId: id, stageId: stage.id }, ctx.user.name);
     }
 

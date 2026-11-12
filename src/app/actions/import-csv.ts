@@ -120,7 +120,8 @@ export async function importContactsCsv(rows: ContactRow[]): Promise<ImportResul
           companyId,
           tags: tags.length ? tags : ["importação"],
           source: "csv-import",
-          folderId: await folder(),
+          // organizationId by hand: the tenantDb extends does not reach a nested create.
+          folderLinks: { create: { organizationId: ctx.organizationId, folderId: await folder() } },
         },
       });
       if (phoneKey) seenPhone.add(phoneKey);

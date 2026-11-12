@@ -161,7 +161,317 @@ async function main() {
       "conversation list scoped to org B excludes org A's conversation",
     );
 
-    // 9) Official WhatsApp (Cloud API) conversations are tenant-scoped too.
+    // 9) Mass e-mail broadcasts and their recipients are tenant-scoped too.
+    const broadcastA = await prisma.emailBroadcast.create({
+      data: {
+        organizationId: orgA.id,
+        subject: `ISO-EB-A-${stamp}`,
+        html: "<p>x</p>",
+        createdById: userA.id,
+      },
+    });
+    await prisma.emailBroadcastRecipient.create({
+      data: {
+        organizationId: orgA.id,
+        broadcastId: broadcastA.id,
+        email: `iso-${stamp}@example.com`,
+        batchNo: 0,
+      },
+    });
+    const broadcastsB = await prisma.emailBroadcast.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(
+      broadcastsB.length === 0,
+      "email broadcast list scoped to org B excludes org A's broadcast",
+    );
+    const recipientsB = await prisma.emailBroadcastRecipient.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(
+      recipientsB.length === 0,
+      "email recipient list scoped to org B excludes org A's recipient",
+    );
+
+    // 10) The suppression list is per org: an address blocked in A is still
+    // free in B (the unique key is [organizationId, email]).
+    const blockedEmail = `iso-block-${stamp}@example.com`;
+    await prisma.emailSuppression.create({
+      data: { organizationId: orgA.id, email: blockedEmail, reason: "UNSUBSCRIBED" },
+    });
+    const blockedInB = await prisma.emailSuppression.findMany({
+      where: { organizationId: orgB.id, email: blockedEmail },
+    });
+    assert(
+      blockedInB.length === 0,
+      "an address suppressed in org A is not suppressed in org B",
+    );
+
+    // 11) Sender domains are per org, and a domain belongs to ONE org (unique).
+    const senderDomain = `iso-${stamp}.example.com`;
+    await prisma.emailSenderDomain.create({
+      data: { organizationId: orgA.id, domain: senderDomain },
+    });
+    const domainsB = await prisma.emailSenderDomain.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(
+      domainsB.length === 0,
+      "sender domain list scoped to org B excludes org A's domain",
+    );
+    let duplicateRejected = false;
+    try {
+      await prisma.emailSenderDomain.create({
+        data: { organizationId: orgB.id, domain: senderDomain },
+      });
+    } catch {
+      duplicateRejected = true;
+    }
+    assert(duplicateRejected, "the same sender domain cannot be assigned to a second org");
+
+    // 12) Task board columns are per org.
+    await prisma.taskBoardColumn.create({
+      data: { organizationId: orgA.id, name: "ISO", order: 0, isEntrance: true },
+    });
+    const columnsB = await prisma.taskBoardColumn.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(columnsB.length === 0, "task board columns scoped to org B exclude org A's column");
+
+    // 13) E-mail signatures are per org.
+    await prisma.emailSignature.create({
+      data: { organizationId: orgA.id, name: "ISO", kind: "TEXT", html: "<p>A</p>" },
+    });
+    const signaturesB = await prisma.emailSignature.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(signaturesB.length === 0, "e-mail signatures scoped to org B exclude org A's signature");
+
+    // 14) Microsoft sending accounts are per org.
+    await prisma.emailSenderAccount.create({
+      data: {
+        organizationId: orgA.id,
+        provider: "MICROSOFT",
+        email: "iso@a.test",
+        accountKind: "work",
+        credentials: "x",
+        connectedById: "iso",
+      },
+    });
+    const accountsB = await prisma.emailSenderAccount.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(accountsB.length === 0, "e-mail sender accounts scoped to org B exclude org A's account");
+
+    // 15) One sending account per provider per org: A has a Microsoft (from 14),
+    // a Google and an SMTP account side by side, a second Google or SMTP one is
+    // refused, and B still sees none of them.
+    const googleAccountA = await prisma.emailSenderAccount.create({
+      data: {
+        organizationId: orgA.id,
+        provider: "GOOGLE",
+        email: "iso@a.test",
+        accountKind: "work",
+        credentials: "x",
+        connectedById: "iso",
+      },
+    });
+    const smtpAccountA = await prisma.emailSenderAccount.create({
+      data: {
+        organizationId: orgA.id,
+        provider: "SMTP",
+        email: "iso@a.test",
+        accountKind: "smtp",
+        credentials: "x",
+        connectedById: "iso",
+        hourlyLimit: 100,
+        dailyLimit: 500,
+      },
+    });
+    const providersA = await prisma.emailSenderAccount.findMany({
+      where: { organizationId: orgA.id },
+      select: { provider: true },
+    });
+    assert(
+      providersA.map((a) => a.provider).sort().join(",") === "GOOGLE,MICROSOFT,SMTP",
+      "org A holds one Microsoft, one Google and one SMTP sending account at once",
+    );
+    const accountsBAfterSmtp = await prisma.emailSenderAccount.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(
+      accountsBAfterSmtp.length === 0,
+      "e-mail sender accounts scoped to org B stay empty with Microsoft, Google and SMTP in org A",
+    );
+    const googleLookup = await prisma.emailSenderAccount.findFirst({
+      where: { organizationId: orgA.id, provider: "GOOGLE" },
+      select: { id: true, provider: true },
+    });
+    assert(
+      googleLookup?.id === googleAccountA.id && googleLookup.provider === "GOOGLE",
+      "the sender account lookup by provider GOOGLE returns the Google account",
+    );
+    let secondGoogleCode: string | undefined;
+    try {
+      await prisma.emailSenderAccount.create({
+        data: {
+          organizationId: orgA.id,
+          provider: "GOOGLE",
+          email: "iso2@a.test",
+          accountKind: "work",
+          credentials: "x",
+          connectedById: "iso",
+        },
+      });
+    } catch (error) {
+      secondGoogleCode = (error as { code?: string }).code;
+    }
+    assert(secondGoogleCode === "P2002", "a second Google sending account in the same org is refused (P2002)");
+    const smtpLookup = await prisma.emailSenderAccount.findFirst({
+      where: { organizationId: orgA.id, provider: "SMTP" },
+      select: { id: true, provider: true, hourlyLimit: true, dailyLimit: true },
+    });
+    assert(
+      smtpLookup?.id === smtpAccountA.id &&
+        smtpLookup.provider === "SMTP" &&
+        smtpLookup.hourlyLimit === 100 &&
+        smtpLookup.dailyLimit === 500,
+      "the sender account lookup by provider SMTP returns the SMTP account with both limits",
+    );
+    const limitsOfOthers = await prisma.emailSenderAccount.findMany({
+      where: { organizationId: orgA.id, provider: { in: ["MICROSOFT", "GOOGLE"] } },
+      select: { hourlyLimit: true, dailyLimit: true },
+    });
+    assert(
+      limitsOfOthers.length === 2 && limitsOfOthers.every((a) => a.hourlyLimit === null && a.dailyLimit === null),
+      "the Microsoft and Google accounts keep the SMTP-only limits empty",
+    );
+    let secondSmtpCode: string | undefined;
+    try {
+      await prisma.emailSenderAccount.create({
+        data: {
+          organizationId: orgA.id,
+          provider: "SMTP",
+          email: "iso2@a.test",
+          accountKind: "smtp",
+          credentials: "x",
+          connectedById: "iso",
+        },
+      });
+    } catch (error) {
+      secondSmtpCode = (error as { code?: string }).code;
+    }
+    assert(secondSmtpCode === "P2002", "a second SMTP sending account in the same org is refused (P2002)");
+
+    // 16) WhatsApp group-add runs and their items are per org, and a contact
+    // enters a run only once (the unique key is [runId, contactId]).
+    const groupRunA = await prisma.whatsappGroupAddRun.create({
+      data: {
+        organizationId: orgA.id,
+        connectionId: `iso-conn-${stamp}`,
+        senderKey: `iso-sender-${stamp}`,
+        createdById: userA.id,
+        groupJid: `iso-${stamp}@g.us`,
+        groupName: `ISO-GRP-A-${stamp}`,
+        inviteText: "x",
+      },
+    });
+    await prisma.whatsappGroupAddItem.create({
+      data: {
+        organizationId: orgA.id,
+        runId: groupRunA.id,
+        contactId: `iso-contact-${stamp}`,
+        contactName: `ISO-CT-A-${stamp}`,
+        position: 0,
+        senderKey: `iso-sender-${stamp}`,
+      },
+    });
+    const groupRunsB = await prisma.whatsappGroupAddRun.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(
+      groupRunsB.length === 0,
+      "group-add run list scoped to org B excludes org A's run",
+    );
+    const groupItemsB = await prisma.whatsappGroupAddItem.findMany({
+      where: { organizationId: orgB.id },
+    });
+    assert(
+      groupItemsB.length === 0,
+      "group-add item list scoped to org B excludes org A's item",
+    );
+    let secondItemCode: string | undefined;
+    try {
+      await prisma.whatsappGroupAddItem.create({
+        data: {
+          organizationId: orgA.id,
+          runId: groupRunA.id,
+          contactId: `iso-contact-${stamp}`,
+          contactName: `ISO-CT-A2-${stamp}`,
+          position: 1,
+          senderKey: `iso-sender-${stamp}`,
+        },
+      });
+    } catch (error) {
+      secondItemCode = (error as { code?: string }).code;
+    }
+    assert(
+      secondItemCode === "P2002",
+      "the same contact twice in one group-add run is refused (P2002)",
+    );
+
+    // 17) Contact-folder links are per org, and a contact sits in a folder once.
+    const folderA = await prisma.contactFolder.create({
+      data: { organizationId: orgA.id, name: `ISO-FOLDER-A-${stamp}` },
+    });
+    const folderB = await prisma.contactFolder.create({
+      data: { organizationId: orgB.id, name: `ISO-FOLDER-B-${stamp}` },
+    });
+    const contactA = await prisma.contact.create({
+      data: { organizationId: orgA.id, name: `ISO-CT-A-${stamp}` },
+    });
+    const contactB = await prisma.contact.create({
+      data: { organizationId: orgB.id, name: `ISO-CT-B-${stamp}` },
+    });
+    const linkA = await prisma.contactFolderLink.create({
+      data: { organizationId: orgA.id, contactId: contactA.id, folderId: folderA.id },
+    });
+    await prisma.contactFolderLink.create({
+      data: { organizationId: orgB.id, contactId: contactB.id, folderId: folderB.id },
+    });
+    const linksOfA = await prisma.contactFolderLink.findMany({
+      where: { organizationId: orgA.id },
+    });
+    assert(
+      linksOfA.length === 1 && linksOfA[0].id === linkA.id,
+      "a contact-folder link read scoped by org A returns only org A's link",
+    );
+    const wrongLinkUpdate = await prisma.contactFolderLink.updateMany({
+      where: { id: linkA.id, organizationId: orgB.id },
+      data: { folderId: folderB.id },
+    });
+    assert(
+      wrongLinkUpdate.count === 0,
+      "a contact-folder link updateMany with the wrong org affects 0 rows",
+    );
+    const wrongLinkDelete = await prisma.contactFolderLink.deleteMany({
+      where: { id: linkA.id, organizationId: orgB.id },
+    });
+    assert(
+      wrongLinkDelete.count === 0,
+      "a contact-folder link deleteMany with the wrong org affects 0 rows",
+    );
+    let duplicateLinkCode: string | undefined;
+    try {
+      await prisma.contactFolderLink.create({
+        data: { organizationId: orgA.id, contactId: contactA.id, folderId: folderA.id },
+      });
+    } catch (error) {
+      duplicateLinkCode = (error as { code?: string }).code;
+    }
+    assert(duplicateLinkCode === "P2002", "the same contact twice in one folder is refused (P2002)");
+
+    // 18) Official WhatsApp (Cloud API) conversations are tenant-scoped too.
     const cloudNumber = await prisma.whatsappCloudNumber.create({
       data: {
         organizationId: orgA.id,
@@ -190,6 +500,29 @@ async function main() {
     await prisma.whatsappCloudNumber.deleteMany({
       where: { organizationId: { in: created.orgs } },
     });
+    // Group-add items go with their run (onDelete: Cascade).
+    await prisma.whatsappGroupAddRun.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
+    await prisma.emailSignature.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
+    await prisma.taskBoardColumn.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
+    await prisma.emailSenderDomain.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
+    await prisma.emailSuppression.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
+    await prisma.emailSenderAccount.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
+    // Recipients go with their broadcast (onDelete: Cascade).
+    await prisma.emailBroadcast.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
     await prisma.conversation.deleteMany({
       where: { organizationId: { in: created.orgs } },
     });
@@ -200,6 +533,15 @@ async function main() {
       where: { organizationId: { in: created.orgs } },
     });
     await prisma.integrationConnection.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
+    await prisma.contactFolderLink.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
+    await prisma.contact.deleteMany({
+      where: { organizationId: { in: created.orgs } },
+    });
+    await prisma.contactFolder.deleteMany({
       where: { organizationId: { in: created.orgs } },
     });
     await prisma.company.deleteMany({

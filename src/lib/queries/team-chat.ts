@@ -166,7 +166,8 @@ export async function isChatParticipant(
   return chat != null;
 }
 
-/** Messages of a chat — only if the requester participates in it. */
+/** The latest 200 messages of a chat, oldest first — only if the requester
+ * participates in it. Taken newest-first and reversed, like the inbox thread. */
 export async function listTeamChatMessages(
   organizationId: string,
   chatId: string,
@@ -174,9 +175,9 @@ export async function listTeamChatMessages(
 ) {
   if (!(await isChatParticipant(organizationId, chatId, userId))) return [];
   const db = tenantDb(organizationId);
-  return db.teamChatMessage.findMany({
+  const rows = await db.teamChatMessage.findMany({
     where: { chatId },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
     take: 200,
     select: {
       id: true,
@@ -201,6 +202,7 @@ export async function listTeamChatMessages(
       createdAt: true,
     },
   });
+  return rows.reverse();
 }
 
 /** Stable key for the 1:1 chat between two users in an org. */

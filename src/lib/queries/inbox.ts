@@ -1,6 +1,7 @@
 import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
 import { WHATSAPP_PROVIDERS } from "@/lib/queries/connections";
+import { isAvatarFresh } from "@/lib/whatsapp/avatar";
 
 /** Viewer scope: who is asking. WhatsApp is strictly per-user — every user
  * (admins included) sees only conversations from the numbers THEY connected, so
@@ -86,6 +87,7 @@ export async function listConversations(organizationId: string, viewer: InboxVie
     : [];
   const cMap = new Map(contacts.map((c) => [c.id, c.name]));
 
+  const now = new Date();
   return convos.map((c) => ({
     id: c.id,
     remoteJid: c.remoteJid,
@@ -100,7 +102,7 @@ export async function listConversations(organizationId: string, viewer: InboxVie
     pinned: c.pinned,
     folderId: c.folderId,
     avatarUrl: c.avatarUrl,
-    avatarChecked: c.avatarCheckedAt !== null,
+    avatarChecked: isAvatarFresh(c.avatarCheckedAt, now),
   }));
 }
 
@@ -113,12 +115,14 @@ export async function listConversationFolders(organizationId: string) {
   });
 }
 
-/** Messages of a conversation, oldest first (scoped via organizationId). */
+/** The latest 200 messages of a conversation, oldest first (scoped via organizationId).
+ * Taken newest-first and reversed: an ascending `take` would freeze the thread
+ * on its first 200 messages once the chat grows past that. */
 export async function listMessages(organizationId: string, conversationId: string) {
   const db = tenantDb(organizationId);
-  return db.message.findMany({
+  const rows = await db.message.findMany({
     where: { conversationId },
-    orderBy: { timestamp: "asc" },
+    orderBy: { timestamp: "desc" },
     take: 200,
     select: {
       id: true,
@@ -141,6 +145,7 @@ export async function listMessages(organizationId: string, conversationId: strin
       mediaHeight: true,
     },
   });
+  return rows.reverse();
 }
 
 /** Contact details for the inbox side panel. */

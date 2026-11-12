@@ -5,7 +5,7 @@ Plataforma **SaaS modular** de CRM/ERP multi-tenant para PMEs brasileiras: o cli
 > **Este README é o documento de handoff.** Foi escrito para um dev novo conseguir rodar, entender a arquitetura e fazer deploy do zero. Leia a seção **Runbook de produção** com atenção — ela concentra o conhecimento operacional que mais dá dor de cabeça.
 
 - **Repositório:** `Grupo-Vannuchi/metodo-ai-new`
-- **Branches:** trabalha-se na `dev`; `main` = produção (deploy sai da `main`).
+- **Branches:** `feature/<nome>` ou `fix/<nome>` a partir da `main`, com PR para a `main` = produção (deploy sai da `main`). A `dev` não é usada desde 01/10/2026. Fluxo completo: [docs/guia/07-como-trabalhamos.md](docs/guia/07-como-trabalhamos.md).
 - **Node:** ≥ 20.9
 
 ---
@@ -48,7 +48,7 @@ O MétodoAI **deixou de ser um SaaS de planos fixos** e virou uma **plataforma m
 | Auth | **jose** (JWT HS256, cookie de sessão) + **bcryptjs**; OAuth Google/Microsoft/LinkedIn |
 | Jobs/Cache | **Upstash QStash** (jobs) + **Upstash Redis** (rate-limit) — opcionais |
 | Storage | **Vercel Blob** (mídia do inbox) |
-| E-mail | **Resend** (verificação, convites, reset) |
+| E-mail | **Resend** (conta da plataforma): transacional (verificação, convites, reset) e o submenu E-mail (envio em massa, com domínio próprio de cada empresa) |
 | IA | **Anthropic** (copiloto/agente) + **OpenAI** (transcrição de áudio, imagens) |
 | WhatsApp | **Evolution API** (não-oficial) numa **VPS separada** + **WhatsApp Cloud API** direto na Meta (piloto) |
 
@@ -82,7 +82,7 @@ O MétodoAI **deixou de ser um SaaS de planos fixos** e virou uma **plataforma m
 - Nav final = `allowedScreens ∩ availableScreens(modules)`.
 
 ### 3.5 Modelo de dados (Prisma) — principais
-`Organization` (com `ownerId`), `User`, `Membership`, `AccountModule`, `OrganizationModule`, `AccessTemplate`, `Invitation`, `AuthToken`, `Account` (OAuth), `UserProfile` · CRM: `Company`, `Contact`, `ContactFolder`, `Pipeline`, `Stage`, `Opportunity`, `ProductService`, `Automation`, `Goal` · Financeiro: `FinanceEntry`, `FinanceCategory` · RH: `Employee`, `PayrollRun`, `TimeOff` · Suprimentos: `SupplyItem`, `PurchaseOrder`, `Asset`, `MaintenanceEvent`, `Supplier`, `ClientEquipment` · Marketing: `MessageTemplate`, `Campaign`, `CampaignRecipient`, `ExtractionJob`, `ExtractedLead` · Inbox: `IntegrationConnection`, `Conversation`, `Message`, `WhatsappAgent` · Colaboração: `TeamChat*`, `FeedPost*`, `Notification`, `PinnedItem` · `AuditLog`.
+`Organization` (com `ownerId`), `User`, `Membership`, `AccountModule`, `OrganizationModule`, `AccessTemplate`, `Invitation`, `AuthToken`, `Account` (OAuth), `UserProfile` · CRM: `Company`, `Contact`, `ContactFolder`, `ContactFolderLink`, `Pipeline`, `Stage`, `Opportunity`, `ProductService`, `Automation`, `Goal` · Financeiro: `FinanceEntry`, `FinanceCategory` · RH: `Employee`, `PayrollRun`, `TimeOff` · Suprimentos: `SupplyItem`, `PurchaseOrder`, `Asset`, `MaintenanceEvent`, `Supplier`, `ClientEquipment` · Marketing: `MessageTemplate`, `Campaign`, `CampaignRecipient`, `ExtractionJob`, `ExtractedLead` · Inbox: `IntegrationConnection`, `Conversation`, `Message`, `WhatsappAgent` · Colaboração: `TeamChat*`, `FeedPost*`, `Notification`, `PinnedItem` · `AuditLog`.
 
 ---
 
@@ -107,7 +107,8 @@ src/
     integrations/      # channels (evolution/email), crypto, evolution-creds
     downloader/        # resolvers YouTube/X/Instagram
     assistant/         # copiloto: tools, system prompt, threads
-    whatsapp/          # inbound parser + ingest + media
+    whatsapp/          # inbound parser + ingest + media; group-add/ (contatos
+                       #   do CRM num grupo: regras, executor, serviço)
   messages/            # pt.json, en.json (next-intl) — mantenha PARIDADE
 prisma/
   schema.prisma, migrations/, seed.ts
@@ -141,7 +142,7 @@ Antes de commitar: **`npm run typecheck` + `npm run lint` + `npm run build` + `n
 ### Scripts (`package.json`)
 | Comando | O que faz |
 |---|---|
-| `dev` / `build` / `start` | ciclo Next.js |
+| `dev` / `build` / `start` | ciclo Next.js — o `build` usa webpack, não Turbopack (§8, gotcha 4) |
 | `typecheck` | `tsc --noEmit` |
 | `lint` | ESLint |
 | `check:isolation` | prova que o banco respeita o filtro de org quando ele é escrito (não que o código o escreva — ver §3.1) |
@@ -167,14 +168,20 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 | `META_WEBHOOK_VERIFY_TOKEN` | p/ WhatsApp oficial | responde ao GET de verificação do webhook |
 | `META_GRAPH_VERSION` | não | versão da Graph API (padrão `v26.0`) |
 | `WHATSAPP_CLOUD_ORG_IDS` | não | empresas liberadas para a tela oficial (ids separados por vírgula); vazio = ninguém |
+| `WHATSAPP_DEV_ALLOWED_NUMBERS` | só fora de produção | números (ou JIDs de grupo), separados por vírgula, que podem receber WhatsApp em desenvolvimento; vazia = nada sai. Ignorada em produção. Trava em `src/lib/whatsapp/dev-guard.ts` |
+| `WHATSAPP_GROUP_ADD_ORG_IDS` | p/ grupos do WhatsApp | empresas (ids separados por vírgula) que veem o "Adicionar a grupo do WhatsApp" durante o piloto; **vazia = ninguém**. Chave em `src/lib/whatsapp/group-add/pilot.ts` |
 | `ANTHROPIC_API_KEY` | p/ IA | copiloto + agente WhatsApp |
 | `OPENAI_API_KEY` | p/ IA | transcrição de áudio, geração de imagem |
-| `RESEND_API_KEY`, `EMAIL_FROM` | p/ e-mail | verificação, convites, reset |
+| `RESEND_API_KEY`, `EMAIL_FROM` | p/ e-mail | verificação, convites, reset e o envio em massa do submenu E-mail |
+| `RESEND_WEBHOOK_SECRET` | não | segredo do webhook de entrega do E-mail em massa (painel Resend → Webhooks) |
+| `MICROSOFT_MAIL_CLIENT_ID`, `MICROSOFT_MAIL_CLIENT_SECRET` | opcional | envio de e-mail em massa pela caixa Microsoft da empresa (app "MetodoIA" no Entra); sem as duas, a opção "Pela conta Microsoft" não aparece |
+| `GOOGLE_MAIL_CLIENT_ID`, `GOOGLE_MAIL_CLIENT_SECRET`, `GOOGLE_MAIL_PILOT_ORG_IDS` | opcional | envio de e-mail em massa pela conta Google da empresa (projeto "MetodoIA E-mail" no Google Cloud, separado do projeto do "Entrar com Google"; escopo `gmail.send`); sem as duas primeiras, a opção "Pela conta Google" não aparece; `GOOGLE_MAIL_PILOT_ORG_IDS` é uma lista de ids de empresa separados por vírgula que restringe a opção a elas até a Google aprovar o app (vazia = todas as empresas) |
 | `BLOB_READ_WRITE_TOKEN` | p/ mídia | Vercel Blob (mídia do inbox) |
 | `QSTASH_TOKEN`, `QSTASH_URL`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` | p/ jobs | fila (prospecção, mídia). Sem eles, degrada. |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | não | rate-limit |
 | `GOOGLE_CLIENT_ID/SECRET`, `MICROSOFT_*`, `LINKEDIN_*` | não | login OAuth |
 | `CRON_SECRET` | p/ cron | autentica os endpoints `/api/cron/*` |
+| `MCP_API_KEY` | não | chave do servidor MCP de leitura (`/api/mcp`); sem ela o endpoint responde 404 |
 | `SEED_OWNER_EMAIL`, `SEED_OWNER_PASSWORD`, `SEED_ORG_NAME` | não | usadas pelo seed |
 
 > **Nunca commite segredos.** `.env` está no `.gitignore`.
@@ -185,7 +192,33 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 
 - **Inbox WhatsApp (Evolution):** conexão por usuário (`IntegrationConnection.ownerId`), credenciais **criptografadas**. Envio: `src/app/actions/inbox.ts` → adapter `WHATSAPP_EVOLUTION`. **Sempre resolva as credenciais com `resolveEvoCreds()`** (`src/lib/integrations/evolution-creds.ts`) — conexões "de plataforma" guardam só o `instance`; `baseUrl`/`apiKey` vêm do env. Passar credenciais cruas quebra o envio ("Conexão Evolution incompleta"). Recebimento: webhook por conexão `/api/webhooks/evolution/[connectionId]/[token]` → `lib/whatsapp/inbound.ts` + `ingest.ts`. Histórico exige instância criada com `syncFullHistory` (número já conectado precisa desconectar+reconectar). Mídia é assíncrona (QStash → baixa → Vercel Blob).
 - **Conversas (Oficial) — WhatsApp Cloud API (piloto):** tela `/app/inbox-oficial`, código em `src/lib/whatsapp-cloud/`, tabelas `WhatsappCloud*`. Por vendedor (cada um conecta o próprio número com Phone Number ID, WABA ID e token). Webhook único `/api/webhooks/whatsapp-cloud` (GET de verificação + POST assinado). Texto livre só dentro da janela de 24h; fora dela, modelo aprovado. Campanhas com canal "WhatsApp Oficial" disparam modelos pelo número do criador. Design: [spec de 28/09/2026](docs/superpowers/specs/2026-09-28-whatsapp-cloud-inbox-design.md). Simulador local: `scripts/wa-cloud-webhook.ts`. **Configurar a Meta:** (1) App Secret em *Configurações do app → Básico* → `META_APP_SECRET`; (2) em *WhatsApp → Configuração*, URL de retorno `https://metodotia.com/api/webhooks/whatsapp-cloud` e token = `META_WEBHOOK_VERIFY_TOKEN`, assinando `messages`, `message_template_status_update` e `user_id_update` (se listado); (3) token permanente: Gerenciador de Negócios → *Usuários do sistema* → admin → atribuir app e WABA → gerar token com `whatsapp_business_messaging` e `whatsapp_business_management`; (4) número de teste: cadastrar até 5 destinos em *Configuração da API*; (5) número real: PIN da verificação em duas etapas, informado no formulário de conexão.
+
+- **Contatos do CRM num grupo do WhatsApp ("Adicionar a grupo do WhatsApp", em `/app/contacts`, piloto):** só para as empresas listadas em `WHATSAPP_GROUP_ADD_ORG_IDS` (vazia = ninguém; fora da lista, o botão some, a tela de acompanhamento dá 404, as actions recusam e o executor pausa a rodada como `pilot_off`; com a empresa de volta à lista, nada a retoma sozinho, só o "Retomar" de quem a começou). Adiciona os contatos de uma pasta, ou de uma seleção, direto num grupo do WhatsApp, pelo número que a própria pessoa conectou em Conversas (a conexão `EVOLUTION` dela, `ownerId = userId`, sempre por `resolveEvoCreds()`). A pasta é lida pelos vínculos de contato com pasta (`contact_folder_links`, do contato em várias pastas, nunca a coluna antiga `contacts."folderId"`): um contato em duas pastas entra pela rodada de qualquer uma delas, e a origem "Sem pasta" é quem não tem vínculo nenhum, como a tela de Contatos mostra. Spec e plano: `docs/superpowers/specs/2026-10-28-crm-grupo-whatsapp-design.md` e `docs/superpowers/plans/2026-10-28-crm-grupo-whatsapp.md`. Exige a tela `contacts` e os módulos `crm` e `inbox`: o servidor resolve e passa `canAddToGroup` como prop, e as actions conferem de novo. Só duas escritas saem para o WhatsApp: adicionar o participante (`POST /group/updateParticipant`, um número por chamada) e, quando a privacidade da pessoa recusa a adição (código `403`), o texto do convite pelo privado, com o link do grupo (`GET /group/inviteCode`, pedido uma vez por rodada) sempre numa linha própria no fim. Nunca `sendInvite`, remover, promover, rebaixar nem mexer na configuração do grupo, e o `check:group-add` falha se qualquer um aparecer em `src/lib/whatsapp/group-add/` ou no cliente da Evolution. Ritmo e limites: uma pessoa a cada 30 a 90 s (aleatório), só das 8h às 20h de São Paulo, todos os dias; no máximo 100 pessoas por dia por número (contam `ADDED`, `INVITED` e `FAILED`) e 1.024 participantes por grupo; quem tem opt-out nunca é adicionado nem recebe convite. Uma rodada `RUNNING` por número (`senderKey`, os dígitos do `ownerJid`, em qualquer empresa): as outras ficam `QUEUED`, e uma `PAUSED` segura a fila. A rodada fica presa ao número com que foi planejada: no começo de cada visita do executor, antes de voltar sozinha e no "Retomar", ela confere que a instância ainda é desse número; se Conversas foi reconectado com outro telefone, pausa como `number_changed` ("O WhatsApp conectado agora é outro número") e só volta pelo "Retomar", com o número de antes conectado de novo. Um número desconectado em Conversas (conexão `INACTIVE`, instância apagada) pausa a rodada como `disconnected` e não custa chamada à Evolution até ser reconectado. A rodada grava um item por contato (`whatsapp_group_add_runs` e `whatsapp_group_add_items`); quem ficou `PROCESSING` numa queda vira `FAILED` com motivo `interrupted` e nunca é refeito. O mesmo vale para as outras respostas em que a adição ou o convite pode ter saído (`UNCERTAIN_REASONS` em `core.ts`: a adição sem resposta, com um 2xx sem código ou com o 502, 503 ou 504 de um gateway, e o texto do convite sem resposta ou com um desses três): a tela diz "Não foi possível confirmar…" e a rodada seguinte do mesmo grupo pula a pessoa (`previous_uncertain`); um 4xx ou um 500 é recusa ("O WhatsApp recusou a adição (código N)"), e a rodada seguinte tenta de novo. Código: regras puras em `src/lib/whatsapp/group-add/core.ts` (plano, leitura dos códigos, janela, ritmo, convite, previsão); executor em `runner.ts` (contexto de sistema: Prisma cru com `organizationId` explícito, lease em `lastDispatchAt`, fila por número); o que a pessoa faz em `service.ts` (por `tenantDb`: listar grupos, conferir, começar, pausar, retomar, cancelar, cutucar); leituras em `src/lib/queries/whatsapp-group-add.ts`; actions em `src/app/actions/whatsapp-group-add.ts` (a auditoria guarda o nome do grupo, nunca o JID, o telefone ou o texto); chamadas da Evolution em `src/lib/integrations/evolution-client.ts` e `evolution-groups.ts`; cron recomendado em `src/app/api/cron/whatsapp-groups/route.ts` e job `whatsapp-group-add` em `src/lib/jobs/index.ts`. Telas: o botão da pasta aberta e o da barra de seleção (`contacts-grid.tsx`, `bulk-bar.tsx`, `folder-explorer.tsx`), a janela de dois passos (`group-add-dialog.tsx`, `group-add-picker.tsx`, `group-add-review.tsx`), o acompanhamento em `/app/contacts/grupos/[runId]` (`group-add-run.tsx`, relê a página a cada 5 s enquanto a rodada anda, e a cada minuto enquanto ela espera a janela, o teto do dia ou a Evolution) e a seção "Grupos do WhatsApp" em `/app/contacts/[id]`. Pausar e cancelar são de quem começou a rodada ou de ADMIN para cima; retomar é só de quem começou, porque a rodada sai do WhatsApp pessoal dessa pessoa. **Sem fila (como na produção)**, a rodada roda dentro do processo do site (`after()`) e só as pausas de 30 a 90 s são dormidas lá; uma espera mais longa (a janela das 8h, o teto do dia, uma Evolution que não responde) solta a rodada, e quem a retoma é o cron (recomendado) ou quem abre a tela de acompanhamento (a abertura cutuca a rodada, uma vez por abertura, nunca a cada releitura). A rodada que espera, ou que um restart cortou, segue `RUNNING`, só com "Pausar" e "Cancelar": o "Retomar" é só da rodada pausada. Um redeploy (todo merge na `main`) ou um restart do Passenger interrompe a rodada em andamento, sem adicionar ninguém duas vezes. Testes: `npm run check:group-add` (regras puras e as guardas de escrita e de auditoria), `npm run check:group-add:e2e` (contra a Evolution falsa em loopback, `scripts/shims/fake-evolution.ts`, e o Postgres local) e `npm run check:groups` (a leitura dos grupos da Evolution, que o recurso divide com a importação de grupo para o CRM). Os códigos `200`, `403` e `409` do Baileys e o campo `announce` ainda esperam o teste real, com o roteiro no §8 ("WhatsApp: contatos do CRM num grupo — primeiro uso real").
 - **IA/Copiloto:** `src/lib/assistant/*` (tools read-only + ações com confirmação). Tools aceitam `companyId` opcional para consultar outra empresa da conta (owner-only).
+- **E-mail em massa (submenu E-mail):** `src/lib/email-broadcast/` e as tabelas `email_broadcasts`, `email_broadcast_recipients` e `email_suppressions`. Um destinatário por endereço por envio, garantido por `@@unique`. Planilhas (.xlsx/.csv) são lidas no navegador (`spreadsheet.ts`): se a primeira linha de uma aba tiver a coluna `email` (e as colunas `nome`, `sobrenome` e `empresa`), cada endereço leva da própria linha o `{{nome}}` (nome + sobrenome) e o `{{empresa}}`, guardados no `audience` do rascunho (`imports[].people`); sem essa linha, só os endereços. Se o endereço também vier do CRM, o cadastro do CRM vence e a planilha só completa o que faltar. Lotes de 100 com `Idempotency-Key` (um 409 `concurrent_idempotent_requests` repete com a mesma chave; política em `retry-policy.ts`); sem QStash, roda em `after()` com lease verificado por dono e tem o botão "Retomar envio". A cota conta também os endereços ainda na fila de envios em andamento. O webhook de entrega é o webhook único da plataforma: `/api/email/webhook` (segredo `RESEND_WEBHOOK_SECRET`), com assinatura Svix; se aplicar o evento falha, apaga o evento guardado e responde 500 para o Svix repetir. Envia pela conta Resend da plataforma (`RESEND_API_KEY`). O remetente é digitado em cada envio e o domínio dele precisa estar em `email_sender_domains` daquela empresa (comando `email:dominio`, runbook §8). O ritmo é de ~2 req/s somando todos os envios em andamento (a conta Resend aceita 10 req/s por equipe), para preservar os e-mails de login e reset. O descadastro é próprio (`/email-unsubscribe/...` e o one-click `/api/email/unsubscribe/...`) e **não** altera `Contact.optedOut`. Imagens no corpo: botão "Imagem" do editor (opção desligada por padrão no `RichTextEditor`, as Propostas não usam), por upload em `/api/email/image` (mesmo gating da tela, guarda via `putMedia`) ou link https; podem ser clicáveis (`<a><img></a>`), e no envio ganham estilo responsivo e base64 é removido (`prepareEmailImages`). Anexos: até 10 arquivos e 10 MB por envio, com os tipos da lista fechada em `src/lib/email-broadcast/attachments.ts`. Sobem por `/api/email/attachment` (mesmo gating da tela) para o storage, na pasta `email-attachments/<org>/`. O envio guarda só as chaves, na coluna `attachments`, e o servidor confere que são da empresa. Com anexo, o despachante lê os arquivos uma vez por execução (`readMedia`) e manda um e-mail por chamada, porque o `/emails/batch` do Resend não aceita anexos; o ritmo fica em ~2 e-mails/s, e a confirmação mostra o tempo estimado. Se um arquivo não puder ser lido, o envio pausa (`attachment_unavailable`) sem mandar nada. Com anexo, um envio de algumas centenas de destinatários leva minutos e roda dentro do processo da app (`after()`): um redeploy (todo merge na `main`) ou um restart do Passenger o interrompe — ninguém recebe duas vezes e "Retomar envio" continua de onde parou; evite mergear na `main` enquanto um envio com anexo estiver rodando. Assinaturas: `/app/email/signatures`, aberta pelo formulário do e-mail ("Gerenciar assinaturas" ou "Criar assinatura"); a página E-mail não tem mais abas desde 19/10/2026. São da empresa e têm dois tipos: "Texto e imagens" (o editor do corpo) ou "Imagem pronta" (imagem, link opcional e texto alternativo obrigatório). Cada empresa tem no máximo uma padrão e no máximo 20 assinaturas, e quem tem acesso ao E-mail gerencia. O rascunho guarda `signatureId`. Ao iniciar o envio, a assinatura é montada e sanitizada (`composeSignature`) e congelada em `signatureHtml`/`signatureText` no próprio envio: o despachante só lê essa cópia, e editar ou excluir a assinatura não muda envios feitos. Tabela `email_signatures`; regras puras em `src/lib/email-broadcast/signature.ts`. Specs: `docs/superpowers/specs/2026-10-06-email-em-massa-design.md`, para a conta da plataforma e os domínios, `docs/superpowers/specs/2026-10-08-email-dominios-plataforma-design.md`, para os anexos, `docs/superpowers/specs/2026-10-09-email-anexos-design.md`, e, para as assinaturas, `docs/superpowers/specs/2026-10-13-email-assinaturas-design.md`. Envio pela conta Microsoft (spec `docs/superpowers/specs/2026-10-15-email-conta-microsoft-design.md`): cada empresa conecta uma caixa Outlook/Microsoft 365 (`email_sender_accounts`, uma por provedor por empresa; rotas `/api/email/microsoft/*`, app "MetodoIA" no Entra, `MICROSOFT_MAIL_CLIENT_*`). "Novo e-mail" pergunta o canal, e a página E-mail também: sempre pergunta ao entrar e lista só os envios do canal escolhido (`/app/email?canal=plataforma|microsoft|google|smtp`, regras em `src/lib/email-broadcast/list-channel.ts`). Os cartões da plataforma e do SMTP aparecem para toda empresa com o E-mail; o da Microsoft só com o app configurado e o da Google só para as empresas do piloto. Como sempre há o SMTP além da plataforma, as duas telas sempre perguntam: não existe mais o atalho direto para a plataforma de quando nenhuma caixa estava disponível. Pela Microsoft, o despachante monta MIME (`nodemailer` só como montador) e envia por `sendMail` ou por rascunho + anexos (`Mail.ReadWrite`). O ritmo é de ~28/min por caixa e há um limite diário estimado (300 no Outlook pessoal, 10.000 no Microsoft 365), com pausa e "Retomar envio". Cada destinatário é reservado antes da chamada, e o que sobra numa queda vira "Situação incerta", sem reenvio. Envios pela Microsoft não contam na cota da plataforma (a barra de cota mensal fica oculta no formulário) nem têm rastreio de entrega/abertura. Envio pela conta Google (spec `docs/superpowers/specs/2026-10-19-email-conta-google-design.md`): a empresa conecta uma conta Gmail ou Google Workspace, no máximo uma por provedor, então a mesma empresa pode ter uma Google e uma Microsoft (`@@unique([organizationId, provider])`; rotas `/api/email/google/*`, cookies `gg_mail_*`, projeto "MetodoIA E-mail" no Google Cloud, separado do projeto do "Entrar com Google", `GOOGLE_MAIL_CLIENT_*`). O escopo é só `gmail.send` (mais a identidade), nunca leitura: o `hd` do token de identidade separa Workspace de Gmail pessoal, e uma conta Google sem Gmail é recusada na conexão (`no_gmail`). O laço de envio é um só para as caixas conectadas (`mailbox/deliver.ts`), com três adaptadores, um por provedor (`microsoft/`, `google/adapter.ts` e `smtp/adapter.ts`), e confere que o provedor da conta é o canal do envio. O e-mail sai por `messages.send` com o MIME montado pelo servidor: upload simples até 5 MB e retomável acima disso; uma falha na chamada que entrega o e-mail vira "Situação incerta", sem reenvio. O ritmo é de ~28/min por conta e o limite diário estimado é de 500 (Gmail pessoal) e 2.000 (Workspace), com pausa e "Retomar envio"; se o Gmail estiver desligado na conta, o envio pausa inteiro sem marcar ninguém como falha. Envios pelo Google também não contam na cota da plataforma nem têm rastreio de entrega/abertura. Piloto: com `GOOGLE_MAIL_PILOT_ORG_IDS` preenchida (ids de empresa separados por vírgula), só essas empresas veem a opção Google e as rotas e actions recusam as outras (as actions respondem `sender_account_missing`; só as rotas usam `not_configured`); vazia, todas veem. Enquanto o projeto Google estiver em Testing, a autorização de cada conta vence em 7 dias e a conta passa a "precisa reconectar". Runbook no §8. Caixa de entrada (20/10/2026): a página do canal Microsoft tem as abas "Envios" e "Caixa de entrada" (`?canal=microsoft&aba=caixa`, com `filtro`, `q` e `msg`). A aba lê a pasta Caixa de Entrada da caixa conectada pelo Microsoft Graph a cada visita, com a mesma permissão `Mail.ReadWrite` (nada novo para o cliente autorizar). Mostra os 50 e-mails mais recentes, com busca enquanto digita (a partir de 3 letras; Enter busca na hora) e os filtros "Não lidas" e "Respostas aos envios". Abrir um e-mail o marca como lido. A resposta sai pela própria caixa (`/reply` do Graph), na mesma conversa. Nada da caixa é guardado no banco. O corpo aparece num `iframe` sandbox, sem scripts e com CSP; imagens embutidas (`cid:`) até 1,5 MB viram data URI. "Resposta ao envio" é uma estimativa: quem escreveu recebeu um envio pela Microsoft antes, e o assunto (sem "Re:" etc.) é o do envio (com `{{nome}}`/`{{empresa}}`, os trechos fixos batem do começo ao fim). Quem vê a aba: dono e admins, e membros cujo modelo de acesso marque `email` e `emailInbox`; membro sem modelo não vê (`OPT_IN_SCREENS`, guia 04). Links do corpo abrem em nova aba sem acesso ao app (`neutralizeOpeners`). Uma visita faz no máximo 3 chamadas simultâneas à caixa (a Microsoft aceita 4 por app e caixa) e repete uma vez num 429. O anexo baixado passa em streaming (`/$value`), sem ser montado na memória. Código em `src/lib/email-broadcast/microsoft/inbox*.ts` e `src/components/email/inbox/`; anexos por `/api/email/microsoft/attachment`. Envio por SMTP (21/10/2026, spec `docs/superpowers/specs/2026-10-21-email-conta-smtp-design.md`): a empresa envia pelo servidor SMTP de qualquer provedor que peça login (o primeiro cliente usa a KingHost), com no máximo uma conta por empresa, ao lado da Microsoft e da Google (`email_sender_accounts`, provedor `SMTP`, `accountKind = "smtp"`). Não há variável de ambiente nova nem piloto: o cartão "Por outro provedor (SMTP)" aparece para toda empresa com o E-mail. A conta é preenchida em `/app/email/smtp` (conta nova, edição e reconexão) com servidor, porta (465, 587 ou 2525; a 25 é recusada), segurança (SSL ou STARTTLS), usuário e senha. Servidor, porta, segurança, usuário e senha ficam criptografados em `credentials` (`INTEGRATION_ENC_KEY`), e a senha nunca vai ao navegador, ao log nem à auditoria. A action `saveSmtpAccount` testa a conexão (TLS ou STARTTLS e login, sem mandar e-mail) em todo salvamento e só grava se o teste passar; o certificado é sempre conferido. Só um teste roda por vez por empresa em cada processo (a trava fica na memória; o segundo recebe `busy`), e cada empresa faz no máximo 10 testes a cada 10 minutos, também por processo (o 11º recebe `too_many_tests`, sem conectar), para o formulário não servir para testar senha atrás de senha num servidor. A senha guardada só é reaproveitada na edição se servidor, porta, segurança e usuário continuarem iguais: senão, alguém com acesso ao E-mail poderia apontar o servidor para um seu e receber a senha guardada durante o teste. Proteção de endereço (`smtp/address.ts`): quem preenche o formulário escolhe para onde o servidor do MétodoAI conecta, então, antes de cada conexão (no teste e em cada envio), o nome é resolvido e recusado se qualquer endereço for de rede interna (loopback, redes privadas, link-local, CGNAT, reservadas), e a conexão vai ao IP conferido, com o nome original no SNI e na conferência do certificado. O envio usa o mesmo laço da Microsoft e da Google (`mailbox/deliver.ts`, com o adaptador `smtp/adapter.ts`, o envio em `smtp/send.ts` e as regras puras em `smtp/core.ts`): uma conexão por e-mail, com o MIME de sempre entregue cru. Os limites são informados pela empresa, porque o MétodoAI não conhece os do provedor: o por hora só espaça os envios (intervalo de `max(2,1 s, 3.600.000 ms ÷ limite)`, vezes os envios da mesma conta em andamento) e nunca pausa; o por dia pausa e espera "Retomar envio". Os padrões são 100 por hora e 500 por dia, e os máximos 1.700 por hora e 10.000 por dia (`LIMITS.smtp*`), com o limite por hora sempre menor ou igual ao do dia. Uma trava consultiva por conta (`pg_advisory_xact_lock`) faz envios simultâneos dela respeitarem os dois limites, e cada tentativa tem teto de 75 s para caber no lease de 90 s. Uma falha de rede ou tempo esgotado na entrega vira "Situação incerta", sem reenvio (três seguidas pausam o envio com `provider_error`, porque o servidor está derrubando a entrega sem responder), mas uma recusa do servidor nunca é incerta (nem a resposta de código 400 ou mais seguida de conexão fechada, como o `421` com PIPELINING). O `421` é do servidor (repete e depois pausa); a recusa de um destinatário só falha esse destinatário, sem pausar o envio por si (3 falhas seguidas continuam pausando, como nos outros canais); e um login recusado (535, 534 ou 530) marca a conta "precisa reconectar" (`NEEDS_RECONNECT`) e pausa o envio. O envio em massa não deixa cópia na pasta Enviados do provedor (só as respostas da caixa de entrada, abaixo, deixam), não há rastreio de entrega nem de abertura, e o envio não conta na cota da plataforma. Ler as respostas por IMAP é opcional: dá a aba "Caixa de entrada" no canal SMTP, com a resposta pela própria conta e uma cópia dela na pasta Enviados. Código do IMAP em `src/lib/email-broadcast/imap/` (conexão, leitura e resposta), com os anexos em `/api/email/smtp/attachment`; o `npm run check:imap` testa contra um servidor de verdade (Ethereal) e por isso precisa de internet e do Postgres do Docker (leva uns 4 min). Runbook e notas de suporte do SMTP e do IMAP no §8 ("E-mail: caixa de entrada por IMAP").
+- **Kanban de Tarefas (`/app/tasks?view=kanban`):** colunas livres da empresa (tabela
+  `task_board_columns`, até 20), montadas na primeira abertura com as 5 antigas e cada tarefa onde
+  aparecia (horário de Brasília). Tarefa nova nasce com `tasks.boardColumnId` nulo ("ainda não colocada")
+  e `tasks.boardOrder` com padrão no banco (instante da criação). Ao abrir `/app/tasks`, `placeNewTasks` põe
+  cada uma na coluna da data dela no dia em que foi criada (`task_board_columns.dateBucket`: "Atrasadas",
+  "Hoje", "Em breve", "Sem data"; `columnForNewTask`); sem essa coluna, vai para a entrada (★). Logo
+  depois, `placeTasksByDeadline` leva para "Atrasadas" (a coluna marcada `dateBucket = "overdue"`) toda
+  tarefa aberta com prazo antes de hoje (horário de Brasília), de qualquer coluna menos a de concluídas,
+  e tira de lá a que deixou de estar vencida (prazo mudou) para a coluna da data dela, ou para a entrada
+  (`columnForDeadline`, desde 20/10/2026). Não há cron: roda a cada abertura da tela, e é por isso que um
+  card vencido arrastado para fora de "Atrasadas" volta logo depois de solto (a tela recarrega). Sem a
+  coluna "Atrasadas", nada se move por prazo. Fora isso, só muda de coluna se alguém mover ou concluir.
+  Assim nenhum caminho que cria tarefa
+  (formulário, recorrência, Copiloto, automações, WhatsApp) precisa conhecer o quadro. A coluna de concluídas
+  (`task_board_columns.isDone`, ✓) recebe toda tarefa concluída: concluir (check, status "Concluída" ou soltar
+  o card nela) leva o card para ela, e reabrir (desmarcar ou arrastar para fora) leva para a
+  coluna da data dela no dia da reabertura, ou para a entrada (`columnForDoneChange`, `doneAfterMove`,
+  `placeTaskByDoneState`). Ela não pode ser excluída nem virar a entrada. Dentro de cada coluna os cards vão
+  pelo prazo, do mais próximo ao mais distante (no mesmo dia, pelo horário), com as sem prazo no fim; a de
+  concluídas mostra a concluída mais recentemente primeiro (`cardOrderFor`, desde 20/10/2026). Arrastar só
+  troca a coluna; `tasks.boardOrder` continua gravado, mas nenhuma tela ordena por ele. A visão em lista (`/app/tasks`) usa as mesmas colunas como abas, na mesma ordem (`tasksOfColumn`); "Meus itens" e as listas do CRM seguem com as abas por prazo. Toda alteração que depende do estado do quadro (mover card, criar, reordenar, trocar a entrada, excluir coluna)
+  passa pela mesma trava por empresa (`lockTaskBoard`); renomear é uma única escrita. Regras puras em
+  `src/lib/tasks/board-core.ts` (`npm run check:tasks`).
 - **Prospecção:** Google Places com **chave do próprio cliente (BYO)**, assíncrona via QStash, descarte LGPD.
 - **Baixador (MVP frágil):** `src/lib/downloader/` — YouTube via `@distube/ytdl-core` (quebra quando o YouTube muda; atualizar a lib ajuda), X via endpoint de syndication, Instagram via `og:video` (só público). Download passa por `/api/downloader/fetch` (proxy com allowlist de host anti-SSRF, gateado por módulo). **Se o YouTube for crítico, migrar para `yt-dlp` numa VPS é o caminho estável.**
 
@@ -204,15 +237,226 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 > de produção de lá estava apontada para a `dev`, não para a `main`.
 
 ### Migrações (Supabase) — processo MANUAL
-Nunca rode `prisma migrate dev` contra produção. As migrations são aplicadas manualmente:
+Nunca rode `prisma migrate dev`, `migrate deploy` ou `migrate reset` contra produção: a tabela
+`_prisma_migrations` do Supabase não tem o histórico completo, então o Prisma toma por pendentes
+migrations já aplicadas e tenta rodá-las de novo. As migrations são aplicadas manualmente, uma a uma:
 ```bash
 # com DATABASE_URL apontando pro Supabase:
-npx prisma migrate deploy        # aplica as pendentes na ordem, idempotente
-# (alternativa manual, uma a uma:)
-# npx prisma db execute --file prisma/migrations/<nome>/migration.sql --schema prisma/schema.prisma
-# npx prisma migrate resolve --applied <nome>
+npx prisma db execute --file prisma/migrations/<nome>/migration.sql --schema prisma/schema.prisma
+npx prisma migrate resolve --applied <nome>
 ```
-Sempre **backup antes** de migração destrutiva. Confira com `npx prisma migrate status`.
+**Antes do merge da branch `feature/email-em-massa`:** aplicar no Supabase o SQL de `prisma/migrations/20261006120000_email_broadcasts/migration.sql` (só cria tabelas, índices e a FK da tabela nova — nada destrutivo). A Hostinger não roda migrations.
+
+**Antes do merge da branch `feature/email-anexos`:** aplicar no Supabase
+`prisma/migrations/20261009120000_email_broadcast_attachments/migration.sql` com `npx prisma db execute --file
+prisma/migrations/20261009120000_email_broadcast_attachments/migration.sql --schema prisma/schema.prisma` e depois
+`npx prisma migrate resolve --applied 20261009120000_email_broadcast_attachments` (aditiva: só a coluna `attachments`
+com default `[]`). **Não** use `migrate deploy`.
+
+**Antes do merge da branch `feature/email-assinaturas`:** aplicar no Supabase `prisma/migrations/20261013120000_email_signatures/migration.sql` com `npx prisma db execute --file prisma/migrations/20261013120000_email_signatures/migration.sql --schema prisma/schema.prisma` e depois `npx prisma migrate resolve --applied 20261013120000_email_signatures`. Ela só adiciona: o enum, a tabela `email_signatures` e as colunas `signatureId`/`signatureHtml`/`signatureText` em `email_broadcasts`. **Não** use `migrate deploy`.
+
+**Depois do merge e do deploy da branch `feature/email-assinatura-sem-texto`** (ordem invertida de propósito: o código anterior ainda lê `introText`, então apagar a coluna antes do deploy quebra as telas de assinatura): aplicar no Supabase `prisma/migrations/20261013180000_email_signatures_drop_intro_text/migration.sql` com `npx prisma db execute --file prisma/migrations/20261013180000_email_signatures_drop_intro_text/migration.sql --schema prisma/schema.prisma` e depois `npx prisma migrate resolve --applied 20261013180000_email_signatures_drop_intro_text`. Ela apaga a coluna `introText` de `email_signatures` (destrutiva: o texto acima da imagem das assinaturas existentes se perde; envios já feitos guardam a cópia congelada e não mudam). **Não** use `migrate deploy`.
+
+**Antes do merge da branch `feature/crm-contato-varias-pastas` (fase 1):**
+1. Aplicar no Supabase `prisma/migrations/20261029120000_contact_folder_links/migration.sql` com `npx prisma db execute --file prisma/migrations/20261029120000_contact_folder_links/migration.sql --schema prisma/schema.prisma` e depois `npx prisma migrate resolve --applied 20261029120000_contact_folder_links`. Ela cria `contact_folder_links`, copia os vínculos atuais e cria o gatilho `contacts_folder_link_sync` (espelha em `contact_folder_links` o que o código antigo gravar em `contacts.folderId` até o deploy). **Não** use `migrate deploy`.
+2. Conferir no Supabase, antes do merge:
+   - nenhum contato com `folderId` ficou sem vínculo (precisa dar 0): `SELECT count(*) FROM contacts c WHERE c."folderId" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM contact_folder_links l WHERE l."contactId" = c.id AND l."folderId" = c."folderId");`
+   - o gatilho existe (precisa voltar 1 linha): `SELECT 1 FROM pg_trigger WHERE tgname = 'contacts_folder_link_sync';`
+   - nenhum vínculo aponta para contato ou pasta de outra organização (precisa dar 0): `SELECT count(*) FROM contact_folder_links l JOIN contacts c ON c.id = l."contactId" JOIN contact_folders f ON f.id = l."folderId" WHERE c."organizationId" <> l."organizationId" OR f."organizationId" <> l."organizationId";`
+3. Fazer o merge. Com o build no ar, testar uma movimentação e uma adição em produção. A fase 2 (outro PR, dias depois) apaga o campo legado: schema → merge e deploy → só então a migration que apaga gatilho, função, FK, índice e coluna.
+
+**Se o merge precisar ser revertido**, o código antigo volta a ler `contacts.folderId`, que o código novo nunca grava e por isso ficou parado no que era no deploy: as segundas pastas e tudo o que o código novo arquivou (movimentações, adições, importações) não aparecem nele. Quem entrou numa segunda pasta continua só na primeira, e um contato importado pelo código novo aparece em "Sem pasta". Os vínculos continuam em `contact_folder_links` para quando o código novo voltar.
+
+**Antes do merge da branch `feature/email-dominios-plataforma`:**
+1. Aplicar no Supabase `prisma/migrations/20261008120000_email_sender_domains/migration.sql` com
+   `prisma db execute --file … --schema prisma/schema.prisma` e depois
+   `prisma migrate resolve --applied 20261008120000_email_sender_domains` (aditiva: tabela nova + coluna nula).
+   **Não** use `migrate deploy` aqui.
+2. Envios em andamento da época da conexão por cliente ficam sem remetente. Conferir:
+   `SELECT id, "organizationId", status FROM email_broadcasts WHERE status IN ('SENDING','PAUSED');`
+   Se vier linha, deixe terminar antes do merge ou encerre (troque `<ids>`):
+   ```sql
+   UPDATE email_broadcast_recipients SET status = 'FAILED', error = 'Envio encerrado na troca para a conta de e-mail da plataforma' WHERE status = 'QUEUED' AND "broadcastId" IN (<ids>);
+   UPDATE email_broadcasts SET status = 'DONE', "finishedAt" = now(), "lastDispatchAt" = NULL WHERE id IN (<ids>);
+   ```
+3. Contas Resend de clientes que usaram o E-mail antes desta mudança podem ter um webhook apontando para
+   `/api/webhooks/resend/<id>` (agora responde 404): apague-o no painel do Resend do cliente.
+
+**Antes do merge da branch `feature/tarefas-kanban-colunas`:** aplicar no Supabase
+`prisma/migrations/20261008150000_task_board_columns/migration.sql` com `prisma db execute --file … --schema
+prisma/schema.prisma` e depois `prisma migrate resolve --applied 20261008150000_task_board_columns` (aditiva:
+tabela nova, duas colunas em `tasks` e FK com `SET NULL`). **Não** use `migrate deploy`.
+
+**Antes do merge da branch `feature/tarefas-concluir-move-coluna`:** aplicar no Supabase
+`prisma/migrations/20261014120000_task_board_done_column/migration.sql` com `prisma db execute --file … --schema
+prisma/schema.prisma` e depois `prisma migrate resolve --applied 20261014120000_task_board_done_column`. Ela
+acrescenta `task_board_columns.isDone`, liga a flag na coluna "Concluídas"/"Done" de cada empresa, leva as
+tarefas concluídas que estavam em outras colunas para o topo dela e as abertas que estavam nela para o fim da
+entrada. Não apaga nada, e o código anterior ignora a flag. **Não** use `migrate deploy`.
+
+**Antes do merge da branch `feature/tarefas-coluna-pela-data`:** aplicar no Supabase
+`prisma/migrations/20261014160000_task_board_date_buckets/migration.sql` com `prisma db execute --file … --schema
+prisma/schema.prisma` e depois `prisma migrate resolve --applied 20261014160000_task_board_date_buckets`. Ela
+acrescenta `task_board_columns.dateBucket` (único por empresa), liga a marca nas colunas "Atrasadas", "Hoje",
+"Em breve" e "Sem data" (ou "Overdue", "Today", "Upcoming", "No date") e coloca as tarefas que nunca foram
+colocadas (sem coluna; caíam na entrada) na coluna da data delas **no dia da migration** (horário de São Paulo),
+as concluídas em "Concluídas" e, sem a coluna, na entrada. Não apaga nada, e o código anterior continua funcionando com ela.
+**Não** use `migrate deploy`.
+
+Sempre **backup antes** de migração destrutiva. Não confie no `npx prisma migrate status` em produção:
+pelo mesmo histórico incompleto, ele lista como pendentes migrations que já estão aplicadas. Confira a
+tabela ou coluna nova direto no Supabase.
+
+**Antes do merge da branch `feature/email-conta-microsoft`:**
+
+1. Aplicar no Supabase `prisma/migrations/20261015120000_email_sender_accounts/migration.sql` com `prisma db execute --file … --schema prisma/schema.prisma` e depois `prisma migrate resolve --applied 20261015120000_email_sender_accounts`. É aditiva: tabela nova, duas colunas com padrão, dois valores de enum e FK `SET NULL`. **Não** use `migrate deploy`.
+2. Pôr `MICROSOFT_MAIL_CLIENT_ID` e `MICROSOFT_MAIL_CLIENT_SECRET` no hPanel (as duas) e reiniciar o app — as variáveis são lidas na subida.
+3. O retorno de produção (`https://metodotia.com/api/email/microsoft/callback`) já está cadastrado no app.
+4. Depois que houver envios pela Microsoft em produção, não volte o código para antes desta branch: os status `SENDING`/`UNCERTAIN` dos destinatários quebram a leitura no código antigo. Corrija para frente.
+
+**Segredo do app Microsoft do E-mail:** o segredo "Envio de e-mail 2026-10-15" vence em **14/10/2028**. Para trocar: Azure → Registros de aplicativo → MetodoIA → Certificados e segredos → Novo segredo; atualizar `.env` e hPanel; apagar o antigo. Sem troca, os envios pela Microsoft pausam com erro do provedor até o segredo ser trocado; depois da troca, basta clicar em “Retomar envio” (as contas não precisam ser reconectadas).
+
+**Antes do merge da branch `feature/email-conta-google`:**
+
+1. Aplicar no Supabase `prisma/migrations/20261019120000_email_sender_google/migration.sql` com `prisma db execute --file … --schema prisma/schema.prisma` e depois `prisma migrate resolve --applied 20261019120000_email_sender_google`. Ela acrescenta o valor `GOOGLE` aos enums `EmailChannel` e `EmailSenderProvider` e troca o índice único de `email_sender_accounts` de `(organizationId)` para `(organizationId, provider)`; não apaga dado algum, e o código atual da produção continua funcionando com ela. **Não** use `migrate deploy`.
+2. Pôr `GOOGLE_MAIL_PILOT_ORG_IDS`, `GOOGLE_MAIL_CLIENT_ID` e `GOOGLE_MAIL_CLIENT_SECRET` no hPanel (a primeira com os ids das empresas do piloto, separados por vírgula) e reiniciar o app — as variáveis são lidas na subida. **Ordem:** a lista do piloto entra antes ou junto com o client id e o secret, nunca depois: com as duas credenciais e sem a lista, todas as empresas já veem a opção Google. Sem o client id e o secret, a opção Google não aparece em lugar nenhum; sem a lista, todas as empresas a veem. Para achar os ids, rode no SQL editor do Supabase (só leitura) `select id, name, slug from organizations where slug in ('...');` (ou filtre por nome, `where name ilike '%...%'`) e cole os ids, separados por vírgula, na variável.
+3. Projeto "MetodoIA E-mail" no Google Cloud (separado do projeto do "Entrar com Google", que usa `GOOGLE_CLIENT_*`): cliente OAuth Web com os retornos `https://metodotia.com/api/email/google/callback` e `http://localhost:3000/api/email/google/callback`, escopos `openid`, `userinfo.email`, `userinfo.profile` e `gmail.send`, tipo de usuário External e status **Testing**, com as contas de teste cadastradas como usuários de teste (até 100). Em Testing a autorização de cada conta vence em **7 dias**: a conta aparece como "precisa reconectar" e basta conectar de novo.
+4. **Não publicar o projeto ("In production") antes da aprovação da Google.** Sem ela aparece a tela de "app não verificado" e há um teto **vitalício** de 100 contas novas no projeto, que não pode ser zerado.
+5. A aprovação do escopo `gmail.send` é pedida pelo dono do projeto (spec §3: página inicial e política de privacidade em `metodotia.com`, domínio confirmado no Search Console, vídeo não listado no YouTube, em inglês, e a justificativa de cada escopo). **Depois de aprovar:** mudar o projeto para "In production" e **apagar `GOOGLE_MAIL_PILOT_ORG_IDS`** no hPanel, reiniciando o app, para todas as empresas verem a opção. Tirar também do catálogo (`pt.json` e `en.json`, as mesmas chaves) o que só vale no período de teste: em `emailBroadcast.channel.googleError.cancelled`, a frase “Enquanto o envio pelo Google está em teste, só contas da lista de teste conseguem conectar.” / “While sending through Google is in testing, only accounts on the test list can connect.”; em `emailBroadcast.channel.googleReconnectBody`, o trecho “a conexão de teste de 7 dias venceu” / “the 7-day test connection expired” (a lista fica “senha trocada ou acesso revogado” / “password changed or access revoked”).
+6. Depois que houver conta Google conectada em produção, não volte o código para antes desta branch: o código antigo pega a primeira conta da empresa sem olhar o provedor. Corrija para frente.
+
+**Segredo do cliente OAuth Google do E-mail:** o segredo do cliente "MetodoIA E-mail" não vence por padrão, então não há data de troca. Se vazar: Google Cloud → APIs e serviços → Credenciais → cliente "MetodoIA E-mail" → criar um segredo novo; atualizar `GOOGLE_MAIL_CLIENT_SECRET` no `.env` e no hPanel (e reiniciar o app); só então apagar o antigo.
+
+**Antes do merge da branch `feature/email-conta-smtp`:**
+
+1. Aplicar no Supabase `prisma/migrations/20261021120000_email_sender_smtp/migration.sql` com `prisma db execute --file … --schema prisma/schema.prisma` e depois `prisma migrate resolve --applied 20261021120000_email_sender_smtp`. Ela acrescenta o valor `SMTP` aos enums `EmailChannel` e `EmailSenderProvider` e as colunas opcionais `hourlyLimit` e `dailyLimit` em `email_sender_accounts`; não apaga dado algum, e o código atual da produção continua funcionando com ela. **Não** use `migrate deploy`. **Sem ela, o deploy quebra o E-mail de todas as empresas, não só das que vão usar SMTP:** o cartão SMTP aparece para todas, então a página E-mail e o formulário do novo e-mail (que consultam o provedor `SMTP`) e o laço de envio da Microsoft e da Google (que lê as colunas `hourlyLimit` e `dailyLimit` da conta antes de cada e-mail) falham até a migration entrar.
+2. Nenhuma variável nova no hPanel: o canal só usa o que já existe, a `INTEGRATION_ENC_KEY` (criptografa a senha; se ela mudar, as senhas guardadas deixam de abrir e a conta vira "precisa reconectar") e a `NEXT_PUBLIC_SITE_URL` (de onde sai o nome dito ao servidor no EHLO). A única dependência do ambiente é a Hostinger deixar sair a conexão para o servidor SMTP do cliente (ela confirmou que deixa); o primeiro "Testar e salvar" em produção prova isso.
+3. Depois do merge e do deploy, cadastrar a conta do cliente em `/app/email/smtp` e fazer um envio pequeno de teste, só para endereços autorizados.
+4. Depois que houver conta ou envio SMTP em produção, não volte o código para antes desta branch: o código antigo não conhece o valor `SMTP` dos enums e quebra ao ler esses envios. Corrija para frente.
+
+**Envio por SMTP, notas de suporte** (spec `docs/superpowers/specs/2026-10-21-email-conta-smtp-design.md`, §4.1, §5.3 e §10):
+
+- `tls_failed` ("Não foi possível abrir a conexão segura com servidor:porta"): primeiro, conferir a segurança: SSL/TLS na 465; STARTTLS na 587 e na 2525. A 587 ou a 2525 com SSL/TLS dá "wrong version number", e um servidor que não aceita o STARTTLS também cai aqui. Com a segurança certa, o certificado não confere com o nome: a pessoa deve usar o servidor que o provedor indica para programas de e-mail (o nome do próprio provedor), e não `smtp.<domínio do cliente>`, cujo certificado costuma ser de outro nome. O certificado é sempre conferido e não há opção para desligar.
+- `too_many_tests`: a empresa fez 10 testes de conexão em 10 minutos (a conta é por processo, na memória). Cada teste libera a vaga 10 minutos depois de começar; é só esperar.
+- `connection_failed` na porta 465: tentar a 587 com STARTTLS. Se a falha vier em servidores e portas que respondem de fora, suspeite de bloqueio de saída da hospedagem; a saída seria um relay por HTTPS, fora desta fase.
+- `auth_failed` no teste, ou envio pausado com a conta "precisa reconectar" (`NEEDS_RECONNECT`): o servidor recusou o usuário ou a senha. A pessoa informa a senha nova em `/app/email/smtp` e clica em "Retomar envio".
+- Envio pausado com `account_blocked`: o servidor recusou o endereço do remetente (ou o relay) para esse login, em geral porque o e-mail da conta não é um endereço que o usuário do login pode usar.
+- Limite por hora baixo deixa o envio lento: 100 por hora é um e-mail a cada 36 s, então 500 destinatários levam cerca de 5 h. O envio roda dentro do processo do site (`after()`, sem fila), e um restart do Passenger ou um redeploy (todo merge na `main`) o interrompe até alguém clicar em "Retomar envio". Ninguém recebe duas vezes (o e-mail que estava no ar vira "Situação incerta"), mas evite mergear na `main` com um envio longo em andamento. Um cron que retome sozinho fica para depois.
+- Os limites do provedor não são conhecidos pelo MétodoAI: a empresa informa os dela. Se o provedor recusar por limite, o envio pausa com `daily_limit` e continua com "Retomar envio" quando a janela do provedor liberar.
+
+**Antes do merge da branch `feature/crm-grupo-whatsapp-piloto` (o "Adicionar a grupo do WhatsApp", que substitui o PR #262):** aplicar no Supabase `prisma/migrations/20261028120000_whatsapp_group_add/migration.sql` com `npx prisma db execute --file prisma/migrations/20261028120000_whatsapp_group_add/migration.sql --schema prisma/schema.prisma` e depois `npx prisma migrate resolve --applied 20261028120000_whatsapp_group_add`. Ela é aditiva: dois enums (`WhatsappGroupAddStatus` e `WhatsappGroupAddItemStatus`) e duas tabelas (`whatsapp_group_add_runs` e `whatsapp_group_add_items`, com os índices e a FK dos itens para a rodada, `ON DELETE CASCADE`). Não altera tabela nem dado existente, e o código atual da produção continua funcionando com ela. **Não** use `migrate deploy`.
+
+### E-mail: caixa de entrada por IMAP
+
+Opcional, dentro da conta SMTP (spec `docs/superpowers/specs/2026-10-23-email-caixa-imap-design.md`). Mostra a aba "Caixa de entrada" no canal SMTP (`/app/email?canal=smtp&aba=caixa`), com leitura, resposta e anexos. **Não há migração, variável de ambiente nem piloto:** as configurações do IMAP (servidor, porta e segurança) ficam dentro das credenciais criptografadas que a conta SMTP já guarda, e uma conta antiga, sem elas, abre normalmente e só não tem caixa. A caixa reaproveita a tela `emailInbox` (opt-in) e o módulo `marketing`, a mesma da caixa Microsoft: dono e admins veem; membro só vê se o modelo de acesso dele marcar `email` e `emailInbox`.
+
+**Ligar para o Varandas (depois do merge e do deploy):**
+
+1. Em `/app/email/smtp`, editar a conta SMTP que já existe (não precisa refazer a conta).
+2. Marcar "Mostrar a caixa de entrada no MétodoAI". O servidor vem sugerido a partir do SMTP: para a KingHost, `imap.kinghost.net`, porta **993** (SSL/TLS). Conta de revenda usa `imap.uni5.net`.
+3. Digitar a senha da caixa de novo, no campo "Senha" do topo do formulário (ligar o IMAP, ou trocar o servidor ou a porta dele, pede a senha: a guardada só vale para os servidores em que foi digitada) e clicar em "Testar e salvar". O login do IMAP é o mesmo usuário e a mesma senha do SMTP: não existe senha própria do IMAP. O teste faz também o login no IMAP e só grava se passar.
+4. **A saída na porta 993 a partir da Hostinger ainda não foi provada:** o primeiro "Testar e salvar" em produção prova. `imap_connection_failed` com servidor e porta certos é o sinal de porta bloqueada: tente a 143 com STARTTLS antes de suspeitar de qualquer outra coisa (se a 143 também falhar, aí sim bloqueio de saída da hospedagem). `imap_tls_failed` não é bloqueio: quase sempre é certificado, e o servidor digitado não é o nome que o certificado carrega. Use o servidor que o provedor indica para programas de e-mail (o nome do próprio provedor), e não `imap.<domínio do cliente>`, e confira a segurança (SSL/TLS na 993, STARTTLS na 143).
+5. Abrir a aba e só ler, com um cuidado: **abrir um e-mail o marca como lido (`\Seen`) na caixa real do cliente.** Quem faz o teste abre um e-mail que ele escolheu, não o primeiro da lista. Responder só para um endereço que a equipe controla: a resposta sai de verdade pelo SMTP da conta, e o `\Answered` e a cópia em Enviados ficam na caixa real.
+
+**Notas de suporte:**
+
+- Para tirar a caixa: editar a conta, desmarcar a opção e salvar. O servidor do IMAP é esquecido e a aba some; o envio continua igual.
+- Os erros `imap_*` do formulário (`imap_auth_failed`, `imap_tls_failed`, `imap_connection_failed`, `imap_host_not_found`, `imap_host_not_allowed`, `imap_failed`) dizem que o SMTP passou e o IMAP não; nada é salvo. `imap_auth_failed` costuma ser IMAP desativado na caixa do provedor. Para `imap_connection_failed` e `imap_tls_failed`, ver o passo 4.
+- **Um login recusado pelo IMAP pausa a conta inteira.** Em qualquer visita à página (o cartão do canal incluído), uma recusa de usuário ou senha marca a conta como "precisa reconectar" (`NEEDS_RECONNECT`) e **pausa também os envios em massa** até alguém salvar o formulário de novo. É de propósito: sem isso cada visita repetiria a senha errada a partir do IP da plataforma, que é o de todos os clientes, e o provedor poderia bloqueá-lo. Vale também para quem só desligou o IMAP na caixa (o SMTP ainda aceitaria). Recusa por indisponibilidade ou por limite de conexões do servidor (`[UNAVAILABLE]`, `[LIMIT]`, `[INUSE]`) não pausa nada. O motivo fica no campo `lastError` da conta, na tabela `email_sender_accounts` (`imap login refused: …`, sem a senha).
+- **"Não foi possível abrir a caixa de entrada agora. Tente de novo em instantes."** é o estado temporário (servidor do provedor fora, porta bloqueada, tempo esgotado, conexão que caiu): não mexe na conta e some quando o servidor volta. Nos primeiros dias, procure no log de execução (hPanel) `IMAP inbox connection failed <erro> …` (nem abriu a conexão), `IMAP inbox failed <código>` (falhou no meio do pedido) e `IMAP request cut: …` (o pedido passou de 60 s ou dos bytes permitidos); nenhuma leva a senha. Conta pausada é outra coisa: a tela pede para reconectar.
+- Salvar o formulário com a caixa ligada testa o SMTP e depois o IMAP, cada um com seu limite: com uma porta bloqueada pode levar cerca de 65 s (30 s + 30 s + 5 s de logout), com o botão ocupado. É o teto, não trava.
+- A caixa é lida ao vivo, uma conexão IMAP por pedido (sem processo de fundo no Passenger), só a `INBOX`, os 50 mais recentes (mais antigos pela busca). Nada é guardado no banco. Abrir um e-mail o marca como lido (`\Seen`) na caixa real.
+- A resposta sai pelo SMTP da conta, na mesma conversa (`In-Reply-To`, `References`), e uma cópia é gravada na pasta de Enviados do provedor (pela marcação `\Sent`, ou pelo nome); sem pasta de Enviados, a resposta sai sem cópia. Se a entrega falhar de um jeito que pode ter chegado ao servidor, aparece "Resposta incerta": confira em Enviados antes de tentar de novo.
+- Anexos baixam por `/api/email/smtp/attachment`, sempre como download (`application/octet-stream`). E-mails acima de 15 MB mostram só os cabeçalhos e o aviso para abrir no webmail.
+- O Google (Gmail) não entra aqui: o escopo de leitura dele é restrito e é assunto à parte.
+
+### E-mail em massa: liberar o domínio de um cliente
+
+Todas as empresas enviam pela conta Resend da plataforma (`RESEND_API_KEY`). Cada empresa só envia de
+domínio próprio, liberado assim:
+
+1. Painel do Resend (conta da plataforma) → **Domains → Add Domain** → domínio do cliente. Passe ao
+   cliente as linhas de DNS e espere **Verified**.
+2. Libere para a empresa (o `slug` aparece na URL/Configurações da empresa):
+   `npx tsx --env-file=.env.supabase scripts/email-domain.ts add <dominio> <slug> --yes`
+   (`.env.supabase` com `DIRECT_URL` de produção; apague o arquivo depois.)
+3. Conferir: `... scripts/email-domain.ts list`. Remover: `... remove <dominio> --yes` (envios em andamento
+   desse domínio pausam no próximo lote).
+4. Uma vez só (não é por cliente): Resend → Webhooks → Add endpoint `https://metodotia.com/api/email/webhook`,
+   com os eventos `email.delivered`, `email.bounced`, `email.complained` e `email.failed`; copie o
+   signing secret para `RESEND_WEBHOOK_SECRET` no hPanel. Configure o segredo logo depois de criar o endpoint
+   (até lá o Resend recebe 401 e fica repetindo) e reinicie o app no hPanel — as variáveis são lidas na subida.
+
+Um domínio pertence a uma empresa só (seus subdomínios e domínios-pai também ficam na mesma empresa; o comando recusa o contrário), e `metodotia.com` nunca é liberado para cliente. A chave do
+`.env` precisa estar como "Sending access" com **All domains** no Resend.
+
+### MCP de leitura: ligar o conector do Claude
+
+O servidor MCP (`/api/mcp`, [guia 05](docs/guia/05-rotas-e-jobs.md)) deixa o Claude consultar, só lendo, os
+dados de todas as empresas: 23 ferramentas de busca e resumo por módulo. Para ligar em produção:
+
+1. **Antes do merge**, gere uma chave
+   (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`), cadastre como `MCP_API_KEY`
+   nas variáveis de ambiente do app no hPanel e reinicie o app — as variáveis são lidas na subida. Sem ela,
+   ou com menos de 32 caracteres, `/api/mcp` responde 404 a tudo (o resto do site não é afetado). Use uma
+   chave diferente da do `.env` local.
+2. Depois do deploy, no claude.ai, edite (ou remova e adicione de novo) o conector personalizado
+   "METODO AI" com a URL `https://metodotia.com/api/mcp/<chave>`. Teste pedindo "liste as organizações".
+3. No Claude Code, o mesmo servidor entra com a chave no header:
+   `claude mcp add --transport http metodoai https://metodotia.com/api/mcp --header "Authorization: Bearer <chave>"`.
+4. **Trocar a chave** = gerar outra, trocar no hPanel (reiniciando o app) e no conector. Faça isso se ela
+   vazar: a chave no caminho fica nos logs de acesso da Hostinger.
+
+Nunca saem mensagens do WhatsApp, corpo de e-mail, salário ou folha por pessoa, dados bancários, credenciais
+nem anotações livres — a lista está no spec (`docs/superpowers/specs/2026-10-22-mcp-leitura-design.md`) e em
+`FORBIDDEN_KEYS` de `src/lib/mcp/core.ts`, que bloqueia qualquer resposta que traga um desses campos.
+
+### WhatsApp: contatos do CRM num grupo — primeiro uso real
+
+O que o recurso é e onde está o código: §7 ("Contatos do CRM num grupo do WhatsApp"). **Liberar para uma empresa** = pôr o id dela em `WHATSAPP_GROUP_ADD_ORG_IDS` na Hostinger (vazia = ninguém vê; comece só pela empresa MétodoAI). **Antes do merge**, a migration das duas tabelas (parágrafo "Antes do merge da branch `feature/crm-grupo-whatsapp-piloto`", na seção Migrações, mais acima) e o teste real (no fim desta seção). **Recomendado**, o cron `whatsapp-groups`: linha da tabela, `curl` e "Passenger e o processo" na seção Crons, mais abaixo. Há piloto: depois do merge, o botão só aparece para as empresas listadas em `WHATSAPP_GROUP_ADD_ORG_IDS` que têm o CRM e as Conversas (`inbox`); com a variável vazia, para ninguém. No teste real local, ponha nela o id da empresa local e, em `WHATSAPP_DEV_ALLOWED_NUMBERS`, os números do time **e o JID do grupo de teste** (`...@g.us`): fora da lista, a trava de dev segura a adição (que exige o grupo e a pessoa), o convite e até a consulta do número. A ordem é esta: primeiro o teste real, com 2 a 4 contatos do time; só depois dele, o primeiro uso real, com 5 a 10.
+
+**O primeiro uso real, com cuidado (depois do teste real, que vem primeiro):**
+
+- **De 5 a 10 contatos**, nada além. O ritmo é de uma pessoa a cada 30 a 90 s, então 10 pessoas levam de 5 a 15 min, e o objetivo do dia é ver o comportamento, não o volume.
+- **Só entre 8h e 20h de São Paulo.** Fora da janela nada sai: a rodada fica em "Aguardando o horário: volta às 8h". Comece de manhã e acompanhe até o fim.
+- **Só com números do time.** Nunca clientes e nunca números inventados: um número que parece de teste pode ser de uma pessoa de verdade, e uma adição ou um convite não se desfaz. Num grupo todos veem o telefone de todos.
+- **Pelo número de quem está testando**, conectado em Conversas e admin do grupo de teste. Não mergeie na `main` nem reinicie o Passenger com a rodada andando: ela roda dentro do processo do site (`after()`, sem fila), e uma interrupção deixa quem estava na vez como "Não deu agora" (motivo `interrupted`) e **nunca o refaz**. A rodada cortada continua `RUNNING`, como a que espera as 8h, só com "Pausar" e "Cancelar" (o "Retomar" é só da rodada pausada): o resto continua quando alguém abre a tela de acompanhamento ou pelo cron.
+- **Acompanhe** em `/app/contacts/grupos/<id>` e deixe a tela aberta até o fim: ela relê a cada 5 s (a cada minuto enquanto a rodada espera a janela, o teto ou a Evolution) e, se a rodada tiver parado (restart, Evolution fora), abri-la é o que a retoma. Se precisar do banco:
+
+  ```sql
+  SELECT id, status, "pausedReason", "waitReason", "lastError", "nextAttemptAt", "startedAt"
+  FROM whatsapp_group_add_runs ORDER BY "createdAt" DESC LIMIT 5;
+
+  SELECT status, reason, code, count(*)
+  FROM whatsapp_group_add_items WHERE "runId" = '<id da rodada>' GROUP BY 1, 2, 3 ORDER BY 1;
+  ```
+
+  O item guarda o telefone e a rodada guarda o texto do convite: tire os dois antes de colar um resultado em qualquer lugar.
+
+**Linhas de log para ficar de olho.** `console.error` vai para o log de erro do site (hPanel → Logs de erro, ou `~/domains/<dominio>/logs/`; ver "Logs do app" em Deploy). O executor só escreve quando algo falha, e nunca o telefone nem o texto do convite: uma rodada saudável não deixa nenhuma linha `[group-add]`. O que vier depois do prefixo é o id da rodada (quando há) e o nome e o código do erro, nunca a mensagem dele.
+
+| Linha | O que é | O que fazer |
+|---|---|---|
+| `[group-add] run failed <rodada> <Erro>` | erro inesperado no executor. A rodada pausa sozinha como "Erro inesperado", e quem estava na vez vira "Não deu agora" (`interrupted`). | Ler o erro, corrigir a causa e "Retomar". |
+| `[group-add] could not pause after a failure <rodada> <Erro>` | nem a pausa foi gravada (banco fora?). | A rodada fica `RUNNING` sem executor. Passado o lease de 90 s, abrir a tela de acompanhamento ou o cron a retoma. |
+| `[group-add] background run failed <Erro>` | a tarefa em `after()` caiu antes de pegar a rodada. | Abrir a tela de acompanhamento (cutuca) ou esperar o cron. |
+| `[group-add] could not start the next run of a number <Erro>` | a rodada seguinte da fila de um número não subiu. | Ela segue `QUEUED`: o cron, ou abrir a tela dela, tenta de novo. |
+| `[group-add] could not take a run back <rodada> <Erro>` | não religou uma rodada pausada por número desconectado ou por grupo ilegível. | Tenta de novo no próximo cutucão ou tick do cron; "Retomar" também serve. |
+| `[group-add] poke failed <rodada> <Erro>` | o cutucão ao abrir a tela de acompanhamento falhou. | Reabrir a tela; "Retomar" se estiver pausada. |
+| `[group-add] cron could not kick a run <rodada> <Erro>` | o cron achou a rodada e não conseguiu dispará-la. | O próximo tick tenta de novo. |
+| `[group-add] <ação> failed <Erro>` | uma action da tela falhou: `listing the groups`, `the preview`, `the start`, `the pause`, `the resume` ou `the cancel`. | A tela mostra "Algo deu errado. Tente de novo." |
+| `[group-add] the poke failed <Erro>` | a action do cutucão que a tela de acompanhamento faz ao abrir falhou. | A tela não mostra nada: o resultado do cutucão é ignorado. Reabrir a tela; "Retomar" se estiver pausada. |
+
+**O teste real (manual, fora dos agentes, ANTES do merge).** Confirma na Evolution de verdade o que o código só supõe: os códigos que o Baileys devolve à adição (`200` adicionado, `403` a privacidade da pessoa pede o link, `409` já é participante) e o campo `announce` do grupo. Roda antes do merge, no `next dev --webpack` local com o `.env` real (que aponta para a Evolution de verdade): conecte um número do time em Conversas, no app local; use só números do time; rode entre 8h e 20h de São Paulo; e, no fim, desconecte o número de teste em Conversas. São de 2 a 4 contatos, e ele vem antes do primeiro uso real (os 5 a 10 contatos acima). **Se não der para rodar antes do merge:** não há piloto, então depois do merge o botão já aparece para toda empresa com CRM + Conversas, e ninguém avisa os clientes do recurso até o teste passar.
+
+1. Crie um grupo de teste só com o número que vai testar (como admin) e, no máximo, mais um número do time. Quem a rodada vai adicionar fica **fora** do grupo no começo: a pessoa que deve aceitar direto (o `200`), a que tem a privacidade de grupos em "Meus contatos" (o `403`) e a reservada para o `409`. Quem já está no grupo aparece na conferência em "Já estão no grupo" e nunca é tentado, e a rodada não produz o código que o teste veio confirmar. Nunca clientes, nunca números inventados.
+2. A pessoa do `403` deve ter a privacidade de grupos em "Meus contatos" (WhatsApp → Configurações → Privacidade → Grupos) e **não** ter salvo o número de quem testa: sem isso o `403` não aparece.
+3. Cadastre essas pessoas como contatos de uma pasta do CRM (de 2 a 4 contatos no total), com o telefone de cada uma. A reservada para o `409` vai por último: a rodada vai pelos contatos do mais antigo ao mais novo, e a vez dela tem de vir depois de uma pausa.
+4. Comece a rodada pela pasta ("Adicionar a grupo do WhatsApp") e escolha o grupo de teste. Na conferência, o aviso "Neste grupo todos podem mandar mensagens" aparece quando o `announce` vem `false`: mude a configuração do grupo (só admins enviam, todos enviam) e abra a janela de novo para ver os dois casos.
+5. Na primeira pausa de 30 a 90 s, adicione à mão, pelo WhatsApp, a pessoa reservada para o `409`: quando chegar a vez dela, a adição responde que ela já é participante.
+6. No fim, confira cada item na tela e em `whatsapp_group_add_items.code`. Quem aceitou direto fica "Adicionado", com `code = '200'`. Quem tem a privacidade em "Meus contatos" recebe o convite por mensagem, com o link do grupo sozinho na última linha, fica "Convite enviado" e tem `code = '403'`. Quem já estava fica "Já estava no grupo", com `code = '409'`.
+7. **Se um código vier diferente**, ou um item ficar "Não deu agora" sem motivo claro, não adivinhe: o item guarda o código visto. A correção é em `outcomeFromCode` (`src/lib/whatsapp/group-add/core.ts`), com um caso novo no `check:group-add`.
+8. Depois, apague o grupo de teste e os contatos de teste, e desconecte o número de teste em Conversas (no app local).
 
 ### Deploy — automático a cada push na `main`
 
@@ -222,7 +466,7 @@ pipeline dela é:
 ```
 npm install          # instala dependências novas — 669 pacotes no deploy de 25/09
   └─ postinstall     # prisma generate (client v6.19.3)
-npm run build        # next build, com TypeScript incluso — 145 páginas
+npm run build        # next build --webpack, com TypeScript incluso — 145 páginas (gotcha 4)
 ```
 
 **O merge derruba o site por ~30 a 60 segundos.** Medido em 25/09/2026: logo após um merge o
@@ -241,7 +485,7 @@ isso a `main` exige PR e `enforce_admins` está ligado — sem isso, um push dir
 > Antes de mergear qualquer coisa que toque `prisma/schema.prisma`, aplique a migration no Supabase
 > **primeiro** (veja "Migrações" acima) e só então faça o merge. A ordem importa: schema novo com
 > código antigo costuma funcionar; código novo com schema antigo quebra. A migration
-> `20260928120000_whatsapp_cloud` (WhatsApp oficial) só cria tabelas, mas **tem de estar aplicada no
+> `20261112120000_whatsapp_cloud` (WhatsApp oficial) só cria tabelas, mas **tem de estar aplicada no
 > Supabase ANTES do merge** que traz a tela oficial: sem essas tabelas, o detalhe, a edição e a
 > exclusão de campanhas, o limite de números de WhatsApp e o disparo das campanhas `WHATSAPP_CLOUD`
 > antigas quebram para **todas** as empresas — não só para a do piloto.
@@ -254,17 +498,45 @@ isso a `main` exige PR e `enforce_admins` está ligado — sem isso, um push dir
 3. **Logs do app:** `console.error` vai pro log de erro do site (hPanel → Logs de erro, ou
    `~/domains/<dominio>/logs/`). Procure prefixos como `[evolution] send`, `[inbox]`, `[downloader]`,
    `[ingest]`.
+4. **Build falhou e o site continuou no ar** = o hPanel mostra "Falha na construção", mas o domínio
+   segue respondendo com o build anterior. O código novo **não** foi publicado, por mais que o merge
+   tenha acontecido — e um revert também não desfaz nada, porque é só mais um deploy que falha do
+   mesmo jeito (em 01/10 os PRs #209 e #210 entraram na `main` e nunca chegaram ao ar; confira o hash
+   do CSS servido para saber qual build está no ar). Desde 30/09/2026, no build da Hostinger, os processos `node` que o Turbopack cria
+   para rodar o PostCSS morrem antes de se conectar de volta (por quê, a Hostinger não documenta), e
+   todo deploy quebrava em `globals.css` com `node process exited before we could connect to it with
+   exit status: 0` (o merge do PR #207, em 01/10, ficou parado nisso). Por isso o script `build` é
+   `next build --webpack`: o webpack roda o PostCSS dentro do próprio processo. O `next dev` continua
+   no Turbopack. **Não volte o build para o Turbopack** sem antes conferir um deploy.
+   A alternativa óbvia, `experimental.turbopackPluginRuntimeStrategy: "workerThreads"`, foi testada e
+   descartada: resolve a falha, mas esbarra num bug nativo do Node com worker threads (corrigido só
+   no 24.13.1/25.4.0, não no 20) e terminou 2 de 6 builds locais em segfault (`exit 139`) — o que,
+   na Hostinger, também marca o deploy como falho.
+   **O build com webpack precisa do `outputFileTracingIncludes` do `next.config.ts`.** A Hostinger
+   publica só os arquivos listados nos traces (`.next/**/*.nft.json`), e o trace do webpack não
+   enxerga o `query_compiler_bg.wasm` que o Prisma (sem engine Rust) lê do disco. Sem a linha, o
+   deploy "dá certo", as páginas públicas abrem, mas toda query morre com `ENOENT …
+   .prisma/client/query_compiler_bg.wasm`: login dá 500, `/app` e telas logadas mostram "This page
+   couldn't load" (foi o que aconteceu em 01/10, entre 10:51 e a correção). O erro real só aparece em
+   hPanel → Logs de execução; localmente não reproduz, porque o `node_modules` está inteiro.
+   **O build também precisa do `experimental.cpus: 4` do `next.config.ts`.** Sem ele, o Next abre um
+   processo por CPU (63 na máquina de build da Hostinger) para "Collecting page data", e em 19/10 o
+   deploy do PR #237 morreu ali com `SIGABRT` / `OS can't spawn worker thread: Resource temporarily
+   unavailable (os error 11)`: o limite de threads do servidor compartilhado, não o código. A falha
+   depende da carga da máquina (builds anteriores passaram com 63), por isso o limite fica fixo.
 
-### Crons — só o `extractions` deve rodar
+### Crons — dos de manutenção, só o `extractions` deve rodar
 
 **Nada no repositório agenda esses jobs.** O `vercel.json` que os declarava era resquício de uma fase
 Vercel que nunca foi produção, e foi removido. Eles só executam se existir um cron job do hPanel
 batendo no endpoint com o header certo — o repositório nunca vai agendá-los, qualquer que seja o
 estado deles hoje.
 
-**Nenhum dos quatro produz sintoma visível quando não roda**, e é por isso que passaram meses
-despercebidos. Falha de manutenção é silenciosa por definição: o mural esconde post vencido por
-consulta, leads acumulam invisíveis, e ninguém sente falta de uma notificação que nunca existiu.
+**Nenhum dos quatro de manutenção produz sintoma visível quando não roda**, e é por isso que passaram
+meses despercebidos. Falha de manutenção é silenciosa por definição: o mural esconde post vencido por
+consulta, leads acumulam invisíveis, e ninguém sente falta de uma notificação que nunca existiu. O quinto,
+`whatsapp-groups`, é de outra natureza (ver a última linha da tabela): nada se perde sem ele, a rodada que
+parou só espera.
 
 A decisão de 25/09/2026 e o que cada um realmente vale:
 
@@ -274,8 +546,21 @@ A decisão de 25/09/2026 e o que cada um realmente vale:
 | `/api/cron/notifications`<br>`0 7 * * *` | Decisão de produto | Cria o digest diário (`DIGEST_KINDS`), que não nasce em nenhum outro lugar. Notificações de atribuição seguem funcionando sem ele. |
 | `/api/cron/feed-cleanup`<br>`0 * * * *` | Opcional | Só apaga fisicamente posts já vencidos. O mural já os esconde por `expiresAt`, então sem o cron a diferença é a tabela crescer. |
 | `/api/cron/campaigns`<br>`* * * * *` | Raramente | A promoção `SCHEDULED` → `RUNNING` é **código inalcançável**: `createCampaign` sempre grava `DRAFT` e a UI não expõe agendamento. O `startCampaign` já marca RUNNING e enfileira o primeiro disparo sozinho. Só serve para retomar campanha cuja cadeia de disparo morreu no meio. |
+| `/api/cron/whatsapp-groups`<br>`*/5 * * * *` | Recomendado | Retoma sozinha a rodada de "Adicionar a grupo do WhatsApp" que parou à espera: da janela das 8h, do teto de 100 por dia, de uma Evolution que não respondeu, de um número que voltou a abrir, ou de um restart do servidor. Não apaga nada. **Sem ele, a rodada continua quando alguém abre a tela de acompanhamento ou clica em "Retomar"** (abrir a tela cutuca a rodada que já pode seguir; "Retomar" é para a pausada): a que espera a janela das 8h ou o teto do dia, ou que parou num restart, não retoma sozinha, porque não existe espera de horas dentro do processo (só as pausas de 30 a 90 s entre as pessoas são dormidas lá). Diferente do `campaigns`, **não** é no-op sem `QSTASH_TOKEN`: na produção, que não tem fila, ele roda a rodada no próprio processo (`after()`). |
 
-Os quatro exigem `Authorization: Bearer $CRON_SECRET` (guard em `src/lib/cron-auth.ts`) e respondem
+O `whatsapp-groups` (outubro/2026) não entra na decisão de 25/09 logo abaixo, que trata dos quatro de
+manutenção: ele não apaga nada, e agendá-lo é **recomendado** onde o recurso estiver em uso (o porquê está no
+parágrafo a seguir). O que muda sem ele está na linha da tabela.
+
+**Passenger e o processo (`whatsapp-groups`).** A rodada roda dentro do processo do site, e o Passenger
+encerra o processo ocioso contando só as requisições que chegam: as chamadas que a própria rodada faz à
+Evolution não o mantêm vivo. Só o tráfego dos usuários, ou uma tela de acompanhamento aberta, mantêm, e
+ninguém deve contar com uma aba aberta. Com o cron a cada 5 min, o pior caso é uma parada de uns 5 min e
+uma pessoa `interrupted` a cada processo encerrado. Sem o cron, uma rodada cortada de madrugada fica
+`RUNNING`, sem botão que a retome, até alguém abrir a tela dela. Se o tempo ocioso da Hostinger se mostrar
+perto de 5 min, `*/2 * * * *` é o agendamento mais seguro.
+
+Os cinco exigem `Authorization: Bearer $CRON_SECRET` (guard em `src/lib/cron-auth.ts`) e respondem
 **401 sem o header** — inclusive quando `CRON_SECRET` não está setado, então defina-o no env de
 produção antes de agendar qualquer um. Comandos para o hPanel → Cron Jobs:
 
@@ -308,6 +593,7 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/ext
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/notifications   # 0 7 * * *
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/feed-cleanup    # 0 * * * *
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/campaigns       # * * * * *
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/whatsapp-groups # */5 * * * *
 ```
 
 ### Incidentes já resolvidos (histórico útil)
@@ -321,6 +607,10 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/cam
 
 ## 9. Convenções
 
+> Resumo de tudo numa página (fluxo de branch e PR, migration, commits, combinados do time):
+> [docs/guia/07-como-trabalhamos.md](docs/guia/07-como-trabalhamos.md).
+
+- **Branches:** `feature/<nome>` ou `fix/<nome>` a partir da `main`, PR para a `main`. A `dev` não é mais usada.
 - **Commits:** `[ÁREA] - Verbo + Tarefa`, com corpo estruturado, terminando com a linha de co-autoria. Ex.: `[CRM] - Adiciona autofill de CEP na empresa`.
 - **Validação por entrega:** `typecheck` + `lint` + `build` + `check:isolation` + `check:node` antes de commitar; manter **paridade de chaves** entre `pt.json` e `en.json`.
 - **Gating sempre pelas fontes de verdade:** `config/modules.ts` (módulos), `config/screens.ts` (telas), `config/limits.ts` (limites). Não espalhe `if` de módulo/permissão pelo código.
@@ -335,8 +625,8 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/cam
 
 Diferente da lista de produto abaixo, estes têm próximo passo conhecido e escrito.
 
-1. **`CRON_SECRET` em produção e agendar o `extractions`.** Os quatro `/api/cron/*` respondem 401 sem
-   o segredo definido no env. Só o `extractions` deve ser agendado — o porquê, a consulta que conta o
+1. **`CRON_SECRET` em produção e agendar o `extractions`.** Os cinco `/api/cron/*` respondem 401 sem
+   o segredo definido no env. Dos quatro de manutenção, só o `extractions` deve ser agendado — o porquê, a consulta que conta o
    que será apagado, e o cuidado com a primeira execução estão no [§8](#8-runbook-de-produção--leia-antes-de-qualquer-deploy).
    **Conte antes de agendar:** a primeira execução limpa tudo que acumulou desde que a prospecção
    entrou no ar, de uma vez, e leads nunca importados não voltam.
@@ -354,6 +644,30 @@ Diferente da lista de produto abaixo, estes têm próximo passo conhecido e escr
 
 4. **`package.json#prisma` está depreciado.** O log de deploy avisa que a chave sai no Prisma 7 e pede
    migração para um `prisma.config.ts`. Não urge — mas é quebra garantida num upgrade futuro.
+
+5. **Fase 2 de contato em várias pastas.** A fase 1 (`feature/crm-contato-varias-pastas`, runbook no
+   [§8](#8-runbook-de-produção--leia-antes-de-qualquer-deploy)) passou as pastas do contato para
+   `contact_folder_links` e deixou a coluna antiga `contacts."folderId"` no banco, sem uso: no schema ela é
+   `Contact.legacyFolderId` (`@map("folderId")`), e só o gatilho `contacts_folder_link_sync` (função
+   `contact_folder_link_sync`) a usa, para não perder o que o código antigo gravasse até o deploy. Depois de
+   alguns dias com a fase 1 estável em produção, num PR separado e **nesta ordem** (invertida de propósito,
+   como em `20261013180000_email_signatures_drop_intro_text`; apagar a coluna antes do deploy quebraria o
+   código no ar):
+   1. Tirar do `schema.prisma` o `legacyFolderId`, a relação `legacyFolder`, o `legacyContacts` de
+      `ContactFolder` e o `@@index([organizationId, legacyFolderId])`. No mesmo PR, ajustar
+      `scripts/check-contact-folders-db.ts`, que hoje depende da coluna: o `makeContact` grava `"folderId"`
+      em todo caso, e em 25 casos (18 fora os `trigger: …`) é o gatilho que põe os contatos na pasta. Reescreva o
+      `makeContact` para inserir sem `"folderId"` e, quando receber uma pasta, criar o vínculo com
+      `addLink`; apague os casos `trigger: …` e o trecho sobre o gatilho no guia 06. Sem isso o script
+      quebra no passo 3, quando a coluna sair.
+   2. Mergear e esperar o deploy entrar no ar. O Prisma não lê coluna que o schema não declara, então a
+      coluna sobrando é inofensiva.
+   3. Só então aplicar no Supabase a migration que apaga, nesta ordem, o gatilho `contacts_folder_link_sync`,
+      a função `contact_folder_link_sync`, a FK `contacts_folderId_fkey`, o índice
+      `contacts_organizationId_folderId_idx` e a coluna `contacts."folderId"`. Com `npx prisma db execute
+      --file … --schema prisma/schema.prisma` e depois `npx prisma migrate resolve --applied <pasta>`.
+      **Nunca** `migrate deploy` (nem `migrate dev`) em produção. Depois disso, não volte o código para antes
+      da fase 1: ele lê `folderId`, que não existe mais. Corrija para frente.
 
 ### Produto
 

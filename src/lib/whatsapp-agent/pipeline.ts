@@ -8,11 +8,12 @@ import { hasFeatureByModules } from "@/config/modules";
 import { isAgentOverDailyLimit } from "@/lib/whatsapp-agent/quota";
 import { agentToolset, runAgentTool, type BotContext } from "@/lib/whatsapp-agent/tools";
 import { isTranscriptionConfigured, transcribeAudio } from "@/lib/whatsapp-agent/transcribe";
+import { blockedByAgentTestLock } from "@/lib/whatsapp-agent/test-lock";
 import { getBase64FromMediaMessage } from "@/lib/integrations/evolution-client";
 import type { ParsedInbound } from "@/lib/whatsapp/inbound";
 
 /** Wait this long before replying, so rapid-fire messages get answered as one. */
-const DEBOUNCE_MS = 8000;
+export const DEBOUNCE_MS = 8000;
 /** How many recent messages of the chat to feed the model as context (memory). */
 const HISTORY_LIMIT = 20;
 const MAX_TOKENS = 800;
@@ -36,6 +37,7 @@ type Turn = { role: "user" | "assistant"; content: string };
  */
 export function scheduleAgentReply(organizationId: string, connectionId: string, m: ParsedInbound): void {
   if (m.fromMe || m.isGroup) return;
+  if (blockedByAgentTestLock(connectionId, m.remoteJid)) return;
   // Let text through, and audio too — voice notes are transcribed downstream
   // (before the agent runs), so an empty body isn't the whole story for audio.
   const isAudio = m.type === "AUDIO" || (m.media?.mime ?? "").toLowerCase().startsWith("audio/");
@@ -200,7 +202,7 @@ async function transcribeInboundAudio(connectionId: string, m: ParsedInbound): P
 
 /** Store the bot's outgoing message, or tag the already-ingested echo. Uses the
  *  providerMessageId returned by the send so the webhook echo dedups against it. */
-async function recordAgentReply(
+export async function recordAgentReply(
   organizationId: string,
   conversationId: string,
   body: string,
@@ -287,7 +289,7 @@ function buildSystem(agent: AgentRow): string {
 
 /** The human the bot acts for: the agent's configurer if still a member, else
  *  any OWNER/ADMIN of the org. Null only if no such member exists. */
-async function resolveOwnerId(organizationId: string, createdById: string | null): Promise<string | null> {
+export async function resolveOwnerId(organizationId: string, createdById: string | null): Promise<string | null> {
   if (createdById) {
     const m = await prisma.membership.findFirst({
       where: { organizationId, userId: createdById },
@@ -315,6 +317,6 @@ function toAlternatingTurns(turns: Turn[]): Turn[] {
   return merged;
 }
 
-function sleep(ms: number): Promise<void> {
+export function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }

@@ -26,7 +26,7 @@ export type OrgContext = {
   /** True when the signed-in user is the account owner of this company — gates
    *  the company switcher, "create company" and account-level module purchase. */
   isAccountOwner: boolean;
-  /** Access template assigned to this membership (null = full access). */
+  /** Access template assigned to this membership (null = every gateable screen except OPT_IN_SCREENS). */
   accessTemplateId: string | null;
   /** Screen keys this member can reach (see src/lib/access.ts). */
   allowedScreens: string[];

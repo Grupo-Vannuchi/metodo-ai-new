@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
+import { mergeContactFolderLinks } from "@/lib/crm/contact-folder-links";
 
 /**
  * Merge duplicate records. The primary is kept and enriched with the losers'
@@ -76,6 +77,8 @@ export async function mergeContacts(primaryId: string, loserIds: string[]): Prom
           tags,
         },
       });
+      // Before the delete: the losers' folder links would cascade away with them.
+      await mergeContactFolderLinks(tx, primaryId, others.map((o) => o.id));
       await tx.contact.deleteMany({ where: { id: { in: losers } } });
     });
 

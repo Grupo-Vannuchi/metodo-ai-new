@@ -72,21 +72,37 @@ Não existe um terceiro lugar gateando alguma coisa. É sempre um destes três a
   exportadas — `hasModule`, `hasFeatureByModules`, `assertFeatureByModules`, `availableScreens`
   — são a única forma correta de perguntar "esta empresa tem X".
 - **[src/config/screens.ts](../../src/config/screens.ts)** — as telas *gateáveis por template de
-  acesso*: `GATEABLE_SCREENS`, **15** hoje (`feed`, `crm`, `proposals`, `tasks`, `prospecting`,
-  `campaigns`, `inbox`, `inboxOficial`, `companies`, `contacts`, `connections`, `finance`, `hr`, `supplies`,
-  `downloader`). `dashboard` e `settings` não estão nessa lista porque são `ALWAYS_ALLOWED` —
+  acesso*: `GATEABLE_SCREENS`, **17** hoje (`feed`, `crm`, `proposals`, `tasks`, `prospecting`,
+  `campaigns`, `email`, `emailInbox`, `inbox`, `inboxOficial`, `companies`, `contacts`, `connections`, `finance`,
+  `hr`, `supplies`, `downloader`). `dashboard` e `settings` não estão nessa lista porque são `ALWAYS_ALLOWED` —
   nenhum template restringe o *acesso à tela*, todo membro autenticado chega lá. Isso não é o
   mesmo que "sem restrição nenhuma": o comentário-fonte em
   [src/config/screens.ts:5-7](../../src/config/screens.ts#L5-L7) registra que `settings` é
   **gateada por papel** (ADMIN+) dentro dela mesma — partes da tela mudam ou somem conforme o
   `role` do membro, só não por template de acesso.
+  O módulo `marketing` libera as telas `campaigns`, `email`, `emailInbox` e `prospecting`. A tela `email` (submenu
+  E-mail, envio em massa via Resend) precisa ser marcada nos modelos de acesso para que membros a
+  vejam; owner e admin veem direto. `emailInbox` ("Caixa de entrada do e-mail") não tem item de menu:
+  é a aba "Caixa de entrada" dentro de E-mail › Pela conta Microsoft e de E-mail › Por SMTP (esta só
+  quando a conta SMTP está ativa e tem IMAP configurado), e libera ler e responder a caixa conectada
+  da empresa nos dois canais. A página resolve o acesso no servidor (`canAccessScreen`) e passa o
+  resultado aos componentes. É separada de `email` para que um modelo de acesso possa liberar o
+  envio sem liberar a leitura da caixa; quem tem modelo de acesso só vê a aba se o modelo marcar as
+  duas telas. `emailInbox` também está em `OPT_IN_SCREENS` (mesmo arquivo): ler a caixa expõe
+  redefinição de senha, código de 2FA e e-mail pessoal do dono da caixa, então MEMBER **sem**
+  modelo de acesso **não** a recebe — só OWNER/ADMIN e membros cujo modelo marque a tela.
 - **[src/config/limits.ts](../../src/config/limits.ts)** — limites globais de uso, os mesmos para
   toda organização: `seatLimit` (25), `whatsappNumbersLimit` (10),
-  `dispatchQuotaPerMonth` (50.000), `prospectingQuotaPerMonth` (10.000),
+  `dispatchQuotaPerMonth` (50.000), `emailBroadcastQuotaPerMonth` (50.000), `prospectingQuotaPerMonth` (10.000),
   `extractionsPerMonth` (500), `assistantDailyLimit` (750), `whatsappAgentDailyLimit` (2.000),
-  `companiesPerAccount` (5) e `connectionsLimit` (`null` = sem limite). O comentário no topo do
+  `companiesPerAccount` (5), `taskBoardColumnsMax` (20) e `connectionsLimit` (`null` = sem limite). O comentário no topo do
   arquivo é direto: **não existem mais planos** — o antigo `STANDARD/PLUS/GOLD/ENTERPRISE` virou
   módulo instalado ou não; estes números só existem para conter abuso/custo, iguais para todos.
+  `emailBroadcastQuotaPerMonth` (50.000): e-mails aceitos pelo Resend no mês no submenu E-mail. É
+  **separada** de `dispatchQuotaPerMonth` (Campanhas), e as duas não se somam.
+  `microsoftDailyPersonal` (300) e `microsoftDailyWork` (10.000): estimativa de saídas por 24 h de uma caixa Microsoft conectada (Outlook pessoal e Microsoft 365). A Microsoft não informa o restante; o envio pausa no estimado ou na recusa real.
+  `googleDailyPersonal` (500) e `googleDailyWork` (2.000): estimativa de saídas por 24 h de uma conta Google conectada (Gmail pessoal e Google Workspace). O Google não informa o restante; o envio pausa no estimado ou na recusa real.
+  `smtpHourlyDefault` (100) e `smtpDailyDefault` (500): os limites por hora e por dia de uma conta SMTP quando a empresa não informa os dela. `smtpHourlyMax` (1.700, o ritmo mínimo de 2,1 s por e-mail) e `smtpDailyMax` (10.000): os tetos que o formulário aceita, com o limite por hora sempre menor ou igual ao do dia. Diferente da Microsoft e do Google, os limites do SMTP são **informados pela empresa** (cada provedor tem os seus): o envio espaça os e-mails para nunca passar do limite por hora e pausa ao chegar no do dia ou na recusa real do provedor.
 
 ## Como o gating se compõe
 
@@ -97,9 +113,10 @@ Duas perguntas diferentes, duas fontes diferentes:
    `CORE_SCREENS` (`dashboard`, `settings`, `feed` — ninguém é dono, sempre disponíveis
    *independente de módulo*) com as `screens` de cada módulo instalado.
 2. **"O template de acesso deste membro permite esta tela?"** → `ctx.allowedScreens`, resolvido
-   por `resolveAllowedScreens` em [src/lib/access.ts](../../src/lib/access.ts): OWNER/ADMIN e
-   MEMBER sem template ganham `GATEABLE_SCREENS` inteiro; MEMBER com template fica restrito ao que
-   o template listar.
+   por `resolveAllowedScreens` em [src/lib/access.ts](../../src/lib/access.ts): OWNER/ADMIN ganham
+   `GATEABLE_SCREENS` inteiro; MEMBER sem template ganha `GATEABLE_SCREENS` **menos**
+   `OPT_IN_SCREENS` (hoje só `emailInbox`), que só chega por template; MEMBER com template fica
+   restrito ao que o template listar.
 
 O menu real é a interseção das duas, ao vivo em
 [src/components/app/app-shell.tsx:37-38](../../src/components/app/app-shell.tsx#L37-L38):
@@ -145,6 +162,23 @@ resolvido e mostra ou esconde o vínculo com oportunidade/contato conforme essa 
 padrão se repete para outras combinações de módulo em `tasks`, `feed`, `inbox`, `campaigns` — grep
 por `hasModule(ctx.modules,` mostra todos.
 
+**Um caso com três chaves: "Adicionar a grupo do WhatsApp"** (CRM → Contatos). A tela `contacts` e
+o módulo `crm` já são exigidos pelo
+[layout de `/app/contacts`](<../../src/app/[locale]/app/contacts/layout.tsx>); a terceira chave é o
+`inbox`, porque o número que adiciona é o conectado pela própria pessoa em Conversas. Quem resolve
+é o **servidor**, nunca o componente:
+
+- a lista de contatos recebe `canAddToGroup = hasModule(ctx.modules, "inbox")` como prop
+  ([contacts/page.tsx](<../../src/app/[locale]/app/contacts/page.tsx>)); sem ela, o botão da pasta
+  aberta e o da barra de seleção nem existem;
+- a página de acompanhamento (`contacts/grupos/[runId]`) responde `notFound()` sem `inbox`, e a seção
+  "Grupos do WhatsApp" da página do contato só renderiza com `canInbox`;
+- as server actions (`src/app/actions/whatsapp-group-add.ts`) repetem as três checagens no `gate()`,
+  porque server action é endpoint público — esconder o botão não protege nada;
+- pausar, retomar e cancelar uma rodada valem para quem a começou ou para ADMIN+
+  (`run.createdById === ctx.userId || hasRole(ctx.role, "ADMIN")`). A página calcula isso no servidor e
+  passa `canSteer` pronto ao componente; a action confere de novo.
+
 Vale notar: nem toda `Feature` do tipo `Feature` (em `modules.ts`) tem um módulo dono hoje.
 `webhooks.outbound` e `sso` estão no tipo mas não aparecem em nenhum `unlocks` de `MODULES` —
 leitura minha do código, não comentário do arquivo: `FEATURE_MODULE` é construído por
@@ -154,12 +188,16 @@ para o tipo mas sem dono ainda — não gatear nada por elas por engano.
 
 ## Paridade de i18n
 
-`src/messages/pt.json` e `src/messages/en.json` têm **2731 chaves-folha cada um** (contagem
+`src/messages/pt.json` e `src/messages/en.json` têm **3529 chaves-folha cada um** (contagem
 própria, recursiva sobre os dois arquivos — batem exatamente). Não existe script no repositório
-que verifique isso automaticamente: nenhum arquivo em `scripts/` nem entrada em `package.json`
-menciona `pt.json`/`en.json`. Adicionar uma chave de um lado sem adicionar do outro não quebra
-`typecheck`, `lint` nem `build` — só aparece como texto faltando (ou a chave crua) na tela de quem
-usa o idioma que ficou pra trás.
+que verifique a paridade inteira automaticamente: os dois arquivos em `scripts/` que leem
+`pt.json`/`en.json` só conferem as chaves de que dependem. O `check-email-broadcast.ts` (`npm run check:email`)
+confere que os textos dos motivos de pausa e de falha do E-mail, e os dos erros da caixa de entrada no formulário
+da conta SMTP, existem nos dois. O `check-whatsapp-group-add.ts` (`npm run check:group-add`) confere as notas de
+motivo da tela de acompanhamento do "Adicionar a grupo do WhatsApp" (`crm.groupAdd.reason`) nos dois, e o texto em
+português de algumas delas. Adicionar uma chave de um lado sem
+adicionar do outro não quebra `typecheck`, `lint` nem `build` — só aparece como texto faltando (ou a
+chave crua) na tela de quem usa o idioma que ficou pra trás.
 
 **Textos jurídicos longos ficam fora dos catálogos**, em `src/messages/legal/<doc>.<locale>.json`
 (hoje só `privacy`, servida em `/privacy`). O motivo é peso: o `NextIntlClientProvider` do layout

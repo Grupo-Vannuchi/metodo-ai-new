@@ -301,6 +301,24 @@
   ::-webkit-scrollbar-thumb:hover {
     background-color: var(--muted-foreground);
   }
+
+  /* Tasks kanban: a contrasted horizontal bar (the themed bar above is too faint
+     on a wide board). Chromium/Firefox use scrollbar-width/scrollbar-color; the
+     ::-webkit-scrollbar rules below only take effect in Safari. */
+  .board-scroll {
+    scrollbar-width: auto;
+    scrollbar-color: var(--muted-foreground) var(--muted);
+  }
+  .board-scroll::-webkit-scrollbar {
+    height: 14px;
+  }
+  .board-scroll::-webkit-scrollbar-track {
+    background: var(--muted);
+    border-radius: 9999px;
+  }
+  .board-scroll::-webkit-scrollbar-thumb {
+    background-color: var(--muted-foreground);
+  }
 }
 
 /* Background slideshow crossfade. Kept even under prefers-reduced-motion

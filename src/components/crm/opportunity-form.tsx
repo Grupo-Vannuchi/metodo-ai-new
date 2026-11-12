@@ -7,12 +7,14 @@ import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea, FieldError } from "@/components/ui/field";
 import { MoneyInput } from "@/components/ui/money-input";
+import { SearchSelect } from "@/components/ui/search-select";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/ui/confirm";
 import { updateOpportunity, deleteOpportunity } from "@/app/actions/opportunities";
 import { useRegisterAssistantForm } from "@/components/app/assistant/form-store";
 import type { FormBridge } from "@/lib/assistant/form-bridge";
+import { PipelineStageFields, type PipelineOption } from "@/components/crm/pipeline-stage-fields";
 
 type Option = { id: string; name: string };
 type ProductOption = { id: string; name: string; kind: "PRODUCT" | "SERVICE"; price: number | null };
@@ -39,7 +41,7 @@ const selectCls = cn(
 export function OpportunityForm({
   id,
   defaultValues,
-  stages,
+  pipelines,
   companies,
   contacts,
   members,
@@ -48,7 +50,7 @@ export function OpportunityForm({
 }: {
   id: string;
   defaultValues: Values;
-  stages: Option[];
+  pipelines: PipelineOption[];
   companies: Option[];
   contacts: Option[];
   members: Option[];
@@ -71,6 +73,11 @@ export function OpportunityForm({
   } = useForm<Values>({ defaultValues });
 
   const status = watch("status");
+  const stageId = watch("stageId");
+  const companyId = watch("companyId");
+  const contactId = watch("contactId");
+  const ownerId = watch("ownerId");
+  const productServiceId = watch("productServiceId");
   const needsReason = status === "LOST" || status === "CANCELED";
 
   // Let the AI copilot pre-fill this form for review (it never saves). Money is
@@ -87,7 +94,9 @@ export function OpportunityForm({
           name: "stageId",
           label: "Etapa do funil",
           type: "select",
-          options: stages.map((s) => ({ value: s.id, label: s.name })),
+          options: pipelines.flatMap((p) =>
+            p.stages.map((s) => ({ value: s.id, label: `${p.name} › ${s.name}` })),
+          ),
         },
         {
           name: "status",
@@ -113,7 +122,7 @@ export function OpportunityForm({
         }
       },
     }),
-    [id, stages, setValue],
+    [id, pipelines, setValue],
   );
   useRegisterAssistantForm(bridge);
 
@@ -149,6 +158,14 @@ export function OpportunityForm({
             <Input id="title" aria-invalid={Boolean(errors.title)} {...register("title", { required: tv("required") })} />
             <FieldError>{errors.title?.message}</FieldError>
           </div>
+          <PipelineStageFields
+            pipelines={pipelines}
+            stageId={stageId}
+            onStageChange={(next) => setValue("stageId", next, { shouldDirty: true })}
+            pipelineLabel={t("pipeline")}
+            stageLabel={t("stage")}
+            selectClassName={selectCls}
+          />
           <div>
             <Label htmlFor="value">{t("value")}</Label>
             <MoneyInput
@@ -157,14 +174,6 @@ export function OpportunityForm({
               onValueChange={(n) => setValue("value", String(n))}
             />
             <input type="hidden" {...register("value")} />
-          </div>
-          <div>
-            <Label htmlFor="stageId">{t("stage")}</Label>
-            <select id="stageId" className={selectCls} {...register("stageId")}>
-              {stages.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
           </div>
           <div>
             <Label htmlFor="status">{t("status")}</Label>
@@ -177,7 +186,7 @@ export function OpportunityForm({
             </select>
           </div>
           {needsReason ? (
-            <div>
+            <div className="sm:col-span-2">
               <Label htmlFor="outcomeReason">{t("outcomeReason")}</Label>
               <Input
                 id="outcomeReason"
@@ -186,26 +195,24 @@ export function OpportunityForm({
               />
               <FieldError>{errors.outcomeReason?.message}</FieldError>
             </div>
-          ) : (
-            <div />
-          )}
+          ) : null}
           <div>
             <Label htmlFor="companyId">{t("company")}</Label>
-            <select id="companyId" className={selectCls} {...register("companyId")}>
-              <option value="">{t("none")}</option>
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <SearchSelect
+              id="companyId"
+              options={companies}
+              value={companyId}
+              onChange={(next) => setValue("companyId", next, { shouldDirty: true })}
+            />
           </div>
           <div>
             <Label htmlFor="contactId">{t("contact")}</Label>
-            <select id="contactId" className={selectCls} {...register("contactId")}>
-              <option value="">{t("none")}</option>
-              {contacts.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <SearchSelect
+              id="contactId"
+              options={contacts}
+              value={contactId}
+              onChange={(next) => setValue("contactId", next, { shouldDirty: true })}
+            />
           </div>
         </div>
       </fieldset>
@@ -215,21 +222,22 @@ export function OpportunityForm({
         <div className="mt-2 grid gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="ownerId">{t("owner")}</Label>
-            <select id="ownerId" className={selectCls} {...register("ownerId")}>
-              {!isMemberRole && <option value="">{t("none")}</option>}
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
+            <SearchSelect
+              id="ownerId"
+              options={members}
+              value={ownerId}
+              onChange={(next) => setValue("ownerId", next, { shouldDirty: true })}
+              clearable={!isMemberRole}
+            />
           </div>
           <div>
             <Label htmlFor="productServiceId">{t("productService")}</Label>
-            <select id="productServiceId" className={selectCls} {...register("productServiceId")}>
-              <option value="">{t("none")}</option>
-              {productServices.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+            <SearchSelect
+              id="productServiceId"
+              options={productServices}
+              value={productServiceId}
+              onChange={(next) => setValue("productServiceId", next, { shouldDirty: true })}
+            />
           </div>
           <div>
             <Label htmlFor="expectedCloseDate">{t("expectedCloseDate")}</Label>

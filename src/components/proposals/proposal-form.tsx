@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { useTranslations } from "next-intl";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { MoneyInput } from "@/components/ui/money-input";
+import { SearchSelect } from "@/components/ui/search-select";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { formatBRL } from "@/lib/money";
@@ -82,8 +83,11 @@ export function ProposalForm({
     register,
     handleSubmit,
     setValue,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<Scalars>({ defaultValues: defaults });
+  const companyId = useWatch({ control, name: "companyId" });
+  const contactId = useWatch({ control, name: "contactId" });
 
   const [serverError, setServerError] = useState<string | null>(null);
   const [discount, setDiscount] = useState(defaults.discount);
@@ -259,21 +263,21 @@ export function ProposalForm({
           </div>
           <div>
             <Label htmlFor="companyId">{t("form.company")}</Label>
-            <select id="companyId" className={selectCls} {...register("companyId")}>
-              <option value="">{t("none")}</option>
-              {options.companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <SearchSelect
+              id="companyId"
+              options={options.companies}
+              value={companyId}
+              onChange={(next) => setValue("companyId", next, { shouldDirty: true })}
+            />
           </div>
           <div>
             <Label htmlFor="contactId">{t("form.contact")}</Label>
-            <select id="contactId" className={selectCls} {...register("contactId")}>
-              <option value="">{t("none")}</option>
-              {options.contacts.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <SearchSelect
+              id="contactId"
+              options={options.contacts}
+              value={contactId}
+              onChange={(next) => setValue("contactId", next, { shouldDirty: true })}
+            />
           </div>
           <div>
             <Label htmlFor="clientCompany">{t("form.clientCompany")}</Label>
@@ -314,17 +318,13 @@ export function ProposalForm({
                 <div key={it.key} className="rounded-lg border border-border p-3">
                   <div className="grid gap-3 sm:grid-cols-12">
                     <div className="sm:col-span-4">
-                      <Label>{t("form.product")}</Label>
-                      <select
-                        className={selectCls}
+                      <Label htmlFor={`product-${it.key}`}>{t("form.product")}</Label>
+                      <SearchSelect
+                        id={`product-${it.key}`}
+                        options={options.products}
                         value={it.productServiceId}
-                        onChange={(e) => pickProduct(it.key, e.target.value)}
-                      >
-                        <option value="">{t("form.freeItem")}</option>
-                        {options.products.map((p) => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                      </select>
+                        onChange={(next) => pickProduct(it.key, next)}
+                      />
                     </div>
                     <div className="sm:col-span-4">
                       <Label>{t("form.itemName")}</Label>

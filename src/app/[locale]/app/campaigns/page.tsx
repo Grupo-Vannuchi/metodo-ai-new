@@ -63,7 +63,7 @@ export default async function CampaignsPage({
                 <th className="px-5 py-3 font-medium">{t("campaignName")}</th>
                 <th className="px-5 py-3 font-medium">{t("channel")}</th>
                 <th className="px-5 py-3 font-medium">{t("recipients")}</th>
-                <th className="px-5 py-3 font-medium">{t("status")}</th>
+                <th className="px-5 py-3 font-medium">{t("colStatus")}</th>
                 <th className="px-5 py-3" />
               </tr>
             </thead>

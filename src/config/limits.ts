@@ -13,6 +13,24 @@ export const LIMITS: {
   whatsappNumbersLimit: number | null;
   /** Campaign dispatches per month. */
   dispatchQuotaPerMonth: number;
+  /** Mass e-mails (submenu E-mail) per month — separate from Campaigns. */
+  emailBroadcastQuotaPerMonth: number;
+  /** Estimated e-mails per 24 h through a personal Microsoft mailbox (Outlook.com). */
+  microsoftDailyPersonal: number;
+  /** Estimated recipients per 24 h through a Microsoft 365 mailbox. */
+  microsoftDailyWork: number;
+  /** Estimated e-mails per 24 h through a connected Gmail / Google Workspace account: personal Gmail. */
+  googleDailyPersonal: number;
+  /** Estimated e-mails per 24 h through a connected Gmail / Google Workspace account: Google Workspace. */
+  googleDailyWork: number;
+  /** E-mails per hour an SMTP account sends when the company didn't give its own figure. */
+  smtpHourlyDefault: number;
+  /** E-mails per 24 h an SMTP account sends when the company didn't give its own figure. */
+  smtpDailyDefault: number;
+  /** Highest hourly limit the SMTP form accepts (one e-mail every ~2.1 s, the mailbox pace). */
+  smtpHourlyMax: number;
+  /** Highest daily limit the SMTP form accepts. */
+  smtpDailyMax: number;
   /** Prospecting leads per month. */
   prospectingQuotaPerMonth: number;
   /** Prospecting extraction jobs per month. */
@@ -23,14 +41,26 @@ export const LIMITS: {
   whatsappAgentDailyLimit: number;
   /** Companies (organizations) an account owner can have. */
   companiesPerAccount: number;
+  /** Columns of the Tasks kanban per org. */
+  taskBoardColumnsMax: number;
 } = {
   seatLimit: 25,
   connectionsLimit: null,
   whatsappNumbersLimit: 10,
   dispatchQuotaPerMonth: 50_000,
+  emailBroadcastQuotaPerMonth: 50_000,
+  microsoftDailyPersonal: 300,
+  microsoftDailyWork: 10_000,
+  googleDailyPersonal: 500,
+  googleDailyWork: 2_000,
+  smtpHourlyDefault: 100,
+  smtpDailyDefault: 500,
+  smtpHourlyMax: 1_700,
+  smtpDailyMax: 10_000,
   prospectingQuotaPerMonth: 10_000,
   extractionsPerMonth: 500,
   assistantDailyLimit: 750,
   whatsappAgentDailyLimit: 2_000,
   companiesPerAccount: 5,
+  taskBoardColumnsMax: 20,
 };

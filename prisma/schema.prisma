@@ -339,7 +339,11 @@ model Contact {
   id             String   @id @default(cuid())
   organizationId String
   companyId      String?
-  folderId       String?
+  /// OBSOLETO: a pasta única de antes de `ContactFolderLink`. A app não lê nem grava este campo; só a
+  /// função `contact_folder_link_sync` (gatilho `contacts_folder_link_sync`) o usa, para espelhar em
+  /// `contact_folder_links` o que o código antigo gravar até o deploy. A fase 2 (outro PR) apaga a
+  /// coluna, a FK, o índice, o gatilho e a função. Pastas do contato: `folderLinks`.
+  legacyFolderId String?  @map("folderId")
   name           String
   email          String?
   phone          String?
@@ -352,13 +356,15 @@ model Contact {
   updatedAt      DateTime @updatedAt
 
   company            Company?            @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  folder             ContactFolder?      @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  /// OBSOLETO: relação do `legacyFolderId`. A fase 2 apaga.
+  legacyFolder       ContactFolder?      @relation(fields: [legacyFolderId], references: [id], onDelete: SetNull)
   opportunities      Opportunity[]
   proposals          Proposal[]
   campaignRecipients CampaignRecipient[]
+  folderLinks        ContactFolderLink[]
 
   @@index([organizationId, companyId])
-  @@index([organizationId, folderId])
+  @@index([organizationId, legacyFolderId])
   @@index([organizationId, name])
   @@map("contacts")
 }
@@ -372,10 +378,28 @@ model ContactFolder {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  contacts Contact[]
+  /// OBSOLETO: lado inverso de `Contact.legacyFolder`. A fase 2 apaga. Contatos da pasta: `links`.
+  legacyContacts Contact[]
+  links          ContactFolderLink[]
 
   @@index([organizationId, order])
   @@map("contact_folders")
+}
+
+/// Um contato arquivado numa pasta. Um contato pode estar em várias; em nenhuma = "Sem pasta".
+model ContactFolderLink {
+  id             String   @id @default(cuid())
+  organizationId String
+  contactId      String
+  folderId       String
+  createdAt      DateTime @default(now())
+
+  contact Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  folder  ContactFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, folderId])
+  @@index([organizationId, folderId])
+  @@map("contact_folder_links")
 }
 
 /// A user-defined folder to organize companies (drag-and-drop explorer).
@@ -438,7 +462,7 @@ model AutomationRule {
   organizationId String
   name           String
   enabled        Boolean  @default(true)
-  /// "stage_entered" | "opportunity_won" | "opportunity_lost"
+  /// One of TRIGGERS in src/lib/automation/types.ts (a CRM event or "whatsapp_message").
   trigger        String
   /// The stage that fires a "stage_entered" rule (null for won/lost).
   triggerStageId String?
@@ -451,6 +475,36 @@ model AutomationRule {
 
   @@index([organizationId, trigger, enabled])
   @@map("automation_rules")
+}
+
+enum AutomationSessionStatus {
+  ACTIVE
+  COMPLETED
+  EXPIRED
+  HANDOFF
+  CANCELED
+}
+
+/// A WhatsApp conversation in the middle of a "whatsapp_message" automation: the
+/// keyword opened it, and the customer's next answers continue it without the
+/// keyword until every question is answered. Expires after 24 h without a
+/// customer message (checked lazily on the next inbound, no cron).
+model AutomationSession {
+  id             String                  @id @default(cuid())
+  organizationId String
+  ruleId         String
+  conversationId String
+  status         AutomationSessionStatus @default(ACTIVE)
+  /// Answers collected so far, keyed by question index: { "0": "Mariana" }.
+  answers        Json                    @default("{}")
+  opportunityId  String?
+  lastInboundAt  DateTime                @default(now())
+  finishedAt     DateTime?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@index([organizationId, conversationId, status])
+  @@map("automation_sessions")
 }
 
 /// A sales pipeline (a board). Each org gets a default one.
@@ -737,6 +791,102 @@ model ProposalTemplateItem {
 
   @@index([organizationId, templateId])
   @@map("proposal_template_items")
+}
+
+// ---------------------------------------------------------------------------
+// WhatsApp group add (CRM) — a member adds CRM contacts to one WhatsApp group
+// through their own number. A run is one such job; its items are the contacts.
+// Both tables carry `organizationId`. See
+// docs/superpowers/specs/2026-10-28-crm-grupo-whatsapp-design.md.
+// ---------------------------------------------------------------------------
+
+enum WhatsappGroupAddStatus {
+  QUEUED
+  RUNNING
+  PAUSED
+  DONE
+  CANCELED
+}
+
+enum WhatsappGroupAddItemStatus {
+  PENDING
+  PROCESSING
+  ADDED
+  INVITED
+  ALREADY_IN
+  NO_WHATSAPP
+  SKIPPED
+  LEFT_GROUP
+  ALREADY_INVITED
+  FAILED
+}
+
+/// Adding a set of CRM contacts to one WhatsApp group through the member's own number (spec 2026-10-28).
+model WhatsappGroupAddRun {
+  id             String                 @id @default(cuid())
+  organizationId String
+  /// IntegrationConnection.id (loose: deleting the connection keeps the history).
+  connectionId   String
+  /// The phone behind the connection: the instance's ownerJid digits. Cap and queue are per senderKey.
+  senderKey      String
+  createdById    String
+  groupJid       String
+  groupName      String
+  inviteText     String                 @db.Text
+  inviteUrl      String?
+  status         WhatsappGroupAddStatus @default(QUEUED)
+  /// "manual" | "disconnected" | "not_admin" | "no_connection" | "number_changed" (the instance is linked to another phone) | "error" | "pilot_off" (the organization left WHATSAPP_GROUP_ADD_ORG_IDS)
+  pausedReason   String?
+  /// "pace" | "window" | "cap" | "unavailable" — why nextAttemptAt is in the future
+  waitReason     String?
+  nextAttemptAt  DateTime?
+  lastError      String?
+  /// Runner lease (src/lib/whatsapp/group-add/runner.ts).
+  lastDispatchAt DateTime?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  items WhatsappGroupAddItem[]
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+  @@index([organizationId, groupJid])
+  @@index([senderKey, status])
+  @@map("whatsapp_group_add_runs")
+}
+
+/// One contact in a run. Unique per (run, contact): nobody is processed twice in a run.
+model WhatsappGroupAddItem {
+  id             String                     @id @default(cuid())
+  organizationId String
+  runId          String
+  /// Loose reference: deleting the contact keeps the history.
+  contactId      String
+  contactName    String
+  position       Int
+  phone          String?
+  phoneKey       String?
+  senderKey      String
+  status         WhatsappGroupAddItemStatus @default(PENDING)
+  /// WhatsApp's per-number code from the add call ("200", "403", …).
+  code           String?
+  /// SkipReason | "interrupted" | "uncertain" | "unknown_answer" | "http_<n>" | "no_invite_link" | "invite_failed"
+  /// | "invite_uncertain" (the text got no answer: it may have gone out) | "group_full" (the group would pass 1,024 participants)
+  /// "interrupted", "uncertain", "unknown_answer", "http_502", "http_503", "http_504" and "invite_uncertain" are in doubt
+  /// (UNCERTAIN_REASONS in src/lib/whatsapp/group-add/core.ts): a later round for the group skips them (previous_uncertain).
+  reason         String?
+  processedAt    DateTime?
+  updatedAt      DateTime                   @updatedAt
+
+  run WhatsappGroupAddRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, contactId])
+  @@index([runId, status, position])
+  @@index([organizationId, contactId])
+  @@index([senderKey, processedAt])
+  @@map("whatsapp_group_add_items")
 }
 
 // ---------------------------------------------------------------------------
@@ -1456,6 +1606,12 @@ model Task {
   reminderAt     DateTime?
   recurrence     TaskRecurrence @default(NONE)
   doneAt         DateTime?
+  /// Kanban column; null = the org's entrance column (TaskBoardColumn.isEntrance).
+  boardColumnId  String?
+  /// Position inside the kanban column (ascending). Defaults to the insert
+  /// instant (epoch seconds), so a new task lands at the end of the entrance
+  /// column without the task-creating code paths knowing about the board.
+  boardOrder     Float          @default(dbgenerated("extract(epoch from now())"))
   assignedToId   String? // User responsible
   createdById    String?
   contactId      String?
@@ -1466,13 +1622,42 @@ model Task {
 
   checklist   TaskChecklistItem[]
   attachments TaskAttachment[]
+  boardColumn TaskBoardColumn? @relation(fields: [boardColumnId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, assignedToId, doneAt])
   @@index([organizationId, dueDate])
   @@index([organizationId, reminderAt])
   @@index([organizationId, opportunityId])
   @@index([organizationId, contactId])
+  @@index([organizationId, boardColumnId])
   @@map("tasks")
+}
+
+/// A column of the org's task kanban (one board per org). Built on the board's
+/// first open (src/lib/tasks/board.ts); renamed/added/removed by members.
+/// Columns don't mean anything to the task (completion is the check).
+model TaskBoardColumn {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  order          Int      @default(0)
+  /// New tasks (boardColumnId null) show here. Exactly one per org.
+  isEntrance     Boolean  @default(false)
+  /// Completed tasks go here (and reopened ones leave it). At most one per org;
+  /// it can't be deleted nor be the entrance.
+  isDone         Boolean  @default(false)
+  /// New tasks whose due date falls in this bucket ("overdue" | "today" |
+  /// "upcoming" | "nodate", as of the day they were created) land here. At most
+  /// one column per bucket per org; null = none.
+  dateBucket     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tasks Task[]
+
+  @@unique([organizationId, dateBucket])
+  @@index([organizationId, order])
+  @@map("task_board_columns")
 }
 
 /// A checklist item / subtask of a Task. Ordered; completion feeds the task's
@@ -2561,4 +2746,228 @@ model AssistantMessage {
 
   @@index([threadId, createdAt])
   @@map("assistant_messages")
+}
+
+// ---------------------------------------------------------------------------
+// Mass e-mail (submenu E-mail). Independent from Campaigns on purpose: its own
+// recipients (by address, not by contact), suppression list and quota. See
+// docs/superpowers/specs/2026-10-06-email-em-massa-design.md.
+// ---------------------------------------------------------------------------
+
+enum EmailBroadcastStatus {
+  DRAFT
+  SENDING
+  PAUSED
+  DONE
+}
+
+enum EmailRecipientStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  BOUNCED
+  COMPLAINED
+  FAILED
+  /// Reserved by the Microsoft dispatcher right before calling Graph.
+  SENDING
+  /// The run stopped between the reservation and Graph's answer: never resent.
+  UNCERTAIN
+}
+
+enum EmailChannel {
+  PLATFORM
+  MICROSOFT
+  GOOGLE
+  SMTP
+}
+
+enum EmailSenderProvider {
+  MICROSOFT
+  GOOGLE
+  SMTP
+}
+
+enum EmailSenderAccountStatus {
+  ACTIVE
+  NEEDS_RECONNECT
+}
+
+enum EmailSuppressionReason {
+  UNSUBSCRIBED
+  BOUNCED
+  COMPLAINED
+}
+
+/// One mass e-mail send. The audience selection is kept as JSON so a draft
+/// reopens as it was; recipients are materialized only when sending starts.
+model EmailBroadcast {
+  id             String               @id @default(cuid())
+  organizationId String
+  subject        String
+  /// Editor HTML as typed; sanitized again at render time.
+  html           String               @db.Text
+  fromName       String?
+  replyTo        String?
+  /// Sender address typed in the composer (normalized). Its domain must be an
+  /// EmailSenderDomain of this org for the send to start or continue.
+  fromEmail      String?
+  /// AudienceSelection (src/lib/validations/email-broadcast.ts).
+  audience       Json                 @default("{}")
+  /// EmailAttachment[] (src/lib/email-broadcast/attachments.ts): { key, filename, size }.
+  attachments    Json                 @default("[]")
+  /// Signature chosen in the composer (null = none). Deleting it nulls this.
+  signatureId    String?
+  signature      EmailSignature?      @relation(fields: [signatureId], references: [id], onDelete: SetNull)
+  /// Frozen copy taken when the send starts (sanitized HTML + text part); the
+  /// dispatcher only ever reads these, never email_signatures.
+  signatureHtml  String?              @db.Text
+  signatureText  String?              @db.Text
+  /// PLATFORM = the platform's Resend account; MICROSOFT = the org's connected mailbox (spec 2026-10-15).
+  channel         EmailChannel         @default(PLATFORM)
+  /// The mailbox a MICROSOFT send goes out from (set when it starts or resumes).
+  senderAccountId String?
+  senderAccount   EmailSenderAccount?  @relation(fields: [senderAccountId], references: [id], onDelete: SetNull)
+  /// { selected, invalid, duplicates, suppressed, total } frozen at send time.
+  stats          Json                 @default("{}")
+  status         EmailBroadcastStatus @default(DRAFT)
+  /// "no_connection" | "quota" | "provider_error"
+  pausedReason   String?
+  /// Resend's message when paused by a provider error.
+  lastError      String?
+  createdById    String
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  /// Dispatcher heartbeat / lease (src/lib/email-broadcast/dispatch.ts).
+  lastDispatchAt DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  recipients EmailBroadcastRecipient[]
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+  @@index([senderAccountId])
+  @@map("email_broadcasts")
+}
+
+/// One ADDRESS in a send. Unique per (broadcast, email): the database, not the
+/// code, guarantees nobody gets the same send twice.
+model EmailBroadcastRecipient {
+  id                String               @id @default(cuid())
+  organizationId    String
+  broadcastId       String
+  /// Normalized: trimmed + lowercased.
+  email             String
+  name              String?
+  companyName       String?
+  /// "contact" | "company" | "manual" — where the address came from.
+  sources           String[]             @default([])
+  /// Loose references (no FK): deleting a contact keeps the send history.
+  contactId         String?
+  companyId         String?
+  /// Fixed batch of 100 assigned at creation; the batch idempotency key uses it.
+  batchNo           Int
+  status            EmailRecipientStatus @default(QUEUED)
+  providerMessageId String?
+  error             String?
+  sentAt            DateTime?
+  updatedAt         DateTime             @updatedAt
+
+  broadcast EmailBroadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  @@unique([broadcastId, email])
+  @@index([broadcastId, status])
+  @@index([broadcastId, batchNo])
+  @@index([organizationId, sentAt])
+  @@index([providerMessageId])
+  @@map("email_broadcast_recipients")
+}
+
+/// Addresses that must never receive a mass e-mail from this org again
+/// (unsubscribed, hard bounce, spam complaint).
+model EmailSuppression {
+  id             String                 @id @default(cuid())
+  organizationId String
+  /// Normalized: trimmed + lowercased.
+  email          String
+  reason         EmailSuppressionReason
+  recipientId    String?
+  createdAt      DateTime               @default(now())
+
+  @@unique([organizationId, email])
+  @@map("email_suppressions")
+}
+
+/// A sender domain the platform team VERIFIED in the platform's Resend account
+/// and assigned to ONE organization (scripts/email-domain.ts). Globally unique:
+/// the lock that stops org B from sending as org A's domain through the shared
+/// platform account.
+model EmailSenderDomain {
+  id             String   @id @default(cuid())
+  organizationId String
+  /// Lowercase, no "@".
+  domain         String   @unique
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@map("email_sender_domains")
+}
+
+enum EmailSignatureKind {
+  TEXT
+  IMAGE
+}
+
+/// A reusable e-mail signature of ONE organization (spec 2026-10-13). Anyone
+/// with the E-mail screen manages them; at most one isDefault per org (set by
+/// the actions).
+model EmailSignature {
+  id             String             @id @default(cuid())
+  organizationId String
+  name           String
+  kind           EmailSignatureKind @default(TEXT)
+  /// TEXT: editor HTML, sanitized on save and again whenever it is rendered.
+  html           String             @default("") @db.Text
+  /// IMAGE fields (null for TEXT).
+  imageUrl       String?
+  imageAlt       String?
+  imageHref      String?
+  isDefault      Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  broadcasts EmailBroadcast[]
+
+  @@index([organizationId])
+  @@map("email_signatures")
+}
+
+/// The company's own mailbox for mass e-mail (spec 2026-10-15). One per org per provider.
+model EmailSenderAccount {
+  id             String                   @id @default(cuid())
+  organizationId String
+  provider       EmailSenderProvider
+  /// Mailbox address, lowercase.
+  email          String
+  displayName    String?
+  /// "personal" | "work" (Microsoft, Google: sets the estimated daily limit, microsoft/core.ts, google/core.ts) or "smtp".
+  accountKind    String
+  /// encryptCredentials(...); never leaves the server. Microsoft, Google: { accessToken, refreshToken, expiresAt }.
+  /// SMTP: { host, port, security, username, password } and, when the inbox is read over IMAP (spec 2026-10-23),
+  /// { imapHost, imapPort, imapSecurity } too (smtp/credentials.ts). The IMAP login is the SMTP username and password.
+  credentials    String                   @db.Text
+  /// Só SMTP: limites informados pela empresa.
+  hourlyLimit    Int?
+  dailyLimit     Int?
+  status         EmailSenderAccountStatus @default(ACTIVE)
+  /// Last technical error of a token renewal.
+  lastError      String?
+  connectedById  String
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  broadcasts EmailBroadcast[]
+
+  @@unique([organizationId, provider])
+  @@map("email_sender_accounts")
 }

@@ -1,0 +1,345 @@
+import { Suspense } from "react";
+import { getFormatter, getTranslations } from "next-intl/server";
+import { AlertTriangle, CheckCircle2, Plus } from "lucide-react";
+import { requireOrgContext } from "@/lib/tenant";
+import { canAccessScreen } from "@/lib/access";
+import { hasModule } from "@/config/modules";
+import { listEmailBroadcasts, countEmailsSentThisMonth } from "@/lib/queries/email-broadcasts";
+import { getSenderAccountView } from "@/lib/queries/email-sender-accounts";
+import { listPausedMessageKey, listReason } from "@/lib/email-broadcast/failure-reason";
+import { broadcastChannelOf, emailListHref, listChannelFromParam } from "@/lib/email-broadcast/list-channel";
+import { googleMailEnabledFor } from "@/lib/email-broadcast/google/oauth";
+import { microsoftMailConfigured } from "@/lib/email-broadcast/microsoft/oauth";
+import { deliveryTrackingConfigured } from "@/lib/email-broadcast/platform";
+import { inboxUnreadCount } from "@/lib/email-broadcast/microsoft/inbox";
+import { imapUnreadCount } from "@/lib/email-broadcast/imap/inbox";
+import { parseImapMessageRef } from "@/lib/email-broadcast/imap/core";
+import {
+  inboxFilterFromParam,
+  inboxHref,
+  inboxSearchFromParam,
+  isGraphId,
+  mailboxTabFromParam,
+} from "@/lib/email-broadcast/microsoft/inbox-core";
+import { listSenderDomains } from "@/lib/queries/email-sender-domains";
+import { BackButton } from "@/components/app/back-bar";
+import { DeleteButton } from "@/components/crm/delete-button";
+import { deleteEmailDraft } from "@/app/actions/email-broadcasts";
+import { ChannelChoice } from "@/components/email/channel-choice";
+import { ChannelIcon } from "@/components/email/channel-icon";
+import { SenderAccountPanel } from "@/components/email/sender-account-panel";
+import { StatusBadge } from "@/components/email/status-badge";
+import { EmailInbox } from "@/components/email/inbox/email-inbox";
+import { MailboxTabs } from "@/components/email/inbox/mailbox-tabs";
+import { Skeleton } from "@/components/ui/skeleton";
+import { buttonVariants } from "@/components/ui/button";
+import { LIMITS } from "@/config/limits";
+import { Link } from "@/i18n/navigation";
+import { resolveLocale } from "@/i18n/routing";
+
+export const dynamic = "force-dynamic";
+
+export default async function EmailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<{
+    canal?: string | string[];
+    aba?: string | string[];
+    filtro?: string | string[];
+    q?: string | string[];
+    msg?: string | string[];
+  }>;
+}) {
+  const locale = resolveLocale((await params).locale);
+  const ctx = await requireOrgContext(locale);
+  const t = await getTranslations("emailBroadcast");
+  const format = await getFormatter();
+  const microsoftEnabled = microsoftMailConfigured();
+  // Google is a pilot channel: only the companies that may use it see it.
+  const googleEnabled = googleMailEnabledFor(ctx.organizationId);
+  const sp = await searchParams;
+  // Entering E-mail always asks the channel first (no remembered choice). SMTP has no pilot: every company
+  // with E-mail may connect one, so there is always a channel to choose besides the platform.
+  const view = listChannelFromParam(sp.canal, { microsoft: microsoftEnabled, google: googleEnabled, smtp: true });
+  // The Inbox has its own screen key (Microsoft and the SMTP account's IMAP alike): a template can grant sending without reading.
+  const inboxScreen = canAccessScreen(ctx, "emailInbox");
+  const inboxAllowed = microsoftEnabled && inboxScreen;
+  /** Unread count for the badges (channel card, "Envios" tab), streamed so a slow mailbox never holds the page. */
+  const unreadFor = (account: { status: string } | null) =>
+    inboxAllowed && account?.status === "ACTIVE" ? inboxUnreadCount(ctx.organizationId).catch(() => null) : null;
+  /** The SMTP account has an Inbox only when it is active and has IMAP set up. */
+  const smtpInboxOf = (account: { status: string; imapHost: string | null } | null) =>
+    inboxScreen && account?.status === "ACTIVE" && account.imapHost ? account : null;
+  const smtpUnreadFor = (account: { status: string; imapHost: string | null } | null) =>
+    smtpInboxOf(account) ? imapUnreadCount(ctx.organizationId).catch(() => null) : null;
+  const limit = LIMITS.emailBroadcastQuotaPerMonth;
+
+  const header = (newHref: string) => (
+    <div className="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
+        <p className="mt-1 text-muted-foreground">{t("subtitle")}</p>
+      </div>
+      <Link href={newHref} className={buttonVariants()}>
+        <Plus className="size-4" />
+        {t("new")}
+      </Link>
+    </div>
+  );
+
+  if (view === null) {
+    const [microsoftAccount, googleAccount, smtpAccount] = await Promise.all([
+      microsoftEnabled ? getSenderAccountView(ctx.organizationId, "MICROSOFT") : Promise.resolve(null),
+      googleEnabled ? getSenderAccountView(ctx.organizationId, "GOOGLE") : Promise.resolve(null),
+      getSenderAccountView(ctx.organizationId, "SMTP"),
+    ]);
+    return (
+      <div className="flex flex-col gap-6">
+        {header("/app/email/new")}
+        <ChannelChoice
+          mode="browse"
+          microsoft={microsoftAccount}
+          microsoftEnabled={microsoftEnabled}
+          google={googleAccount}
+          googleEnabled={googleEnabled}
+          smtp={smtpAccount}
+          quotaLimit={limit}
+          inbox={
+            inboxAllowed && microsoftAccount?.status === "ACTIVE"
+              ? { href: inboxHref(), unread: unreadFor(microsoftAccount) }
+              : null
+          }
+          smtpInbox={
+            smtpInboxOf(smtpAccount) ? { href: inboxHref({ canal: "smtp" }), unread: smtpUnreadFor(smtpAccount) } : null
+          }
+        />
+      </div>
+    );
+  }
+
+  // The mailbox channels (Microsoft, Google and SMTP) share the layout; the platform has domains and a monthly quota.
+  const provider = view === "microsoft" ? "MICROSOFT" : view === "google" ? "GOOGLE" : view === "smtp" ? "SMTP" : null;
+  const mailbox = provider !== null;
+  const microsoft = view === "microsoft";
+  const smtp = view === "smtp";
+  // SMTP's tabs depend on its account, read below; Microsoft's only on the screen.
+  const smtpAccount = smtp ? await getSenderAccountView(ctx.organizationId, "SMTP") : null;
+  const smtpHasInbox = smtpInboxOf(smtpAccount) !== null;
+  const tabsChannel = microsoft && inboxAllowed ? "microsoft" : smtpHasInbox ? "smtp" : null;
+  const tab = tabsChannel ? mailboxTabFromParam(sp.aba) : "envios";
+
+  const channelTitle = (
+    <div className="flex flex-wrap items-center gap-3">
+      <h2 className="flex items-center gap-2 text-lg font-semibold">
+        <ChannelIcon channel={view} />
+        {microsoft && inboxAllowed ? t("channel.microsoftTitle") : t(`listChannel.${view}`)}
+      </h2>
+      <Link href={emailListHref(null)} className="text-sm font-medium text-brand hover:underline">
+        {t("switchChannel")}
+      </Link>
+    </div>
+  );
+
+  if (tabsChannel && tab === "caixa") {
+    const account = smtp ? smtpAccount : await getSenderAccountView(ctx.organizationId, "MICROSOFT");
+    const rawMsg = Array.isArray(sp.msg) ? sp.msg[0] : sp.msg;
+    const msg = tabsChannel === "smtp" ? (parseImapMessageRef(rawMsg ?? "") ? rawMsg : null) : isGraphId(rawMsg) ? rawMsg : null;
+    return (
+      <>
+        <BackButton fallback={emailListHref(null)} />
+        <div className="flex flex-col gap-6">
+          {header(`/app/email/new?via=${tabsChannel}`)}
+          {channelTitle}
+          {/* No badge here: the list header shows the unread count, and one Graph call less keeps
+              the mailbox under Outlook's concurrency limit (and out of a race with the "read" mark). */}
+          <MailboxTabs channel={tabsChannel} active="caixa" unread={null} />
+          {account?.status === "ACTIVE" ? (
+            <Suspense fallback={<InboxSkeleton label={t("inbox.loading")} />}>
+              <EmailInbox
+                channel={tabsChannel}
+                organizationId={ctx.organizationId}
+                account={account}
+                filter={inboxFilterFromParam(sp.filtro)}
+                search={inboxSearchFromParam(sp.q)}
+                messageId={msg ?? null}
+                showCrm={hasModule(ctx.modules, "crm") && canAccessScreen(ctx, "contacts")}
+              />
+            </Suspense>
+          ) : (
+            <div className="max-w-2xl">
+              <SenderAccountPanel provider={smtp ? "SMTP" : "MICROSOFT"} account={account} />
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  const [rows, domains, used, account] = await Promise.all([
+    listEmailBroadcasts(ctx.organizationId, broadcastChannelOf(view)),
+    mailbox ? Promise.resolve([] as string[]) : listSenderDomains(ctx.organizationId),
+    mailbox ? Promise.resolve(0) : countEmailsSentThisMonth(ctx.organizationId),
+    // The SMTP account was read above (for the tabs): reading it again would decrypt its credentials a second time.
+    smtp ? Promise.resolve(smtpAccount) : provider ? getSenderAccountView(ctx.organizationId, provider) : Promise.resolve(null),
+  ]);
+  const tracking = deliveryTrackingConfigured();
+  const pct = Math.min(100, (used / limit) * 100);
+
+  return (
+    <>
+      {/* /app/email is a top-level path, so the shell's BackBar hides itself; a
+          channel's list is a step past the choice, so it gets the same control. */}
+      <BackButton fallback={emailListHref(null)} />
+      <div className="flex flex-col gap-6">
+        {header(`/app/email/new?via=${view === "plataforma" ? "platform" : view}`)}
+
+        {channelTitle}
+        {tabsChannel ? (
+          <MailboxTabs
+            channel={tabsChannel}
+            active="envios"
+            unread={tabsChannel === "smtp" ? smtpUnreadFor(account) : unreadFor(account)}
+          />
+        ) : null}
+
+        {provider ? (
+          <div className="max-w-2xl">
+            <SenderAccountPanel provider={provider} account={account} />
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            {domains.length > 0 ? (
+              <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-4">
+                <CheckCircle2 className="size-5 shrink-0 text-green-600" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">{t("domains.title")}</p>
+                  <p className="truncate text-sm text-muted-foreground">
+                    {domains.join(", ")} · {tracking ? t("domains.tracking") : t("domains.noTracking")}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-5 py-4 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                <AlertTriangle className="size-5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">{t("domains.noneTitle")}</p>
+                  <p className="text-sm">{t("domains.noneBody")}</p>
+                </div>
+              </div>
+            )}
+            <div className="flex flex-col justify-center gap-2 rounded-xl border border-border bg-card px-5 py-4">
+              <div className="flex justify-between text-sm tabular-nums">
+                <span className="text-muted-foreground">{t("quota.label")}</span>
+                <span className="font-medium">
+                  {t("quota.value", { used: format.number(used), limit: format.number(limit) })}
+                </span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                <div className="h-full bg-brand" style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {rows.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
+            {t("empty")}
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-border bg-card">
+            <table className="w-full text-left text-sm tabular-nums">
+              <thead className="border-b border-border text-muted-foreground">
+                <tr>
+                  <th className="px-5 py-3 font-medium">{t("col.subject")}</th>
+                  <th className="px-5 py-3 font-medium">{t("col.from")}</th>
+                  <th className="px-5 py-3 font-medium">{t("col.status")}</th>
+                  <th className="px-5 py-3 text-right font-medium">{t("col.recipients")}</th>
+                  {/* Microsoft and Google don't report delivery: no "Entregues" column there. */}
+                  {mailbox ? null : <th className="px-5 py-3 text-right font-medium">{t("col.delivered")}</th>}
+                  <th className="px-5 py-3 text-right font-medium">{t("col.problems")}</th>
+                  <th className="px-5 py-3 font-medium">{t("col.date")}</th>
+                  <th className="px-5 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const isDraft = r.status === "DRAFT";
+                  const href = isDraft ? `/app/email/${r.id}/edit` : `/app/email/${r.id}`;
+                  const when = format.dateTime(r.startedAt ?? r.updatedAt, { dateStyle: "short", timeStyle: "short" });
+                  const reason = listReason({
+                    status: r.status,
+                    pausedReason: r.pausedReason,
+                    problems: r.problems,
+                    uncertain: r.uncertain,
+                  });
+                  return (
+                    <tr key={r.id} className="border-b border-border last:border-0">
+                      <td className="px-5 py-3 font-medium">
+                        <Link href={href} className="hover:underline">
+                          {r.subject || t("noSubject")}
+                        </Link>
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="max-w-56 truncate">{r.fromEmail ?? "—"}</div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <StatusBadge status={r.status} label={t(`status.${r.status}`)} />
+                        {reason?.kind === "paused" ? (
+                          <div className="mt-1 max-w-xs text-xs text-red-600">{t(listPausedMessageKey(r.channel, reason.reason))}</div>
+                        ) : null}
+                        {reason?.kind === "problems" ? (
+                          <div className="mt-1 max-w-xs text-xs text-red-600">
+                            {[
+                              reason.failed ? t("listReason.failed", { count: reason.failed }) : null,
+                              reason.uncertain ? t("listReason.uncertain", { count: reason.uncertain }) : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="px-5 py-3 text-right">{isDraft ? "—" : format.number(r.total)}</td>
+                      {mailbox ? null : (
+                        <td className="px-5 py-3 text-right">{isDraft ? "—" : format.number(r.delivered)}</td>
+                      )}
+                      <td className="px-5 py-3 text-right">{isDraft ? "—" : format.number(r.problems)}</td>
+                      <td className="px-5 py-3 text-muted-foreground">
+                        {isDraft ? t("editedAt", { date: when }) : when}
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        {isDraft ? <DeleteButton action={deleteEmailDraft.bind(null, r.id)} /> : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** Placeholder while the Inbox loads from Microsoft. */
+function InboxSkeleton({ label }: { label: string }) {
+  return (
+    <div className="flex min-h-[640px] overflow-hidden rounded-xl border border-border bg-card" aria-busy="true">
+      <span className="sr-only">{label}</span>
+      <div className="flex w-full flex-col gap-3 p-4 md:w-[380px] md:shrink-0 md:border-r md:border-border">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-8 w-2/3" />
+        {Array.from({ length: 6 }, (_, i) => (
+          <Skeleton key={i} className="h-16 w-full" />
+        ))}
+      </div>
+      <div className="hidden flex-1 flex-col gap-4 p-6 md:flex">
+        <Skeleton className="h-7 w-1/2" />
+        <Skeleton className="h-10 w-2/3" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    </div>
+  );
+}

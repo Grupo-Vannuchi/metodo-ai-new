@@ -8,7 +8,7 @@ import pt from "@/messages/legal/privacy.pt.json";
 import en from "@/messages/legal/privacy.en.json";
 
 /** Date of the last change to the policy text — update it with every edit. */
-const UPDATED_AT = "2026-09-28";
+const UPDATED_AT = "2026-10-19";
 
 /** `satisfies` makes `typecheck` fail if either locale drifts from the shape. */
 const CONTENT = { pt, en } satisfies Record<Locale, LegalContent>;

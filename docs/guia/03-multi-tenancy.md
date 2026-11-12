@@ -20,7 +20,7 @@ organização ativa e devolve o mesmo client Prisma cru de
 `$allOperations`: toda chamada, em qualquer model, passa por essa função antes de chegar no
 banco.
 
-A interceptação só age sobre os models listados na constante `TENANT_MODELS` — **75 hoje**
+A interceptação só age sobre os models listados na constante `TENANT_MODELS` — **86 hoje**
 (é a contagem das entradas do array; cresce conforme o schema cresce). Para qualquer model
 fora dessa lista, o extends devolve a query sem tocar nela:
 
@@ -57,8 +57,12 @@ deste guia empurra pra lá: a seção acima ensina "nunca `update`, use `updateM
 que `updateMany` não devolve as linhas alteradas. O próximo passo óbvio, pra quem precisa do dado
 de volta, é alcançar `updateManyAndReturn` — que parece a versão "Many" seguindo o mesmo padrão
 recomendado, mas **não está em `WHERE_OPS`** e cruza organização em silêncio. Hoje nada em `src/`
-usa `createManyAndReturn` nem `updateManyAndReturn` — é uma armadilha latente, não um bug já
-disparado —, mas é exatamente o tipo de escolha que este guia, seguido pela metade, induziria.
+usa `updateManyAndReturn`, e `createManyAndReturn` tem um uso só: a importação de contatos do
+WhatsApp ([src/lib/crm/whatsapp-import-contacts.ts](../../src/lib/crm/whatsapp-import-contacts.ts)),
+que precisa dos ids dos contatos novos para criar os vínculos com a pasta. Lá o `organizationId` vai
+**à mão** no `data` de cada contato e de cada vínculo — o extends não põe nada nessa operação —, e o
+`check:folders:db` confere que os dois saem com a organização certa. Fora desse caso, continua sendo
+exatamente o tipo de escolha que este guia, seguido pela metade, induziria.
 
 O comentário no topo do arquivo já registra o motivo
 ([src/lib/tenant-db.ts:12-16](../../src/lib/tenant-db.ts#L12-L16)):
@@ -127,13 +131,43 @@ Para leitura por id vale o mesmo raciocínio: o par é `findFirst({ where: { id 
 
 ## Onde cada coisa vive
 
-- **Leitura:** DAL em [src/lib/queries/](../../src/lib/queries/) — 50 arquivos, um por
-  domínio.
+- **Leitura:** DAL em [src/lib/queries/](../../src/lib/queries/) — 57 arquivos, um por
+  domínio, mais a pasta `mcp/` (abaixo). O mais novo é
+  [whatsapp-group-add.ts](../../src/lib/queries/whatsapp-group-add.ts): o acompanhamento de uma rodada de
+  "Adicionar a grupo do WhatsApp" (`getGroupAddRunView`, com o motivo da pausa, a espera e o `lastError`) e
+  o registro no contato (`listContactGroupAdds`, com a data e a situação da rodada), os dois com
+  `tenantDb`. Um `id` de rodada de outra empresa dá `null`, não um erro. A tela de acompanhamento também
+  pede ao serviço a previsão de término (`forecastGroupAddRun`, que lê a rodada por `tenantDb` e só do
+  executor a conta do dia do número).
+- **Leitura do servidor MCP** ([src/lib/queries/mcp/](../../src/lib/queries/mcp/)): contexto de
+  sistema. Quem chama é o portador da chave `MCP_API_KEY` ([guia 05](05-rotas-e-jobs.md)), não um
+  usuário com sessão, então não existe organização ativa: ela chega como argumento de cada
+  ferramenta, é conferida (`getOrganizationRef`) e vai explícita para `tenantDb(organizationId)`.
+  Prisma cru só nos modelos globais (`Organization`, `OrganizationModule`, `Membership`, `User`),
+  sempre com o id filtrando. Só leitura e só com `select` explícito — o `check:mcp` falha se aparecer
+  escrita ou SQL cru nessa pasta ou em `src/lib/mcp/`.
 - **Escrita:** actions em [src/app/actions/](../../src/app/actions/).
 - **Prisma cru** ([src/lib/prisma.ts](../../src/lib/prisma.ts), sem `tenantDb`): só em
   contexto de sistema — webhook, job, cron — nunca no caminho de uma request de usuário.
   Nesses contextos não existe "organização ativa" vinda de sessão, então todo filtro de
   `organizationId` precisa ser passado à mão, explicitamente, em cada query.
+- **Executor das rodadas de grupo do WhatsApp**
+  ([src/lib/whatsapp/group-add/runner.ts](../../src/lib/whatsapp/group-add/runner.ts)): contexto de
+  sistema, com Prisma cru. Roda em segundo plano (`after()`, job da fila ou cron), sem sessão: a
+  organização vem da própria rodada e vai explícita em cada query, e a conexão da Evolution é
+  buscada dentro dessa organização **antes** de decifrar as credenciais (`loadEvoCredsById` não filtra
+  por organização, então não serve sozinho). A promoção da fila (`promoteQueuedRuns`,
+  `findDueGroupAddRuns`) e a conta do teto do dia (`countUsedToday`) cruzam empresas de propósito: o teto de
+  100 por dia e a regra de uma rodada por vez valem por **número do celular** (`senderKey`), e o mesmo
+  celular pode estar ligado a duas empresas; a pausa de 30 a 90 s entre as pessoas também (a rodada que
+  começa ou recomeça espera a última tentativa do número, de qualquer empresa). Só leem contagens, ids, a
+  data dessa última tentativa (um `max`) e a organização da rodada que vão tocar, nunca contato, telefone
+  ou texto. O que o executor lê de contato é o opt-out, só dentro da empresa da rodada, na vez de cada
+  pessoa. A promoção e a retomada de uma rodada pausada rodam numa transação com `pg_advisory_xact_lock`
+  por número. Quem usa a tela
+  ([service.ts](../../src/lib/whatsapp/group-add/service.ts)) lê e grava as tabelas com `tenantDb`; do
+  executor só chama o que cruza empresas (a conta do dia, a fila do número, a retomada), sempre com a
+  rodada e a organização que ele mesmo já leu por `tenantDb`.
 
 ## Como se prova
 
@@ -145,7 +179,7 @@ mas verifica compatibilidade de versão do Node — não tem relação com isola
 **O que o script prova, com precisão — não mais que isso.** Ele importa só `PrismaClient` +
 `PrismaPg`, nunca `tenantDb` nem nada de [src/lib/queries/](../../src/lib/queries/): cria duas
 organizações reais no Postgres local, popula cada uma com dado próprio (membro, empresa, conexão
-de integração, campanha, job de extração, conversa, conversa do WhatsApp oficial) e roda **10 asserções**, todas com
+de integração, campanha, job de extração, conversa, envio de e-mail, destinatário, bloqueio de e-mail, domínio de envio, coluna do quadro de tarefas, assinatura de e-mail, rodada de adição a grupo do WhatsApp, item da rodada e conta de envio de e-mail, com uma Microsoft, uma Google e uma SMTP na mesma empresa, além de pasta de contato, contato, vínculo de contato com pasta e conversa do WhatsApp oficial) e roda **32 asserções**, todas com
 `where: { organizationId: ... }` escrito à mão contra o client **cru** — inclusive um
 `updateMany` com filtro de organização trocado, que precisa afetar zero linhas. Isso prova que o
 Postgres honra o filtro de organização quando a query o inclui. **Não prova que o código da
@@ -167,6 +201,12 @@ Postgres faz o que se espera dele.
   `count === 0`** como erro de autorização. Nunca `update`/`delete` direto.
 - `upsert`, `createManyAndReturn`, `updateManyAndReturn` em tabela de negócio: sem atalho — some
   `organizationId` ao `where` (ou ao `data`) à mão. Nenhuma das três está em `WHERE_OPS`.
+- `create` aninhado (ex.: `folderLinks: { create: { ... } }` dentro de `contact.create`) não passa
+  pelo extends, que só injeta no nível de cima: ponha o `organizationId` do registro aninhado à mão.
+- `createMany` numa tabela de vínculo (ex.: `ContactFolderLink`) injeta o `organizationId`, mas não
+  confere de quem são o `contactId` e o `folderId`: filtre antes pelos ids que são da organização
+  (`ownContactIds` e `findFirst` da pasta, em
+  [src/lib/crm/contact-folder-links.ts](../../src/lib/crm/contact-folder-links.ts)).
 - Model de negócio novo: adicione em `TENANT_MODELS`, senão o extends passa direto por ele.
 - `check:isolation` verde prova que o Postgres respeita o filtro que a query já traz — não que
   `tenantDb`, a DAL ou as actions estão passando esse filtro. Só o vermelho é garantia de algo.

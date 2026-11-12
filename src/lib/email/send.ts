@@ -1,5 +1,6 @@
 import "server-only";
 import { env } from "@/lib/env";
+import { transactionalRetryDelayMs } from "@/lib/email/retry-after";
 
 /**
  * Transactional email via Resend (platform key). Distinct from the campaigns
@@ -35,21 +36,29 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   }
 
   try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: env.EMAIL_FROM,
-        to: Array.isArray(input.to) ? input.to : [input.to],
-        subject: input.subject,
-        html: input.html,
-        ...(input.text ? { text: input.text } : {}),
-        ...(input.replyTo ? { reply_to: input.replyTo } : {}),
-      }),
-    });
+    const post = () =>
+      fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: env.EMAIL_FROM,
+          to: Array.isArray(input.to) ? input.to : [input.to],
+          subject: input.subject,
+          html: input.html,
+          ...(input.text ? { text: input.text } : {}),
+          ...(input.replyTo ? { reply_to: input.replyTo } : {}),
+        }),
+      });
+
+    let res = await post();
+    if (res.status === 429) {
+      // The account is shared with the mass e-mail: wait briefly and retry once.
+      await new Promise((r) => setTimeout(r, transactionalRetryDelayMs(res.headers.get("retry-after"))));
+      res = await post();
+    }
 
     const data = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
     if (!res.ok) {

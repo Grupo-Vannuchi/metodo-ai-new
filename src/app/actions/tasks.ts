@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
 import { deleteMedia } from "@/lib/storage/blob";
 import { runAutomations } from "@/lib/automation/engine";
+import { placeTaskByDoneState } from "@/lib/tasks/board";
 import { taskSchema, checklistTextSchema } from "@/lib/validations/task";
 
 export type TaskResult =
@@ -242,6 +243,8 @@ export async function createTask(formData: FormData): Promise<TaskResult> {
       data: { organizationId: ctx.organizationId, createdById: ctx.userId, ...data },
       select: { id: true },
     });
+    // Created already done: its card belongs in the done column.
+    if (data.doneAt) await placeTaskByDoneState(ctx.organizationId, task.id);
     if (data.assignedToId && data.assignedToId !== ctx.userId) {
       await notifyAssignee(db, ctx.organizationId, data.assignedToId, ctx.user.name, data.title, task.id);
     }
@@ -267,6 +270,7 @@ export async function updateTask(id: string, formData: FormData): Promise<TaskRe
     const wasDone = current.doneAt != null;
     const data = await buildData(ctx.organizationId, ctx.userId, parsed.data, { assignedToId: current.assignedToId, doneAt: current.doneAt });
     await db.task.updateMany({ where: { id }, data });
+    if (wasDone !== (data.doneAt != null)) await placeTaskByDoneState(ctx.organizationId, id);
 
     // Completing a recurring task via the form spawns the next occurrence.
     if (!wasDone && data.status === "DONE") await spawnNextOccurrence(db, current);
@@ -302,6 +306,7 @@ export async function toggleTask(id: string, done: boolean): Promise<TaskResult>
         ? { doneAt: new Date(), status: "DONE", progress: 100 }
         : { doneAt: null, status: "TODO", progress: 0 },
     });
+    await placeTaskByDoneState(ctx.organizationId, id);
     if (done && current.doneAt == null) await spawnNextOccurrence(db, current);
     if (done && current.doneAt == null && current.opportunityId) {
       await runAutomations(ctx.organizationId, { type: "task_completed", opportunityId: current.opportunityId }, ctx.user.name);
@@ -332,6 +337,7 @@ export async function setTaskStatus(id: string, status: TaskStatus): Promise<Tas
           ? { status, doneAt: null, progress: current.progress >= 100 ? 50 : current.progress || 25 }
           : { status, doneAt: null, progress: 0 };
     await db.task.updateMany({ where: { id }, data });
+    if (isDone !== (current.doneAt != null)) await placeTaskByDoneState(ctx.organizationId, id);
     if (isDone && current.doneAt == null) await spawnNextOccurrence(db, current);
     if (isDone && current.doneAt == null && current.opportunityId) {
       await runAutomations(ctx.organizationId, { type: "task_completed", opportunityId: current.opportunityId }, ctx.user.name);
