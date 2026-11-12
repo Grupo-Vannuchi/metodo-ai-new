@@ -34,6 +34,8 @@ const OWN_NOTES: ReadonlySet<string> = new Set([
   "invite_failed",
   "invite_uncertain",
   "group_full",
+  // Outside production only: the dev guard held the add or the invite back (src/lib/whatsapp/dev-guard.ts).
+  "dev_guard",
 ]);
 
 const HTTP_REASON = /^http_(\d+)$/;

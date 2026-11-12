@@ -1460,7 +1460,8 @@
         "no_invite_link": "Não foi possível pegar o link do grupo para mandar o convite",
         "invite_failed": "O WhatsApp não deixou adicionar e o convite não pôde ser enviado",
         "invite_uncertain": "Não foi possível confirmar o envio do convite",
-        "group_full": "O grupo chegou ao limite de {max} participantes"
+        "group_full": "O grupo chegou ao limite de {max} participantes",
+        "dev_guard": "Segurado pela trava de desenvolvimento: o número não está em WHATSAPP_DEV_ALLOWED_NUMBERS. Nada foi enviado."
       },
       "contact": {
         "title": "Grupos do WhatsApp",

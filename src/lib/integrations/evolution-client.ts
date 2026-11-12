@@ -1,4 +1,6 @@
 import "server-only";
+import { env } from "@/lib/env";
+import { devGuardBlocks, parseDevAllowlist } from "@/lib/whatsapp/dev-guard";
 import {
   existsOnWhatsapp,
   inviteUrlFrom,
@@ -308,15 +310,32 @@ export async function fetchOwnerJid(creds: EvoCreds): Promise<string | null> {
 }
 
 /**
+ * Outside production, whether a call that reaches a person (an add to a group, a text) must be held back: the person's
+ * number is not on WHATSAPP_DEV_ALLOWED_NUMBERS (rules and why: src/lib/whatsapp/dev-guard.ts). The same guard as the
+ * channel adapter's, but it logs nothing: this client keeps numbers out of every log. Reads (groups, lookups, the invite
+ * link) are not held: they reach nobody.
+ */
+function heldByDevGuard(creds: EvoCreds, number: string): boolean {
+  return devGuardBlocks({
+    nodeEnv: env.NODE_ENV,
+    baseUrl: creds.baseUrl,
+    target: number,
+    allowed: parseDevAllowlist(env.WHATSAPP_DEV_ALLOWED_NUMBERS),
+  });
+}
+
+/**
  * Adds one number to a group. `httpStatus` is Evolution's, 0 when no answer came (the add may or may not have
  * happened). `code` is the status Baileys gave that number ("200" added, "403" the person's privacy settings ask for
- * the link instead), null when the answer has none.
+ * the link instead), null when the answer has none. `heldByDevGuard` when the dev guard kept the call from going out
+ * at all (outside production only): nothing reached Evolution.
  */
 export async function addGroupParticipant(
   creds: EvoCreds,
   groupJid: string,
   number: string,
-): Promise<{ httpStatus: number; code: string | null }> {
+): Promise<{ httpStatus: number; code: string | null; heldByDevGuard?: true }> {
+  if (heldByDevGuard(creds, number)) return { httpStatus: 0, code: null, heldByDevGuard: true };
   const { status, data } = await req(
     creds,
     "POST",
@@ -354,12 +373,14 @@ export async function fetchGroupInviteUrl(creds: EvoCreds, groupJid: string): Pr
 /**
  * Sends a text message. Unlike the channel adapter, it keeps the number and the text out of everything it could
  * write: it logs nothing, and returns only the HTTP status (0 when no answer came: the text may have gone out).
+ * `heldByDevGuard` when the dev guard kept it from going out at all (outside production only).
  */
 export async function sendPlainText(
   creds: EvoCreds,
   number: string,
   text: string,
-): Promise<{ ok: boolean; httpStatus: number }> {
+): Promise<{ ok: boolean; httpStatus: number; heldByDevGuard?: true }> {
+  if (heldByDevGuard(creds, number)) return { ok: false, httpStatus: 0, heldByDevGuard: true };
   const { ok, status } = await req(
     creds,
     "POST",

@@ -512,6 +512,8 @@ async function inviteByText(
   await beat(v);
   const text = renderInvite(run.inviteText, { nome: item.contactName, grupo: run.groupName }, url);
   const sent = await sendPlainText(creds, number, text);
+  // Outside production, a number not on WHATSAPP_DEV_ALLOWED_NUMBERS: the text never left. Its own reason, not a refusal.
+  if (sent.heldByDevGuard) return { status: "FAILED", reason: "dev_guard" };
   if (sent.ok) return { status: "INVITED", reason: null };
   const mayHaveGone = sent.httpStatus === 0 || (UNCERTAIN_HTTP_STATUSES as readonly number[]).includes(sent.httpStatus);
   return { status: "FAILED", reason: mayHaveGone ? "invite_uncertain" : "invite_failed" };
@@ -586,6 +588,12 @@ async function tryPerson(
 
   await beat(v);
   const answer = await addGroupParticipant(creds, run.groupJid, number);
+  if (answer.heldByDevGuard) {
+    // Outside production, a number not on WHATSAPP_DEV_ALLOWED_NUMBERS: the add never left. Skipped with a reason of its own,
+    // so the screen says why; not counted for the day, and no pause follows (WhatsApp was asked nothing about the add).
+    await settle(v, item.id, { status: "SKIPPED", reason: "dev_guard", processedAt: null });
+    return "again";
+  }
   const added = classifyAdd(answer);
   let status: "ADDED" | "INVITED" | "ALREADY_IN" | "FAILED";
   let reason = added.reason;

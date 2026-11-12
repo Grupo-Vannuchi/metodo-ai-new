@@ -228,6 +228,8 @@ fora dela (inclusive `NODE_ENV` vazio dos scripts `tsx`), só sai mensagem para 
 grupo só pelo JID listado, LID e destino vazio segurados, e uma Evolution em loopback (a falsa dos e2e)
 liberada. Não usa banco nem rede; todos os números do teste são inventados e não saem do processo. Rode
 sempre que mexer nesse arquivo ou em [channels/evolution.ts](../../src/lib/integrations/channels/evolution.ts).
+A adição a grupo e o texto do convite de [evolution-client.ts](../../src/lib/integrations/evolution-client.ts)
+usam a mesma trava; quem confere que eles a consultam antes de chamar a Evolution é o `check:group-add`.
 
 `npm run check:mcp` cobre as regras puras do servidor MCP de leitura
 ([src/lib/mcp/core.ts](../../src/lib/mcp/core.ts): comparação da chave com espaço ou quebra de linha

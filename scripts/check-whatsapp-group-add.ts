@@ -1070,6 +1070,30 @@ check("the Evolution client sends no member action but add, and never names send
   for (const { rule, re } of rules) assert.ok(!re.test(text), `evolution-client.ts must not ${rule}`);
 });
 
+check("the add and the text go through the dev guard before Evolution is called, and the runner tells a held call apart", () => {
+  const client = readFileSync(join(__dirname, "..", "src", "lib", "integrations", "evolution-client.ts"), "utf8");
+  // The body of an exported function of the client, up to the next one.
+  const bodyOf = (text: string, name: string) => {
+    const start = text.indexOf(`export async function ${name}(`);
+    assert.ok(start >= 0, `${name} not found`);
+    const next = text.indexOf("export async function", start + 1);
+    return text.slice(start, next < 0 ? undefined : next);
+  };
+  for (const name of ["addGroupParticipant", "sendPlainText"]) {
+    const body = bodyOf(client, name);
+    const guard = body.indexOf("heldByDevGuard(creds, number)");
+    assert.ok(guard >= 0, `${name} does not ask the dev guard`);
+    assert.ok(guard < body.indexOf("await req("), `${name} asks the dev guard only after calling Evolution`);
+  }
+  // The guard is the shared one, read from env, so production (NODE_ENV=production) is never held.
+  assert.ok(client.includes("devGuardBlocks({") && client.includes("env.WHATSAPP_DEV_ALLOWED_NUMBERS"), "the client's guard is not devGuardBlocks");
+  // A held call is not read as WhatsApp's answer (httpStatus 0 would be a doubt never redone): the runner checks the flag first.
+  const runner = readFileSync(join(__dirname, "..", "src", "lib", "whatsapp", "group-add", "runner.ts"), "utf8");
+  assert.ok(runner.indexOf("answer.heldByDevGuard") >= 0 && runner.indexOf("answer.heldByDevGuard") < runner.indexOf("classifyAdd(answer)"));
+  assert.ok(runner.indexOf("sent.heldByDevGuard") >= 0 && runner.indexOf("sent.heldByDevGuard") < runner.indexOf("if (sent.ok)"));
+  assert.deepEqual(reasonNote("dev_guard"), { key: "dev_guard" });
+});
+
 // ── What the audit entries of the actions may carry ──────────────────────────
 //
 // `AuditLog.meta` is free-form JSON in a table that lives as long as the organization does. The old form of a group's JID is

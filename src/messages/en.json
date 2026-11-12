@@ -1460,7 +1460,8 @@
         "no_invite_link": "Could not get the group link to send the invite",
         "invite_failed": "WhatsApp would not let us add them and the invite could not be sent",
         "invite_uncertain": "We could not confirm that the invite was sent",
-        "group_full": "The group reached its limit of {max} participants"
+        "group_full": "The group reached its limit of {max} participants",
+        "dev_guard": "Held back by the development guard: the number is not in WHATSAPP_DEV_ALLOWED_NUMBERS. Nothing was sent."
       },
       "contact": {
         "title": "WhatsApp groups",
