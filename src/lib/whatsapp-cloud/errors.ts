@@ -50,6 +50,8 @@ const BY_CODE: Record<number, MetaErrorCategory> = {
   131042: "payment_issue",
   131048: "spam_limited",
   368: "policy_blocked",
+  // A Meta respondeu com código: recusou, nada saiu, pode repetir.
+  2: "transient",
   131000: "transient",
   131016: "transient",
 };
@@ -58,8 +60,8 @@ const BY_CODE: Record<number, MetaErrorCategory> = {
  * `httpStatus` (opcional) só pesa quando a Meta não mandou código. Falha de rede
  * (0: tempo esgotado, conexão cortada) ou HTTP 5xx sem código é **incerto**: o
  * pedido pode ter chegado e a mensagem pode ter saído (e sido cobrada). Quem
- * recebe "uncertain" não reenvia sozinho. Só os códigos 131000 e 131016, em que
- * a Meta diz que falhou, são "transient" e podem ser repetidos.
+ * recebe "uncertain" não reenvia sozinho. Só os códigos 2, 131000 e 131016, em
+ * que a Meta diz que falhou, são "transient" e podem ser repetidos.
  */
 export function categorizeMetaError(code: number | null | undefined, httpStatus?: number): MetaErrorCategory {
   if (code === null || code === undefined) {

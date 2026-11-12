@@ -40,10 +40,11 @@ export type SendResponse = {
 };
 
 /**
- * ÚNICO ponto que manda mensagem à Meta (o callSend e o recibo de leitura passam
- * por aqui). Fora de produção, a trava de dev segura o envio para número fora de
- * WHATSAPP_DEV_ALLOWED_NUMBERS antes de qualquer chamada: o .env local pode ter um
- * token de verdade, e cada modelo enviado é cobrado.
+ * Por aqui passam todos os envios da tela e das campanhas oficiais (o callSend e o
+ * recibo de leitura). Fora de produção, a trava de dev segura o envio para número
+ * fora de WHATSAPP_DEV_ALLOWED_NUMBERS antes de qualquer chamada: o .env local pode
+ * ter um token de verdade, e cada modelo enviado é cobrado. O adaptador antigo de
+ * canal (integrations/channels/meta-cloud.ts) tem a mesma trava.
  */
 export async function postMessage(
   phoneNumberId: string,

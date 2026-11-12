@@ -264,11 +264,13 @@ export async function startCampaign(id: string): Promise<{ ok: boolean; error?: 
     // Re-dispatch: when every recipient was already processed (a finished
     // campaign), reset them all to PENDING so the whole campaign sends again.
     // A campaign still mid-flight (some PENDING left) just resumes the rest.
-    // Never reached by an official campaign with nobody pending (already_sent above).
+    // Never for an official campaign: every template sent again is charged by the
+    // Meta, and a slow live chain may send its last person between the check of
+    // cloudCampaignStartProblem and this count (already_sent covers the rest).
     const pending = await db.campaignRecipient.count({
       where: { campaignId: id, status: "PENDING" },
     });
-    if (pending === 0) {
+    if (pending === 0 && !cloudLink) {
       await db.campaignRecipient.updateMany({
         where: { campaignId: id },
         data: {

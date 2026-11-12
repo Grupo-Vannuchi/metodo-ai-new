@@ -18,7 +18,8 @@ describe("categorizeMetaError", () => {
   test("131042 = problema de pagamento", () => assert.equal(categorizeMetaError(131042), "payment_issue"));
   test("131048 = limitado por spam", () => assert.equal(categorizeMetaError(131048), "spam_limited"));
   test("368 = bloqueado por política", () => assert.equal(categorizeMetaError(368), "policy_blocked"));
-  test("131000 e 131016 = instabilidade da Meta", () => {
+  test("2, 131000 e 131016 = instabilidade da Meta", () => {
+    assert.equal(categorizeMetaError(2), "transient");
     assert.equal(categorizeMetaError(131000), "transient");
     assert.equal(categorizeMetaError(131016), "transient");
   });

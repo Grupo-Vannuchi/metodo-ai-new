@@ -14,7 +14,8 @@
  * Pure (no env, no network) so `npm run check:devguard` can test it; the wiring
  * lives in src/lib/integrations/channels/evolution.ts, in
  * src/lib/integrations/evolution-client.ts (group add and invite) and, for the
- * official WhatsApp, in src/lib/whatsapp-cloud/meta-api.ts (postMessage).
+ * official WhatsApp, in src/lib/whatsapp-cloud/meta-api.ts (postMessage) and in
+ * the older channel adapter src/lib/integrations/channels/meta-cloud.ts.
  */
 import { normalizeWhatsappNumber } from "@/lib/phone";
 

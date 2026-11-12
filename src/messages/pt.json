@@ -2213,6 +2213,7 @@
     "cancel": "Cancelar",
     "start": "Iniciar disparo",
     "restart": "Disparar novamente",
+    "resume": "Retomar disparo",
     "starting": "Iniciando…",
     "colContact": "Contato",
     "colDestination": "Destino",
@@ -2274,6 +2275,7 @@
       "renameOnly": "Campanhas oficiais permitem trocar só o nome. Para usar outro modelo, crie outra campanha.",
       "rename": "Salvar nome",
       "blocked": {
+        "not_enabled": "O WhatsApp oficial não está liberado para esta empresa.",
         "not_owner": "Só quem conectou o número oficial desta campanha pode dispará-la.",
         "already_sent": "Campanha oficial já enviada. Para enviar de novo, crie outra campanha."
       }

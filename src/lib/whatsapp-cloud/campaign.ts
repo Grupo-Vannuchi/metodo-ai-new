@@ -25,7 +25,10 @@ import { isWhatsappCloudEnabled } from "@/lib/whatsapp-cloud/rollout";
  *
  * Cada destinatário é RESERVADO antes da chamada à Meta (`sentAt` preenchido
  * com o status ainda PENDING): duas cadeias de disparo em paralelo nunca pagam o
- * mesmo modelo duas vezes. Reserva de lote que morreu vence em 10 minutos.
+ * mesmo modelo duas vezes. Uma reserva com mais de 10 minutos é de um processo
+ * que morreu no meio da chamada (redeploy, restart do Passenger): a Meta pode ter
+ * aceitado, então ela vira falha incerta e nunca é reenviada. Uma chamada viva
+ * não segura a reserva tanto tempo (o teto de cada chamada é 20 s, graph.ts).
  */
 const BATCH = 25;
 const RATE_LIMIT_RETRY_SEC = 60;
@@ -114,12 +117,15 @@ export async function dispatchCloudCampaignBatch(link: CloudCampaignLink): Promi
   const remaining = LIMITS.dispatchQuotaPerMonth - sent;
   if (remaining <= 0) return pause("Cota mensal de disparos atingida.");
 
-  // Livre = PENDING sem reserva, ou com reserva vencida (lote que morreu no meio).
+  // Reserva vencida = processo que morreu no meio da chamada à Meta: pode ter
+  // saído e sido cobrado. Vira FAILED incerto, como o "uncertain" do callSend.
   const staleBefore = new Date(now.getTime() - CLAIM_STALE_MS);
-  const claimable = {
-    status: "PENDING" as const,
-    OR: [{ sentAt: null }, { sentAt: { lt: staleBefore } }],
-  };
+  await db.campaignRecipient.updateMany({
+    where: { campaignId, status: "PENDING", sentAt: { lt: staleBefore } },
+    data: { status: "FAILED", error: recipientErrorText("uncertain", null), sentAt: null },
+  });
+  // Livre = PENDING sem reserva. Reservado por outra cadeia viva não é tocado.
+  const claimable = { status: "PENDING" as const, sentAt: null };
   const recipients = await db.campaignRecipient.findMany({
     where: { campaignId, ...claimable },
     orderBy: { id: "asc" },
@@ -168,6 +174,13 @@ export async function dispatchCloudCampaignBatch(link: CloudCampaignLink): Promi
         // volta à fila (reenviar cobraria duas vezes). A campanha para, para uma
         // Meta fora do ar não marcar a lista inteira como falha, um por um.
         await fail(r.id, recipientErrorText(res.category, res.message));
+        // Era o último da fila: não há o que retomar, a campanha termina (o
+        // destinatário fica com o aviso). Pausada, ela ficaria parada para sempre.
+        const left = await db.campaignRecipient.count({ where: { campaignId, status: "PENDING" } });
+        if (left === 0) {
+          await db.campaign.updateMany({ where: { id: campaignId }, data: { status: "DONE" } });
+          return { done: true };
+        }
         return pause(pauseReasonText(res.category));
       }
       if (res.category === "dev_guard") {

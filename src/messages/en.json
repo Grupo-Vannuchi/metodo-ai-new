@@ -2213,6 +2213,7 @@
     "cancel": "Cancel",
     "start": "Start dispatch",
     "restart": "Dispatch again",
+    "resume": "Resume sending",
     "starting": "Starting…",
     "colContact": "Contact",
     "colDestination": "Destination",
@@ -2274,6 +2275,7 @@
       "renameOnly": "Official campaigns can only be renamed. To use another template, create another campaign.",
       "rename": "Save name",
       "blocked": {
+        "not_enabled": "The official WhatsApp is not enabled for this company.",
         "not_owner": "Only whoever connected this campaign's official number can dispatch it.",
         "already_sent": "Official campaign already sent. To send again, create another campaign."
       }

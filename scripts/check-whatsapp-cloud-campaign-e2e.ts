@@ -7,9 +7,11 @@
  *
  * What it proves (review of PR #206, 12/11/2026):
  * - a send with no answer (network failure, HTTP 5xx with no code) may have gone out and been charged: the person is FAILED,
- *   never put back in the queue, and the campaign pauses; resumed, it goes on with the others only;
+ *   never put back in the queue, and the campaign pauses (or finishes, when it was the last); resumed, it goes on with the
+ *   others only; the reservation of a process that died in the middle of the call (over 10 min) is FAILED the same way;
  * - a send the Meta says failed (131000) goes back to the queue, and nothing else changes;
- * - the dev guard holds a number off WHATSAPP_DEV_ALLOWED_NUMBERS before any call, and lets the read receipt through;
+ * - the dev guard holds a number off WHATSAPP_DEV_ALLOWED_NUMBERS before any call, and lets the read receipt through, in
+ *   postMessage and in the older channel adapter (channels/meta-cloud.ts);
  * - a company taken off WHATSAPP_CLOUD_ORG_IDS has its running campaign paused, without a call;
  * - only the owner of the number starts a campaign, and one with nobody left in the queue is not sent again.
  *
@@ -35,6 +37,7 @@ import { postMessage } from "@/lib/whatsapp-cloud/meta-api";
 import { encryptToken } from "@/lib/whatsapp-cloud/numbers";
 import { readPayload, templatePayload } from "@/lib/whatsapp-cloud/payloads";
 import { getCloudCampaignInfo } from "@/lib/queries/whatsapp-cloud-campaigns";
+import metaCloudAdapter from "@/lib/integrations/channels/meta-cloud";
 
 // ── The fake Graph API ───────────────────────────────────────────────────────
 
@@ -250,6 +253,37 @@ check("no answer (network failure): the person is FAILED and never resent, the c
   assert.deepEqual(after.map((r) => r.status), ["FAILED", "SENT"]);
 });
 
+check("no answer for the last person in the queue: FAILED, not resent, and the campaign finishes instead of pausing for ever", async ({ prisma, w }) => {
+  const link = await makeCampaign(prisma, w, [PHONES[0]]);
+  replies.push({ kind: "network" });
+  assert.deepEqual(await dispatchCloudCampaignBatch(link), { done: true });
+  assert.equal(calls.length, 1);
+  assert.deepEqual((await recipientsOf(prisma, link.campaignId)).map((r) => r.status), ["FAILED"]);
+  assert.equal((await campaignState(prisma, link.campaignId)).status, "DONE");
+});
+
+check("a reservation of a process that died (over 10 min) is FAILED as uncertain with no call; a live one is left alone", async ({ prisma, w }) => {
+  const link = await makeCampaign(prisma, w, [PHONES[0], PHONES[1], PHONES[2]]);
+  const [stale, live] = await prisma.campaignRecipient.findMany({
+    where: { campaignId: link.campaignId },
+    orderBy: { id: "asc" },
+    select: { id: true },
+  });
+  const minutesAgo = (m: number) => new Date(Date.now() - m * 60 * 1000);
+  await prisma.campaignRecipient.updateMany({ where: { id: stale.id }, data: { sentAt: minutesAgo(11) } });
+  await prisma.campaignRecipient.updateMany({ where: { id: live.id }, data: { sentAt: minutesAgo(1) } });
+  replies.push(accepted("wamid.fresh", PHONES[2]));
+  const res = await dispatchCloudCampaignBatch(link);
+  assert.equal(res.done, false, "the live reservation is still in flight: the campaign is not over");
+  assert.deepEqual(sentTo(), [PHONES[2]], "only the person nobody had reserved was sent");
+  const rows = await recipientsOf(prisma, link.campaignId);
+  assert.deepEqual(rows.map((r) => r.status), ["FAILED", "PENDING", "SENT"]);
+  assert.equal(rows[0].error, recipientErrorText("uncertain", null));
+  assert.equal(rows[0].sentAt, null);
+  assert.notEqual(rows[1].sentAt, null, "the live reservation keeps its stamp");
+  assert.equal((await campaignState(prisma, link.campaignId)).status, "RUNNING");
+});
+
 check("an HTTP 5xx with no code is uncertain too: FAILED, not resent, campaign paused", async ({ prisma, w }) => {
   const link = await makeCampaign(prisma, w, [PHONES[0], PHONES[1]]);
   replies.push({ kind: "http", status: 503, body: "Service Unavailable" });
@@ -293,6 +327,19 @@ check("the dev guard: an empty list holds every send, a BSUID-only one too; the 
   const read = await postMessage("pn", "token", readPayload("wamid.x"));
   assert.equal(read.ok, true);
   assert.equal(calls.length, 1);
+});
+
+check("the older channel adapter (channels/meta-cloud.ts) is held by the dev guard too", async () => {
+  const creds = { phoneNumberId: "pn-old", accessToken: "wcc-e2e-not-a-token" };
+  const held = await metaCloudAdapter.send(creds, { to: "5511988887777", body: "x" });
+  assert.equal(held.ok, false);
+  assert.match(held.error ?? "", /WHATSAPP_DEV_ALLOWED_NUMBERS/);
+  assert.equal(calls.length, 0, "the number off the list never reached the Graph API");
+  replies.push(accepted("wamid.old", PHONES[0]));
+  const sent = await metaCloudAdapter.send(creds, { to: PHONES[0], body: "x" });
+  assert.deepEqual(sent, { ok: true, providerMessageId: "wamid.old" });
+  assert.deepEqual(sentTo(), [PHONES[0]]);
+  assert.equal(calls[0].path, "/pn-old/messages");
 });
 
 check("a company taken off WHATSAPP_CLOUD_ORG_IDS: its running campaign pauses with no call, the queue untouched", async ({ prisma, w }) => {

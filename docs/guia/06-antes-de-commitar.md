@@ -234,7 +234,8 @@ A adição a grupo e o texto do convite de [evolution-client.ts](../../src/lib/i
 usam a mesma trava (a adição exige o JID do grupo e o número da pessoa; o executor a consulta antes até da
 consulta do número); quem confere que eles a consultam antes de chamar a Evolution é o `check:group-add`.
 O WhatsApp oficial usa `cloudSendBlocked`, do mesmo arquivo, em `postMessage`
-([meta-api.ts](../../src/lib/whatsapp-cloud/meta-api.ts)): telefone em `to` precisa estar na lista, destino só por
+([meta-api.ts](../../src/lib/whatsapp-cloud/meta-api.ts)) e no adaptador antigo
+[channels/meta-cloud.ts](../../src/lib/integrations/channels/meta-cloud.ts): telefone em `to` precisa estar na lista, destino só por
 BSUID é segurado, o recibo de leitura (sem destino) passa, e não há exceção de loopback (a Graph API é sempre a Meta
 de verdade). O `check:devguard` cobre a regra; quem confere que o disparo a consulta antes de chamar a Meta é o
 `check:wa-cloud:e2e`.
@@ -416,7 +417,8 @@ qualquer mudança em `src/lib/whatsapp-cloud/`.
 ([scripts/check-whatsapp-cloud-campaign-e2e.ts](../../scripts/check-whatsapp-cloud-campaign-e2e.ts)). A Graph API
 é falsa: o `fetch` é trocado no processo inteiro, uma chamada a `graph.facebook.com` recebe a resposta que o caso
 enfileirou (ou uma falha de rede) e qualquer outro host é recusado; o token é inventado. Prova que o envio sem
-resposta (rede ou HTTP 5xx sem código) vira falha incerta, nunca reenviada, e pausa a campanha; que o 131000 volta
+resposta (rede ou HTTP 5xx sem código) vira falha incerta, nunca reenviada, e pausa a campanha (ou a termina, se era
+o último); que a reserva vencida de um processo que morreu vira a mesma falha incerta, sem chamada; que o 131000 volta
 para a fila; que a trava de dev segura o número fora da lista antes da chamada; que tirar a empresa do piloto pausa a
 campanha; e que só o dono do número dispara e uma campanha já enviada não recomeça. Cria a empresa `wcc-e2e-<stamp>`
 e a apaga sempre; recusa banco que não seja local. Rode sempre que mexer em `src/lib/whatsapp-cloud/campaign.ts`,
