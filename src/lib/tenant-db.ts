@@ -95,6 +95,8 @@ const TENANT_MODELS = new Set<string>([
   "EmailSenderDomain",
   "EmailSignature",
   "EmailSenderAccount",
+  "WhatsappGroupAddRun",
+  "WhatsappGroupAddItem",
 ]);
 
 const WHERE_OPS = new Set<string>([
