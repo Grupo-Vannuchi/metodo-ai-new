@@ -11,6 +11,10 @@ import { cn } from "@/lib/utils";
 import { CHANNEL_META, CHANNEL_KEYS, type ChannelKey } from "@/lib/integrations/channels/meta";
 import { createCampaign, countAudience } from "@/app/actions/campaigns";
 import type { AudienceFilter } from "@/lib/queries/campaigns";
+import { CloudCampaignFields, type CloudCampaignValue } from "@/components/campaigns/cloud-campaign-fields";
+import { createCloudCampaign, sampleCloudAudience } from "@/app/actions/whatsapp-cloud-campaigns";
+import type { CloudCampaignSetup } from "@/lib/whatsapp-cloud/campaign-setup";
+import { mappingIsComplete, type ParamContext } from "@/lib/whatsapp-cloud/template-params";
 
 type Option = { id: string; name: string };
 type TemplateOption = { id: string; name: string; channel: string };
@@ -25,6 +29,7 @@ export function CampaignForm({
   stages,
   members,
   hasCrm = true,
+  cloud = null,
 }: {
   templates: TemplateOption[];
   folders: Option[];
@@ -32,6 +37,8 @@ export function CampaignForm({
   stages: Option[];
   members: Option[];
   hasCrm?: boolean;
+  /** Canal oficial resolvido no servidor; null = formulário de hoje, sem mudança. */
+  cloud?: CloudCampaignSetup | null;
 }) {
   const t = useTranslations("campaigns");
   const tv = useTranslations("validation");
@@ -47,10 +54,14 @@ export function CampaignForm({
   const [oppStatus, setOppStatus] = useState("");
   const [ownerId, setOwnerId] = useState("");
   const [count, setCount] = useState<number | null>(null);
+  const [cloudValue, setCloudValue] = useState<CloudCampaignValue>({ templateId: "", params: {} });
+  const [sample, setSample] = useState<ParamContext | null>(null);
+  const isCloud = channel === "WHATSAPP_CLOUD" && cloud !== null;
 
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<Values>({ defaultValues: { name: "", templateId: "" } });
 
@@ -86,12 +97,57 @@ export function CampaignForm({
     };
   }, [channel, tags, folderId, source, stageId, oppStatus, ownerId]);
 
+  // Um contato real do público para a prévia do modelo oficial (mesmo atraso da contagem).
+  useEffect(() => {
+    if (!isCloud) return;
+    let active = true;
+    const id = setTimeout(async () => {
+      const s = await sampleCloudAudience({
+        tags: tags.length ? tags : undefined,
+        folderId: folderId || undefined,
+        source: source || undefined,
+        stageId: stageId || undefined,
+        oppStatus: (oppStatus || undefined) as AudienceFilter["oppStatus"],
+        ownerId: ownerId || undefined,
+      });
+      if (active) setSample(s);
+    }, 350);
+    return () => {
+      active = false;
+      clearTimeout(id);
+    };
+  }, [isCloud, tags, folderId, source, stageId, oppStatus, ownerId]);
+
   function toggleTag(tag: string) {
     setTags((s) => (s.includes(tag) ? s.filter((x) => x !== tag) : [...s, tag]));
   }
 
   async function onSubmit(values: Values) {
     setServerError(null);
+    if (isCloud && cloud) {
+      const tpl = cloud.templates.find((x) => x.id === cloudValue.templateId);
+      if (!tpl || !mappingIsComplete(tpl.variables, cloudValue.params)) {
+        setServerError(t("cloud.incomplete"));
+        return;
+      }
+      const result = await createCloudCampaign({
+        name: values.name.trim(),
+        templateId: tpl.id,
+        params: cloudValue.params,
+        ...filter,
+      });
+      if (result.ok) {
+        router.push(`/app/campaigns/${result.id}`);
+        router.refresh();
+      } else {
+        setServerError(t(`error.${result.error}`));
+      }
+      return;
+    }
+    if (!values.templateId) {
+      setError("templateId", { type: "required", message: tv("required") });
+      return;
+    }
     const result = await createCampaign({ name: values.name.trim(), channel, templateId: values.templateId, ...filter });
     if (result.ok) {
       router.push(`/app/campaigns/${result.id}`);
@@ -120,13 +176,25 @@ export function CampaignForm({
             <Label htmlFor="channel">{t("channel")}</Label>
             <select id="channel" className={selectCls} value={channel} onChange={(e) => setChannel(e.target.value as ChannelKey)}>
               {CHANNEL_KEYS.map((key) => (
-                <option key={key} value={key}>{CHANNEL_META[key].label}</option>
+                <option key={key} value={key}>
+                  {key === "WHATSAPP_CLOUD" && cloud ? t("cloud.channelLabel") : CHANNEL_META[key].label}
+                </option>
               ))}
             </select>
           </div>
+          {isCloud && cloud ? (
+            <CloudCampaignFields
+              templates={cloud.templates}
+              value={cloudValue}
+              onChange={setCloudValue}
+              sample={sample}
+              messagingLimit={cloud.messagingLimit}
+              audienceCount={count}
+            />
+          ) : (
           <div>
             <Label htmlFor="templateId">{t("templateLabel")}</Label>
-            <select id="templateId" className={selectCls} aria-invalid={Boolean(errors.templateId)} {...register("templateId", { required: tv("required") })}>
+            <select id="templateId" className={selectCls} aria-invalid={Boolean(errors.templateId)} {...register("templateId")}>
               <option value="">{t("selectTemplate")}</option>
               {channelTemplates.map((tpl) => (
                 <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
@@ -135,6 +203,7 @@ export function CampaignForm({
             <FieldError>{errors.templateId?.message}</FieldError>
             {channelTemplates.length === 0 ? <p className="mt-1 text-xs text-amber-600">{t("noTemplateForChannel")}</p> : null}
           </div>
+          )}
         </div>
       </fieldset>
 

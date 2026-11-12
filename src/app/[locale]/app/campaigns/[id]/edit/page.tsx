@@ -2,7 +2,9 @@ import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { requireOrgContext } from "@/lib/tenant";
 import { getCampaign, templateOptions } from "@/lib/queries/campaigns";
+import { getCloudCampaignInfo } from "@/lib/queries/whatsapp-cloud-campaigns";
 import { CampaignEditForm } from "@/components/campaigns/campaign-edit-form";
+import { CloudCampaignRenameForm } from "@/components/campaigns/cloud-campaign-rename-form";
 import { type ChannelKey } from "@/lib/integrations/channels/meta";
 import { resolveLocale } from "@/i18n/routing";
 
@@ -21,6 +23,7 @@ export default async function EditCampaignPage({
   const data = await getCampaign(ctx.organizationId, id);
   if (!data) notFound();
   const { campaign } = data;
+  const cloudInfo = await getCloudCampaignInfo(ctx.organizationId, campaign.id);
 
   const allTemplates = await templateOptions(ctx.organizationId);
   const templates = allTemplates
@@ -33,13 +36,17 @@ export default async function EditCampaignPage({
         <h1 className="text-2xl font-bold tracking-tight">{t("editCampaign")}</h1>
       </div>
 
-      <CampaignEditForm
-        id={campaign.id}
-        channel={campaign.channel as ChannelKey}
-        name={campaign.name}
-        templateId={campaign.templateId ?? ""}
-        templates={templates}
-      />
+      {cloudInfo ? (
+        <CloudCampaignRenameForm id={campaign.id} name={campaign.name} templateName={cloudInfo.templateName} />
+      ) : (
+        <CampaignEditForm
+          id={campaign.id}
+          channel={campaign.channel as ChannelKey}
+          name={campaign.name}
+          templateId={campaign.templateId ?? ""}
+          templates={templates}
+        />
+      )}
     </div>
   );
 }

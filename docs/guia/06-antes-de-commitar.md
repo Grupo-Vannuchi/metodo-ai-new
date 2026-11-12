@@ -233,6 +233,12 @@ sempre que mexer nesse arquivo ou em [channels/evolution.ts](../../src/lib/integ
 A adição a grupo e o texto do convite de [evolution-client.ts](../../src/lib/integrations/evolution-client.ts)
 usam a mesma trava (a adição exige o JID do grupo e o número da pessoa; o executor a consulta antes até da
 consulta do número); quem confere que eles a consultam antes de chamar a Evolution é o `check:group-add`.
+O WhatsApp oficial usa `cloudSendBlocked`, do mesmo arquivo, em `postMessage`
+([meta-api.ts](../../src/lib/whatsapp-cloud/meta-api.ts)) e no adaptador antigo
+[channels/meta-cloud.ts](../../src/lib/integrations/channels/meta-cloud.ts): telefone em `to` precisa estar na lista, destino só por
+BSUID é segurado, o recibo de leitura (sem destino) passa, e não há exceção de loopback (a Graph API é sempre a Meta
+de verdade). O `check:devguard` cobre a regra; quem confere que o disparo a consulta antes de chamar a Meta é o
+`check:wa-cloud:e2e`.
 
 `npm run check:mcp` cobre as regras puras do servidor MCP de leitura
 ([src/lib/mcp/core.ts](../../src/lib/mcp/core.ts): comparação da chave com espaço ou quebra de linha
@@ -394,6 +400,29 @@ vale corrigir se você mexer nesse arquivo por outro motivo.
 
 Se `lint` voltar com um número de avisos diferente destes 4 (ou um erro, que é sempre bloqueante),
 o aviso novo é seu — não assuma que é mais um da lista conhecida sem conferir o arquivo e a regra.
+
+## `test:wa-cloud` (fora das cinco obrigatórias)
+
+`npm run test:wa-cloud` roda `src/lib/whatsapp-cloud/__tests__/*.test.ts` com o `node:test`
+nativo via `tsx` — a primeira suíte de testes do repositório, sem dependência nova. Cobre só as
+unidades **puras** da integração com a WhatsApp Cloud API (parser do webhook, assinatura, janela
+de 24h, erros, modelos, mídia, payloads). Não precisa de banco nem de `.env`.
+
+Regra que mantém a suíte rodando: os módulos testados não importam `server-only`, `@/lib/env`
+nem `@/lib/prisma` — fora do Next, `server-only` nem existe e o `env` exige variáveis. Não está no
+CI nem nas cinco checagens obrigatórias (decisão da spec de 28/09/2026); rode antes de commitar
+qualquer mudança em `src/lib/whatsapp-cloud/`.
+
+`npm run check:wa-cloud:e2e` testa o disparo das campanhas oficiais contra o Postgres local
+([scripts/check-whatsapp-cloud-campaign-e2e.ts](../../scripts/check-whatsapp-cloud-campaign-e2e.ts)). A Graph API
+é falsa: o `fetch` é trocado no processo inteiro, uma chamada a `graph.facebook.com` recebe a resposta que o caso
+enfileirou (ou uma falha de rede) e qualquer outro host é recusado; o token é inventado. Prova que o envio sem
+resposta (rede ou HTTP 5xx sem código) vira falha incerta, nunca reenviada, e pausa a campanha (ou a termina, se era
+o último); que a reserva vencida de um processo que morreu vira a mesma falha incerta, sem chamada; que o 131000 volta
+para a fila; que a trava de dev segura o número fora da lista antes da chamada; que tirar a empresa do piloto pausa a
+campanha; e que só o dono do número dispara e uma campanha já enviada não recomeça. Cria a empresa `wcc-e2e-<stamp>`
+e a apaga sempre; recusa banco que não seja local. Rode sempre que mexer em `src/lib/whatsapp-cloud/campaign.ts`,
+`send.ts`, `meta-api.ts`, `errors.ts` ou no `startCampaign`.
 
 ## Convenção de commit
 

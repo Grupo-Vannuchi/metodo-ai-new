@@ -64,7 +64,7 @@ Nunca consulte tabela de negócio sem esse filtro.
 - Desinstalar módulo = `OrganizationModule` vira `DORMANT`, **nunca apagar**.
 
 **3. Paridade de i18n.** `src/messages/pt.json` e `src/messages/en.json` têm exatamente as mesmas
-chaves (3395 hoje). Adicionou de um lado, adiciona do outro.
+chaves (3538 hoje). Adicionou de um lado, adiciona do outro.
 
 ## Armadilhas específicas deste repo
 
@@ -87,6 +87,12 @@ com "Conexão Evolution incompleta". **Fora de produção, mensagem só sai para
 `WHATSAPP_DEV_ALLOWED_NUMBERS`** (lista vazia = nada sai), pela trava de
 [src/lib/whatsapp/dev-guard.ts](src/lib/whatsapp/dev-guard.ts): o `.env` local aponta para a VPS real.
 Envio novo que fale com pessoas passa pelo adaptador de [channels/evolution.ts](src/lib/integrations/channels/evolution.ts) ou chama `devGuardBlocks` antes.
+
+**WhatsApp oficial (Cloud API).** A tela "Conversas (Oficial)" tem código e tabelas próprios
+(`src/lib/whatsapp-cloud/`, `WhatsappCloud*`) e só aparece para empresas em
+`WHATSAPP_CLOUD_ORG_IDS` (`isWhatsappCloudEnabled`, o único leitor). Token do número: sempre
+`loadNumber()`, nunca decifrar à mão. Webhook público autenticado por `X-Hub-Signature-256`.
+Spec: [docs/superpowers/specs/2026-09-28-whatsapp-cloud-inbox-design.md](docs/superpowers/specs/2026-09-28-whatsapp-cloud-inbox-design.md).
 
 **Rotas `/api/*` são públicas por padrão** — nenhum middleware protege endpoint de API, cada rota se
 protege sozinha.

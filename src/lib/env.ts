@@ -89,6 +89,18 @@ const serverSchema = z.object({
   EVOLUTION_API_KEY: z.string().optional(),
   // Legacy single default instance (pre-multi-user); no longer required.
   EVOLUTION_INSTANCE: z.string().optional(),
+  // WhatsApp Cloud API direto na Meta — tela "Conversas (Oficial)". O App Secret
+  // confere a assinatura do webhook (X-Hub-Signature-256) e o verify token
+  // responde ao GET de verificação. Opcionais: sem eles o webhook recusa tudo
+  // (fail-closed). Ver docs/superpowers/specs/2026-09-28-whatsapp-cloud-inbox-design.md.
+  META_APP_SECRET: z.string().optional(),
+  META_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
+  // Versão da Graph API (ex.: "v26.0"). Validada no uso (graph.ts) e não aqui,
+  // para um valor vazio no hPanel não derrubar o boot.
+  META_GRAPH_VERSION: z.string().optional(),
+  // Ids de Organization liberados para a tela oficial durante o piloto,
+  // separados por vírgula. Vazio = ninguém vê.
+  WHATSAPP_CLOUD_ORG_IDS: z.string().optional(),
   // Outside production, the only numbers (or group JIDs) a WhatsApp message may
   // go to, comma-separated. Unset or empty = nothing goes out. Ignored in
   // production. Guard: src/lib/whatsapp/dev-guard.ts.

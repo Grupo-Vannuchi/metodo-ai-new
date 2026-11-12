@@ -30,7 +30,7 @@ export async function applyInboundReaction(
  */
 
 /** Find the org contact matching this number, creating one if none exists. */
-async function resolveContactId(
+export async function resolveContactId(
   organizationId: string,
   remoteJid: string,
   pushName: string | null,

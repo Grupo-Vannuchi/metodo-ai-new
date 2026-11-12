@@ -5,6 +5,7 @@ import { runWhatsappMediaJob, type WhatsappMediaJob } from "@/lib/whatsapp/media
 import { QUEUE_BUDGET_MS, runEmailBroadcast } from "@/lib/email-broadcast/dispatch";
 import { runGroupAddRun } from "@/lib/whatsapp/group-add/runner";
 import { enqueue, isQueueConfigured } from "@/lib/queue";
+import { downloadInboundMedia, type WhatsappCloudMediaJob } from "@/lib/whatsapp-cloud/media";
 
 /** How long one queue visit to a WhatsApp group-add round works before it hands the round back (a job is cut off after about a minute). */
 const GROUP_ADD_BUDGET_MS = 50_000;
@@ -53,6 +54,14 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
     if (!job?.messageId || !job?.connectionId || !job?.key?.id) return;
     await runWhatsappMediaJob(job);
   },
+
+  /** Download an official WhatsApp (Cloud API) inbound media into storage. */
+  "whatsapp-cloud-media": async (payload) => {
+    const job = payload as WhatsappCloudMediaJob;
+    if (!job?.organizationId || !job?.messageId) return;
+    await downloadInboundMedia(job.organizationId, job.messageId);
+  },
+
   /** Run a mass e-mail for up to ~50s, then re-enqueue until it's done. */
   "email-broadcast": async (payload) => {
     const broadcastId = String((payload as { broadcastId?: string })?.broadcastId ?? "");
