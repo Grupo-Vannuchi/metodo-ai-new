@@ -80,7 +80,8 @@ como sem nome) e, para o membro ainda sem nome, da lista de contatos dela pelo n
 dígitos, o contato com o nome do membro ou, sem nome, com o telefone no lugar, e os números que já estão no
 CRM sendo pulados). Rode sempre que mexer nesses dois arquivos.
 
-`npm run check:group-add` cobre as regras puras do "Adicionar a grupo do WhatsApp"
+`npm run check:group-add` cobre as regras puras do "Adicionar a grupo do WhatsApp" (inclusive a chave do piloto,
+`WHATSAPP_GROUP_ADD_ORG_IDS`: só as empresas listadas, vazia = ninguém, e só o id inteiro)
 ([src/lib/whatsapp/group-add/core.ts](../../src/lib/whatsapp/group-add/core.ts): o mesmo telefone em formatos
 diferentes (com ou sem 55, com ou sem o 9, com máscara) dando a mesma chave e o mesmo número para discar (o
 celular antigo de 8 dígitos ganha o 9 e conta como celular); quem entra na rodada e quem fica de fora, na ordem
@@ -187,7 +188,8 @@ nome do grupo que o começo devolve ao lado do id da rodada, o mesmo que a rodad
 e nunca o JID, nem o antigo com o número de quem criou o grupo), que é o que a auditoria grava; o excedente de
 1.024 participantes como `group_full`; pausar, retomar e cancelar, inclusive no meio de uma chamada (a pausa feita durante a
 consulta do número segura a adição, e o cancelamento entre a adição recusada e o convite segura o texto: a pessoa volta
-para a fila sem contar no dia); a lista de
+para a fila sem contar no dia); a rodada de uma empresa tirada do piloto parada sem chamada nem trava, e seguindo
+quando ela volta à lista; a lista de
 rodadas devidas do cron e o `pokeGroupAdd`; a rota do cron (`/api/cron/whatsapp-groups`): sem o segredo, com um errado,
 de outro esquema ou com o segredo não configurado ela responde 401 e não toca em nada; com ele, chama só as rodadas
 devidas e deixa em paz a de trava ainda viva (até 90 s, o limite incluído) e a que um executor está trabalhando, e

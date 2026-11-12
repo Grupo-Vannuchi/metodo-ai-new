@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { hasModule } from "@/config/modules";
 import { requireOrgContext, hasRole } from "@/lib/tenant";
 import { getGroupAddRunView } from "@/lib/queries/whatsapp-group-add";
+import { isGroupAddEnabled } from "@/lib/whatsapp/group-add/pilot";
 import { GROUP_UNREADABLE } from "@/lib/whatsapp/group-add/runner";
 import { forecastGroupAddRun } from "@/lib/whatsapp/group-add/service";
 import { GroupAddRun } from "@/components/crm/group-add-run";
@@ -23,7 +24,7 @@ export default async function GroupAddRunPage({
   const { locale: rawLocale, runId } = await params;
   const locale = resolveLocale(rawLocale);
   const ctx = await requireOrgContext(locale);
-  if (!hasModule(ctx.modules, "inbox")) notFound();
+  if (!hasModule(ctx.modules, "inbox") || !isGroupAddEnabled(ctx.organizationId)) notFound();
 
   const run = await getGroupAddRunView(ctx.organizationId, runId);
   if (!run) notFound();

@@ -180,7 +180,8 @@ function ContactList({
 }
 
 /**
- * `canAddToGroup` comes from the server (the Atendimento module is installed): it turns on the two entries of "Adicionar a
+ * `canAddToGroup` comes from the server (the Atendimento module is installed and the organization is on the pilot list,
+ * WHATSAPP_GROUP_ADD_ORG_IDS): it turns on the two entries of "Adicionar a
  * grupo do WhatsApp", the button of the open folder and the one of the selection bar, which open the same dialog.
  */
 export function ContactsGrid({ columns, canAddToGroup }: { columns: ContactColumn[]; canAddToGroup: boolean }) {

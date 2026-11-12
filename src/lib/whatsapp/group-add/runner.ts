@@ -18,6 +18,7 @@ import {
 } from "@/lib/integrations/evolution-client";
 import { isAdminOf } from "@/lib/integrations/evolution-groups";
 import { saoPauloDayStart } from "@/lib/tasks/board-core";
+import { isGroupAddEnabled } from "./pilot";
 import {
   CAP_COUNTED,
   GROUP_ADD_DAILY_CAP,
@@ -629,6 +630,9 @@ export async function runGroupAddRun(runId: string, opts: { budgetMs?: number } 
   const rt = groupAddRuntime;
   const first = await prisma.whatsappGroupAddRun.findFirst({ where: { id: runId }, select: RUN_SELECT });
   if (!first || first.status !== "RUNNING") return { done: true };
+  // An organization taken off the pilot list: its round stops where it is, untouched (no lease, nothing asked of Evolution),
+  // and goes on by itself if the organization is listed again (the cron still lists it as due).
+  if (!isGroupAddEnabled(first.organizationId)) return { done: true };
   const stamp = await takeLease(first.id, first.organizationId);
   if (!stamp) return { done: true }; // another runner is alive
   const v: Visit = { id: first.id, org: first.organizationId, stamp };

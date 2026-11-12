@@ -1333,6 +1333,26 @@ check("a cancel made between a refused add and the invite holds back the text: n
   assert.deepEqual((await itemsOf(w, runId)).map((i) => [i.status, i.processedAt]), [["PENDING", null], ["PENDING", null]]);
 });
 
+check("pilot: the round of a company taken off WHATSAPP_GROUP_ADD_ORG_IDS stops where it is, and goes on once it is listed again", async (ctx) => {
+  const { fake, w } = await scenario(ctx);
+  await people(w, 1);
+  const runId = await begin(w, { source: { kind: "folder", folderId: null } });
+  const listed = env.WHATSAPP_GROUP_ADD_ORG_IDS;
+  try {
+    env.WHATSAPP_GROUP_ADD_ORG_IDS = w.orgB; // org A taken off the list
+    assert.deepEqual(await runGroupAddRun(runId), { done: true });
+    assert.deepEqual(callsTo(fake, "updateParticipant", "whatsappNumbers", "sendText"), [], "a round off the pilot asked Evolution");
+    const run = await runOf(w, runId);
+    assert.deepEqual([run.status, run.lastDispatchAt], ["RUNNING", null], "untouched: no lease taken");
+    assert.deepEqual((await itemsOf(w, runId)).map((i) => i.status), ["PENDING"]);
+  } finally {
+    env.WHATSAPP_GROUP_ADD_ORG_IDS = listed;
+  }
+  assert.deepEqual(await runGroupAddRun(runId), { done: true });
+  assert.deepEqual(addedNumbers(fake), [N(1)]);
+  assert.equal((await runOf(w, runId)).status, "DONE");
+});
+
 check("window: outside 08:00-20:00 in São Paulo nothing goes out, the run waits for 08:00 and goes on then", async (ctx) => {
   const { fake, w } = await scenario(ctx);
   await people(w, 2);
@@ -3417,6 +3437,8 @@ async function main(): Promise<number> {
     await assert.rejects(() => fetch("http://evolution.invalid/"), /blocked/);
     assert.deepEqual(refused.splice(0), ["evolution.invalid"]);
     const world = await createWorld(prisma);
+    // The pilot list holds the two companies of the checks, whatever .env holds (unset there = nobody, and no round would run).
+    env.WHATSAPP_GROUP_ADD_ORG_IDS = [world.orgA, world.orgB].join(",");
     installRuntime();
     for (const c of checks) {
       const started: FakeEvolution[] = [];

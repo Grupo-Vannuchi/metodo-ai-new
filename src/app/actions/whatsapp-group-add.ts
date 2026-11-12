@@ -7,6 +7,7 @@ import { audit } from "@/lib/audit";
 import { getGroupAddRunView, type GroupAddRunView } from "@/lib/queries/whatsapp-group-add";
 import { getOrgContext, hasRole, type OrgContext } from "@/lib/tenant";
 import { groupAddPreviewSchema, groupAddRunIdSchema, groupAddStartSchema } from "@/lib/validations/whatsapp-group-add";
+import { isGroupAddEnabled } from "@/lib/whatsapp/group-add/pilot";
 import { errorTag } from "@/lib/whatsapp/group-add/runner";
 import {
   cancelGroupAdd,
@@ -37,8 +38,8 @@ export type GroupAddPreview = Extract<Awaited<ReturnType<typeof previewGroupAdd>
 type Gate = { ok: true; ctx: OrgContext } | GroupAddActionFail;
 
 /**
- * Session + the "contacts" screen + the CRM and Atendimento modules (the number is the one of Conversas) — the same gates as
- * the screens, repeated because server actions are public endpoints.
+ * Session + the "contacts" screen + the CRM and Atendimento modules (the number is the one of Conversas) + the pilot
+ * (WHATSAPP_GROUP_ADD_ORG_IDS) — the same gates as the screens, repeated because server actions are public endpoints.
  */
 async function gate(): Promise<Gate> {
   const ctx = await getOrgContext();
@@ -46,6 +47,7 @@ async function gate(): Promise<Gate> {
   if (!canAccessScreen(ctx, "contacts") || !hasModule(ctx.modules, "crm") || !hasModule(ctx.modules, "inbox")) {
     return { ok: false, error: "forbidden" };
   }
+  if (!isGroupAddEnabled(ctx.organizationId)) return { ok: false, error: "forbidden" };
   return { ok: true, ctx };
 }
 

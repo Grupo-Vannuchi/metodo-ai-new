@@ -52,6 +52,18 @@ export type GroupAddItemStatus =
  */
 export const CAP_COUNTED: readonly GroupAddItemStatus[] = ["ADDED", "INVITED", "FAILED", "NO_WHATSAPP"];
 
+/**
+ * The pilot gate: whether the organization is on `list` (WHATSAPP_GROUP_ADD_ORG_IDS, comma-separated ids, spaces allowed).
+ * Unset or empty = no organization: the feature reaches people's numbers, so it is off until someone is listed.
+ */
+export function groupAddPilotAllows(organizationId: string, list: string | undefined): boolean {
+  if (!organizationId) return false;
+  return (list ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .includes(organizationId);
+}
+
 export type SkipReason = "no_phone" | "opted_out" | "not_mobile" | "duplicate" | "previous_uncertain";
 
 /**

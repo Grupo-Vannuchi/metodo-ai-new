@@ -28,6 +28,7 @@ import {
   GROUP_ADD_MAX_CONTACTS,
   GROUP_ADD_PAUSE_SECONDS,
   GROUP_ADD_WINDOW,
+  groupAddPilotAllows,
   INVITE_TEXT_MAX,
   isInsideWindow,
   linkedNumber,
@@ -87,6 +88,20 @@ check("the pacing, cap and size constants are the agreed ones", () => {
   // Only people the WhatsApp was actually asked about count against the day: the lookup that found no account too (stamped by
   // the runner), never the not_mobile the plan leaves out (no processedAt).
   assert.deepEqual([...CAP_COUNTED], ["ADDED", "INVITED", "FAILED", "NO_WHATSAPP"]);
+});
+
+check("the pilot: only the organizations listed in WHATSAPP_GROUP_ADD_ORG_IDS; unset or empty is nobody", () => {
+  // Off by default: the feature reaches people's numbers (the opposite of the Google mail pilot, where empty is everyone).
+  assert.equal(groupAddPilotAllows("org_a", undefined), false);
+  assert.equal(groupAddPilotAllows("org_a", ""), false);
+  assert.equal(groupAddPilotAllows("org_a", " , ,"), false);
+  assert.equal(groupAddPilotAllows("org_a", "org_a"), true);
+  assert.equal(groupAddPilotAllows("org_b", " org_a , org_b "), true, "spaces around an id are fine");
+  assert.equal(groupAddPilotAllows("org_c", "org_a,org_b"), false);
+  // Whole ids only: a prefix, a part or an empty id never matches.
+  assert.equal(groupAddPilotAllows("org", "org_a"), false);
+  assert.equal(groupAddPilotAllows("org_a", "org_ab"), false);
+  assert.equal(groupAddPilotAllows("", "org_a,"), false);
 });
 
 check("phoneMatchKey gives one key to the same BR mobile in any format", () => {

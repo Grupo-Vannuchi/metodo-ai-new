@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { Plus } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { hasModule } from "@/config/modules";
+import { isGroupAddEnabled } from "@/lib/whatsapp/group-add/pilot";
 import { getContactsBoard } from "@/lib/queries/contact-folders";
 import { findContactDuplicates } from "@/lib/queries/duplicates";
 import { ContactsGrid } from "@/components/crm/contacts-grid";
@@ -28,8 +29,9 @@ export default async function ContactsPage({
     findContactDuplicates(ctx.organizationId),
   ]);
   // "Adicionar a grupo do WhatsApp" sends from the member's number of Conversas, so it needs the Atendimento module (the
-  // layout already gates the screen and the CRM). Resolved here and sent down as a prop; the actions check it again.
-  const canAddToGroup = hasModule(ctx.modules, "inbox");
+  // layout already gates the screen and the CRM), and the organization on the pilot list (WHATSAPP_GROUP_ADD_ORG_IDS).
+  // Resolved here and sent down as a prop; the actions check both again.
+  const canAddToGroup = hasModule(ctx.modules, "inbox") && isGroupAddEnabled(ctx.organizationId);
 
   return (
     <div className="flex flex-col gap-6">

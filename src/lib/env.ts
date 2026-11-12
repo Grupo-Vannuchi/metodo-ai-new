@@ -93,6 +93,9 @@ const serverSchema = z.object({
   // go to, comma-separated. Unset or empty = nothing goes out. Ignored in
   // production. Guard: src/lib/whatsapp/dev-guard.ts.
   WHATSAPP_DEV_ALLOWED_NUMBERS: z.string().optional(),
+  // Organization ids, comma-separated, that see "Adicionar a grupo do WhatsApp" while it is a pilot. Unset or empty =
+  // no organization (the opposite of GOOGLE_MAIL_PILOT_ORG_IDS). Gate: src/lib/whatsapp/group-add/pilot.ts.
+  WHATSAPP_GROUP_ADD_ORG_IDS: z.string().optional(),
   // Platform Google Places key (prospecting) — a single shared key so tenants
   // don't have to bring their own. Falls back to a per-tenant key when unset.
   GOOGLE_PLACES_API_KEY: z.string().optional(),
