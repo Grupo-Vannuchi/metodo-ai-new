@@ -12,6 +12,7 @@ import {
   fetchGroupInviteUrl,
   fetchGroupSummary,
   fetchOwnerJid,
+  groupAddHeldByDevGuard,
   sendPlainText,
   type EvoCreds,
   type EvoState,
@@ -567,6 +568,13 @@ async function tryPerson(
     return "again";
   }
 
+  // Outside production, a group or a person not on WHATSAPP_DEV_ALLOWED_NUMBERS: held before the lookup, so not even the lookup
+  // of the number goes out. addGroupParticipant asks the same guard again below.
+  if (groupAddHeldByDevGuard(creds, run.groupJid, number)) {
+    await settle(v, item.id, { status: "SKIPPED", reason: "dev_guard", processedAt: null });
+    return "again";
+  }
+
   await beat(v);
   if ((await checkOnWhatsapp(creds, number)) === false) {
     // The lookup asked WhatsApp about the number, so it is stamped: it counts for the day (CAP_COUNTED) and the pause between
@@ -630,9 +638,16 @@ export async function runGroupAddRun(runId: string, opts: { budgetMs?: number } 
   const rt = groupAddRuntime;
   const first = await prisma.whatsappGroupAddRun.findFirst({ where: { id: runId }, select: RUN_SELECT });
   if (!first || first.status !== "RUNNING") return { done: true };
-  // An organization taken off the pilot list: its round stops where it is, untouched (no lease, nothing asked of Evolution),
-  // and goes on by itself if the organization is listed again (the cron still lists it as due).
-  if (!isGroupAddEnabled(first.organizationId)) return { done: true };
+  // An organization taken off the pilot list is the emergency brake: its round is paused as "pilot_off", nothing asked of
+  // Evolution, the people not reached left PENDING. Nothing takes it back by itself (findDueGroupAddRuns only retakes
+  // "disconnected" and an unreadable group): once the organization is listed again, who started it resumes it.
+  if (!isGroupAddEnabled(first.organizationId)) {
+    await prisma.whatsappGroupAddRun.updateMany({
+      where: { id: first.id, organizationId: first.organizationId, status: "RUNNING" },
+      data: { status: "PAUSED", pausedReason: "pilot_off", waitReason: null },
+    });
+    return { done: true };
+  }
   const stamp = await takeLease(first.id, first.organizationId);
   if (!stamp) return { done: true }; // another runner is alive
   const v: Visit = { id: first.id, org: first.organizationId, stamp };

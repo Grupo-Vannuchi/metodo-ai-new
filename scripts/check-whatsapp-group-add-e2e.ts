@@ -1333,21 +1333,26 @@ check("a cancel made between a refused add and the invite holds back the text: n
   assert.deepEqual((await itemsOf(w, runId)).map((i) => [i.status, i.processedAt]), [["PENDING", null], ["PENDING", null]]);
 });
 
-check("pilot: the round of a company taken off WHATSAPP_GROUP_ADD_ORG_IDS stops where it is, and goes on once it is listed again", async (ctx) => {
+check("pilot: taking a company off WHATSAPP_GROUP_ADD_ORG_IDS pauses its round (pilot_off); listed again, only a resume sets it going", async (ctx) => {
   const { fake, w } = await scenario(ctx);
   await people(w, 1);
   const runId = await begin(w, { source: { kind: "folder", folderId: null } });
   const listed = env.WHATSAPP_GROUP_ADD_ORG_IDS;
   try {
-    env.WHATSAPP_GROUP_ADD_ORG_IDS = w.orgB; // org A taken off the list
+    env.WHATSAPP_GROUP_ADD_ORG_IDS = w.orgB; // org A taken off the list: the emergency brake
     assert.deepEqual(await runGroupAddRun(runId), { done: true });
     assert.deepEqual(callsTo(fake, "updateParticipant", "whatsappNumbers", "sendText"), [], "a round off the pilot asked Evolution");
     const run = await runOf(w, runId);
-    assert.deepEqual([run.status, run.lastDispatchAt], ["RUNNING", null], "untouched: no lease taken");
+    assert.deepEqual([run.status, run.pausedReason, run.lastDispatchAt], ["PAUSED", "pilot_off", null]);
     assert.deepEqual((await itemsOf(w, runId)).map((i) => i.status), ["PENDING"]);
   } finally {
     env.WHATSAPP_GROUP_ADD_ORG_IDS = listed;
   }
+  // Listed again, nothing takes it back by itself: a brake that let go on its own days later would be no brake.
+  assert.ok(!(await findDueGroupAddRuns(groupAddRuntime.now())).includes(runId), "the cron's list took a pilot_off round back");
+  assert.equal((await runOf(w, runId)).status, "PAUSED");
+  // Who started it resumes it, and it goes on.
+  assert.deepEqual(await resumeGroupAdd(w.orgA, runId), { ok: true });
   assert.deepEqual(await runGroupAddRun(runId), { done: true });
   assert.deepEqual(addedNumbers(fake), [N(1)]);
   assert.equal((await runOf(w, runId)).status, "DONE");

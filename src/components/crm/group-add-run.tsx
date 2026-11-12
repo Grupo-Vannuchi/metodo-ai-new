@@ -29,7 +29,7 @@ export type GroupAddRunProps = {
   runId: string;
   groupName: string;
   status: RunStatus;
-  /** "manual" | "disconnected" | "not_admin" | "no_connection" | "number_changed" | "error" while PAUSED. */
+  /** "manual" | "disconnected" | "not_admin" | "no_connection" | "number_changed" | "error" | "pilot_off" while PAUSED. */
   pausedReason: string | null;
   /** A run paused as not_admin only because the group could not be read: it goes on by itself, so it is not "no longer admin". */
   unreadable: boolean;
@@ -105,9 +105,9 @@ const SUMMARY_ORDER: readonly GroupAddItemStatus[] = [
   "PENDING",
 ];
 
-const PAUSE_REASONS: readonly string[] = ["manual", "disconnected", "not_admin", "no_connection", "number_changed", "error"];
+const PAUSE_REASONS: readonly string[] = ["manual", "disconnected", "not_admin", "no_connection", "number_changed", "error", "pilot_off"];
 /** The pauses that say what has to happen for the round to go on (the rest explain themselves). */
-const HINTED_PAUSES: readonly string[] = ["disconnected", "not_admin", "no_connection", "number_changed", "error"];
+const HINTED_PAUSES: readonly string[] = ["disconnected", "not_admin", "no_connection", "number_changed", "error", "pilot_off"];
 const WAIT_REASONS: readonly string[] = ["pace", "window", "cap", "unavailable"];
 
 /** The statuses that, with no note for their reason, still get a line saying what they mean (the others say it by their name). */

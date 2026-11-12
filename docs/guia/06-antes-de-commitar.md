@@ -188,8 +188,8 @@ nome do grupo que o começo devolve ao lado do id da rodada, o mesmo que a rodad
 e nunca o JID, nem o antigo com o número de quem criou o grupo), que é o que a auditoria grava; o excedente de
 1.024 participantes como `group_full`; pausar, retomar e cancelar, inclusive no meio de uma chamada (a pausa feita durante a
 consulta do número segura a adição, e o cancelamento entre a adição recusada e o convite segura o texto: a pessoa volta
-para a fila sem contar no dia); a rodada de uma empresa tirada do piloto parada sem chamada nem trava, e seguindo
-quando ela volta à lista; a lista de
+para a fila sem contar no dia); a rodada de uma empresa tirada do piloto pausada como `pilot_off` sem chamada nenhuma, que
+nem a lista do cron retoma quando ela volta à lista, só o "Retomar"; a lista de
 rodadas devidas do cron e o `pokeGroupAdd`; a rota do cron (`/api/cron/whatsapp-groups`): sem o segredo, com um errado,
 de outro esquema ou com o segredo não configurado ela responde 401 e não toca em nada; com ele, chama só as rodadas
 devidas e deixa em paz a de trava ainda viva (até 90 s, o limite incluído) e a que um executor está trabalhando, e
@@ -231,7 +231,8 @@ grupo só pelo JID listado, LID e destino vazio segurados, e uma Evolution em lo
 liberada. Não usa banco nem rede; todos os números do teste são inventados e não saem do processo. Rode
 sempre que mexer nesse arquivo ou em [channels/evolution.ts](../../src/lib/integrations/channels/evolution.ts).
 A adição a grupo e o texto do convite de [evolution-client.ts](../../src/lib/integrations/evolution-client.ts)
-usam a mesma trava; quem confere que eles a consultam antes de chamar a Evolution é o `check:group-add`.
+usam a mesma trava (a adição exige o JID do grupo e o número da pessoa; o executor a consulta antes até da
+consulta do número); quem confere que eles a consultam antes de chamar a Evolution é o `check:group-add`.
 
 `npm run check:mcp` cobre as regras puras do servidor MCP de leitura
 ([src/lib/mcp/core.ts](../../src/lib/mcp/core.ts): comparação da chave com espaço ou quebra de linha

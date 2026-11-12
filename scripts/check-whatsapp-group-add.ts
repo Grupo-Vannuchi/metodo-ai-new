@@ -1094,16 +1094,30 @@ check("the add and the text go through the dev guard before Evolution is called,
     const next = text.indexOf("export async function", start + 1);
     return text.slice(start, next < 0 ? undefined : next);
   };
-  for (const name of ["addGroupParticipant", "sendPlainText"]) {
+  // The add asks for the group AND the person (a client's group picked by mistake in development must not get the team's
+  // numbers); the text, for the person.
+  for (const [name, call] of [
+    ["addGroupParticipant", "groupAddHeldByDevGuard(creds, groupJid, number)"],
+    ["sendPlainText", "heldByDevGuard(creds, number)"],
+  ] as const) {
     const body = bodyOf(client, name);
-    const guard = body.indexOf("heldByDevGuard(creds, number)");
-    assert.ok(guard >= 0, `${name} does not ask the dev guard`);
+    const guard = body.indexOf(call);
+    assert.ok(guard >= 0, `${name} does not ask the dev guard (${call})`);
     assert.ok(guard < body.indexOf("await req("), `${name} asks the dev guard only after calling Evolution`);
   }
+  const both = client.slice(client.indexOf("export function groupAddHeldByDevGuard("), client.indexOf("export async function addGroupParticipant("));
+  assert.ok(both.includes("heldByDevGuard(creds, groupJid)") && both.includes("heldByDevGuard(creds, number)"), "the add's guard must hold for the group or the person");
   // The guard is the shared one, read from env, so production (NODE_ENV=production) is never held.
   assert.ok(client.includes("devGuardBlocks({") && client.includes("env.WHATSAPP_DEV_ALLOWED_NUMBERS"), "the client's guard is not devGuardBlocks");
   // A held call is not read as WhatsApp's answer (httpStatus 0 would be a doubt never redone): the runner checks the flag first.
   const runner = readFileSync(join(__dirname, "..", "src", "lib", "whatsapp", "group-add", "runner.ts"), "utf8");
+  // And it asks the guard before the lookup of the number, so in development not even the lookup goes out for someone not listed.
+  const tryPerson = runner.slice(runner.indexOf("async function tryPerson("));
+  assert.ok(
+    tryPerson.indexOf("groupAddHeldByDevGuard(creds, run.groupJid, number)") >= 0 &&
+      tryPerson.indexOf("groupAddHeldByDevGuard(creds, run.groupJid, number)") < tryPerson.indexOf("checkOnWhatsapp("),
+    "the runner looks the number up before asking the dev guard",
+  );
   assert.ok(runner.indexOf("answer.heldByDevGuard") >= 0 && runner.indexOf("answer.heldByDevGuard") < runner.indexOf("classifyAdd(answer)"));
   assert.ok(runner.indexOf("sent.heldByDevGuard") >= 0 && runner.indexOf("sent.heldByDevGuard") < runner.indexOf("if (sent.ok)"));
   assert.deepEqual(reasonNote("dev_guard"), { key: "dev_guard" });

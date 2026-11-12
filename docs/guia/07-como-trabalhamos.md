@@ -151,7 +151,8 @@ checagem prova e o que fazer quando falha: [06-antes-de-commitar](06-antes-de-co
   produção. Por isso, fora de produção, texto, mídia, áudio e reação só saem para os números de
   `WHATSAPP_DEV_ALLOWED_NUMBERS` (separados por vírgula, em qualquer formato; grupo pelo JID
   `...@g.us`). Vazia ou ausente, nada sai, e a tela mostra "Envio de WhatsApp bloqueado fora de
-  produção". No "Adicionar a grupo do WhatsApp", a adição e o texto do convite seguem a mesma lista,
-  pelo número da pessoa (não do grupo); quem não está nela fica "Segurado pela trava de
-  desenvolvimento" na tela da rodada. Para testar, ponha só o seu celular. Em produção a variável é
+  produção". No "Adicionar a grupo do WhatsApp", a adição exige na lista o JID do grupo **e** o número
+  da pessoa (um grupo de cliente escolhido por engano não recebe os números do time), e o convite, o
+  número da pessoa; quem fica de fora aparece como "Segurado pela trava de desenvolvimento" na tela
+  da rodada, sem nem a consulta do número. Para testar, ponha só o seu celular. Em produção a variável é
   ignorada.

@@ -1407,6 +1407,7 @@
           "no_connection": "Conexão removida",
           "number_changed": "O WhatsApp conectado agora é outro número",
           "error": "Erro inesperado",
+          "pilot_off": "Pausada: o recurso foi desligado para esta empresa",
           "other": "Rodada pausada"
         },
         "pausedHint": {
@@ -1414,7 +1415,8 @@
           "not_admin": "A rodada só continua quando o seu número voltar a ser admin do grupo.",
           "number_changed": "Esta rodada usa o número de antes: reconecte esse número em Conversas, ou cancele e comece uma rodada nova.",
           "no_connection": "A conexão do WhatsApp desta rodada foi removida e ela não consegue continuar. Cancele e comece outra.",
-          "error": "Algo falhou no meio do caminho. Retome a rodada para tentar de novo."
+          "error": "Algo falhou no meio do caminho. Retome a rodada para tentar de novo.",
+          "pilot_off": "Quando o recurso for liberado de novo, quem começou a rodada pode retomá-la."
         },
         "wait": {
           "queued": "Na fila: este número já tem outra rodada (em andamento ou pausada)",

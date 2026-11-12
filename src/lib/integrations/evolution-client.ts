@@ -325,6 +325,16 @@ function heldByDevGuard(creds: EvoCreds, number: string): boolean {
 }
 
 /**
+ * Outside production, whether an add to a group must be held back: the GROUP's JID and the person's number must both be
+ * on WHATSAPP_DEV_ALLOWED_NUMBERS. The group too, because in development the group list is the member's real WhatsApp:
+ * picking a client's group by mistake would add the team's numbers to it, and the whole group sees "X added Y". Asked by
+ * addGroupParticipant, and by the runner before the lookup of the number, so not even the lookup goes out.
+ */
+export function groupAddHeldByDevGuard(creds: EvoCreds, groupJid: string, number: string): boolean {
+  return heldByDevGuard(creds, groupJid) || heldByDevGuard(creds, number);
+}
+
+/**
  * Adds one number to a group. `httpStatus` is Evolution's, 0 when no answer came (the add may or may not have
  * happened). `code` is the status Baileys gave that number ("200" added, "403" the person's privacy settings ask for
  * the link instead), null when the answer has none. `heldByDevGuard` when the dev guard kept the call from going out
@@ -335,7 +345,7 @@ export async function addGroupParticipant(
   groupJid: string,
   number: string,
 ): Promise<{ httpStatus: number; code: string | null; heldByDevGuard?: true }> {
-  if (heldByDevGuard(creds, number)) return { httpStatus: 0, code: null, heldByDevGuard: true };
+  if (groupAddHeldByDevGuard(creds, groupJid, number)) return { httpStatus: 0, code: null, heldByDevGuard: true };
   const { status, data } = await req(
     creds,
     "POST",

@@ -1407,6 +1407,7 @@
           "no_connection": "Connection removed",
           "number_changed": "The WhatsApp connected now is a different number",
           "error": "Unexpected error",
+          "pilot_off": "Paused: the feature was turned off for this company",
           "other": "Round paused"
         },
         "pausedHint": {
@@ -1414,7 +1415,8 @@
           "not_admin": "The round only goes on when your number is an admin of the group again.",
           "number_changed": "This round uses the previous number: reconnect that number in Inbox, or cancel and start a new round.",
           "no_connection": "The WhatsApp connection of this round was removed, so it can't go on. Cancel it and start another.",
-          "error": "Something failed along the way. Resume the round to try again."
+          "error": "Something failed along the way. Resume the round to try again.",
+          "pilot_off": "Once the feature is turned on again, whoever started the round can resume it."
         },
         "wait": {
           "queued": "Queued: this number already has another round (in progress or paused)",
