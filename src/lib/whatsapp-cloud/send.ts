@@ -20,6 +20,8 @@ export type CallResult =
 export async function callSend(number: NumberWithToken, payload: Record<string, unknown>): Promise<CallResult> {
   const res = await postMessage(number.phoneNumberId, number.token, payload);
   if (!res.ok) {
+    // Segurado pela trava de dev: não chegou à Meta, não é erro do número.
+    if (res.heldByDevGuard) return { ok: false, category: "dev_guard", code: null, message: res.message };
     const category = categorizeMetaError(res.code, res.status);
     if (isNumberLevelError(category)) await markNumberError(number.organizationId, number.id, res.message);
     console.error(`[wa-cloud] send failed (${res.code ?? res.status}): ${res.message}`);

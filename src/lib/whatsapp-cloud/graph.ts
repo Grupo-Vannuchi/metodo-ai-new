@@ -13,7 +13,8 @@ export function graphVersion(): string {
 
 export type GraphResult<T> =
   | { ok: true; data: T }
-  | { ok: false; status: number; code: number | null; message: string };
+  // heldByDevGuard: nem saiu do processo (trava de dev, ver meta-api.ts postMessage).
+  | { ok: false; status: number; code: number | null; message: string; heldByDevGuard?: true };
 
 type GraphRequest = {
   method?: "GET" | "POST" | "DELETE";

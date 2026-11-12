@@ -21,6 +21,7 @@
     "check:isolation": "tsx --env-file=.env scripts/check-isolation.ts",
     "check:node": "tsx scripts/check-node.ts",
     "test:wa-cloud": "tsx --test src/lib/whatsapp-cloud/__tests__/*.test.ts",
+    "check:wa-cloud:e2e": "tsx --tsconfig scripts/tsconfig.server.json --env-file=.env scripts/check-whatsapp-cloud-campaign-e2e.ts",
     "check:email": "tsx scripts/check-email-broadcast.ts",
     "check:imap": "tsx --tsconfig scripts/tsconfig.server.json --env-file=.env scripts/check-email-imap.ts",
     "check:folders": "tsx scripts/check-contact-folders.ts",

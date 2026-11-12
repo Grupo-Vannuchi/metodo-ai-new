@@ -711,7 +711,9 @@
       "invalid_params": "A Meta recusou os dados da mensagem: {detail}",
       "unsupported_type": "Formato não aceito pela Meta (use JPG, PNG, MP4, MP3, M4A, OGG, AAC, AMR, PDF, Office ou TXT).",
       "too_large": "Arquivo acima do limite da Meta para esse tipo.",
-      "file_empty": "Arquivo vazio."
+      "file_empty": "Arquivo vazio.",
+      "uncertain": "A Meta não respondeu. A mensagem pode ter saído: confira a conversa antes de enviar de novo.",
+      "dev_guard": "Segurado pela trava de desenvolvimento: o número não está em WHATSAPP_DEV_ALLOWED_NUMBERS."
     }
   },
   "access": {
@@ -2235,7 +2237,10 @@
       "invalid": "Dados inválidos.",
       "forbidden": "Seu plano não inclui este canal.",
       "no_connection": "Conecte o canal em Conexões antes de disparar.",
-      "unknown": "Algo deu errado."
+      "unknown": "Algo deu errado.",
+      "not_enabled": "O WhatsApp oficial não está liberado para esta empresa.",
+      "not_owner": "Só quem conectou o número oficial desta campanha pode dispará-la.",
+      "already_sent": "Esta campanha oficial já foi enviada. Para enviar de novo, crie outra campanha."
     },
     "cloud": {
       "channelLabel": "WhatsApp Oficial (modelos aprovados)",
@@ -2267,7 +2272,11 @@
       "templateUsed": "Modelo da Meta: {name}",
       "pausedReason": "Pausada automaticamente: {reason}",
       "renameOnly": "Campanhas oficiais permitem trocar só o nome. Para usar outro modelo, crie outra campanha.",
-      "rename": "Salvar nome"
+      "rename": "Salvar nome",
+      "blocked": {
+        "not_owner": "Só quem conectou o número oficial desta campanha pode dispará-la.",
+        "already_sent": "Campanha oficial já enviada. Para enviar de novo, crie outra campanha."
+      }
     }
   },
   "emailBroadcast": {

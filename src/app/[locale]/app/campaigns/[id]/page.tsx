@@ -46,6 +46,15 @@ export default async function CampaignDetailPage({
   if (!data) notFound();
   const { campaign, counts, recipients } = data;
   const cloudInfo = await getCloudCampaignInfo(ctx.organizationId, campaign.id);
+  // Campanha oficial: só o dono do número dispara, e uma já enviada não recomeça
+  // (startCampaign confere de novo; aqui só troca o botão por um aviso).
+  const cloudBlocked = !cloudInfo
+    ? null
+    : cloudInfo.numberOwnerId !== ctx.userId
+      ? "not_owner"
+      : (counts.PENDING ?? 0) === 0
+        ? "already_sent"
+        : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -69,7 +78,11 @@ export default async function CampaignDetailPage({
             <Pencil className="size-4" />
             {t("edit")}
           </Link>
-          <StartButton id={campaign.id} status={campaign.status} />
+          {cloudBlocked ? (
+            <p className="max-w-xs text-right text-sm text-muted-foreground">{t(`cloud.blocked.${cloudBlocked}`)}</p>
+          ) : (
+            <StartButton id={campaign.id} status={campaign.status} />
+          )}
         </div>
       </div>
 

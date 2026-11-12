@@ -1,4 +1,6 @@
 import "server-only";
+import { env } from "@/lib/env";
+import { cloudSendBlocked, parseDevAllowlist } from "@/lib/whatsapp/dev-guard";
 import { graphRequest, type GraphResult } from "@/lib/whatsapp-cloud/graph";
 
 /** Endpoints da WhatsApp Cloud API usados pela tela oficial (spec §4). */
@@ -37,11 +39,27 @@ export type SendResponse = {
   contacts?: { input?: string; wa_id?: string; user_id?: string }[];
 };
 
-export function postMessage(
+/**
+ * ÚNICO ponto que manda mensagem à Meta (o callSend e o recibo de leitura passam
+ * por aqui). Fora de produção, a trava de dev segura o envio para número fora de
+ * WHATSAPP_DEV_ALLOWED_NUMBERS antes de qualquer chamada: o .env local pode ter um
+ * token de verdade, e cada modelo enviado é cobrado.
+ */
+export async function postMessage(
   phoneNumberId: string,
   token: string,
   payload: Record<string, unknown>,
 ): Promise<GraphResult<SendResponse>> {
+  if (
+    cloudSendBlocked({
+      nodeEnv: env.NODE_ENV,
+      payload,
+      allowed: parseDevAllowlist(env.WHATSAPP_DEV_ALLOWED_NUMBERS),
+    })
+  ) {
+    console.warn("[wa-cloud] dev guard: send held (destination not in WHATSAPP_DEV_ALLOWED_NUMBERS)");
+    return { ok: false, status: 0, code: null, message: "Segurado pela trava de desenvolvimento.", heldByDevGuard: true };
+  }
   return graphRequest<SendResponse>(`${phoneNumberId}/messages`, token, { json: payload });
 }
 

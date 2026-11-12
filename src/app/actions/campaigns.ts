@@ -242,6 +242,10 @@ export async function startCampaign(id: string): Promise<{ ok: boolean; error?: 
     // Campanha oficial (vínculo WhatsappCloudCampaign): número do criador + modelo aprovado.
     const cloudLink = channel === "WHATSAPP_CLOUD" ? await findCloudCampaign(ctx.organizationId, id) : null;
     if (cloudLink) {
+      // Piloto, número ativo, dono do número, modelo aprovado e alguém na fila
+      // (uma campanha oficial já enviada não recomeça: cada modelo é cobrado).
+      const problem = await cloudCampaignStartProblem(cloudLink, ctx.userId);
+      if (problem) return { ok: false, error: problem };
       // Já disparando agora (clique duplo, duas abas): não abre uma segunda cadeia
       // nem reinicia destinatários — cada envio de modelo é cobrado pela Meta.
       if (
@@ -251,8 +255,6 @@ export async function startCampaign(id: string): Promise<{ ok: boolean; error?: 
       ) {
         return { ok: true };
       }
-      const problem = await cloudCampaignStartProblem(cloudLink);
-      if (problem) return { ok: false, error: problem };
       await clearCloudPauseReason(ctx.organizationId, id);
     } else {
       const creds = await resolveChannelCredentials(ctx.organizationId, channel);
@@ -262,6 +264,7 @@ export async function startCampaign(id: string): Promise<{ ok: boolean; error?: 
     // Re-dispatch: when every recipient was already processed (a finished
     // campaign), reset them all to PENDING so the whole campaign sends again.
     // A campaign still mid-flight (some PENDING left) just resumes the rest.
+    // Never reached by an official campaign with nobody pending (already_sent above).
     const pending = await db.campaignRecipient.count({
       where: { campaignId: id, status: "PENDING" },
     });

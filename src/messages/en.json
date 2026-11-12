@@ -711,7 +711,9 @@
       "invalid_params": "Meta refused the message data: {detail}",
       "unsupported_type": "Format not accepted by Meta (use JPG, PNG, MP4, MP3, M4A, OGG, AAC, AMR, PDF, Office or TXT).",
       "too_large": "File exceeds Meta's limit for this type.",
-      "file_empty": "Empty file."
+      "file_empty": "Empty file.",
+      "uncertain": "Meta did not answer. The message may have gone out: check the conversation before sending again.",
+      "dev_guard": "Held by the development guard: the number is not in WHATSAPP_DEV_ALLOWED_NUMBERS."
     }
   },
   "access": {
@@ -2235,7 +2237,10 @@
       "invalid": "Invalid data.",
       "forbidden": "Your plan doesn't include this channel.",
       "no_connection": "Connect the channel under Connections before dispatching.",
-      "unknown": "Something went wrong."
+      "unknown": "Something went wrong.",
+      "not_enabled": "The official WhatsApp is not enabled for this company.",
+      "not_owner": "Only whoever connected this campaign's official number can dispatch it.",
+      "already_sent": "This official campaign was already sent. To send again, create another campaign."
     },
     "cloud": {
       "channelLabel": "Official WhatsApp (approved templates)",
@@ -2267,7 +2272,11 @@
       "templateUsed": "Meta template: {name}",
       "pausedReason": "Paused automatically: {reason}",
       "renameOnly": "Official campaigns can only be renamed. To use another template, create another campaign.",
-      "rename": "Save name"
+      "rename": "Save name",
+      "blocked": {
+        "not_owner": "Only whoever connected this campaign's official number can dispatch it.",
+        "already_sent": "Official campaign already sent. To send again, create another campaign."
+      }
     }
   },
   "emailBroadcast": {

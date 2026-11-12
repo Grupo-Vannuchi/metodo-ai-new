@@ -22,6 +22,8 @@ export type MetaErrorCategory =
   | "spam_limited"
   | "policy_blocked"
   | "transient"
+  | "uncertain"
+  | "dev_guard"
   | "unknown";
 
 const BY_CODE: Record<number, MetaErrorCategory> = {
@@ -53,12 +55,15 @@ const BY_CODE: Record<number, MetaErrorCategory> = {
 };
 
 /**
- * `httpStatus` (opcional) só pesa quando a Meta não mandou código: falha de rede
- * (0) ou HTTP 5xx é instabilidade passageira, não erro da mensagem.
+ * `httpStatus` (opcional) só pesa quando a Meta não mandou código. Falha de rede
+ * (0: tempo esgotado, conexão cortada) ou HTTP 5xx sem código é **incerto**: o
+ * pedido pode ter chegado e a mensagem pode ter saído (e sido cobrada). Quem
+ * recebe "uncertain" não reenvia sozinho. Só os códigos 131000 e 131016, em que
+ * a Meta diz que falhou, são "transient" e podem ser repetidos.
  */
 export function categorizeMetaError(code: number | null | undefined, httpStatus?: number): MetaErrorCategory {
   if (code === null || code === undefined) {
-    if (code === null && httpStatus !== undefined && (httpStatus === 0 || httpStatus >= 500)) return "transient";
+    if (code === null && httpStatus !== undefined && (httpStatus === 0 || httpStatus >= 500)) return "uncertain";
     return "unknown";
   }
   return BY_CODE[code] ?? "unknown";
@@ -106,6 +111,8 @@ const RECIPIENT_TEXT: Partial<Record<MetaErrorCategory, string>> = {
   marketing_opt_out: "Contato optou por não receber marketing.",
   marketing_limited: "A Meta limitou mensagens de marketing para este contato.",
   window_closed: "Fora da janela de 24h.",
+  uncertain: "A Meta não respondeu: a mensagem pode ter saído. Não foi reenviada, para não cobrar duas vezes.",
+  dev_guard: "Segurado pela trava de desenvolvimento (número fora de WHATSAPP_DEV_ALLOWED_NUMBERS).",
 };
 
 /** Texto gravado no destinatário de campanha que falhou. */
@@ -122,6 +129,7 @@ const PAUSE_TEXT: Partial<Record<MetaErrorCategory, string>> = {
   payment_issue: "Problema com a forma de pagamento da conta na Meta.",
   spam_limited: "A Meta limitou o número por excesso de mensagens.",
   policy_blocked: "A Meta bloqueou o envio por violação de política.",
+  uncertain: "A Meta não respondeu a um envio. Confira o destinatário marcado como falha antes de retomar.",
 };
 
 /** Motivo gravado quando uma campanha é pausada por erro da Meta. */

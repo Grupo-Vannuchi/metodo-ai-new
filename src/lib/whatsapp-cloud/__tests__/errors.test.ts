@@ -26,9 +26,10 @@ describe("categorizeMetaError", () => {
     assert.equal(categorizeMetaError(4), "rate_limited");
     assert.equal(categorizeMetaError(80007), "rate_limited");
   });
-  test("sem código + HTTP 500 = instabilidade", () => assert.equal(categorizeMetaError(null, 500), "transient"));
-  test("sem código + HTTP 503 = instabilidade", () => assert.equal(categorizeMetaError(null, 503), "transient"));
-  test("sem código + falha de rede (0) = instabilidade", () => assert.equal(categorizeMetaError(null, 0), "transient"));
+  // Sem código, a Meta pode ter recebido o pedido: incerto, nunca repetido sozinho (cobraria duas vezes).
+  test("sem código + HTTP 500 = incerto", () => assert.equal(categorizeMetaError(null, 500), "uncertain"));
+  test("sem código + HTTP 503 = incerto", () => assert.equal(categorizeMetaError(null, 503), "uncertain"));
+  test("sem código + falha de rede (0) = incerto", () => assert.equal(categorizeMetaError(null, 0), "uncertain"));
   test("sem código + HTTP 400 continua desconhecido", () => assert.equal(categorizeMetaError(null, 400), "unknown"));
   test("com código, o HTTP não muda a categoria", () => assert.equal(categorizeMetaError(131047, 500), "window_closed"));
 });
@@ -42,6 +43,10 @@ describe("classificação", () => {
   test("limite por spam para a campanha", () => assert.equal(isCampaignStopper("spam_limited"), true));
   test("bloqueio por política para a campanha", () => assert.equal(isCampaignStopper("policy_blocked"), true));
   test("instabilidade não para a campanha", () => assert.equal(isCampaignStopper("transient"), false));
+  test("incerto e trava de dev não são problema do número", () => {
+    assert.equal(isNumberLevelError("uncertain"), false);
+    assert.equal(isNumberLevelError("dev_guard"), false);
+  });
   test("problemas da conta não marcam o número com erro", () => {
     assert.equal(isNumberLevelError("payment_issue"), false);
     assert.equal(isNumberLevelError("spam_limited"), false);
@@ -80,4 +85,10 @@ describe("textos", () => {
     assert.equal(pauseReasonText("spam_limited"), "A Meta limitou o número por excesso de mensagens.");
     assert.equal(pauseReasonText("policy_blocked"), "A Meta bloqueou o envio por violação de política.");
   });
+  test("envio incerto avisa que não foi reenviado e pede conferência", () => {
+    assert.match(recipientErrorText("uncertain", "fetch failed"), /não foi reenviada/i);
+    assert.match(pauseReasonText("uncertain"), /confira/i);
+  });
+  test("envio segurado pela trava de dev diz o motivo", () =>
+    assert.match(recipientErrorText("dev_guard", null), /trava de desenvolvimento/));
 });

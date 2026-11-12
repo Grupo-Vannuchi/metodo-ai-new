@@ -12,7 +12,9 @@
  * Evolution (the e2e scripts), which reaches nobody.
  *
  * Pure (no env, no network) so `npm run check:devguard` can test it; the wiring
- * lives in src/lib/integrations/channels/evolution.ts.
+ * lives in src/lib/integrations/channels/evolution.ts, in
+ * src/lib/integrations/evolution-client.ts (group add and invite) and, for the
+ * official WhatsApp, in src/lib/whatsapp-cloud/meta-api.ts (postMessage).
  */
 import { normalizeWhatsappNumber } from "@/lib/phone";
 
@@ -64,4 +66,27 @@ export function devGuardBlocks(input: DevGuardInput): boolean {
   if (input.nodeEnv === "production") return false;
   if (isLoopback(input.baseUrl)) return false;
   return !destinationKeys(input.target).some((key) => input.allowed.has(key));
+}
+
+/**
+ * The same guard for the official WhatsApp (Cloud API): the body of a
+ * POST /{phone-number-id}/messages. True when it must NOT go out.
+ * - A phone in `to` must be on the list, like any Evolution send.
+ * - A body with no destination (the read receipt, `status: "read"`) reaches
+ *   nobody and passes.
+ * - A destination by BSUID only (`recipient`, no phone) can't be matched against
+ *   a list of numbers, so outside production it is held.
+ * There is no loopback exception: the Graph API is always the real Meta.
+ */
+export function cloudSendBlocked(input: {
+  nodeEnv: string | undefined;
+  payload: Record<string, unknown>;
+  allowed: ReadonlySet<string>;
+}): boolean {
+  if (input.nodeEnv === "production") return false;
+  const to = input.payload.to;
+  if (typeof to === "string" && to.trim()) {
+    return !destinationKeys(to).some((key) => input.allowed.has(key));
+  }
+  return input.payload.recipient !== undefined && input.payload.recipient !== null;
 }
