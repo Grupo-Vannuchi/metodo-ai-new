@@ -154,5 +154,7 @@ checagem prova e o que fazer quando falha: [06-antes-de-commitar](06-antes-de-co
   produção". No "Adicionar a grupo do WhatsApp", a adição exige na lista o JID do grupo **e** o número
   da pessoa (um grupo de cliente escolhido por engano não recebe os números do time), e o convite, o
   número da pessoa; quem fica de fora aparece como "Segurado pela trava de desenvolvimento" na tela
-  da rodada, sem nem a consulta do número. Para testar, ponha só o seu celular. Em produção a variável é
+  da rodada, sem nem a consulta do número. O WhatsApp oficial (Cloud API) também passa pela trava: o
+  `.env` local pode ter um token de verdade, e cada modelo é cobrado pela Meta; o destinatário de fora vira
+  falha "Segurado pela trava de desenvolvimento". Para testar, ponha só o seu celular. Em produção a variável é
   ignorada.

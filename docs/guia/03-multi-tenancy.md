@@ -20,7 +20,7 @@ organização ativa e devolve o mesmo client Prisma cru de
 `$allOperations`: toda chamada, em qualquer model, passa por essa função antes de chegar no
 banco.
 
-A interceptação só age sobre os models listados na constante `TENANT_MODELS` — **81 hoje**
+A interceptação só age sobre os models listados na constante `TENANT_MODELS` — **86 hoje**
 (é a contagem das entradas do array; cresce conforme o schema cresce). Para qualquer model
 fora dessa lista, o extends devolve a query sem tocar nela:
 
@@ -179,7 +179,7 @@ mas verifica compatibilidade de versão do Node — não tem relação com isola
 **O que o script prova, com precisão — não mais que isso.** Ele importa só `PrismaClient` +
 `PrismaPg`, nunca `tenantDb` nem nada de [src/lib/queries/](../../src/lib/queries/): cria duas
 organizações reais no Postgres local, popula cada uma com dado próprio (membro, empresa, conexão
-de integração, campanha, job de extração, conversa, envio de e-mail, destinatário, bloqueio de e-mail, domínio de envio, coluna do quadro de tarefas, assinatura de e-mail, rodada de adição a grupo do WhatsApp, item da rodada e conta de envio de e-mail, com uma Microsoft, uma Google e uma SMTP na mesma empresa, além de pasta de contato, contato e vínculo de contato com pasta) e roda **31 asserções**, todas com
+de integração, campanha, job de extração, conversa, envio de e-mail, destinatário, bloqueio de e-mail, domínio de envio, coluna do quadro de tarefas, assinatura de e-mail, rodada de adição a grupo do WhatsApp, item da rodada e conta de envio de e-mail, com uma Microsoft, uma Google e uma SMTP na mesma empresa, além de pasta de contato, contato, vínculo de contato com pasta e conversa do WhatsApp oficial) e roda **32 asserções**, todas com
 `where: { organizationId: ... }` escrito à mão contra o client **cru** — inclusive um
 `updateMany` com filtro de organização trocado, que precisa afetar zero linhas. Isso prova que o
 Postgres honra o filtro de organização quando a query o inclui. **Não prova que o código da

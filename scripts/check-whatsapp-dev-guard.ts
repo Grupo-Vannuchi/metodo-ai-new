@@ -5,7 +5,7 @@
  * `npm run check:devguard`; exits non-zero on the first failure.
  */
 import assert from "node:assert/strict";
-import { destinationKeys, devGuardBlocks, parseDevAllowlist } from "../src/lib/whatsapp/dev-guard";
+import { cloudSendBlocked, destinationKeys, devGuardBlocks, parseDevAllowlist } from "../src/lib/whatsapp/dev-guard";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -91,6 +91,33 @@ check("a formatted entry with spaces stays one number", () => {
   const list = parseDevAllowlist("(11) 90000-0001");
   assert.equal(list.has("5511900000001"), true);
   assert.equal(list.size, 2); // with and without the 9th digit, nothing else
+});
+
+// Official WhatsApp (Cloud API): the body of POST /{phone-number-id}/messages.
+const cloudBlocks = (payload: Record<string, unknown>, opts: { nodeEnv?: string; allowed?: ReadonlySet<string> } = {}) =>
+  cloudSendBlocked({ nodeEnv: "nodeEnv" in opts ? opts.nodeEnv : "development", payload, allowed: opts.allowed ?? MINE });
+const template = (to: string) => ({ messaging_product: "whatsapp", to, type: "template", template: { name: "x" } });
+
+check("official: a phone on the list goes out (with or without the 9th digit)", () => {
+  assert.equal(cloudBlocks(template("5511900000001")), false);
+  assert.equal(cloudBlocks(template("551100000001")), false); // the Meta may answer a Brazilian mobile without the 9
+  assert.equal(cloudBlocks(template("5511900000002")), false);
+});
+
+check("official: a phone off the list, or an empty list, is held outside production", () => {
+  assert.equal(cloudBlocks(template("5511988887777")), true);
+  assert.equal(cloudBlocks(template("5511900000001"), { allowed: NONE }), true);
+  assert.equal(cloudBlocks(template("5511900000001"), { nodeEnv: undefined, allowed: NONE }), true);
+});
+
+check("official: production is never held back", () => {
+  assert.equal(cloudBlocks(template("5511988887777"), { nodeEnv: "production", allowed: NONE }), false);
+  assert.equal(cloudBlocks({ messaging_product: "whatsapp", recipient: "BR.abc" }, { nodeEnv: "production" }), false);
+});
+
+check("official: a BSUID-only destination is held outside production, a read receipt passes", () => {
+  assert.equal(cloudBlocks({ messaging_product: "whatsapp", recipient: "BR.5511900000001" }), true);
+  assert.equal(cloudBlocks({ messaging_product: "whatsapp", status: "read", message_id: "wamid.x" }), false);
 });
 
 console.log(`\n✅ whatsapp-dev-guard: ${passed} checks passed.`);

@@ -63,7 +63,7 @@ em **todas** as empresas da conta que o tinham instalado.
 
 ## As três fontes de verdade
 
-Não existe um terceiro lugar gateando alguma coisa. É sempre um destes três arquivos:
+Não existe um terceiro lugar gateando alguma coisa. É sempre um destes três arquivos (mais a liberação temporária do WhatsApp oficial, descrita em "Como o gating se compõe"):
 
 - **[src/config/modules.ts](../../src/config/modules.ts)** — o registro dos módulos. Hoje **9**:
   `crm`, `finance`, `hr`, `supplies`, `marketing`, `inbox`, `ia`, `tasks`, `downloader`
@@ -72,9 +72,9 @@ Não existe um terceiro lugar gateando alguma coisa. É sempre um destes três a
   exportadas — `hasModule`, `hasFeatureByModules`, `assertFeatureByModules`, `availableScreens`
   — são a única forma correta de perguntar "esta empresa tem X".
 - **[src/config/screens.ts](../../src/config/screens.ts)** — as telas *gateáveis por template de
-  acesso*: `GATEABLE_SCREENS`, **16** hoje (`feed`, `crm`, `proposals`, `tasks`, `prospecting`,
-  `campaigns`, `email`, `emailInbox`, `inbox`, `companies`, `contacts`, `connections`, `finance`, `hr`,
-  `supplies`, `downloader`). `dashboard` e `settings` não estão nessa lista porque são `ALWAYS_ALLOWED` —
+  acesso*: `GATEABLE_SCREENS`, **17** hoje (`feed`, `crm`, `proposals`, `tasks`, `prospecting`,
+  `campaigns`, `email`, `emailInbox`, `inbox`, `inboxOficial`, `companies`, `contacts`, `connections`, `finance`,
+  `hr`, `supplies`, `downloader`). `dashboard` e `settings` não estão nessa lista porque são `ALWAYS_ALLOWED` —
   nenhum template restringe o *acesso à tela*, todo membro autenticado chega lá. Isso não é o
   mesmo que "sem restrição nenhuma": o comentário-fonte em
   [src/config/screens.ts:5-7](../../src/config/screens.ts#L5-L7) registra que `settings` é
@@ -139,6 +139,15 @@ coisas — `requireScreen(ctx, "connections")` **e** `requireModule(ctx, "inbox"
 por link direto apenas quem tem a tela liberada no template **e** o módulo Atendimento instalado.
 Uma tela sem módulo dono é inalcançável por navegação; não é o mesmo que desprotegida.
 
+**Liberação gradual (WhatsApp oficial).** A tela `inboxOficial` pertence ao módulo `inbox`, mas
+durante o piloto só aparece para empresas listadas em `WHATSAPP_CLOUD_ORG_IDS`. O único lugar que
+lê essa variável é `isWhatsappCloudEnabled`, em
+[src/lib/whatsapp-cloud/rollout.ts](../../src/lib/whatsapp-cloud/rollout.ts): o menu
+(`app-shell.tsx`) e a página de modelos de acesso passam a lista de telas por
+`filterRolloutScreens`, e a página, as rotas e as actions da tela checam a mesma função. É um
+filtro temporário por cima da interseção acima, não um quarto eixo de gating — quando a migração
+terminar, a variável e o filtro saem.
+
 **Gating cross-módulo** (uma tela de um módulo usando algo de outro) segue um padrão fixo: o
 **server** resolve `hasModule(...)` e passa o resultado como prop para o client component — nunca
 o inverso. Real, em
@@ -179,7 +188,7 @@ para o tipo mas sem dono ainda — não gatear nada por elas por engano.
 
 ## Paridade de i18n
 
-`src/messages/pt.json` e `src/messages/en.json` têm **3395 chaves-folha cada um** (contagem
+`src/messages/pt.json` e `src/messages/en.json` têm **3538 chaves-folha cada um** (contagem
 própria, recursiva sobre os dois arquivos — batem exatamente). Não existe script no repositório
 que verifique a paridade inteira automaticamente: os dois arquivos em `scripts/` que leem
 `pt.json`/`en.json` só conferem as chaves de que dependem. O `check-email-broadcast.ts` (`npm run check:email`)

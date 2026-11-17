@@ -51,6 +51,7 @@ sobrou.
 | Cron do hPanel (as cinco rotas de `/api/cron/*`: `campaigns`, `extractions`, `feed-cleanup`, `notifications` e `whatsapp-groups`) | header fixo → `isCronAuthorized(req)` | [src/lib/cron-auth.ts](../../src/lib/cron-auth.ts) |
 | QStash (fila de jobs) | assinatura HMAC → `verifyQStashSignature(...)` | [src/lib/queue.ts](../../src/lib/queue.ts) |
 | Evolution (webhook) | token embutido no caminho | rota de webhook, ver abaixo |
+| Meta (webhook do WhatsApp oficial) | assinatura HMAC `X-Hub-Signature-256` → `verifySignature(...)` com `META_APP_SECRET` | [src/lib/whatsapp-cloud/signature.ts](../../src/lib/whatsapp-cloud/signature.ts) |
 | Destinatário de e-mail em massa (link) | HMAC do id do destinatário no caminho → `verifyEmailUnsubscribeSig` | [src/lib/email-broadcast/unsubscribe.ts](../../src/lib/email-broadcast/unsubscribe.ts) |
 | Resend (webhook do e-mail em massa) | assinatura Svix com o segredo da plataforma (`RESEND_WEBHOOK_SECRET`) → `verifySvixSignature` | [src/app/api/email/webhook/route.ts](../../src/app/api/email/webhook/route.ts) |
 | Usuário logado conectando a caixa Microsoft do E-mail | sessão (`getOrgContext()`) + tela `email` + módulo `marketing`; o retorno confere `state`, verificador PKCE e empresa nos cookies `ms_mail_*` (10 min) | [src/app/api/email/microsoft/](../../src/app/api/email/microsoft/) |
@@ -167,6 +168,25 @@ Evolution não assina os webhooks que envia. Real,
 Em desenvolvimento isso exige túnel (ngrok) com `NEXT_PUBLIC_SITE_URL` apontando pra ele —
 `localhost` não recebe webhook, porque é a Evolution quem precisa alcançar sua máquina pela
 internet, não o contrário.
+
+### Webhook (Meta — WhatsApp oficial)
+
+Entra por `/api/webhooks/whatsapp-cloud` — uma URL só para todos os números, porque a Meta manda o
+webhook para o **app**, não por conexão. Os dois métodos são fail-closed:
+
+- `GET` é o aperto de mão da inscrição: devolve o `hub.challenge` só se `hub.verify_token` bater
+  com `META_WEBHOOK_VERIFY_TOKEN` (comparação em tempo constante); sem a variável, 403.
+- `POST` só é lido depois de `verifySignature(bytesCrus, X-Hub-Signature-256, META_APP_SECRET)`;
+  sem a variável ou com assinatura errada, 401. A empresa sai de `metadata.phone_number_id` →
+  `WhatsappCloudNumber.organizationId`.
+
+Com assinatura válida, cada evento do payload é processado isolado e a rota responde **200** quando
+tudo foi gravado, quando o corpo não é JSON e quando o número é desconhecido ou inativo (nada a
+fazer). Se algum evento falhou de verdade (ex.: banco fora do ar), loga `[wa-cloud] webhook
+processing failed (N event(s))` e responde **500** de propósito: a Meta reenvia por até 7 dias quem
+não responde 200, e o reenvio é seguro porque a deduplicação é pelo `wamid`, único por empresa (a
+mensagem e o contador da conversa são gravados numa transação só). Em desenvolvimento, `scripts/wa-cloud-webhook.ts` assina e envia payloads falsos para o
+app local — não precisa de túnel para testar o recebimento.
 
 ### Servidor MCP de leitura (Claude)
 
@@ -320,7 +340,8 @@ Antes de considerar uma rota em `src/app/api/` pronta:
   intencionalmente pública?
 - **Se é pública, por quê?** Isso precisa ser uma decisão registrada, não um esquecimento.
 - **Se não é pública, qual guard?** `getOrgContext()` com checagem de `null`,
-  `isCronAuthorized(req)`, `verifyQStashSignature(...)`, ou comparação de token — uma das linhas
-  da tabela acima. Escreva a checagem como uma das primeiras linhas do handler.
+  `isCronAuthorized(req)`, `verifyQStashSignature(...)`, `verifySignature(...)` da Meta, ou
+  comparação de token — uma das linhas da tabela acima. Escreva a checagem como uma das
+  primeiras linhas do handler.
 - **Toca dado de tenant?** Se a rota lê ou grava tabela de negócio, autenticar quem chama não
   basta — vale o [guia 03 (multi-tenancy)](03-multi-tenancy.md) também.

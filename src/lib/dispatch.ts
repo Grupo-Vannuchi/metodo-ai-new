@@ -8,6 +8,7 @@ import { makeRateLimiter } from "@/lib/ratelimit";
 import { unsubscribeUrl } from "@/lib/unsubscribe";
 import { normalizeWhatsappNumber, looksLikeWhatsappMobile } from "@/lib/phone";
 import { LIMITS } from "@/config/limits";
+import { dispatchCloudCampaignBatch, findCloudCampaign } from "@/lib/whatsapp-cloud/campaign";
 
 /** Per-channel sliding-window rate limit (events per window) — a hard ceiling. */
 const RATE: Record<ChannelKey, { limit: number; windowSec: number }> = {
@@ -111,6 +112,14 @@ export async function dispatchCampaignBatch(
   // Stamp so the per-minute cron doesn't enqueue a second job onto this active,
   // self-throttling chain (which would break the pacing / duplicate sends).
   await prisma.campaign.update({ where: { id: campaignId }, data: { lastDispatchAt: new Date() } });
+
+  // Campanhas oficiais (WhatsApp Cloud API) têm vínculo WhatsappCloudCampaign e
+  // disparam modelos aprovados pelo número do criador — caminho próprio (spec
+  // 2026-09-28 §8). Sem vínculo, segue o fluxo abaixo, inalterado.
+  if (campaign.channel === "WHATSAPP_CLOUD") {
+    const link = await findCloudCampaign(campaign.organizationId, campaignId);
+    if (link) return dispatchCloudCampaignBatch(link);
+  }
 
   const channel = campaign.channel as ChannelKey;
   const creds = await resolveChannelCredentials(campaign.organizationId, channel);

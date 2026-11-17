@@ -8,14 +8,15 @@ import { Spinner } from "@/components/ui/spinner";
 import { useRouter } from "@/i18n/navigation";
 import { startCampaign } from "@/app/actions/campaigns";
 
-export function StartButton({ id, status }: { id: string; status: string }) {
+export function StartButton({ id, status, resume = false }: { id: string; status: string; resume?: boolean }) {
   const t = useTranslations("campaigns");
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   // A never-sent campaign shows "start"; once it has run, it can be re-dispatched.
-  const label = status === "DRAFT" ? t("start") : t("restart");
+  // `resume`: a paused official campaign goes on with whoever is left (it never sends again from the start).
+  const label = status === "DRAFT" ? t("start") : resume ? t("resume") : t("restart");
 
   return (
     <div className="flex flex-col items-end gap-1">
