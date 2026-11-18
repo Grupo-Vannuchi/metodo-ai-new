@@ -54,10 +54,24 @@ const PREVIEW: Record<MsgType, string> = {
 };
 
 /**
+ * Every refusal leaves a line in the hPanel log (the code and a technical note,
+ * never the phone, the caption or the file name): before 17/11/2026 a refused
+ * send left no trace, and a failure could not be told apart afterwards.
+ */
+function refuse(error: string, status: number, note: string): Response {
+  console.warn(`[inbox] send media refused: ${error} (${note})`);
+  return Response.json({ ok: false, error }, { status });
+}
+
+/**
  * Send a media message (image/video/audio/document) on WhatsApp. Uploads the
  * file to object storage, sends the URL through Evolution, and stores the
  * outbound Message (bytes never touch Postgres). Strictly per-user: only works
  * on a conversation from a number the caller connected.
+ *
+ * `uncertain` means the file may have gone out (Evolution did not answer, or the
+ * send went out and saving it failed): the screen says so instead of offering a
+ * retry that could deliver it twice.
  */
 export async function POST(req: Request) {
   const ctx = await getOrgContext();
@@ -75,48 +89,49 @@ export async function POST(req: Request) {
   } catch {
     /* ignore */
   }
-  if (!file || !conversationId) return Response.json({ ok: false, error: "invalid" }, { status: 400 });
-  if (file.size > MAX_SIZE) return Response.json({ ok: false, error: "size" }, { status: 400 });
+  if (!file || !conversationId) return refuse("invalid", 400, file ? "no conversation" : "no file in the form");
+  if (file.size > MAX_SIZE) return refuse("size", 400, `${file.size}B`);
   const mime = file.type || "application/octet-stream";
-  if (!ALLOWED.has(mime)) return Response.json({ ok: false, error: "type" }, { status: 400 });
+  if (!ALLOWED.has(mime)) return refuse("type", 400, mime);
 
   const db = tenantDb(ctx.organizationId);
   const convo = await db.conversation.findFirst({
     where: { id: conversationId },
     select: { id: true, connectionId: true, remoteJid: true, isGroup: true },
   });
-  if (!convo) return Response.json({ ok: false, error: "not_found" }, { status: 404 });
+  if (!convo) return refuse("not_found", 404, "no such conversation");
 
   // Per-user: the conversation must be on a number the caller connected.
   const owned = await db.integrationConnection.findFirst({
     where: { id: convo.connectionId, ownerId: ctx.userId },
     select: { id: true },
   });
-  if (!owned) return Response.json({ ok: false, error: "not_found" }, { status: 404 });
+  if (!owned) return refuse("not_found", 404, "the number is not the caller's");
 
   const conn = await db.integrationConnection.findFirst({
     where: { id: convo.connectionId, provider: "EVOLUTION" },
     select: { credentialsEnc: true },
   });
-  if (!conn) return Response.json({ ok: false, error: "no_connection" }, { status: 400 });
+  if (!conn) return refuse("no_connection", 400, "not an Evolution connection");
 
   let creds: ReturnType<typeof resolveEvoCreds>;
   try {
     creds = resolveEvoCreds(decryptCredentials(conn.credentialsEnc));
   } catch {
-    return Response.json({ ok: false, error: "no_connection" }, { status: 400 });
+    return refuse("no_connection", 400, "credentials unreadable");
   }
-  if (!creds) return Response.json({ ok: false, error: "no_connection" }, { status: 400 });
+  if (!creds) return refuse("no_connection", 400, "credentials incomplete");
 
   const { mediatype, msgType } = classify(mime);
   const safeName = (file.name || "arquivo").replace(/[^\w.\-]+/g, "_").slice(0, 120) || "arquivo";
 
+  let sent = false;
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const stored = await putMedia(`inbox/${convo.connectionId}/out/${randomUUID()}-${safeName}`, buffer, mime);
 
     const adapter = getChannelAdapter("WHATSAPP_EVOLUTION");
-    if (!adapter.sendMedia) return Response.json({ ok: false, error: "no_connection" }, { status: 400 });
+    if (!adapter.sendMedia) return refuse("no_connection", 400, "adapter without sendMedia");
     const to = convo.isGroup ? convo.remoteJid : (convo.remoteJid.split("@")[0] ?? "");
     const result = await adapter.sendMedia(creds, {
       to,
@@ -126,7 +141,12 @@ export async function POST(req: Request) {
       caption,
       fileName: file.name || safeName,
     });
-    if (!result.ok) return Response.json({ ok: false, error: "send_failed" }, { status: 502 });
+    if (!result.ok) {
+      const error = result.uncertain ? "uncertain" : "send_failed";
+      console.error(`[inbox] send media ${error} (${mime}, ${stored.size}B): ${result.error ?? "no detail"}`);
+      return Response.json({ ok: false, error, detail: result.error?.slice(0, 300) }, { status: 502 });
+    }
+    sent = true;
 
     await db.message.create({
       data: {
@@ -153,7 +173,8 @@ export async function POST(req: Request) {
     revalidatePath("/app/inbox");
     return Response.json({ ok: true });
   } catch (error) {
-    console.error("[inbox] send media failed", error);
-    return Response.json({ ok: false, error: "send_failed" }, { status: 500 });
+    // After `sent`, the file already went out: only saving it here failed.
+    console.error(`[inbox] send media failed ${sent ? "after the file went out" : "before sending"}`, error);
+    return Response.json({ ok: false, error: sent ? "uncertain" : "send_failed" }, { status: 500 });
   }
 }

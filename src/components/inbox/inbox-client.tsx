@@ -591,16 +591,25 @@ export function InboxClient({
       fd.set("conversationId", selectedId);
       if (caption) fd.set("caption", caption);
       const r = await fetch("/api/inbox/messages/media", { method: "POST", body: fd });
-      const data = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (r.ok && data.ok) {
+      const data = (await r.json().catch(() => null)) as { ok?: boolean; error?: string; detail?: string } | null;
+      if (r.ok && data?.ok) {
         await fetchMessages();
         void loadConversations();
         scrollToBottom();
+      } else if (!data || data.error === "uncertain") {
+        // No answer from our route (the hosting cut a slow send, or a restart),
+        // or Evolution did not answer: the file may have gone out. Say so rather
+        // than "try again", and reload in case it did.
+        setSendError(data?.detail ? `${t("sendMediaError.uncertain")} — ${data.detail}` : t("sendMediaError.uncertain"));
+        void fetchMessages();
       } else {
-        setSendError(t(`sendMediaError.${data.error ?? "send_failed"}`));
+        const message = t(`sendMediaError.${data.error ?? "send_failed"}`);
+        setSendError(data.detail ? `${message} — ${data.detail}` : message);
       }
     } catch {
-      setSendError(t("sendMediaError.send_failed"));
+      // The request may have reached the server before the connection failed.
+      setSendError(t("sendMediaError.uncertain"));
+      void fetchMessages();
     } finally {
       setUploading(false);
     }
