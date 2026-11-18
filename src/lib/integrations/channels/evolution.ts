@@ -20,14 +20,16 @@ function heldByDevGuard(baseUrl: string, target: string): SendResult | null {
 }
 
 /** Evolution nests error details in different shapes across versions — dig out a
- * human-readable message (falling back to the status code). */
+ * human-readable message (falling back to the status code). `response` comes
+ * before `error`: v2 answers `{ status, error: "Bad Request", response: { message } }`,
+ * and the reason is in `response.message`, not in the generic `error`. */
 function evolutionError(data: unknown, status: number): string {
   const flat = (v: unknown): string | null => {
     if (typeof v === "string") return v.trim() || null;
     if (Array.isArray(v)) return v.map((x) => flat(x)).filter(Boolean).join("; ") || null;
     if (v && typeof v === "object") {
       const o = v as Record<string, unknown>;
-      return flat(o.message) ?? flat(o.error) ?? flat(o.response) ?? flat(o.exception);
+      return flat(o.message) ?? flat(o.response) ?? flat(o.error) ?? flat(o.exception);
     }
     return null;
   };
@@ -115,7 +117,14 @@ const adapter: ChannelAdapter = {
       }
       return { ok: true, providerMessageId: data.key?.id };
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : "Erro Evolution" };
+      // No answer from Evolution (connection dropped, reset, refused): the file
+      // may have gone out, so the caller must not offer a blind retry. Logged
+      // without the phone so the hPanel log shows why a send failed. The cause
+      // (it may carry the VPS address) goes to the log only, never to the screen.
+      const reason = e instanceof Error ? e.message : "Erro Evolution";
+      const cause = e instanceof Error && e.cause instanceof Error ? ` (${e.cause.message})` : "";
+      console.error(`[evolution] sendMedia no response: ${reason}${cause}`);
+      return { ok: false, error: reason, uncertain: true };
     }
   },
 

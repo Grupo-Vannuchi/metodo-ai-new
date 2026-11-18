@@ -26,6 +26,10 @@ export type SendResult = {
   ok: boolean;
   providerMessageId?: string;
   error?: string;
+  /** The call may have reached the provider and no answer came back (dropped
+   * connection, timeout): the message may have gone out, so a retry risks a
+   * duplicate. Only set on failures. */
+  uncertain?: boolean;
 };
 
 /** Outbound media (WhatsApp). `media` is a publicly-fetchable URL. */

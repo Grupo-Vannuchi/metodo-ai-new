@@ -574,7 +574,8 @@
       "type": "Tipo de arquivo não permitido.",
       "not_found": "Conversa não encontrada.",
       "no_connection": "Conexão do WhatsApp indisponível.",
-      "send_failed": "Não foi possível enviar o arquivo. Tente novamente."
+      "send_failed": "Não foi possível enviar o arquivo. Tente novamente.",
+      "uncertain": "Não foi possível confirmar se o arquivo foi enviado. Ele pode ter chegado ao contato: confira antes de tentar de novo."
     },
     "startError": {
       "unauthorized": "Sessão expirada.",
