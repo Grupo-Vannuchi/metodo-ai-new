@@ -150,8 +150,17 @@ Para leitura por id vale o mesmo raciocínio: o par é `findFirst({ where: { id 
   - Nesse SQL, a classe dos dígitos é `[^0-9]`, nunca `\D`. O `$queryRaw` recebe o template já
     interpretado pelo JavaScript, e o `'\D'` chega ao Postgres como `'D'`, que não tira nada (conferido em
     18/11/2026).
-  - As duas consultas antigas da janela de mesclar (`findContactDuplicates` e `findCompanyDuplicates`)
-    ainda usam `'\D'`. Por isso, hoje elas só juntam telefones e CNPJs escritos do mesmo jeito.
+  - Até 18/11/2026, quatro lugares usavam `'\D'` e só reconheciam telefones e CNPJs escritos
+    exatamente do mesmo jeito:
+    - as duas consultas da janela de mesclar (`findContactDuplicates` e `findCompanyDuplicates`);
+    - a busca de contato da mensagem de WhatsApp recebida (`resolveContactId`, em
+      [whatsapp/ingest.ts](../../src/lib/whatsapp/ingest.ts), usada pelo WhatsApp comum e pelo oficial).
+      Ela criava um contato repetido a cada conversa nova;
+    - a checagem de repetido da importação por planilha
+      ([import-csv.ts](../../src/app/actions/import-csv.ts)).
+
+    O `check:crm-matches` cobre os três primeiros contra o Postgres e falha se algum `regexp_replace` em
+    `src/` voltar a usar `'\D'`.
 - **Leitura do servidor MCP** ([src/lib/queries/mcp/](../../src/lib/queries/mcp/)): contexto de
   sistema. Quem chama é o portador da chave `MCP_API_KEY` ([guia 05](05-rotas-e-jobs.md)), não um
   usuário com sessão, então não existe organização ativa: ela chega como argumento de cada

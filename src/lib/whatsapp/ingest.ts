@@ -39,12 +39,15 @@ export async function resolveContactId(
   const key = brPhoneKey(digits);
   if (!key) return null;
 
-  // Match by the local phone digits regardless of stored formatting.
+  // Match by the local phone digits regardless of stored formatting. `[^0-9]`,
+  // never a backslash-D: `$queryRaw` takes the cooked template and would send
+  // `'D'` (until 18/11/2026 no formatted phone ever matched, and every new
+  // conversation created a duplicate contact).
   const found = await prisma.$queryRaw<{ id: string }[]>`
     SELECT id FROM contacts
     WHERE "organizationId" = ${organizationId}
       AND phone IS NOT NULL
-      AND right(regexp_replace(phone, '\D', '', 'g'), 11) = ${key}
+      AND right(regexp_replace(phone, '[^0-9]', '', 'g'), 11) = ${key}
     LIMIT 1`;
   if (found[0]) return found[0].id;
 

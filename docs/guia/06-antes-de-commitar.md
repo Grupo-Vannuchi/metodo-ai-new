@@ -81,8 +81,25 @@ item da proposta. Rode sempre que mexer nesse arquivo.
 - telefone curto ou campo vazio nunca bate;
 - **um registro igual em outra empresa nunca volta**.
 
-Roda contra o Postgres do Docker: cria duas organizações de teste e apaga tudo o que criou, mesmo quando
-falha. O `.env` serve para o `DATABASE_URL`. Rode sempre que mexer nessas duas funções ou no SQL delas.
+Ele também cobre os grupos da janela "Mesclar duplicados" (`findCompanyDuplicates` e
+`findContactDuplicates`, no mesmo arquivo):
+- o mesmo CNPJ ou telefone em dois formatos forma um grupo;
+- telefone com menos de 8 dígitos nunca forma grupo;
+- um registro igual em outra empresa nunca entra no grupo.
+
+E cobre a busca de contato da mensagem de WhatsApp recebida (`resolveContactId`, em
+[src/lib/whatsapp/ingest.ts](../../src/lib/whatsapp/ingest.ts)):
+- um número que já está no CRM, em qualquer formato, liga a conversa a esse contato, sem criar outro;
+- o contato criado para um número novo é reencontrado na mensagem seguinte;
+- o mesmo número em outra empresa nunca é o escolhido.
+
+Antes de tudo, ele varre `src/` e falha se algum `regexp_replace` usar `'\D'`. O `$queryRaw` recebe o
+template já interpretado pelo JavaScript, então esse texto chega ao Postgres como `'D'` e não limpa nada
+(guia 03).
+
+Roda contra o Postgres do Docker: cria três organizações de teste e apaga tudo o que criou, mesmo quando
+falha. O `.env` serve para o `DATABASE_URL`. Rode sempre que mexer nessas funções, no SQL delas ou em
+qualquer `$queryRaw` que limpe dígitos.
 
 `npm run check:groups` cobre o "Adicionar aos contatos" com grupos do WhatsApp
 ([src/lib/integrations/evolution-groups.ts](../../src/lib/integrations/evolution-groups.ts): o número do
