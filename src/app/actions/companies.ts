@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
+import { findCompanyMatches, type MatchRecord } from "@/lib/queries/duplicates";
 import { companySchema, type CompanyInput } from "@/lib/validations/company";
 import { onlyDigits, formatCep, formatPhoneBR } from "@/lib/cnpj";
 
@@ -25,6 +27,33 @@ function toData(input: CompanyInput) {
       zip: input.zip || "",
     },
   };
+}
+
+export type MatchActionResult =
+  | { ok: true; matches: MatchRecord[] }
+  | { ok: false; error: "unauthorized" | "invalid" | "unknown" };
+
+const companyMatchSchema = z.object({
+  name: z.string().max(200),
+  cnpj: z.string().max(30).optional(),
+});
+
+/**
+ * Companies of the active org that look like the one about to be created
+ * (same CNPJ or same name). Read-only; used by the quick add of "Nova
+ * oportunidade" to offer "use this one" before creating a duplicate.
+ */
+export async function checkCompanyMatches(input: { name: string; cnpj?: string }): Promise<MatchActionResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+  const parsed = companyMatchSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+  try {
+    return { ok: true, matches: await findCompanyMatches(ctx.organizationId, parsed.data) };
+  } catch (error) {
+    console.error("Failed to check company matches", error);
+    return { ok: false, error: "unknown" };
+  }
 }
 
 export async function createCompany(
