@@ -574,7 +574,8 @@
       "type": "File type not allowed.",
       "not_found": "Conversation not found.",
       "no_connection": "WhatsApp connection unavailable.",
-      "send_failed": "Couldn't send the file. Please try again."
+      "send_failed": "Couldn't send the file. Please try again.",
+      "uncertain": "Couldn't confirm whether the file was sent. It may have reached the contact: check before trying again."
     },
     "startError": {
       "unauthorized": "Session expired.",

@@ -35,6 +35,7 @@
     "check:group-add:e2e": "tsx --tsconfig scripts/tsconfig.server.json --env-file=.env scripts/check-whatsapp-group-add-e2e.ts",
     "check:devguard": "tsx scripts/check-whatsapp-dev-guard.ts",
     "check:crm-matches": "tsx --tsconfig scripts/tsconfig.server.json --env-file=.env scripts/check-crm-matches.ts",
+    "check:inbox-media": "tsx --tsconfig scripts/tsconfig.server.json --env-file=.env scripts/check-inbox-media-send.ts",
     "check:mcp": "tsx scripts/check-mcp.ts",
     "check:mcp:e2e": "tsx --env-file=.env scripts/check-mcp-e2e.ts",
     "email:dominio": "tsx --env-file=.env scripts/email-domain.ts",

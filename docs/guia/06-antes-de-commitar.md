@@ -252,6 +252,17 @@ BSUID é segurado, o recibo de leitura (sem destino) passa, e não há exceção
 de verdade). O `check:devguard` cobre a regra; quem confere que o disparo a consulta antes de chamar a Meta é o
 `check:wa-cloud:e2e`.
 
+`npm run check:inbox-media` cobre como o envio de arquivo de Conversas informa uma falha
+([scripts/check-inbox-media-send.ts](../../scripts/check-inbox-media-send.ts), contra o `sendMedia` de
+[channels/evolution.ts](../../src/lib/integrations/channels/evolution.ts)). O envio aceito devolve o id. A recusa
+da Evolution é uma falha comum, que pode ser repetida, com o motivo que vem em `response.message`, e não o
+"Bad Request" genérico. A conexão que cai sem resposta é `uncertain` (o arquivo pode ter saído, e a tela diz para
+conferir antes de tentar de novo) e deixa a linha `[evolution] sendMedia no response` no log, sem o telefone. A
+Evolution é uma falsa em 127.0.0.1, liberada pela trava; não usa banco, e o `.env` só serve para o `env.ts`
+carregar. Rode sempre que mexer em `channels/evolution.ts` ou em
+[src/app/api/inbox/messages/media/route.ts](../../src/app/api/inbox/messages/media/route.ts). Nasceu do envio
+que falhou em produção em 17/11/2026 sem deixar nenhuma linha no log.
+
 `npm run check:mcp` cobre as regras puras do servidor MCP de leitura
 ([src/lib/mcp/core.ts](../../src/lib/mcp/core.ts): comparação da chave com espaço ou quebra de linha
 colados, datas `AAAA-MM-DD` como dias UTC com o fim inclusivo, período invertido ou longo demais,

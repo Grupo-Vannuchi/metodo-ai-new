@@ -502,7 +502,11 @@ isso a `main` exige PR e `enforce_admins` está ligado — sem isso, um push dir
    resto virou automático e este passo não.
 3. **Logs do app:** `console.error` vai pro log de erro do site (hPanel → Logs de erro, ou
    `~/domains/<dominio>/logs/`). Procure prefixos como `[evolution] send`, `[inbox]`, `[downloader]`,
-   `[ingest]`.
+   `[ingest]`. O hPanel mostra a hora de Brasília (conferido em 17/11/2026 pelo id de uma mensagem).
+   Envio de arquivo em Conversas: toda recusa deixa `[inbox] send media refused: <motivo>`, e toda
+   falha, `[inbox] send media send_failed`, `uncertain` ou `failed …`. `uncertain` e
+   `[evolution] sendMedia no response` querem dizer que o arquivo pode ter saído. Antes de 17/11/2026,
+   uma recusa ou uma conexão caída não deixava linha nenhuma.
 4. **Build falhou e o site continuou no ar** = o hPanel mostra "Falha na construção", mas o domínio
    segue respondendo com o build anterior. O código novo **não** foi publicado, por mais que o merge
    tenha acontecido — e um revert também não desfaz nada, porque é só mais um deploy que falha do
