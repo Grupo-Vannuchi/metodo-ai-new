@@ -75,7 +75,7 @@ export async function importContactsCsv(rows: ContactRow[]): Promise<ImportResul
           SELECT id FROM contacts
           WHERE "organizationId" = ${ctx.organizationId}
             AND phone IS NOT NULL
-            AND right(regexp_replace(phone, '\D', '', 'g'), 11) = ${phoneKey}
+            AND right(regexp_replace(phone, '[^0-9]', '', 'g'), 11) = ${phoneKey}
           LIMIT 1`;
         dupe = Boolean(hit[0]);
       } else if (email && looksEmail(email)) {
@@ -177,7 +177,7 @@ export async function importCompaniesCsv(rows: CompanyRow[]): Promise<ImportResu
           SELECT id FROM companies
           WHERE "organizationId" = ${ctx.organizationId}
             AND cnpj IS NOT NULL
-            AND regexp_replace(cnpj, '\D', '', 'g') = ${cnpjDigits}
+            AND regexp_replace(cnpj, '[^0-9]', '', 'g') = ${cnpjDigits}
           LIMIT 1`;
         if (hit[0]) { skipped++; continue; }
       } else {

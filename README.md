@@ -611,6 +611,12 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/wha
 - **Deploy fantasma na Vercel**: o projeto `metodo-ai-new` da Vercel, resquício da fase de escolha de plataforma, seguia git-conectado a este repositório com variáveis de ambiente configuradas e branch de produção apontando para a `dev`. Nunca tinha implantado só porque ninguém empurrava para a `dev` havia meses. Em 24/09/2026 um push acordou o projeto e o app passou a ser servido publicamente em `metodo-ai-new.vercel.app`, sem SSO, ao lado da produção real. Resolvido pausando e, em seguida, apagando o projeto da Vercel. **Lição:** "nunca implantou" não é o mesmo que "não vai implantar" — antes de empurrar para uma branch, verifique o que está *conectado* a ela, não só o que já rodou.
 - **`/api/cron/feed-cleanup` apagava posts fixados**: filtrava por `createdAt < now-24h` em vez de `expiresAt`, então teria deletado todo post com mais de 24h — inclusive os permanentes e fixados, que por contrato do modelo nunca expiram. Nunca chegou a rodar em produção (o cron não estava agendado). Corrigido para filtrar por `expiresAt`.
 - **WhatsApp recebia mas não enviava** ("Conexão Evolution incompleta"): o envio não resolvia as credenciais pelo env — corrigido usando `resolveEvoCreds` em todos os caminhos.
+- **Telefone e CNPJ só batiam quando escritos igual (de 18/06 a 18/11/2026):**
+  - **Causa:** o SQL limpava os dígitos com `regexp_replace(x, '\D', '', 'g')` dentro de `prisma.$queryRaw`. O `$queryRaw` recebe o template já interpretado pelo JavaScript, e o `'\D'` chegava ao Postgres como `'D'`, que não limpa nada.
+  - **Efeito no WhatsApp:** a mensagem recebida (comum e oficial, `resolveContactId`) não achava o contato do CRM com o telefone formatado e **criava um contato repetido a cada conversa nova**. Os próprios contatos que ela criava ficam formatados, então nem esses eram reencontrados.
+  - **Efeito no resto:** a janela "Mesclar duplicados" não juntava esses repetidos, e a importação por planilha deixava passar duplicados.
+  - **Correção:** `[^0-9]` nos quatro lugares. O `check:crm-matches` testa contra o Postgres e falha se algum `regexp_replace` voltar a usar `'\D'`. Os contatos repetidos criados até a correção aparecem agora na janela "Mesclar duplicados" de cada empresa.
+  - **Lição:** em SQL dentro de template do JavaScript, nada de barra invertida; e uma consulta "sem resultado" também precisa de teste.
 
 ---
 

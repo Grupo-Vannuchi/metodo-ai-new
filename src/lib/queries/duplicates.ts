@@ -10,6 +10,10 @@ import { tenantDb } from "@/lib/tenant-db";
  * A record can match on more than one key (same phone AND email). To avoid
  * showing it in two groups, phone/cnpj groups are built first and email/name
  * groups skip any id already grouped.
+ *
+ * Digits are cleaned with `[^0-9]`. Until 18/11/2026 these two queries used a
+ * backslash-D, which `$queryRaw` (cooked template) sent as `'D'`: phones and
+ * CNPJs only grouped when typed exactly alike. See findCompanyMatches below.
  */
 
 export type DupRecord = {
@@ -34,11 +38,11 @@ type Group = { k: string; ids: string[] };
 
 export async function findContactDuplicates(organizationId: string): Promise<DupGroup[]> {
   const phoneGroups = await prisma.$queryRaw<Group[]>`
-    SELECT right(regexp_replace(phone, '\D', '', 'g'), 11) AS k, array_agg(id) AS ids
+    SELECT right(regexp_replace(phone, '[^0-9]', '', 'g'), 11) AS k, array_agg(id) AS ids
     FROM contacts
     WHERE "organizationId" = ${organizationId}
       AND phone IS NOT NULL
-      AND length(regexp_replace(phone, '\D', '', 'g')) >= 8
+      AND length(regexp_replace(phone, '[^0-9]', '', 'g')) >= 8
     GROUP BY k HAVING count(*) > 1
     LIMIT 100`;
   const emailGroups = await prisma.$queryRaw<Group[]>`
@@ -102,11 +106,11 @@ export async function findContactDuplicates(organizationId: string): Promise<Dup
 
 export async function findCompanyDuplicates(organizationId: string): Promise<DupGroup[]> {
   const cnpjGroups = await prisma.$queryRaw<Group[]>`
-    SELECT regexp_replace(cnpj, '\D', '', 'g') AS k, array_agg(id) AS ids
+    SELECT regexp_replace(cnpj, '[^0-9]', '', 'g') AS k, array_agg(id) AS ids
     FROM companies
     WHERE "organizationId" = ${organizationId}
       AND cnpj IS NOT NULL
-      AND length(regexp_replace(cnpj, '\D', '', 'g')) >= 8
+      AND length(regexp_replace(cnpj, '[^0-9]', '', 'g')) >= 8
     GROUP BY k HAVING count(*) > 1
     LIMIT 100`;
   const nameGroups = await prisma.$queryRaw<Group[]>`
@@ -182,8 +186,9 @@ const MATCH_LIMIT = 3;
  * same name (case and outer spaces ignored) — the keys the merge tool uses.
  * Ids come from SQL with the org written by hand (the digit normalization has
  * no Prisma equivalent); the rows are then read through `tenantDb`. The class
- * is `[^0-9]`, never `\D`: `$queryRaw` takes the cooked template, where `'\D'`
- * reaches Postgres as `'D'` and strips nothing (checked on 18/11/2026).
+ * is `[^0-9]`, never `\D`: `$queryRaw` takes the cooked template, where a
+ * backslash-D reaches Postgres as a plain `'D'` and strips nothing (checked on
+ * 18/11/2026).
  */
 export async function findCompanyMatches(
   organizationId: string,
