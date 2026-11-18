@@ -42,7 +42,7 @@ O MétodoAI **deixou de ser um SaaS de planos fixos** e virou uma **plataforma m
 | Framework | **Next.js 16** (App Router, Server Components, Server Actions) |
 | Linguagem | **TypeScript** (strict) |
 | UI | **Tailwind CSS v4** (`@theme`, dark por classe `.dark`), **lucide-react** |
-| Formulários | **react-hook-form** + **zod** |
+| Formulários | **react-hook-form** + **zod 4** |
 | Banco | **PostgreSQL** + **Prisma 6** (client Rust-free) |
 | i18n | **next-intl 4** (pt/en) — chaves em `src/messages/{pt,en}.json` |
 | Auth | **jose** (JWT HS256, cookie de sessão) + **bcryptjs**; OAuth Google/Microsoft/LinkedIn |

@@ -24,13 +24,18 @@ export type DocSection = z.infer<typeof docSectionSchema>;
 /** An image + rich-text band (used for header, footer and signature). */
 const bandSchema = z.object({ imageUrl: url.default(""), html: html.default("") });
 
-/** The rich document builder payload (cover/header/footer/signature/sections). */
+/**
+ * The rich document builder payload (cover/header/footer/signature/sections).
+ * The nested objects use `.prefault({})`, not `.default({})`: in zod 4 a default is
+ * returned as-is, so `{}` would skip the inner defaults; a prefault is parsed
+ * through the schema and comes out as a full `{ imageUrl: "", html: "" }`.
+ */
 export const proposalDocumentSchema = z.object({
   city: optionalText(160).default(""),
-  cover: z.object({ imageUrl: url.default(""), subtitle: optionalText(255).default("") }).default({}),
-  header: bandSchema.default({}),
-  footer: bandSchema.default({}),
-  signature: bandSchema.default({}),
+  cover: z.object({ imageUrl: url.default(""), subtitle: optionalText(255).default("") }).prefault({}),
+  header: bandSchema.prefault({}),
+  footer: bandSchema.prefault({}),
+  signature: bandSchema.prefault({}),
   clientLogos: z.array(z.string().trim().max(1000)).max(15).default([]),
   sections: z.array(docSectionSchema).max(40).default([]),
 });
