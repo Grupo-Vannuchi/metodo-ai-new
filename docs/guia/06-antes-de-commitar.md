@@ -72,6 +72,18 @@ com o texto vem primeiro, limite da lista). Ele é usado pelo `SearchSelect`
 Empresa, Contato, Responsável e Produto/Serviço da oportunidade e Empresa, Contato e o produto de cada
 item da proposta. Rode sempre que mexer nesse arquivo.
 
+`npm run check:crm-matches` cobre o aviso "Já existe" do cadastro rápido (o "+") de Empresa e Contato na
+"Nova oportunidade" (`findCompanyMatches` e `findContactMatches`, em
+[src/lib/queries/duplicates.ts](../../src/lib/queries/duplicates.ts)):
+- empresa com o mesmo CNPJ, de qualquer formato, ou com o mesmo nome (sem diferenciar maiúscula e sem os
+  espaços das pontas), contando uma vez só quando bate pelos dois;
+- contato com o mesmo telefone (os últimos 11 dígitos) ou o mesmo e-mail;
+- telefone curto ou campo vazio nunca bate;
+- **um registro igual em outra empresa nunca volta**.
+
+Roda contra o Postgres do Docker: cria duas organizações de teste e apaga tudo o que criou, mesmo quando
+falha. O `.env` serve para o `DATABASE_URL`. Rode sempre que mexer nessas duas funções ou no SQL delas.
+
 `npm run check:groups` cobre o "Adicionar aos contatos" com grupos do WhatsApp
 ([src/lib/integrations/evolution-groups.ts](../../src/lib/integrations/evolution-groups.ts): o número do
 membro vem de `phoneNumber` quando o id é um LID, o nome vem do que a Evolution manda (só dígitos conta

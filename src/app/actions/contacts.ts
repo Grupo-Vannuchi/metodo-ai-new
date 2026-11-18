@@ -1,8 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
+import { findContactMatches } from "@/lib/queries/duplicates";
+import type { MatchActionResult } from "@/app/actions/companies";
 import { contactSchema, type ContactInput } from "@/lib/validations/contact";
 import { parseTags } from "@/lib/contact-form";
 
@@ -25,6 +28,28 @@ async function resolveCompanyId(
     select: { id: true },
   });
   return found?.id ?? null;
+}
+
+const contactMatchSchema = z.object({
+  phone: z.string().max(40).optional(),
+  email: z.string().max(200).optional(),
+});
+
+/**
+ * Contacts of the active org that look like the one about to be created (same
+ * phone or same e-mail). Read-only; used by the quick add of "Nova oportunidade".
+ */
+export async function checkContactMatches(input: { phone?: string; email?: string }): Promise<MatchActionResult> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+  const parsed = contactMatchSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+  try {
+    return { ok: true, matches: await findContactMatches(ctx.organizationId, parsed.data) };
+  } catch (error) {
+    console.error("Failed to check contact matches", error);
+    return { ok: false, error: "unknown" };
+  }
 }
 
 export async function createContact(

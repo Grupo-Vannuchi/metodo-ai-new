@@ -139,6 +139,19 @@ Para leitura por id vale o mesmo raciocínio: o par é `findFirst({ where: { id 
   `tenantDb`. Um `id` de rodada de outra empresa dá `null`, não um erro. A tela de acompanhamento também
   pede ao serviço a previsão de término (`forecastGroupAddRun`, que lê a rodada por `tenantDb` e só do
   executor a conta do dia do número).
+- **SQL cru numa request de usuário:**
+  [duplicates.ts](../../src/lib/queries/duplicates.ts) é a exceção. Ele atende a janela "Mesclar
+  duplicados" (Empresas e Contatos) e o aviso "Já existe" do cadastro rápido da "Nova oportunidade".
+  - Ele compara CNPJ e telefone só pelos dígitos, o que o Prisma não sabe fazer. Por isso os ids saem de
+    `prisma.$queryRaw` com `"organizationId" = ${organizationId}` escrito à mão em cada consulta.
+  - Os registros são relidos por `tenantDb`, a segunda barreira.
+  - O `check:crm-matches` prova, contra o Postgres, que a busca do aviso não devolve registro de outra
+    empresa.
+  - Nesse SQL, a classe dos dígitos é `[^0-9]`, nunca `\D`. O `$queryRaw` recebe o template já
+    interpretado pelo JavaScript, e o `'\D'` chega ao Postgres como `'D'`, que não tira nada (conferido em
+    18/11/2026).
+  - As duas consultas antigas da janela de mesclar (`findContactDuplicates` e `findCompanyDuplicates`)
+    ainda usam `'\D'`. Por isso, hoje elas só juntam telefones e CNPJs escritos do mesmo jeito.
 - **Leitura do servidor MCP** ([src/lib/queries/mcp/](../../src/lib/queries/mcp/)): contexto de
   sistema. Quem chama é o portador da chave `MCP_API_KEY` ([guia 05](05-rotas-e-jobs.md)), não um
   usuário com sessão, então não existe organização ativa: ela chega como argumento de cada

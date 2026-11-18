@@ -163,3 +163,103 @@ export async function findCompanyDuplicates(organizationId: string): Promise<Dup
     }))
     .filter((g) => g.records.length > 1);
 }
+
+// ── Before creating one (quick add in "Nova oportunidade") ───────────────────
+
+/** An existing record that looks like the one about to be created. */
+export type MatchRecord = {
+  id: string;
+  name: string;
+  reason: "cnpj" | "name" | "phone" | "email";
+  /** CNPJ, phone or e-mail, to tell homonyms apart. */
+  detail: string | null;
+};
+
+const MATCH_LIMIT = 3;
+
+/**
+ * Companies of this org with the same CNPJ (digits only, any formatting) or the
+ * same name (case and outer spaces ignored) — the keys the merge tool uses.
+ * Ids come from SQL with the org written by hand (the digit normalization has
+ * no Prisma equivalent); the rows are then read through `tenantDb`. The class
+ * is `[^0-9]`, never `\D`: `$queryRaw` takes the cooked template, where `'\D'`
+ * reaches Postgres as `'D'` and strips nothing (checked on 18/11/2026).
+ */
+export async function findCompanyMatches(
+  organizationId: string,
+  input: { name: string; cnpj?: string },
+): Promise<MatchRecord[]> {
+  const digits = (input.cnpj ?? "").replace(/\D/g, "");
+  const name = input.name.trim().toLowerCase();
+  const reasons = new Map<string, MatchRecord["reason"]>();
+  if (digits.length >= 8) {
+    const rows = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM companies
+      WHERE "organizationId" = ${organizationId}
+        AND cnpj IS NOT NULL
+        AND regexp_replace(cnpj, '[^0-9]', '', 'g') = ${digits}
+      LIMIT ${MATCH_LIMIT}`;
+    rows.forEach((r) => reasons.set(r.id, "cnpj"));
+  }
+  if (name) {
+    const rows = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM companies
+      WHERE "organizationId" = ${organizationId}
+        AND lower(trim(name)) = ${name}
+      LIMIT ${MATCH_LIMIT}`;
+    rows.forEach((r) => { if (!reasons.has(r.id)) reasons.set(r.id, "name"); });
+  }
+  if (reasons.size === 0) return [];
+  const records = await tenantDb(organizationId).company.findMany({
+    where: { id: { in: [...reasons.keys()] } },
+    select: { id: true, name: true, cnpj: true },
+  });
+  return records
+    .map((r) => ({ id: r.id, name: r.name, reason: reasons.get(r.id)!, detail: r.cnpj }))
+    .sort((a, b) => (a.reason === "cnpj" ? 0 : 1) - (b.reason === "cnpj" ? 0 : 1))
+    .slice(0, MATCH_LIMIT);
+}
+
+/**
+ * Contacts of this org with the same phone (last 11 digits, any formatting) or
+ * the same e-mail (case and outer spaces ignored) — the merge tool's keys. Name
+ * alone is not a match: homonyms are common among contacts.
+ */
+export async function findContactMatches(
+  organizationId: string,
+  input: { phone?: string; email?: string },
+): Promise<MatchRecord[]> {
+  const digits = (input.phone ?? "").replace(/\D/g, "").slice(-11);
+  const email = (input.email ?? "").trim().toLowerCase();
+  const reasons = new Map<string, MatchRecord["reason"]>();
+  if (digits.length >= 8) {
+    const rows = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM contacts
+      WHERE "organizationId" = ${organizationId}
+        AND phone IS NOT NULL
+        AND right(regexp_replace(phone, '[^0-9]', '', 'g'), 11) = ${digits}
+      LIMIT ${MATCH_LIMIT}`;
+    rows.forEach((r) => reasons.set(r.id, "phone"));
+  }
+  if (email) {
+    const rows = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM contacts
+      WHERE "organizationId" = ${organizationId}
+        AND email IS NOT NULL
+        AND lower(trim(email)) = ${email}
+      LIMIT ${MATCH_LIMIT}`;
+    rows.forEach((r) => { if (!reasons.has(r.id)) reasons.set(r.id, "email"); });
+  }
+  if (reasons.size === 0) return [];
+  const records = await tenantDb(organizationId).contact.findMany({
+    where: { id: { in: [...reasons.keys()] } },
+    select: { id: true, name: true, phone: true, email: true },
+  });
+  return records
+    .map((r) => {
+      const reason = reasons.get(r.id)!;
+      return { id: r.id, name: r.name, reason, detail: reason === "phone" ? r.phone : r.email };
+    })
+    .sort((a, b) => (a.reason === "phone" ? 0 : 1) - (b.reason === "phone" ? 0 : 1))
+    .slice(0, MATCH_LIMIT);
+}
