@@ -617,6 +617,15 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/wha
   - **Efeito no resto:** a janela "Mesclar duplicados" não juntava esses repetidos, e a importação por planilha deixava passar duplicados.
   - **Correção:** `[^0-9]` nos quatro lugares. O `check:crm-matches` testa contra o Postgres e falha se algum `regexp_replace` voltar a usar `'\D'`. Os contatos repetidos criados até a correção aparecem agora na janela "Mesclar duplicados" de cada empresa.
   - **Lição:** em SQL dentro de template do JavaScript, nada de barra invertida; e uma consulta "sem resultado" também precisa de teste.
+- **A janela "Mesclar duplicados" perdia o descadastro e deixava vínculos para trás (até 19/11/2026):** achado ao revisar a mesclagem antes de passar por ela os repetidos do item acima.
+  - **Contatos:**
+    - o descadastro (LGPD) do contato apagado não passava para o que ficava, e o contato voltava a receber campanhas;
+    - a conversa do WhatsApp oficial ficava ligada a um contato apagado;
+    - dois repetidos na mesma campanha derrubavam a mesclagem.
+  - **Empresas:** o chamado, o equipamento de cliente e o lead importado ficavam apontando para a empresa apagada.
+  - **Os dois:** os favoritos também ficavam para trás.
+  - **Correção:** a mesclagem foi para `src/lib/crm/merge-records.ts`, que leva tudo isso. O `check:merge:db` testa contra o Postgres.
+  - **Lição:** tabela que guarda `contactId`/`companyId` sem chave estrangeira não impede a exclusão. Quem apaga registro precisa saber de todas.
 
 ---
 
