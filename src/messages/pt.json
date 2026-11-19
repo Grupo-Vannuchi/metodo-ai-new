@@ -1426,6 +1426,7 @@
       "mergeBtn": "Mesclar {n}",
       "merging": "Mesclando…",
       "close": "Fechar",
+      "error": "Não foi possível mesclar este grupo. Tente de novo.",
       "by": {
         "phone": "Mesmo telefone",
         "email": "Mesmo e-mail",

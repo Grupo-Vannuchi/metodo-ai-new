@@ -8,17 +8,10 @@ import { useRouter } from "@/i18n/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DupGroup } from "@/lib/queries/duplicates";
+import { dupGroupKey, primaryFor } from "@/lib/crm/duplicates-pick";
 import { mergeContacts, mergeCompanies } from "@/app/actions/merge";
 
 const REASON_ICON = { phone: Phone, email: Mail, cnpj: Hash, name: Type } as const;
-
-/** Suggest the richest record as primary: most deals, then oldest (most
- * established), so the merge keeps the record with the most history. */
-function suggestPrimary(g: DupGroup): string {
-  return [...g.records].sort(
-    (a, b) => b.deals - a.deals || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-  )[0].id;
-}
 
 export function DuplicatesModal({
   entity,
@@ -30,25 +23,35 @@ export function DuplicatesModal({
   const t = useTranslations("crm.dupes");
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [primary, setPrimary] = useState<Record<number, string>>({});
+  // Picks are keyed by the group (dupGroupKey), never by its position in the list: a merge removes a
+  // group and the ones below move up, and a pick stored by position would land on another group.
+  const [picked, setPicked] = useState<Record<string, string>>({});
   const [pending, start] = useTransition();
-  const [busyIdx, setBusyIdx] = useState<number | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [failedKey, setFailedKey] = useState<string | null>(null);
 
   const count = groups.length;
 
-  function primaryOf(idx: number, g: DupGroup) {
-    return primary[idx] ?? suggestPrimary(g);
-  }
-
-  function merge(idx: number, g: DupGroup) {
-    const primaryId = primaryOf(idx, g);
+  function merge(g: DupGroup) {
+    const key = dupGroupKey(g);
+    const primaryId = primaryFor(g, picked[key]);
     const losers = g.records.map((r) => r.id).filter((id) => id !== primaryId);
     if (losers.length === 0) return;
-    setBusyIdx(idx);
+    setBusyKey(key);
+    setFailedKey(null);
     start(async () => {
       const fn = entity === "contacts" ? mergeContacts : mergeCompanies;
-      await fn(primaryId, losers);
-      setBusyIdx(null);
+      const res = await fn(primaryId, losers);
+      setBusyKey(null);
+      if (!res.ok) {
+        setFailedKey(key);
+        return;
+      }
+      setPicked((p) => {
+        const next = { ...p };
+        delete next[key];
+        return next;
+      });
       router.refresh();
     });
   }
@@ -95,11 +98,12 @@ export function DuplicatesModal({
                     <>
                       <p className="text-sm text-muted-foreground">{t("hint")}</p>
                       <div className="mt-4 flex flex-col gap-4">
-                        {groups.map((g, idx) => {
+                        {groups.map((g) => {
                           const Icon = REASON_ICON[g.reason];
-                          const chosen = primaryOf(idx, g);
+                          const key = dupGroupKey(g);
+                          const chosen = primaryFor(g, picked[key]);
                           return (
-                            <div key={`${g.reason}-${g.key}-${idx}`} className="rounded-xl border border-border bg-card/50 p-3">
+                            <div key={key} className="rounded-xl border border-border bg-card/50 p-3">
                               <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                                 <Icon className="size-3.5" />
                                 {t(`by.${g.reason}`)}
@@ -115,9 +119,9 @@ export function DuplicatesModal({
                                   >
                                     <input
                                       type="radio"
-                                      name={`primary-${idx}`}
+                                      name={`primary-${key}`}
                                       checked={chosen === r.id}
-                                      onChange={() => setPrimary((p) => ({ ...p, [idx]: r.id }))}
+                                      onChange={() => setPicked((p) => ({ ...p, [key]: r.id }))}
                                       className="size-4 shrink-0 accent-[var(--brand)]"
                                     />
                                     <div className="min-w-0 flex-1">
@@ -137,10 +141,15 @@ export function DuplicatesModal({
                                   </label>
                                 ))}
                               </div>
-                              <div className="mt-2 flex justify-end">
-                                <Button type="button" size="sm" disabled={pending} onClick={() => merge(idx, g)}>
+                              <div className="mt-2 flex items-center justify-end gap-3">
+                                {failedKey === key ? (
+                                  <p role="alert" className="text-xs text-red-600">
+                                    {t("error")}
+                                  </p>
+                                ) : null}
+                                <Button type="button" size="sm" disabled={pending} onClick={() => merge(g)}>
                                   <Merge className="size-4" />
-                                  {busyIdx === idx ? t("merging") : t("mergeBtn", { n: g.records.length })}
+                                  {busyKey === key ? t("merging") : t("mergeBtn", { n: g.records.length })}
                                 </Button>
                               </div>
                             </div>

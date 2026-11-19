@@ -1426,6 +1426,7 @@
       "mergeBtn": "Merge {n}",
       "merging": "Merging…",
       "close": "Close",
+      "error": "Couldn't merge this group. Try again.",
       "by": {
         "phone": "Same phone",
         "email": "Same email",
