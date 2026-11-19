@@ -381,6 +381,23 @@ põe o contato na pasta pela coluna legada e o gatilho, e a fase 2 precisa troca
 organizações cujo `slug` começa com `folders-db-` (o LIKE diferencia maiúsculas de minúsculas). Precisa do Postgres do Docker e de um `.env` válido. Rode sempre que mexer em
 `ContactFolderLink`, nas ações de pasta de contato ou em `src/lib/crm/whatsapp-import-contacts.ts`.
 
+`npm run check:merge:db` testa no Postgres local a mesclagem da janela "Mesclar duplicados"
+(`mergeContactRecords` e `mergeCompanyRecords`, em [src/lib/crm/merge-records.ts](../../src/lib/crm/merge-records.ts)),
+passando pelo `tenantDb` como a ação faz e conferindo o resultado com o client cru. O script
+[scripts/check-merge-db.ts](../../scripts/check-merge-db.ts) cobre:
+- o descadastro (LGPD) de qualquer um dos repetidos continua no contato que fica;
+- a conversa do WhatsApp oficial e a tarefa passam para o contato que fica;
+- o contato, o chamado, o equipamento de cliente, o lead importado e os favoritos passam para a empresa que fica;
+- dois repetidos na mesma campanha deixam um destinatário só, e cada usuário fica com um favorito só (antes, isso derrubava a mesclagem);
+- os campos vazios do que fica são preenchidos pelos repetidos, e as etiquetas somam;
+- um id de outra empresa é ignorado e não é tocado, e um principal de outra empresa é recusado.
+
+Cria duas empresas `MERGE-DB-A/B-<carimbo>` e dois usuários `merge-db-*@test.local` e apaga tudo o que criou, mesmo quando falha. Se
+você matar o script no meio, apague à mão as organizações cujo `slug` começa com `merge-db-` e os usuários cujo e-mail começa com
+`merge-db-`. Precisa do Postgres do Docker e de um `.env` válido. Rode sempre que mexer na mesclagem. **Tabela nova com `contactId`
+ou `companyId` entra no `merge-records.ts` e ganha um caso aqui**; senão, a mesclagem a deixa apontando para um registro apagado,
+porque nenhuma chave estrangeira impede a exclusão.
+
 ## `check:isolation`
 
 Isolamento multi-tenant é [a regra inviolável nº 1 do `CLAUDE.md`](../../CLAUDE.md) e o
