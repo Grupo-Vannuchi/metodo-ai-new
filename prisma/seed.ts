@@ -32,17 +32,24 @@ async function main() {
 
   const passwordHash = await bcrypt.hash(password, 10);
 
-  const org = await prisma.organization.upsert({
-    where: { slug },
-    update: {},
-    create: { name: orgName, slug },
-  });
-
+  // The owner comes first: the company records its account owner (Organization.ownerId), and
+  // without it nobody is the account owner, so the module onboarding is stuck. The login is
+  // gated on emailVerified (src/app/actions/auth.ts), so the seeded owner starts verified.
   const user = await prisma.user.upsert({
     where: { email },
     update: {},
-    create: { email, name: "Owner", passwordHash },
+    create: { email, name: "Owner", passwordHash, emailVerified: new Date() },
   });
+
+  const org = await prisma.organization.upsert({
+    where: { slug },
+    update: {},
+    create: { name: orgName, slug, ownerId: user.id },
+  });
+
+  // Databases seeded before 19/11/2026 lack both: fill the gaps, never overwrite a value.
+  await prisma.user.updateMany({ where: { id: user.id, emailVerified: null }, data: { emailVerified: new Date() } });
+  await prisma.organization.updateMany({ where: { id: org.id, ownerId: null }, data: { ownerId: user.id } });
 
   await prisma.membership.upsert({
     where: { organizationId_userId: { organizationId: org.id, userId: user.id } },

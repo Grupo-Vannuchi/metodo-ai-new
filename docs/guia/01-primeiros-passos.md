@@ -49,6 +49,9 @@ Três sinais, nesta ordem:
    `SEED_OWNER_PASSWORD` no `.env` (defaults documentados em
    [.env.example](../../.env.example)). Depois de logar, **Painel** é o primeiro item do menu
    lateral — vai ser o alvo da tarefa abaixo.
+   - O seed cria esse usuário já com o e-mail verificado e como dono da conta (`Organization.ownerId`).
+   - Sem o e-mail verificado, o login é recusado. Sem dono, a escolha dos módulos trava.
+   - Num banco local semeado antes de 19/11/2026, faltam esses dois campos. Rode `npm run db:seed` de novo: ele preenche os dois e não mexe no resto.
 
 Se os três passarem, o ambiente está pronto.
 
@@ -98,7 +101,7 @@ pequena: não exige entender nenhuma regra de negócio, e dá para confirmar soz
    (`github.com/Grupo-Vannuchi/metodo-ai-new/actions`) e acompanhe o job `validate`
    ([.github/workflows/ci.yml:17-18](../../.github/workflows/ci.yml#L17-L18)): ele repete as
    mesmas cinco checagens (`typecheck`, `lint`, `check:node`, `build` e `check:isolation`), numa
-   ordem diferente da lista local e com `prisma migrate deploy` no meio — do zero, com um Postgres
+   ordem diferente da lista local e com `check:devguard` e `prisma migrate deploy` no meio — do zero, com um Postgres
    novo subido no runner, não o seu. Ficar verde ali é uma confirmação independente da sua, não uma
    repetição — é a diferença entre "passou aqui" e "passou".
 

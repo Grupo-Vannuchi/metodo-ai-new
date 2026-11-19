@@ -76,6 +76,12 @@ jobs:
       - name: Compatibilidade de Node
         run: npm run check:node
 
+      # O .env local aponta para a Evolution real (VPS): esta trava e o que impede o
+      # ambiente de desenvolvimento de mandar mensagem para cliente. Sem banco, rede ou
+      # env (todos os numeros do teste sao inventados), entao roda aqui sem segredo.
+      - name: Trava de desenvolvimento do WhatsApp
+        run: npm run check:devguard
+
       - name: Aplicar migrations
         run: npx prisma migrate deploy
 

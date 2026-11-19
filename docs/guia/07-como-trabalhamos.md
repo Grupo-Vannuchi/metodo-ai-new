@@ -42,7 +42,7 @@ O fluxo de cada entrega:
    Abra o PR pelo `gh pr create` ou pelo link
    `https://github.com/Grupo-Vannuchi/metodo-ai-new/compare/main...feature/nome-curto?expand=1`.
    A descrição explica o que muda, o que foi testado e se existe migration.
-4. **Espere o CI verde** (job `validate`, aba **Actions**). Ele refaz as cinco checagens do zero,
+4. **Espere o CI verde** (job `validate`, aba **Actions**). Ele refaz as cinco checagens do zero, mais o `check:devguard`,
    com um Postgres novo.
 5. **Merge.** A partir daqui está em produção. Teste em `https://metodotia.com` logo depois.
 

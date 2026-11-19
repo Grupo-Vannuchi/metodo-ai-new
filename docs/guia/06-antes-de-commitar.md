@@ -10,8 +10,10 @@ npm run typecheck && npm run lint && npm run build && npm run check:isolation &&
 ```
 
 São as mesmas cinco checagens que o CI roda em todo push/PR para `dev` e `main`, mas **em outra
-ordem** e com um passo a mais no meio — ver [.github/workflows/ci.yml](../../.github/workflows/ci.yml):
-`typecheck` → `lint` → `check:node` → `prisma migrate deploy` → `build` → `check:isolation`. Rodar
+ordem** e com dois passos a mais no meio — ver [.github/workflows/ci.yml](../../.github/workflows/ci.yml):
+`typecheck` → `lint` → `check:node` → `check:devguard` → `prisma migrate deploy` → `build` →
+`check:isolation`. O `check:devguard` (a trava de desenvolvimento do WhatsApp, ver abaixo) roda só no CI:
+não entra nas cinco do commit, mas um PR que a quebre não fica verde. Rodar
 local antes de commitar não é redundância: é descobrir a falha em segundos, na sua máquina, em vez
 de minutos depois, na fila do CI.
 
@@ -257,7 +259,9 @@ corpo de toda chamada. Rode sempre que mexer em `src/lib/integrations/evolution-
 fora dela (inclusive `NODE_ENV` vazio dos scripts `tsx`), só sai mensagem para quem está em
 `WHATSAPP_DEV_ALLOWED_NUMBERS`, em qualquer formato (com ou sem 55, com ou sem o 9, `@s.whatsapp.net`),
 grupo só pelo JID listado, LID e destino vazio segurados, e uma Evolution em loopback (a falsa dos e2e)
-liberada. Não usa banco nem rede; todos os números do teste são inventados e não saem do processo. Rode
+liberada. Não usa banco, rede nem `.env`; todos os números do teste são inventados e não saem do processo.
+**Roda também no CI** (passo "Trava de desenvolvimento do WhatsApp" do `ci.yml`), porque o `.env` local aponta
+para a Evolution real e é essa trava que impede o ambiente de desenvolvimento de escrever para cliente. Rode
 sempre que mexer nesse arquivo ou em [channels/evolution.ts](../../src/lib/integrations/channels/evolution.ts).
 A adição a grupo e o texto do convite de [evolution-client.ts](../../src/lib/integrations/evolution-client.ts)
 usam a mesma trava (a adição exige o JID do grupo e o número da pessoa; o executor a consulta antes até da
@@ -507,7 +511,7 @@ checagens localmente antes, em vez de descobrir no PR.
 GitHub — push direto é rejeitado, e a única forma de levar código até lá é por Pull Request.
 Conferido na configuração real do repositório: a proteção exige que o check `validate` do CI
 ([.github/workflows/ci.yml](../../.github/workflows/ci.yml) — as mesmas cinco checagens deste
-guia, mais `prisma migrate deploy` contra um Postgres efêmero do próprio job) esteja verde antes do
+guia, mais o `check:devguard` e o `prisma migrate deploy` contra um Postgres efêmero do próprio job) esteja verde antes do
 merge, bloqueia force-push e deleção da branch, e vale até para admin (`enforce_admins`). Ela
 **não** exige aprovação humana configurada — o gate é o CI, não um revisor. Isso não dispensa pedir
 revisão quando fizer sentido; só significa que o GitHub não vai impedir o merge por falta dela.
@@ -517,8 +521,8 @@ O runbook completo — o que o pipeline faz, o procedimento de migração e o hi
 
 ## Resumo
 
-- Os cinco comandos rodam no CI, na mesma composição mas em ordem diferente e com `prisma migrate
-  deploy` no meio; rodar local antes só adianta o feedback.
+- Os cinco comandos rodam no CI, na mesma composição mas em ordem diferente e com `check:devguard` e
+  `prisma migrate deploy` no meio; rodar local antes só adianta o feedback.
 - `typecheck`/`build` pegam erro de tipo e de compilação de verdade; `.next/` velho engana o
   `typecheck` — reinicie o dev server se a linha apontada não existir no seu editor.
 - `lint`: 4 avisos conhecidos hoje (3 sobre `watch()`, 1 var não usada) — nenhum bloqueia; um
