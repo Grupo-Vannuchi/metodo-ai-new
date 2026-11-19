@@ -27,6 +27,7 @@
     "check:folders": "tsx scripts/check-contact-folders.ts",
     "check:folders:db": "tsx --tsconfig scripts/tsconfig.server.json --env-file=.env scripts/check-contact-folders-db.ts",
     "check:merge:db": "tsx --tsconfig scripts/tsconfig.server.json --env-file=.env scripts/check-merge-db.ts",
+    "check:oauth:db": "tsx --tsconfig scripts/tsconfig.server.json --env-file=.env scripts/check-oauth-db.ts",
     "check:tasks": "tsx scripts/check-task-board.ts",
     "check:automation": "tsx scripts/check-automation.ts",
     "check:automation:e2e": "tsx --env-file=.env scripts/check-automation-e2e.ts",

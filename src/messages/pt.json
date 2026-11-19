@@ -176,7 +176,7 @@
       "already_in_team": "Você já faz parte de uma equipe. Saia dela (em Configurações) antes de aceitar este convite.",
       "email_not_verified": "Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada.",
       "oauth": "Não foi possível entrar com {provider}. Tente novamente.",
-      "oauth_unverified": "Seu e-mail no {provider} não está verificado. Use outra forma de acesso.",
+      "oauth_unverified": "Não conseguimos confirmar seu e-mail na conta {provider}. Entre com e-mail e senha (ou crie sua conta assim) e depois conecte a conta {provider} no seu perfil.",
       "generic": "Algo deu errado. Tente novamente."
     },
     "verify": {
