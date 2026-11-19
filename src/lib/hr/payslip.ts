@@ -1,4 +1,5 @@
 import "server-only";
+import { AUTO_PRINT_SCRIPT } from "@/lib/print-document";
 
 /**
  * Print-optimized HTML for a payslip (holerite, A4). Same approach as the
@@ -72,7 +73,7 @@ export function renderPayslip(p: PayslipDoc, opts: { orgName: string; autoPrint?
       : `<tr><td colspan="2" class="empty">—</td></tr>`;
 
   const autoPrint = opts.autoPrint
-    ? `<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},250);});</script>`
+    ? AUTO_PRINT_SCRIPT
     : "";
 
   const identity: [string, string][] = [

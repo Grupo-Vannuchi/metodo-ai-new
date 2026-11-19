@@ -1,6 +1,7 @@
 import { getOrgContext } from "@/lib/tenant";
 import { getPayslip } from "@/lib/queries/payroll";
 import { renderPayslip } from "@/lib/hr/payslip";
+import { documentHtmlHeaders } from "@/lib/print-document";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,5 +36,5 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     });
   }
 
-  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+  return new Response(html, { headers: documentHtmlHeaders() });
 }
