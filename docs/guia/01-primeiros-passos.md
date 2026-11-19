@@ -49,6 +49,9 @@ Três sinais, nesta ordem:
    `SEED_OWNER_PASSWORD` no `.env` (defaults documentados em
    [.env.example](../../.env.example)). Depois de logar, **Painel** é o primeiro item do menu
    lateral — vai ser o alvo da tarefa abaixo.
+   - O seed cria esse usuário já com o e-mail verificado e como dono da conta (`Organization.ownerId`).
+   - Sem o e-mail verificado, o login é recusado. Sem dono, a escolha dos módulos trava.
+   - Num banco local semeado antes de 19/11/2026, faltam esses dois campos. Rode `npm run db:seed` de novo: ele preenche os dois e não mexe no resto.
 
 Se os três passarem, o ambiente está pronto.
 
