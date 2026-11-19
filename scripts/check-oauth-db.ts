@@ -19,11 +19,12 @@
 import assert from "node:assert/strict";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { assertLocalDatabase } from "./lib/local-db";
 import { resolveOAuthSession } from "@/lib/oauth/session";
 import { microsoftEmailVerified } from "@/lib/oauth/providers";
 
 const connectionString = process.env.DATABASE_URL;
-if (!connectionString) throw new Error("DATABASE_URL is not set");
+assertLocalDatabase("check:oauth:db", connectionString);
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 const stamp = Date.now();

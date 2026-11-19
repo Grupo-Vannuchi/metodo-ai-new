@@ -24,6 +24,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { assertLocalDatabase } from "./lib/local-db";
 import { contactFolderEmailCounts, getContactsBoard } from "@/lib/queries/contact-folders";
 import { resolveAudience } from "@/lib/email-broadcast/audience";
 import { EMPTY_AUDIENCE } from "@/lib/validations/email-broadcast";
@@ -39,7 +40,7 @@ import {
 import { createWhatsappContacts } from "@/lib/crm/whatsapp-import-contacts";
 
 const connectionString = process.env.DATABASE_URL;
-if (!connectionString) throw new Error("DATABASE_URL is not set");
+assertLocalDatabase("check:folders:db", connectionString);
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 const stamp = Date.now();
