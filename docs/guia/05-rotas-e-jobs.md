@@ -122,6 +122,18 @@ if (FINANCE.includes(model) && !hasFeatureByModules(ctx.modules, "finance")) {
 Se a rota lê ou grava tabela de negócio, autenticar a sessão é só metade do trabalho — o
 isolamento entre organizações é assunto do [guia 03](03-multi-tenancy.md), não deste.
 
+**Rota que devolve uma página HTML inteira** (hoje, o documento da proposta e o holerite): ela roda na
+origem do app, com a sessão de quem abre. Por isso, três regras:
+- responda com `documentHtmlHeaders()` de [src/lib/print-document.ts](../../src/lib/print-document.ts),
+  que põe a `Content-Security-Policy` dos documentos: nenhum script além do de impressão, liberado pelo
+  hash;
+- se a página precisa abrir a impressão sozinha, use o `AUTO_PRINT_SCRIPT` desse arquivo, nunca um
+  `<script>` próprio, que a CSP bloquearia;
+- texto rico gravado pelo usuário entra só depois de passar por `sanitizeHtml`
+  ([src/lib/proposals/sanitize.ts](../../src/lib/proposals/sanitize.ts)), e o resto por escape.
+
+O `npm run check:documents` confere o sanitizador e a CSP.
+
 ### Rota chamada pelo cron
 
 Tem seção própria mais abaixo — foi a origem do incidente real, então merece espaço maior.
@@ -345,3 +357,5 @@ Antes de considerar uma rota em `src/app/api/` pronta:
   primeiras linhas do handler.
 - **Toca dado de tenant?** Se a rota lê ou grava tabela de negócio, autenticar quem chama não
   basta — vale o [guia 03 (multi-tenancy)](03-multi-tenancy.md) também.
+- **Devolve uma página HTML inteira?** Use `documentHtmlHeaders()` e as regras de "Rota chamada pelo
+  usuário logado", acima.

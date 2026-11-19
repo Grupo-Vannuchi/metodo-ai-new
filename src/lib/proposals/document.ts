@@ -2,6 +2,7 @@ import "server-only";
 import type { ProposalDocument } from "@/lib/validations/proposal-template";
 import { sanitizeHtml } from "@/lib/proposals/sanitize";
 import { substituteVars } from "@/lib/proposals/variables";
+import { AUTO_PRINT_SCRIPT } from "@/lib/print-document";
 
 /**
  * Print-optimized HTML for a proposal (A4). Rendered by the export route; the
@@ -92,7 +93,7 @@ export function renderProposalDocument(p: ProposalDoc, opts: { orgName: string; 
       : "";
 
   const autoPrint = opts.autoPrint
-    ? `<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},250);});</script>`
+    ? AUTO_PRINT_SCRIPT
     : "";
 
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
@@ -246,7 +247,7 @@ export function renderProposalBuilderDocument(
     : "";
 
   const autoPrint = opts.autoPrint
-    ? `<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},250);});</script>`
+    ? AUTO_PRINT_SCRIPT
     : "";
 
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">

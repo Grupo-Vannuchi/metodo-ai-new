@@ -6,8 +6,11 @@ import "server-only";
  * raw, even though it comes from our own constrained editor. Deliberately
  * regex-based (no jsdom) so it stays cheap on the Passenger/CloudLinux host.
  *
- * Strategy: strip dangerous elements entirely, drop every event handler and
- * unsafe URL scheme, then keep only an allowlist of formatting tags/attributes.
+ * Strategy: strip dangerous elements entirely, then scan the rest once from left
+ * to right, keeping only an allowlist of formatting tags/attributes (no event
+ * handler, no unsafe URL scheme) and writing every other `<` out as `&lt;`.
+ * (sanitize-html would be the off-the-shelf choice, but its current releases
+ * need Node 22, and production is pinned to Node 20.)
  */
 
 // Tags removed together with their content (never rendered).
@@ -59,20 +62,46 @@ function cleanAttributes(tag: string, attrs: string): string {
   return kept.length ? " " + kept.join(" ") : "";
 }
 
+/** A whole tag starting exactly at `lastIndex` (sticky). Its attributes can't contain `<` or `>`. */
+const TAG_AT = /<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b([^<>]*)>/y;
+
 export function sanitizeHtml(input: string | null | undefined): string {
   if (!input) return "";
-  let out = String(input).replace(DROP_WITH_CONTENT, "").replace(DROP_TAGS, "");
+  // Dangerous elements go first, content included, so their inner text never shows.
+  const src = String(input).replace(DROP_WITH_CONTENT, "").replace(DROP_TAGS, "");
 
-  // Walk every remaining tag; keep allowed ones (with cleaned attrs), drop the
-  // rest (keeping their inner text).
-  out = out.replace(/<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g, (_full, slash: string, name: string, attrs: string) => {
+  // One left-to-right scan, never revisited: every `<` either opens a complete tag right
+  // there (kept if allowed, with cleaned attributes; dropped otherwise, keeping the text
+  // around it) or is written out as `&lt;`. A dropped tag can't join its neighbours into
+  // a new tag, and a tag without its `>` can't run into the markup that follows.
+  let out = "";
+  let i = 0;
+  while (i < src.length) {
+    const lt = src.indexOf("<", i);
+    if (lt === -1) {
+      out += src.slice(i);
+      break;
+    }
+    out += src.slice(i, lt);
+    TAG_AT.lastIndex = lt;
+    const m = TAG_AT.exec(src);
+    if (!m) {
+      out += "&lt;";
+      i = lt + 1;
+      continue;
+    }
+    const [full, slash, name, attrs] = m;
     const tag = name.toLowerCase();
-    if (!ALLOWED_TAGS.has(tag)) return "";
-    if (slash) return `</${tag}>`;
-    const selfClose = tag === "br" || tag === "hr" || tag === "img";
-    return `<${tag}${cleanAttributes(tag, attrs)}${selfClose ? " /" : ""}>`;
-  });
-
+    if (ALLOWED_TAGS.has(tag)) {
+      if (slash) {
+        out += `</${tag}>`;
+      } else {
+        const selfClose = tag === "br" || tag === "hr" || tag === "img";
+        out += `<${tag}${cleanAttributes(tag, attrs)}${selfClose ? " /" : ""}>`;
+      }
+    }
+    i = lt + full.length;
+  }
   return out;
 }
 

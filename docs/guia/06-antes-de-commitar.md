@@ -32,6 +32,17 @@ caminho direto ou rascunho, faixas do upload, decisão sobre falhas do Graph), a
 falha em português, conferindo que o texto de cada motivo de pausa e de falha, e de cada erro da caixa de entrada no formulário da conta, existe em `pt.json` e `en.json`). Não usa
 banco nem rede. Rode sempre que mexer em `src/lib/email-broadcast/`.
 
+`npm run check:documents` ([scripts/check-documents.ts](../../scripts/check-documents.ts)) confere as páginas HTML que o
+app serve inteiras, a proposta e o holerite. Cobre:
+- o sanitizador de texto rico ([src/lib/proposals/sanitize.ts](../../src/lib/proposals/sanitize.ts)), que o e-mail em massa
+  também usa: nenhuma marcação hostil sai executável, o HTML normal do editor fica como está, e rodar duas vezes não muda nada;
+- a `Content-Security-Policy` desses documentos ([src/lib/print-document.ts](../../src/lib/print-document.ts)): libera pelo
+  hash só o script de impressão automática;
+- uma proposta renderizada com seções hostis: sai só com esse script.
+
+Não usa banco, rede nem `.env`. Rode sempre que mexer no sanitizador, em `print-document.ts` ou nos renderizadores da
+proposta e do holerite.
+
 `npm run check:tasks` faz o mesmo para as regras puras do kanban de Tarefas
 ([src/lib/tasks/board-core.ts](../../src/lib/tasks/board-core.ts): distribuição inicial por data no
 horário de Brasília, posição entre cards, nome de coluna, coluna da tarefa nova pela data, para onde vai
