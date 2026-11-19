@@ -624,8 +624,14 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/wha
     - dois repetidos na mesma campanha derrubavam a mesclagem.
   - **Empresas:** o chamado, o equipamento de cliente e o lead importado ficavam apontando para a empresa apagada.
   - **Os dois:** os favoritos também ficavam para trás.
-  - **Correção:** a mesclagem foi para `src/lib/crm/merge-records.ts`, que leva tudo isso. O `check:merge:db` testa contra o Postgres.
-  - **Lição:** tabela que guarda `contactId`/`companyId` sem chave estrangeira não impede a exclusão. Quem apaga registro precisa saber de todas.
+  - **Na janela:** a escolha do registro a manter ficava guardada pela posição do grupo na lista. Depois de uma mesclagem, o grupo de baixo subia e herdava a escolha. Mesclá-lo fundia o grupo inteiro no contato do grupo anterior, de outra pessoa.
+  - **Correção:**
+    - a mesclagem foi para `src/lib/crm/merge-records.ts`, que leva tudo isso, e o `check:merge:db` testa contra o Postgres;
+    - a janela guarda a escolha pelo grupo e só aceita um registro do próprio grupo (`src/lib/crm/duplicates-pick.ts`);
+    - a janela passou a sugerir um nome de verdade em vez de um contato salvo só com o número.
+  - **Lição:**
+    - tabela que guarda `contactId`/`companyId` sem chave estrangeira não impede a exclusão, e quem apaga registro precisa saber de todas;
+    - em lista que muda depois de uma ação, estado guardado pela posição troca de dono.
 
 ---
 
