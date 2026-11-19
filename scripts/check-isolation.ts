@@ -12,11 +12,12 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { assertLocalDatabase } from "./lib/local-db";
 
 // `engineType = "client"` (schema.prisma) drops the Rust engine, so every
 // PrismaClient needs an explicit driver adapter — same as src/lib/prisma.ts.
 const connectionString = process.env.DATABASE_URL;
-if (!connectionString) throw new Error("DATABASE_URL is not set");
+assertLocalDatabase("check:isolation", connectionString);
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 function assert(cond: boolean, message: string) {

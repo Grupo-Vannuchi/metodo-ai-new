@@ -22,6 +22,9 @@ import {
   findContactMatches,
 } from "../src/lib/queries/duplicates";
 import { resolveContactId } from "../src/lib/whatsapp/ingest";
+import { assertLocalDatabase } from "./lib/local-db";
+
+assertLocalDatabase("check:crm-matches", process.env.DATABASE_URL);
 
 let passed = 0;
 async function check(name: string, fn: () => Promise<void>): Promise<void> {

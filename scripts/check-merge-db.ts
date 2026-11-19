@@ -20,11 +20,12 @@
 import assert from "node:assert/strict";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { assertLocalDatabase } from "./lib/local-db";
 import { tenantDb } from "@/lib/tenant-db";
 import { mergeCompanyRecords, mergeContactRecords } from "@/lib/crm/merge-records";
 
 const connectionString = process.env.DATABASE_URL;
-if (!connectionString) throw new Error("DATABASE_URL is not set");
+assertLocalDatabase("check:merge:db", connectionString);
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 const stamp = Date.now();
