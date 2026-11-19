@@ -95,9 +95,17 @@ export async function resolveOAuthSession(
       prisma.account.create({
         data: { userId: existing.id, provider, providerAccountId: profile.sub },
       }),
+      // The address was never confirmed on this account, and the provider has just proven who owns
+      // it. A password set before that was not proven to be the owner's, so it is dropped; the owner
+      // sets a new one through "Esqueci a senha" if they want one.
       ...(existing.emailVerified
         ? []
-        : [prisma.user.update({ where: { id: existing.id }, data: { emailVerified: new Date() } })]),
+        : [
+            prisma.user.update({
+              where: { id: existing.id },
+              data: { emailVerified: new Date(), passwordHash: null },
+            }),
+          ]),
     ]);
     const s = await firstMembership(existing.id);
     return s ? { ok: true, session: s } : { ok: false, error: "no_membership" };

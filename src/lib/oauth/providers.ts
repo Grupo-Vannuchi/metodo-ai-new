@@ -1,5 +1,5 @@
 import "server-only";
-import { Google, LinkedIn, MicrosoftEntraId, type OAuth2Tokens } from "arctic";
+import { decodeIdToken, Google, LinkedIn, MicrosoftEntraId, type OAuth2Tokens } from "arctic";
 import { env } from "@/lib/env";
 import { OAUTH_PROVIDERS, type OAuthProvider } from "@/lib/oauth/shared";
 
@@ -58,6 +58,25 @@ async function fetchOidcProfile(endpoint: string, accessToken: string): Promise<
   };
 }
 
+/** Personal Microsoft accounts (Outlook, Hotmail, Live) all sign in under this tenant id. */
+const MICROSOFT_PERSONAL_TENANT = "9188040d-6c67-4c5b-b112-36a304b66dad";
+
+type MicrosoftIdClaims = { tid?: unknown; xms_edov?: unknown };
+
+/**
+ * Whether Microsoft vouches for the address it returned. Entra never sends `email_verified`, so the
+ * address counts as verified only for a personal account (Microsoft confirmed it when the account
+ * was created) or when the ID token carries `xms_edov`: the address's domain is verified in the
+ * user's tenant. `xms_edov` is an optional claim that the app
+ * registration must request (Entra → Token configuration); without it, a work/school account signs
+ * in only through an identity already linked to a user ("Conectar" on the profile).
+ */
+export function microsoftEmailVerified(claims: MicrosoftIdClaims): boolean {
+  if (claims.tid === MICROSOFT_PERSONAL_TENANT) return true;
+  const edov = claims.xms_edov;
+  return edov === true || edov === "true" || edov === 1 || edov === "1";
+}
+
 const googleClient = () =>
   new Google(env.GOOGLE_CLIENT_ID!, env.GOOGLE_CLIENT_SECRET!, oauthCallbackUrl("google"));
 
@@ -95,11 +114,16 @@ export const OAUTH: Record<OAuthProvider, ProviderDef> = {
         "https://graph.microsoft.com/oidc/userinfo",
         tokens.accessToken(),
       );
-      // Entra never sends `email_verified`. A work/school address is verified by
-      // the tenant's directory, and a personal Microsoft account verifies its
-      // address at sign-up — so an address we get back clears the same bar as
-      // Google's `email_verified`, and account linking stays safe.
-      return profile ? { ...profile, emailVerified: true } : null;
+      if (!profile) return null;
+      let claims: MicrosoftIdClaims = {};
+      try {
+        // Straight from the token endpoint, over TLS and with our client secret, so it needs
+        // no signature check of its own (OpenID Connect Core 3.1.3.7).
+        claims = decodeIdToken(tokens.idToken()) as MicrosoftIdClaims;
+      } catch {
+        // No ID token: nothing vouches for the address.
+      }
+      return { ...profile, emailVerified: microsoftEmailVerified(claims) };
     },
   },
 

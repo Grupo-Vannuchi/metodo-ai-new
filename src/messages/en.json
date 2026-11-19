@@ -176,7 +176,7 @@
       "already_in_team": "You already belong to a team. Leave it (in Settings) before accepting this invite.",
       "email_not_verified": "Confirm your email before signing in. Check your inbox.",
       "oauth": "Could not sign in with {provider}. Please try again.",
-      "oauth_unverified": "Your {provider} email isn't verified. Use another sign-in method.",
+      "oauth_unverified": "We couldn't confirm your email with {provider}. Sign in with email and password (or create your account that way), then connect {provider} on your profile.",
       "generic": "Something went wrong. Please try again."
     },
     "verify": {

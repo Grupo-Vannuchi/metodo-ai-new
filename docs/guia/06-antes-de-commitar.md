@@ -402,6 +402,21 @@ você matar o script no meio, apague à mão as organizações cujo `slug` come�
 ou `companyId` entra no `merge-records.ts` e ganha um caso aqui**; senão, a mesclagem a deixa apontando para um registro apagado,
 porque nenhuma chave estrangeira impede a exclusão.
 
+`npm run check:oauth:db` testa no Postgres local como o login social vira sessão (`resolveOAuthSession`, em
+[src/lib/oauth/session.ts](../../src/lib/oauth/session.ts), e `microsoftEmailVerified`, em
+[src/lib/oauth/providers.ts](../../src/lib/oauth/providers.ts)). O script
+[scripts/check-oauth-db.ts](../../scripts/check-oauth-db.ts) cobre:
+- quando a Microsoft conta um e-mail como verificado: conta pessoal, ou conta corporativa com o claim `xms_edov`;
+- uma identidade já ligada entra sem olhar o e-mail;
+- um e-mail não verificado não liga nem cria conta;
+- um e-mail verificado liga ao usuário que tem esse e-mail: a senha de uma conta confirmada fica, e a de uma conta cujo e-mail
+  nunca foi confirmado sai;
+- um e-mail novo cria usuário e empresa.
+
+Cria a empresa `OAUTH-DB-<carimbo>` e usuários `oauth-db-*-<carimbo>@test.local`, e apaga tudo o que criou, inclusive a empresa
+que o cadastro pelo login social abre, mesmo quando falha. Se você matar o script no meio, apague à mão os usuários cujo e-mail começa
+com `oauth-db-` e as empresas deles. Precisa do Postgres do Docker e de um `.env` válido. Rode sempre que mexer em `src/lib/oauth/`.
+
 ## `check:isolation`
 
 Isolamento multi-tenant é [a regra inviolável nº 1 do `CLAUDE.md`](../../CLAUDE.md) e o

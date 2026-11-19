@@ -182,7 +182,7 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 | `BLOB_READ_WRITE_TOKEN` | não | Vercel Blob, alternativa antiga ao Supabase. Sem nenhum dos dois, a mídia vai para o disco local (`.media/`, só desenvolvimento) |
 | `QSTASH_TOKEN`, `QSTASH_URL`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` | p/ jobs | fila (prospecção, mídia). Sem eles, degrada. |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | não | rate-limit |
-| `GOOGLE_CLIENT_ID/SECRET`, `MICROSOFT_*`, `LINKEDIN_*` | não | login OAuth |
+| `GOOGLE_CLIENT_ID/SECRET`, `MICROSOFT_*`, `LINKEDIN_*` | não | login OAuth. Na Microsoft, o e-mail só vale para entrar numa conta existente ou criar uma nova quando é de conta pessoal ou quando o app pede o claim opcional `xms_edov` (Entra → Configuração de token → claim opcional do ID token). Sem esse claim, conta corporativa entra só por uma identidade já ligada ("Conectar", no perfil) |
 | `CRON_SECRET` | p/ cron | autentica os endpoints `/api/cron/*` |
 | `MCP_API_KEY` | não | chave do servidor MCP de leitura (`/api/mcp`); sem ela o endpoint responde 404 |
 | `SEED_OWNER_EMAIL`, `SEED_OWNER_PASSWORD`, `SEED_ORG_NAME` | não | usadas pelo seed |
