@@ -122,6 +122,16 @@ if (FINANCE.includes(model) && !hasFeatureByModules(ctx.modules, "finance")) {
 Se a rota lê ou grava tabela de negócio, autenticar a sessão é só metade do trabalho — o
 isolamento entre organizações é assunto do [guia 03](03-multi-tenancy.md), não deste.
 
+**Rota que entrega um arquivo privado** (hoje, o documento de funcionário,
+[src/app/api/hr/documents/[id]/route.ts](../../src/app/api/hr/documents/[id]/route.ts)):
+- confira a mesma permissão da tela, e não só o login. Para o RH, isso é `canAccessScreen(ctx, "hr")` e
+  `hasFeatureByModules(ctx.modules, "hr")`, como no `hr/layout.tsx`;
+- ache o registro pelo `tenantDb`, para um id de outra empresa dar 404;
+- envie os bytes com `readPrivate` ([src/lib/storage/blob.ts](../../src/lib/storage/blob.ts)), como anexo e sem cache.
+
+A tela aponta para essa rota, nunca para o arquivo. Arquivo novo que não pode ser aberto só com o link vai
+para `putPrivate`, não para `putMedia`, que grava no bucket público.
+
 **Rota que devolve uma página HTML inteira** (hoje, o documento da proposta e o holerite): ela roda na
 origem do app, com a sessão de quem abre. Por isso, três regras:
 - responda com `documentHtmlHeaders()` de [src/lib/print-document.ts](../../src/lib/print-document.ts),

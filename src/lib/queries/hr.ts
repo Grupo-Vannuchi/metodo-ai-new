@@ -93,13 +93,14 @@ export async function getEmployee(organizationId: string, id: string) {
   };
 }
 
-/** Documents on an employee's record (metadata only; bytes live in storage). */
+/** Documents on an employee's record (metadata only; bytes live in storage and are served by
+ * /api/hr/documents/[id], so the storage reference never leaves the server). */
 export async function listEmployeeDocuments(organizationId: string, employeeId: string) {
   const db = tenantDb(organizationId);
   return db.employeeDocument.findMany({
     where: { employeeId },
     orderBy: { createdAt: "desc" },
-    select: { id: true, name: true, mime: true, size: true, url: true, expiresAt: true, createdAt: true },
+    select: { id: true, name: true, mime: true, size: true, expiresAt: true, createdAt: true },
   });
 }
 

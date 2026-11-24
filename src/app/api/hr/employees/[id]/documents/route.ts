@@ -2,7 +2,9 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
-import { putMedia } from "@/lib/storage/blob";
+import { putPrivate } from "@/lib/storage/blob";
+import { canAccessScreen } from "@/lib/access";
+import { hasFeatureByModules } from "@/config/modules";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,13 +27,18 @@ const ALLOWED = new Set([
 ]);
 
 /**
- * Upload a document to an employee's record. Bytes go to object storage — never
- * Postgres; only metadata + URL is stored. `expiresAt` (optional) drives the
+ * Upload a document to an employee's record. Bytes go to PRIVATE storage (putPrivate) — never
+ * Postgres nor a public URL; the row keeps a `private:` reference, and the file is only served by
+ * /api/hr/documents/[id]. `expiresAt` (optional) drives the
  * "document expiring" alert on the HR dashboard.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await getOrgContext();
   if (!ctx) return new Response("Unauthorized", { status: 401 });
+  // Same gate as the HR pages.
+  if (!canAccessScreen(ctx, "hr") || !hasFeatureByModules(ctx.modules, "hr")) {
+    return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+  }
 
   const { id } = await params;
   const db = tenantDb(ctx.organizationId);
@@ -63,7 +70,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const key = `employees/${id}/${randomUUID()}-${safeName}`;
 
   try {
-    const stored = await putMedia(key, buffer, mime);
+    const stored = await putPrivate(key, buffer, mime);
     const document = await db.employeeDocument.create({
       data: {
         organizationId: ctx.organizationId,
@@ -71,11 +78,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         name: (file.name || safeName).slice(0, 200),
         mime,
         size: stored.size,
-        url: stored.url,
+        url: stored.ref,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
         uploadedById: ctx.userId,
       },
-      select: { id: true, name: true, mime: true, size: true, url: true, expiresAt: true, createdAt: true },
+      select: { id: true, name: true, mime: true, size: true, expiresAt: true, createdAt: true },
     });
     revalidatePath(`/app/hr/employees/${id}`);
     return Response.json({ ok: true, document });
