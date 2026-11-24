@@ -15,6 +15,7 @@ import { updateOpportunity, deleteOpportunity } from "@/app/actions/opportunitie
 import { useRegisterAssistantForm } from "@/components/app/assistant/form-store";
 import type { FormBridge } from "@/lib/assistant/form-bridge";
 import { PipelineStageFields, type PipelineOption } from "@/components/crm/pipeline-stage-fields";
+import { needsOutcomeReason, type OpportunityStatusValue } from "@/lib/crm/opportunity-status";
 
 type Option = { id: string; name: string };
 type ProductOption = { id: string; name: string; kind: "PRODUCT" | "SERVICE"; price: number | null };
@@ -23,7 +24,7 @@ type Values = {
   title: string;
   value: string;
   stageId: string;
-  status: "OPEN" | "ON_HOLD" | "WON" | "LOST" | "CANCELED";
+  status: OpportunityStatusValue;
   companyId: string;
   contactId: string;
   productServiceId: string;
@@ -78,7 +79,7 @@ export function OpportunityForm({
   const contactId = watch("contactId");
   const ownerId = watch("ownerId");
   const productServiceId = watch("productServiceId");
-  const needsReason = status === "LOST" || status === "CANCELED";
+  const needsReason = needsOutcomeReason(status);
 
   // Let the AI copilot pre-fill this form for review (it never saves). Money is
   // left out — the MoneyInput display is uncontrolled and wouldn't reflect it.
@@ -108,6 +109,7 @@ export function OpportunityForm({
             { value: "WON", label: "Ganha" },
             { value: "LOST", label: "Perdida" },
             { value: "CANCELED", label: "Cancelada" },
+            { value: "DECLINED", label: "Declinada" },
           ],
         },
       ],
@@ -183,6 +185,7 @@ export function OpportunityForm({
               <option value="WON">{t("statusWON")}</option>
               <option value="LOST">{t("statusLOST")}</option>
               <option value="CANCELED">{t("statusCANCELED")}</option>
+              <option value="DECLINED">{t("statusDECLINED")}</option>
             </select>
           </div>
           {needsReason ? (

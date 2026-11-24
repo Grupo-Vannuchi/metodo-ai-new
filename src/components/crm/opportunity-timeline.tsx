@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { Plus, FileText, CheckSquare, Square, Paperclip, Trophy, XCircle, Ban } from "lucide-react";
+import { Plus, FileText, CheckSquare, Square, Paperclip, Trophy, XCircle, Ban, Hand } from "lucide-react";
 import type { TimelineEvent, TimelineType } from "@/lib/queries/timeline";
 
 const ICON: Record<TimelineType, typeof Plus> = {
@@ -11,6 +11,7 @@ const ICON: Record<TimelineType, typeof Plus> = {
   won: Trophy,
   lost: XCircle,
   canceled: Ban,
+  declined: Hand,
 };
 
 const TONE: Record<TimelineType, string> = {
@@ -22,6 +23,7 @@ const TONE: Record<TimelineType, string> = {
   won: "bg-green-500/10 text-green-600",
   lost: "bg-red-500/10 text-red-600",
   canceled: "bg-muted text-muted-foreground",
+  declined: "bg-slate-500/10 text-slate-600",
 };
 
 /**

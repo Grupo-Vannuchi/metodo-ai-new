@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { OPPORTUNITY_STATUSES, needsOutcomeReason } from "@/lib/crm/opportunity-status";
 
 const optionalId = z.string().trim().max(40).optional().or(z.literal(""));
 const optionalText = (max: number) => z.string().trim().max(max).optional().or(z.literal(""));
@@ -29,15 +30,15 @@ export const moveOpportunitySchema = z.object({
 export type MoveOpportunityInput = z.infer<typeof moveOpportunitySchema>;
 
 /** Edit a card (detail page). Adds status + outcome reason (required when the
- * deal is lost/canceled). */
+ * deal is lost, canceled or declined). */
 export const updateOpportunitySchema = z
   .object({
     ...baseFields,
-    status: z.enum(["OPEN", "ON_HOLD", "WON", "LOST", "CANCELED"]),
+    status: z.enum(OPPORTUNITY_STATUSES),
     outcomeReason: optionalText(500),
   })
   .superRefine((data, ctx) => {
-    if ((data.status === "LOST" || data.status === "CANCELED") && !(data.outcomeReason ?? "").trim()) {
+    if (needsOutcomeReason(data.status) && !(data.outcomeReason ?? "").trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["outcomeReason"],

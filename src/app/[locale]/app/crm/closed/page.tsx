@@ -13,11 +13,12 @@ import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
 
-const FILTERS: ClosedStatusFilter[] = ["ALL", "LOST", "CANCELED", "WON"];
+const FILTERS: ClosedStatusFilter[] = ["ALL", "LOST", "CANCELED", "DECLINED", "WON"];
 const STATUS_STYLE: Record<string, string> = {
   WON: "bg-green-500/10 text-green-600",
   LOST: "bg-red-500/10 text-red-600",
   CANCELED: "bg-amber-500/10 text-amber-600",
+  DECLINED: "bg-slate-500/10 text-slate-600",
 };
 
 export default async function ClosedOpportunitiesPage({

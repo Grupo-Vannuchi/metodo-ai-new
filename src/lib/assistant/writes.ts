@@ -14,6 +14,7 @@ import { sendEmail } from "@/lib/email/send";
 import { createRule } from "@/app/actions/automations";
 import { ACTION_TYPES, TRIGGERS } from "@/lib/automation/types";
 import { sendTeamMessage } from "@/app/actions/team-chat";
+import { OPPORTUNITY_STATUSES, isOpportunityStatus, needsOutcomeReason } from "@/lib/crm/opportunity-status";
 
 const DAY = 86_400_000;
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "");
@@ -72,13 +73,13 @@ const BASE_WRITE_TOOLS: Anthropic.Tool[] = [
   {
     name: "set_opportunity_status",
     description:
-      "Muda o status de uma oportunidade (após confirmação): OPEN (aberta), ON_HOLD (em espera), WON (ganha), LOST (perdida), CANCELED (cancelada). Para LOST/CANCELED, informe o motivo.",
+      "Muda o status de uma oportunidade (após confirmação): OPEN (aberta), ON_HOLD (em espera), WON (ganha), LOST (perdida), CANCELED (cancelada), DECLINED (declinada: a própria empresa desistiu do negócio). Para LOST/CANCELED/DECLINED, informe o motivo.",
     input_schema: {
       type: "object",
       properties: {
         opportunityId: { type: "string", description: "Id da oportunidade." },
-        status: { type: "string", enum: ["OPEN", "ON_HOLD", "WON", "LOST", "CANCELED"], description: "Novo status." },
-        outcomeReason: { type: "string", description: "Motivo (obrigatório para LOST/CANCELED)." },
+        status: { type: "string", enum: [...OPPORTUNITY_STATUSES], description: "Novo status." },
+        outcomeReason: { type: "string", description: "Motivo (obrigatório para LOST/CANCELED/DECLINED)." },
       },
       required: ["opportunityId", "status"],
     },
@@ -361,11 +362,11 @@ export async function executeWrite(
     if (tool === "set_opportunity_status") {
       const id = str(args.opportunityId);
       const status = str(args.status);
-      if (!id || !["OPEN", "ON_HOLD", "WON", "LOST", "CANCELED"].includes(status))
+      if (!id || !isOpportunityStatus(status))
         return { ok: false, message: "Oportunidade e status válidos são obrigatórios." };
       const reason = str(args.outcomeReason) || undefined;
-      if ((status === "LOST" || status === "CANCELED") && !reason)
-        return { ok: false, message: "Informe o motivo para marcar como perdida/cancelada." };
+      if (needsOutcomeReason(status) && !reason)
+        return { ok: false, message: "Informe o motivo para marcar como perdida, cancelada ou declinada." };
       const res = await setOpportunityStatus(id, status as Parameters<typeof setOpportunityStatus>[1], reason);
       if (!res.ok) return { ok: false, message: "Não consegui atualizar o status da oportunidade." };
       await audit(ctx, { action: "assistant.opportunity_updated", entity: "Opportunity", entityId: id, meta: { status } });

@@ -270,7 +270,7 @@ export async function salesSummary(organizationId: string, period: Period, pipel
     (await db.pipeline.findFirst({ where: { isDefault: true }, orderBy: { order: "asc" }, select: pipelineSelect })) ??
     (await db.pipeline.findFirst({ orderBy: { order: "asc" }, select: pipelineSelect }));
 
-  const [created, won, lost, canceled, lossGroups, stages, openGroups, goals, proposalGroups] = await Promise.all([
+  const [created, won, lost, canceled, declined, lossGroups, stages, openGroups, goals, proposalGroups] = await Promise.all([
     db.opportunity.aggregate({ where: { createdAt: inPeriod }, _count: { _all: true }, _sum: { value: true } }),
     db.opportunity.findMany({ where: { status: "WON", ...closedInPeriod }, select: { value: true, ownerId: true } }),
     db.opportunity.aggregate({ where: { status: "LOST", ...closedInPeriod }, _count: { _all: true }, _sum: { value: true } }),
@@ -279,9 +279,14 @@ export async function salesSummary(organizationId: string, period: Period, pipel
       _count: { _all: true },
       _sum: { value: true },
     }),
+    db.opportunity.aggregate({
+      where: { status: "DECLINED", ...closedInPeriod },
+      _count: { _all: true },
+      _sum: { value: true },
+    }),
     db.opportunity.groupBy({
       by: ["outcomeReason"],
-      where: { status: { in: ["LOST", "CANCELED"] }, outcomeReason: { not: null }, ...closedInPeriod },
+      where: { status: { in: ["LOST", "CANCELED", "DECLINED"] }, outcomeReason: { not: null }, ...closedInPeriod },
       _count: { _all: true },
     }),
     pipeline
@@ -343,6 +348,7 @@ export async function salesSummary(organizationId: string, period: Period, pipel
     },
     lost: { count: lostCount, value: fromCents(toCents(lost._sum.value)) },
     canceled: { count: canceled._count._all, value: fromCents(toCents(canceled._sum.value)) },
+    declined: { count: declined._count._all, value: fromCents(toCents(declined._sum.value)) },
     // won / (won + lost): a cancellation isn't a competitive loss (same as the app).
     winRate: closedCompetitive ? Math.round((won.length / closedCompetitive) * 10_000) / 10_000 : 0,
     lossReasons: lossGroups

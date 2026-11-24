@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { setOpportunityStatus, type OppStatus } from "@/app/actions/opportunities";
+import { OPPORTUNITY_STATUSES, needsOutcomeReason } from "@/lib/crm/opportunity-status";
 
-const STATUSES: OppStatus[] = ["OPEN", "ON_HOLD", "WON", "LOST", "CANCELED"];
+const STATUSES: readonly OppStatus[] = OPPORTUNITY_STATUSES;
 
 /** Colour of the currently-active status button. */
 const ACTIVE: Record<OppStatus, string> = {
@@ -15,11 +16,12 @@ const ACTIVE: Record<OppStatus, string> = {
   WON: "border-transparent bg-green-600 text-white",
   LOST: "border-transparent bg-red-600 text-white",
   CANCELED: "border-transparent bg-amber-600 text-white",
+  DECLINED: "border-transparent bg-slate-600 text-white",
 };
 
 /**
  * Side-by-side status buttons on the opportunity detail — change status in one
- * click (no full form). LOST/CANCELED reveal an inline reason field first.
+ * click (no full form). LOST/CANCELED/DECLINED reveal an inline reason field first.
  */
 export function OpportunityStatusBar({ id, status }: { id: string; status: OppStatus }) {
   const t = useTranslations("crm.opportunity");
@@ -46,7 +48,7 @@ export function OpportunityStatusBar({ id, status }: { id: string; status: OppSt
   function onPick(next: OppStatus) {
     if (next === status || pending) return;
     // Lost/canceled need a reason — reveal the inline field first.
-    if (next === "LOST" || next === "CANCELED") {
+    if (needsOutcomeReason(next)) {
       setReasonFor(next);
       setReason("");
       return;

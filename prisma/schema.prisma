@@ -548,6 +548,8 @@ enum OpportunityStatus {
   WON
   LOST
   CANCELED
+  /// The company chose not to bid or go on (it declined the deal); closed, with a reason, like LOST and CANCELED.
+  DECLINED
 }
 
 /// Whether a catalog item is a physical product or a service.
