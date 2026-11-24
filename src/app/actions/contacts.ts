@@ -8,6 +8,7 @@ import { findContactMatches } from "@/lib/queries/duplicates";
 import type { MatchActionResult } from "@/app/actions/companies";
 import { contactSchema, type ContactInput } from "@/lib/validations/contact";
 import { parseTags } from "@/lib/contact-form";
+import { onlyDigits } from "@/lib/document";
 
 export type ContactActionResult =
   | { ok: true; id: string }
@@ -64,6 +65,10 @@ export async function createContact(
   try {
     const db = tenantDb(ctx.organizationId);
     const companyId = await resolveCompanyId(ctx.organizationId, parsed.data.companyId);
+    // The schema already asks for a company or a CPF; re-check with the resolved company (an id of
+    // another org resolves to null).
+    const cpf = onlyDigits(parsed.data.cpf ?? "") || null;
+    if (!companyId && !cpf) return { ok: false, error: "invalid" };
     const contact = await db.contact.create({
       data: {
         organizationId: ctx.organizationId,
@@ -72,6 +77,7 @@ export async function createContact(
         phone: parsed.data.phone || null,
         role: parsed.data.role || null,
         companyId,
+        cpf,
         tags: parseTags(parsed.data.tags ?? ""),
         optedOut: parsed.data.optedOut ?? false,
         source: "manual",
@@ -98,6 +104,9 @@ export async function updateContact(
   try {
     const db = tenantDb(ctx.organizationId);
     const companyId = await resolveCompanyId(ctx.organizationId, parsed.data.companyId);
+    // Same rule as on create, with the resolved company.
+    const cpf = onlyDigits(parsed.data.cpf ?? "") || null;
+    if (!companyId && !cpf) return { ok: false, error: "invalid" };
     const res = await db.contact.updateMany({
       where: { id },
       data: {
@@ -106,6 +115,7 @@ export async function updateContact(
         phone: parsed.data.phone || null,
         role: parsed.data.role || null,
         companyId,
+        cpf,
         tags: parseTags(parsed.data.tags ?? ""),
         optedOut: parsed.data.optedOut ?? false,
       },

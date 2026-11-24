@@ -36,6 +36,7 @@ export async function getContact(organizationId: string, id: string) {
       name: true,
       email: true,
       phone: true,
+      cpf: true,
       role: true,
       companyId: true,
       tags: true,

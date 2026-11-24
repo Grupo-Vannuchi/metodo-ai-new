@@ -348,6 +348,9 @@ model Contact {
   email          String?
   phone          String?
   role           String?
+  /// CPF, digits only (11). The manual contact form requires a company OR a CPF; imports and WhatsApp
+  /// contacts may have neither.
+  cpf            String?
   tags           String[] @default([])
   source         String?
   /// LGPD: when true, the contact is excluded from campaigns (unsubscribed).

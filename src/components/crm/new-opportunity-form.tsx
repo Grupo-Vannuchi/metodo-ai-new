@@ -11,6 +11,7 @@ import { SearchSelect } from "@/components/ui/search-select";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { onlyDigits, formatCnpj } from "@/lib/cnpj";
+import { formatDocument, isValidCPF } from "@/lib/document";
 import { useRegisterAssistantForm } from "@/components/app/assistant/form-store";
 import type { FormBridge } from "@/lib/assistant/form-bridge";
 import type { MatchRecord } from "@/lib/queries/duplicates";
@@ -69,6 +70,7 @@ export function NewOpportunityForm({
   const t = useTranslations("crm.board");
   const tf = useTranslations("crm.opportunity");
   const tv = useTranslations("validation");
+  const tc = useTranslations("crm.contacts");
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -91,6 +93,7 @@ export function NewOpportunityForm({
   const [ctName, setCtName] = useState("");
   const [ctPhone, setCtPhone] = useState("");
   const [ctEmail, setCtEmail] = useState("");
+  const [ctCpf, setCtCpf] = useState("");
   const [pName, setPName] = useState("");
   const [pKind, setPKind] = useState<"PRODUCT" | "SERVICE">("PRODUCT");
   const [pPrice, setPPrice] = useState("");
@@ -167,7 +170,7 @@ export function NewOpportunityForm({
   }
 
   function resetContactDraft() {
-    setCtName(""); setCtPhone(""); setCtEmail("");
+    setCtName(""); setCtPhone(""); setCtEmail(""); setCtCpf("");
   }
 
   async function runCnpjLookup() {
@@ -241,8 +244,13 @@ export function NewOpportunityForm({
     const name = ctName.trim();
     const phone = ctPhone.trim();
     const email = ctEmail.trim();
+    const cpf = ctCpf.trim();
+    const companyId = getValues("companyId") || "";
     if (!name || !phone || busy) return;
     setCreateErr(null);
+    // Same rule as the contact form: a company (the one picked above) or a CPF.
+    if (cpf && !isValidCPF(cpf)) return setCreateErr(tc("cpfInvalid"));
+    if (!companyId && !cpf) return setCreateErr(tc("companyOrCpf"));
     startCreate(async () => {
       if (!force) {
         const found = await checkContactMatches({ phone, email });
@@ -257,7 +265,8 @@ export function NewOpportunityForm({
         phone,
         email,
         role: "",
-        companyId: getValues("companyId") || "",
+        companyId,
+        cpf,
         tags: "",
       });
       if (r.ok) {
@@ -400,6 +409,7 @@ export function NewOpportunityForm({
                 <input value={ctName} onChange={(e) => setCtName(e.target.value)} placeholder={tf("contactNamePlaceholder")} onKeyDown={onEnter(() => addContact())} className={miniCls} />
                 <input value={ctPhone} onChange={(e) => { setCtPhone(e.target.value); setMatches(null); }} placeholder={tf("contactPhonePlaceholder")} onKeyDown={onEnter(() => addContact())} className={miniCls} />
                 <input value={ctEmail} onChange={(e) => { setCtEmail(e.target.value); setMatches(null); }} type="email" placeholder={tf("contactEmailPlaceholder")} onKeyDown={onEnter(() => addContact())} className={miniCls} />
+                <input value={ctCpf} onChange={(e) => setCtCpf(formatDocument("CPF", e.target.value))} inputMode="numeric" placeholder={tf("contactCpfPlaceholder")} onKeyDown={onEnter(() => addContact())} className={miniCls} />
                 <AddRow onAdd={() => addContact()} busy={busy} disabled={!ctName.trim() || !ctPhone.trim()} label={tf("add")} cancelLabel={tf("cancelAdd")} onCancel={() => toggle("contact")} />
                 {matches?.kind === "contact" ? (
                   <MatchList

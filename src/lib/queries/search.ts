@@ -42,6 +42,7 @@ export async function globalSearch(
   if (term.length < 2) return [];
   const db = tenantDb(organizationId);
   const c = { contains: term, mode: "insensitive" as const };
+  const cpfDigits = term.replace(/[^0-9]/g, "");
 
   // Inbox results are strictly scoped to the viewer's OWN numbers — every role,
   // admins included, so one user's chats never surface in another's search.
@@ -58,7 +59,8 @@ export async function globalSearch(
   const [contacts, companies, opps, convos, entries] = await Promise.all([
     opts.allowed("contacts")
       ? db.contact.findMany({
-          where: { OR: [{ name: c }, { email: c }, { phone: c }] },
+          // CPF is stored as digits: a typed "123.456" still finds it.
+          where: { OR: [{ name: c }, { email: c }, { phone: c }, ...(cpfDigits.length >= 3 ? [{ cpf: { contains: cpfDigits } }] : [])] },
           take: PER_TYPE,
           select: {
             id: true,
