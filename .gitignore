@@ -49,3 +49,4 @@ next-env.d.ts
 
 # Local dev media storage (Vercel Blob fallback)
 .media/
+.media-private/

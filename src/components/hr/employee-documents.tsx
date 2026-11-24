@@ -14,7 +14,6 @@ type Doc = {
   name: string;
   mime: string;
   size: number;
-  url: string;
   expiresAt: Date | string | null;
   createdAt: Date | string;
 };
@@ -138,7 +137,7 @@ export function EmployeeDocuments({
                 </p>
               </div>
               <a
-                href={doc.url}
+                href={`/api/hr/documents/${doc.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 download={doc.name}

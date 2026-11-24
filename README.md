@@ -47,7 +47,7 @@ O MétodoAI **deixou de ser um SaaS de planos fixos** e virou uma **plataforma m
 | i18n | **next-intl 4** (pt/en) — chaves em `src/messages/{pt,en}.json` |
 | Auth | **jose** (JWT HS256, cookie de sessão) + **bcryptjs**; OAuth Google/Microsoft/LinkedIn |
 | Jobs/Cache | **Upstash QStash** (jobs) + **Upstash Redis** (rate-limit) — opcionais |
-| Storage | **Supabase Storage** (mídia do inbox, bucket público `media`) em produção. Vercel Blob fica só como alternativa antiga, e no desenvolvimento a mídia vai para o disco (`.media/`). A escolha é pelo env, em `src/lib/storage/blob.ts` |
+| Storage | **Supabase Storage** (mídia do inbox, bucket público `media`) em produção. Vercel Blob fica só como alternativa antiga, e no desenvolvimento a mídia vai para o disco (`.media/`). A escolha é pelo env, em `src/lib/storage/blob.ts`. **Arquivos privados** (hoje, os documentos de funcionário do RH, desde 24/11/2026) vão para o bucket `private` do Supabase (ou `.media-private/` no disco): a linha guarda uma referência `private:…`, nunca uma URL, e o arquivo só sai por uma rota que confere login, empresa e permissão (`/api/hr/documents/[id]`). O bucket é criado sozinho, e o código se recusa a gravar se alguém o tornar público. Os documentos de RH enviados antes continuam no bucket público até a migração (README §10) |
 | E-mail | **Resend** (conta da plataforma): transacional (verificação, convites, reset) e o submenu E-mail (envio em massa, com domínio próprio de cada empresa) |
 | IA | **Anthropic** (copiloto/agente) + **OpenAI** (transcrição de áudio, imagens) |
 | WhatsApp | **Evolution API** (não-oficial) numa **VPS separada** + **WhatsApp Cloud API** direto na Meta (piloto) |
@@ -712,6 +712,15 @@ Diferente da lista de produto abaixo, estes têm próximo passo conhecido e escr
    (o detalhe está no §7, "Agente de IA do WhatsApp"). Para abrir o agente a todos, apague a entrada da
    conexão, ou o arquivo e a única chamada em `pipeline.ts`. Não leve os números para o `.env`: o ganho é
    pequeno, e um env errado abriria o agente sem ninguém perceber.
+
+7. **Mover para o armazenamento privado os documentos de RH enviados antes de 24/11/2026.**
+   - Desde 24/11, o documento novo vai para o bucket `private` (§2, "Storage"). Os antigos continuam no bucket público
+     `media`, e quem tiver a URL abre sem login.
+   - A tela já não mostra essas URLs: aponta para `/api/hr/documents/[id]`, que redireciona os antigos.
+   - Falta um script de sistema que, para cada `employee_documents` cuja `url` não começa com `private:`, copie o arquivo
+     para o bucket `private`, troque a `url` pela referência `private:` e só então apague o original do bucket público.
+   - Rodar contra a produção, com o ok do Eduardo e numa janela combinada.
+   - Depois, avaliar o mesmo caminho para os anexos de oportunidade, proposta, tarefa e e-mail.
 
 ### Produto
 
