@@ -15,6 +15,7 @@
 import assert from "node:assert/strict";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { assertLocalDatabase } from "./lib/local-db";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { findSensitiveKeys, utcDayStart } from "../src/lib/mcp/core";
@@ -22,7 +23,7 @@ import { findSensitiveKeys, utcDayStart } from "../src/lib/mcp/core";
 // `engineType = "client"` (schema.prisma) drops the Rust engine, so every
 // PrismaClient needs an explicit driver adapter — same as src/lib/prisma.ts.
 const connectionString = process.env.DATABASE_URL;
-if (!connectionString) throw new Error("DATABASE_URL is not set");
+assertLocalDatabase("check:mcp:e2e", connectionString);
 const KEY = process.env.MCP_API_KEY?.trim();
 if (!KEY) {
   console.error("MCP_API_KEY is not set in .env — the e2e needs the key the server reads.");

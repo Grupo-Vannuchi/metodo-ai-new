@@ -428,11 +428,12 @@ Cria a empresa `OAUTH-DB-<carimbo>` e usuários `oauth-db-*-<carimbo>@test.local
 que o cadastro pelo login social abre, mesmo quando falha. Se você matar o script no meio, apague à mão os usuários cujo e-mail começa
 com `oauth-db-` e as empresas deles. Precisa do Postgres do Docker e de um `.env` válido. Rode sempre que mexer em `src/lib/oauth/`.
 
-**Os scripts que criam e apagam dados para testar o banco só rodam contra um Postgres local.** São eles o
-`check:isolation`, o `check:crm-matches` e os `check:*:db`. Cada um chama `assertLocalDatabase`
+**Os programas que gravam dados de teste ou de demonstração no banco só rodam contra um Postgres local.** São eles o
+`check:isolation`, o `check:crm-matches`, os `check:*:db`, o `check:mcp:e2e`, o `check:automation:e2e`, o simulador
+`scripts/wa-cloud-webhook.ts` e o seed (`npm run db:seed`, `prisma/seed.ts`). Cada um chama `assertLocalDatabase`
 ([scripts/lib/local-db.ts](../../scripts/lib/local-db.ts)), que recusa, antes de conectar, um `DATABASE_URL` cujo servidor não
-seja `localhost`, `127.0.0.1` ou `::1`. Vale para o Docker e para o serviço do CI. Os e2e têm a mesma trava, cada um no seu
-arquivo. Script novo que grava no banco chama essa função logo depois de ler o `DATABASE_URL`.
+seja `localhost`, `127.0.0.1` ou `::1`. Vale para o Docker e para o serviço do CI. Os outros e2e têm a mesma trava, cada um no
+seu arquivo. Programa novo que grava no banco chama essa função logo depois de ler o `DATABASE_URL`.
 
 ## `check:isolation`
 

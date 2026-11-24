@@ -18,12 +18,13 @@ import http from "node:http";
 import { createCipheriv, randomBytes } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { assertLocalDatabase } from "./lib/local-db";
 import { formatMenu, invalidMenuReply } from "../src/lib/automation/menu";
 
 // `engineType = "client"` (schema.prisma) drops the Rust engine, so every
 // PrismaClient needs an explicit driver adapter — same as src/lib/prisma.ts.
 const connectionString = process.env.DATABASE_URL;
-if (!connectionString) throw new Error("DATABASE_URL is not set");
+assertLocalDatabase("check:automation:e2e", connectionString);
 const ENC_KEY = process.env.INTEGRATION_ENC_KEY;
 if (!ENC_KEY) throw new Error("INTEGRATION_ENC_KEY is not set");
 const BASE = process.env.AUTOMATION_E2E_URL ?? "http://localhost:3000";
