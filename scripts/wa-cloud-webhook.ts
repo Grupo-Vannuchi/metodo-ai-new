@@ -18,6 +18,7 @@
 import { createHmac } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { assertLocalDatabase } from "./lib/local-db";
 import * as f from "../src/lib/whatsapp-cloud/__tests__/fixtures";
 
 const [kind, ...rest] = process.argv.slice(2);
@@ -33,7 +34,7 @@ const str = (k: string): string | undefined => opt(k) ?? undefined;
 
 function client(): PrismaClient {
   const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) throw new Error("DATABASE_URL is not set");
+  assertLocalDatabase("wa-cloud-webhook", connectionString);
   return new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 }
 
