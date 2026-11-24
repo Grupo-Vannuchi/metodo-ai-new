@@ -42,10 +42,10 @@ async function defaultPipeline(organizationId: string) {
 
 // ── Board filters (status + period) ─────────────────────────────────────────
 /** "ACTIVE" = the default board (open + on-hold); the rest narrow to one status. */
-export type BoardStatusFilter = "ACTIVE" | "OPEN" | "ON_HOLD" | "WON" | "LOST" | "CANCELED";
+export type BoardStatusFilter = "ACTIVE" | "OPEN" | "ON_HOLD" | "WON" | "LOST" | "CANCELED" | "DECLINED";
 export type BoardPeriodFilter = "ALL" | "TODAY" | "7D" | "30D" | "MONTH" | "YEAR";
 
-export const BOARD_STATUS_FILTERS: BoardStatusFilter[] = ["ACTIVE", "OPEN", "ON_HOLD", "WON", "LOST", "CANCELED"];
+export const BOARD_STATUS_FILTERS: BoardStatusFilter[] = ["ACTIVE", "OPEN", "ON_HOLD", "WON", "LOST", "CANCELED", "DECLINED"];
 export const BOARD_PERIOD_FILTERS: BoardPeriodFilter[] = ["ALL", "TODAY", "7D", "30D", "MONTH", "YEAR"];
 
 /** The Prisma `status` condition for a board status filter. */
@@ -56,6 +56,7 @@ function boardStatusWhere(status?: BoardStatusFilter): OpportunityStatus | { in:
     case "WON":
     case "LOST":
     case "CANCELED":
+    case "DECLINED":
       return status;
     default:
       return { in: ["OPEN", "ON_HOLD"] };
@@ -250,9 +251,9 @@ export async function listMyOpportunities(organizationId: string, userId: string
   return { data, total };
 }
 
-export type ClosedStatusFilter = "LOST" | "CANCELED" | "WON" | "ALL";
+export type ClosedStatusFilter = "LOST" | "CANCELED" | "DECLINED" | "WON" | "ALL";
 
-/** Closed opportunities (won/lost/canceled) — the "archive" where deals go when
+/** Closed opportunities (won/lost/canceled/declined) — the "archive" where deals go when
  * they leave the board. Used by the closed-opportunities page so they can be
  * found and reopened. */
 export async function listClosedOpportunities(
@@ -260,7 +261,7 @@ export async function listClosedOpportunities(
   opts: { status?: ClosedStatusFilter; ownerId?: string } = {},
 ) {
   const db = tenantDb(organizationId);
-  const CLOSED: OpportunityStatus[] = ["LOST", "CANCELED", "WON"];
+  const CLOSED: OpportunityStatus[] = ["LOST", "CANCELED", "DECLINED", "WON"];
   const statusWhere = opts.status && opts.status !== "ALL" ? opts.status : { in: CLOSED };
 
   const opps = await db.opportunity.findMany({

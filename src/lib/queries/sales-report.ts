@@ -7,6 +7,8 @@ export type SalesReport = {
   won: number;
   lost: number;
   canceled: number;
+  /** Deals the company itself declined (did not bid or go on). Not a loss: out of the win rate. */
+  declined: number;
   /** won / (won + lost) — cancellations don't count as a competitive loss. */
   winRate: number;
   wonValue: number;
@@ -14,7 +16,7 @@ export type SalesReport = {
   avgTicket: number;
   /** Average days from creation to close, over won deals that have a close date. */
   avgCycleDays: number | null;
-  /** Why deals were lost/canceled, by `outcomeReason`, most frequent first. */
+  /** Why deals were lost, canceled or declined, by `outcomeReason`, most frequent first. */
   lossReasons: { reason: string; count: number }[];
   /** Current open pipeline, by stage — where deals sit right now. */
   funnel: { id: string; name: string; count: number; value: number }[];
@@ -46,16 +48,17 @@ export async function getSalesReport(
     (await db.pipeline.findFirst({ where: { isDefault: true }, orderBy: { order: "asc" }, select: { id: true } })) ??
     (await db.pipeline.findFirst({ orderBy: { order: "asc" }, select: { id: true } }));
 
-  const [wonOpps, lost, canceled, lossGroups, stages, openGroups] = await Promise.all([
+  const [wonOpps, lost, canceled, declined, lossGroups, stages, openGroups] = await Promise.all([
     db.opportunity.findMany({
       where: { status: "WON", ...closedWhere },
       select: { value: true, createdAt: true, closedAt: true, updatedAt: true },
     }),
     db.opportunity.count({ where: { status: "LOST", ...closedWhere } }),
     db.opportunity.count({ where: { status: "CANCELED", ...closedWhere } }),
+    db.opportunity.count({ where: { status: "DECLINED", ...closedWhere } }),
     db.opportunity.groupBy({
       by: ["outcomeReason"],
-      where: { status: { in: ["LOST", "CANCELED"] }, outcomeReason: { not: null }, ...closedWhere },
+      where: { status: { in: ["LOST", "CANCELED", "DECLINED"] }, outcomeReason: { not: null }, ...closedWhere },
       _count: { _all: true },
     }),
     pipeline
@@ -96,5 +99,5 @@ export async function getSalesReport(
     return { id: s.id, name: s.name, count: d.count, value: d.value };
   });
 
-  return { won, lost, canceled, winRate, wonValue, avgTicket, avgCycleDays, lossReasons, funnel };
+  return { won, lost, canceled, declined, winRate, wonValue, avgTicket, avgCycleDays, lossReasons, funnel };
 }

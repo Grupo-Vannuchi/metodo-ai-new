@@ -412,7 +412,7 @@
           "tasks_by_priority": "Tasks by priority",
           "finance_by_type": "Finance by type"
         },
-        "status": { "OPEN": "Open", "WON": "Won", "LOST": "Lost", "CANCELED": "Canceled" },
+        "status": { "OPEN": "Open", "ON_HOLD": "On hold", "WON": "Won", "LOST": "Lost", "CANCELED": "Canceled", "DECLINED": "Declined" },
         "priority": { "LOW": "Low", "MEDIUM": "Medium", "HIGH": "High" },
         "finance": { "INCOME": "Income", "EXPENSE": "Expense" },
         "source": { "manual": "Manual", "prospecting": "Prospecting", "import": "Import" }
@@ -1819,7 +1819,8 @@
           "ON_HOLD": "On hold",
           "WON": "Won",
           "LOST": "Lost",
-          "CANCELED": "Canceled"
+          "CANCELED": "Canceled",
+          "DECLINED": "Declined"
         },
         "period": {
           "ALL": "All time",
@@ -1850,6 +1851,7 @@
         "ALL": "All",
         "LOST": "Lost",
         "CANCELED": "Canceled",
+        "DECLINED": "Declined",
         "WON": "Won"
       }
     },
@@ -1909,7 +1911,8 @@
           "attachment": "Attachment added",
           "won": "Won",
           "lost": "Lost",
-          "canceled": "Canceled"
+          "canceled": "Canceled",
+          "declined": "Declined"
         }
       },
       "back": "Back",
@@ -1928,6 +1931,7 @@
       "statusWON": "Won",
       "statusLOST": "Lost",
       "statusCANCELED": "Canceled",
+      "statusDECLINED": "Declined",
       "changeStatus": "Change status",
       "reasonPlaceholder": "Enter the reason",
       "confirm": "Confirm",

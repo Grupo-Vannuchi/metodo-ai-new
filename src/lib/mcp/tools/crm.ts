@@ -3,6 +3,7 @@ import { z } from "zod";
 import { listResult, page, resolvePeriod, resolveRange } from "@/lib/mcp/core";
 import { pageShape, periodShape, searchParam } from "@/lib/mcp/inputs";
 import { orgTool, type McpToolDef } from "@/lib/mcp/tool";
+import { OPPORTUNITY_STATUSES } from "@/lib/crm/opportunity-status";
 import {
   salesSummary,
   searchCompanies,
@@ -14,9 +15,9 @@ import {
 const idParam = (what: string) => z.string().min(1).optional().describe(`Id ${what}`);
 
 const opportunityStatus = z
-  .enum(["OPEN", "ON_HOLD", "WON", "LOST", "CANCELED"])
+  .enum(OPPORTUNITY_STATUSES)
   .optional()
-  .describe("Status: OPEN (aberta), ON_HOLD (em espera), WON (ganha), LOST (perdida), CANCELED (cancelada)");
+  .describe("Status: OPEN (aberta), ON_HOLD (em espera), WON (ganha), LOST (perdida), CANCELED (cancelada), DECLINED (declinada)");
 
 const proposalStatus = z
   .enum(["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED"])
@@ -118,7 +119,7 @@ export const crmTools: McpToolDef[] = [
     name: "resumo_vendas",
     description:
       "Relatório de vendas de um período (padrão: mês corrente até hoje): oportunidades criadas, ganhas, " +
-      "perdidas e canceladas (com valores), taxa de conversão (ganhas ÷ ganhas+perdidas), motivos de " +
+      "perdidas, canceladas e declinadas (com valores), taxa de conversão (ganhas ÷ ganhas+perdidas), motivos de " +
       "perda, desempenho e meta por responsável e propostas por status. openFunnel é o retrato do funil " +
       "agora (oportunidades abertas por etapa) de um funil só: o pipelineId informado, senão o padrão.",
     input: { ...periodShape, pipelineId: idParam("do funil para o retrato openFunnel") },

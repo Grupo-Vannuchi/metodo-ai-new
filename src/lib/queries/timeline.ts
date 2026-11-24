@@ -1,5 +1,6 @@
 import "server-only";
 import { tenantDb } from "@/lib/tenant-db";
+import { isClosedStatus } from "@/lib/crm/opportunity-status";
 
 export type TimelineType =
   | "created"
@@ -9,7 +10,8 @@ export type TimelineType =
   | "attachment"
   | "won"
   | "lost"
-  | "canceled";
+  | "canceled"
+  | "declined";
 
 export type TimelineEvent = {
   key: string;
@@ -65,8 +67,8 @@ export async function getOpportunityTimeline(
   for (const a of attachments) {
     events.push({ key: `att-${a.id}`, type: "attachment", at: a.createdAt.toISOString(), title: a.name });
   }
-  if (opp.closedAt && (opp.status === "WON" || opp.status === "LOST" || opp.status === "CANCELED")) {
-    const type = opp.status.toLowerCase() as "won" | "lost" | "canceled";
+  if (opp.closedAt && isClosedStatus(opp.status)) {
+    const type = opp.status.toLowerCase() as "won" | "lost" | "canceled" | "declined";
     events.push({ key: "closed", type, at: opp.closedAt.toISOString(), title: opp.outcomeReason || null });
   }
 

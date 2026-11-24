@@ -13,6 +13,7 @@ const STATUS_STYLE: Record<string, string> = {
   WON: "bg-green-500/10 text-green-600",
   LOST: "bg-red-500/10 text-red-600",
   CANCELED: "bg-amber-500/10 text-amber-600",
+  DECLINED: "bg-slate-500/10 text-slate-600",
 };
 
 /**

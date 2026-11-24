@@ -359,6 +359,15 @@ tabela ou coluna nova direto no Supabase.
 2. Na Hostinger: `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN` e `WHATSAPP_CLOUD_ORG_IDS` só com a empresa do piloto (vazia = ninguém vê a tela oficial nem dispara campanha oficial). Depois de salvar, **reinicie o app no hPanel**: as variáveis só são lidas na subida. Em 17/11/2026 elas foram salvas e só passaram a valer depois do reinício.
 3. Na Meta, depois do deploy: a URL de retorno `https://metodotia.com/api/webhooks/whatsapp-cloud` com o mesmo `META_WEBHOOK_VERIFY_TOKEN` (§7, "Configurar a Meta"). Use só letras e números no token, e um valor diferente do usado no teste local. Na tabela "Campos do webhook", no fim da mesma tela, os campos vêm **todos desligados**: assine `messages` e `message_template_status_update`. Sem isso, nenhuma resposta nem status chega (teste real de 17/11/2026).
 
+**Antes do merge da branch `feature/crm-status-declinada` (o status "Declinada" da oportunidade):**
+- Aplicar no Supabase `prisma/migrations/20261124120000_opportunity_declined/migration.sql`:
+  `npx prisma db execute --file prisma/migrations/20261124120000_opportunity_declined/migration.sql --schema prisma/schema.prisma`;
+  depois, `npx prisma migrate resolve --applied 20261124120000_opportunity_declined`.
+- Ela só acrescenta o valor `DECLINED` ao enum `OpportunityStatus` (`ADD VALUE IF NOT EXISTS`). Não mexe em linha nem em coluna, e o
+  código atual da produção continua funcionando com ela.
+- **Não** use `migrate deploy`.
+- Sem ela, o deploy funciona até alguém escolher "Declinada"; aí a gravação falha.
+
 ### E-mail: caixa de entrada por IMAP
 
 Opcional, dentro da conta SMTP (spec `docs/superpowers/specs/2026-10-23-email-caixa-imap-design.md`). Mostra a aba "Caixa de entrada" no canal SMTP (`/app/email?canal=smtp&aba=caixa`), com leitura, resposta e anexos. **Não há migração, variável de ambiente nem piloto:** as configurações do IMAP (servidor, porta e segurança) ficam dentro das credenciais criptografadas que a conta SMTP já guarda, e uma conta antiga, sem elas, abre normalmente e só não tem caixa. A caixa reaproveita a tela `emailInbox` (opt-in) e o módulo `marketing`, a mesma da caixa Microsoft: dono e admins veem; membro só vê se o modelo de acesso dele marcar `email` e `emailInbox`.

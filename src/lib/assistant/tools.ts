@@ -280,6 +280,7 @@ export async function runAssistantTool(
         ganhos: r.won,
         perdidos: r.lost,
         cancelados: r.canceled,
+        declinados: r.declined,
         taxaConversao: `${Math.round(r.winRate * 100)}%`,
         valorGanho: formatBRL(r.wonValue),
         ticketMedio: formatBRL(r.avgTicket),

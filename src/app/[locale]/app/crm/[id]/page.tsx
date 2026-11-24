@@ -20,6 +20,7 @@ import { Link } from "@/i18n/navigation";
 import { formatBRL } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { resolveLocale } from "@/i18n/routing";
+import { needsOutcomeReason } from "@/lib/crm/opportunity-status";
 
 export const dynamic = "force-dynamic";
 
@@ -167,7 +168,7 @@ export default async function OpportunityViewPage({
             <dd className="mt-0.5 text-sm">{f.value}</dd>
           </div>
         ))}
-        {(opp.status === "LOST" || opp.status === "CANCELED") && opp.outcomeReason ? (
+        {needsOutcomeReason(opp.status) && opp.outcomeReason ? (
           <div className="sm:col-span-2">
             <dt className="text-xs text-muted-foreground">{t("outcomeReason")}</dt>
             <dd className="mt-0.5 text-sm">{opp.outcomeReason}</dd>

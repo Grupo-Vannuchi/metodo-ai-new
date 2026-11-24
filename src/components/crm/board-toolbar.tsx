@@ -12,7 +12,7 @@ type PipelineOpt = { id: string; name: string };
 type Owner = "all" | "me";
 type View = "kanban" | "list";
 
-const STATUSES: BoardStatusFilter[] = ["ACTIVE", "OPEN", "ON_HOLD", "WON", "LOST", "CANCELED"];
+const STATUSES: BoardStatusFilter[] = ["ACTIVE", "OPEN", "ON_HOLD", "WON", "LOST", "CANCELED", "DECLINED"];
 
 export type BoardToolbarState = {
   pipelineId: string;

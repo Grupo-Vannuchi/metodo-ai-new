@@ -6,6 +6,7 @@ import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { deleteMedia } from "@/lib/storage/blob";
 import { runAutomations } from "@/lib/automation/engine";
+import { OPPORTUNITY_STATUSES, isClosedStatus, needsOutcomeReason, type OpportunityStatusValue } from "@/lib/crm/opportunity-status";
 import {
   opportunitySchema,
   moveOpportunitySchema,
@@ -213,7 +214,7 @@ export async function updateOpportunity(
     // OPEN and ON_HOLD are active (not closed) — no closedAt.
     const closedAt = status === "OPEN" || status === "ON_HOLD" ? null : (current.closedAt ?? new Date());
     const outcomeReason =
-      status === "LOST" || status === "CANCELED" ? parsed.data.outcomeReason || null : null;
+      needsOutcomeReason(status) ? parsed.data.outcomeReason || null : null;
     // A new stage (possibly in another pipeline) appends the card to the end of
     // that column, like a drag on the board; otherwise it keeps its position.
     const stageChanged = stage.id !== current.stageId;
@@ -253,7 +254,7 @@ export async function updateOpportunity(
     }
 
     // Automations: won/lost transitions, reopening, or moving between open stages.
-    const wasClosed = current.status === "WON" || current.status === "LOST" || current.status === "CANCELED";
+    const wasClosed = isClosedStatus(current.status);
     if (status === "WON" && current.status !== "WON") {
       await runAutomations(org, { type: "opportunity_won", opportunityId: id }, ctx.user.name);
     } else if (status === "LOST" && current.status !== "LOST") {
@@ -272,12 +273,12 @@ export async function updateOpportunity(
   }
 }
 
-const STATUSES = ["OPEN", "ON_HOLD", "WON", "LOST", "CANCELED"] as const;
-export type OppStatus = (typeof STATUSES)[number];
+const STATUSES = OPPORTUNITY_STATUSES;
+export type OppStatus = OpportunityStatusValue;
 
 /**
  * Quick status change from the opportunity detail (status bar) — no full form.
- * OPEN/ON_HOLD are active (no closedAt); LOST/CANCELED require a reason.
+ * OPEN/ON_HOLD are active (no closedAt); LOST/CANCELED/DECLINED require a reason.
  */
 export async function setOpportunityStatus(
   id: string,
@@ -289,7 +290,7 @@ export async function setOpportunityStatus(
   if (!STATUSES.includes(status)) return { ok: false, error: "invalid" };
 
   const reason = (outcomeReason ?? "").trim();
-  if ((status === "LOST" || status === "CANCELED") && !reason) {
+  if (needsOutcomeReason(status) && !reason) {
     return { ok: false, error: "invalid" };
   }
 
@@ -299,7 +300,7 @@ export async function setOpportunityStatus(
     if (!current) return { ok: false, error: "unknown" };
 
     const closedAt = status === "OPEN" || status === "ON_HOLD" ? null : (current.closedAt ?? new Date());
-    const finalReason = status === "LOST" || status === "CANCELED" ? reason : null;
+    const finalReason = needsOutcomeReason(status) ? reason : null;
 
     const res = await db.opportunity.updateMany({
       where: { id },
@@ -308,7 +309,7 @@ export async function setOpportunityStatus(
     if (res.count === 0) return { ok: false, error: "unknown" };
 
     // Automations: fire on the transition into WON / LOST, or reopening.
-    const wasClosed = current.status === "WON" || current.status === "LOST" || current.status === "CANCELED";
+    const wasClosed = isClosedStatus(current.status);
     if (status === "WON" && current.status !== "WON") {
       await runAutomations(ctx.organizationId, { type: "opportunity_won", opportunityId: id }, ctx.user.name);
     } else if (status === "LOST" && current.status !== "LOST") {

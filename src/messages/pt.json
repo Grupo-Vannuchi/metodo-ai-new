@@ -412,7 +412,7 @@
           "tasks_by_priority": "Tarefas por prioridade",
           "finance_by_type": "Financeiro por tipo"
         },
-        "status": { "OPEN": "Aberta", "WON": "Ganha", "LOST": "Perdida", "CANCELED": "Cancelada" },
+        "status": { "OPEN": "Aberta", "ON_HOLD": "Em espera", "WON": "Ganha", "LOST": "Perdida", "CANCELED": "Cancelada", "DECLINED": "Declinada" },
         "priority": { "LOW": "Baixa", "MEDIUM": "Média", "HIGH": "Alta" },
         "finance": { "INCOME": "Receita", "EXPENSE": "Despesa" },
         "source": { "manual": "Manual", "prospecting": "Prospecção", "import": "Importação" }
@@ -1819,7 +1819,8 @@
           "ON_HOLD": "Em espera",
           "WON": "Ganhas",
           "LOST": "Perdidas",
-          "CANCELED": "Canceladas"
+          "CANCELED": "Canceladas",
+          "DECLINED": "Declinadas"
         },
         "period": {
           "ALL": "Todo período",
@@ -1850,6 +1851,7 @@
         "ALL": "Todas",
         "LOST": "Perdidas",
         "CANCELED": "Canceladas",
+        "DECLINED": "Declinadas",
         "WON": "Ganhas"
       }
     },
@@ -1909,7 +1911,8 @@
           "attachment": "Anexo adicionado",
           "won": "Ganha",
           "lost": "Perdida",
-          "canceled": "Cancelada"
+          "canceled": "Cancelada",
+          "declined": "Declinada"
         }
       },
       "back": "Voltar",
@@ -1928,6 +1931,7 @@
       "statusWON": "Ganha",
       "statusLOST": "Perdida",
       "statusCANCELED": "Cancelada",
+      "statusDECLINED": "Declinada",
       "changeStatus": "Mudar situação",
       "reasonPlaceholder": "Informe o motivo",
       "confirm": "Confirmar",
