@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { getTranslations } from "next-intl/server";
-import { Settings2, Plus, Package, Archive } from "lucide-react";
+import { Settings2, Plus, Package, Archive, X } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import {
   getBoard,
@@ -27,7 +27,7 @@ export default async function CrmPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ pipeline?: string; owner?: string; status?: string; period?: string; view?: string; q?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ pipeline?: string; owner?: string; status?: string; period?: string; view?: string; q?: string; from?: string; to?: string; stage?: string }>;
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
@@ -70,9 +70,14 @@ export default async function CrmPage({
     );
   }
 
+  // `?stage=` narrows the list to one column (the dashboard's funnel chart links here). Only a stage of
+  // the funnel on screen counts; anything else is ignored.
+  const stageFilter = view === "list" ? board.columns.find((c) => c.id === sp?.stage) : undefined;
   const rows: OpportunityRow[] =
     view === "list"
-      ? board.columns.flatMap((c) => c.cards.map((card) => ({ ...card, stageName: c.name })))
+      ? board.columns
+          .filter((c) => !stageFilter || c.id === stageFilter.id)
+          .flatMap((c) => c.cards.map((card) => ({ ...card, stageName: c.name })))
       : [];
 
   // The querystring for the filters currently in effect — what "save view" stores.
@@ -86,7 +91,13 @@ export default async function CrmPage({
     else if (period !== "ALL") p.set("period", period);
     if (view !== "kanban") p.set("view", view);
     if (search) p.set("q", search);
+    if (stageFilter) p.set("stage", stageFilter.id);
     return p.toString();
+  })();
+  const withoutStage = (() => {
+    const p = new URLSearchParams(currentQuery);
+    p.delete("stage");
+    return `/app/crm?${p.toString()}`;
   })();
 
   return (
@@ -126,6 +137,18 @@ export default async function CrmPage({
         />
         <SavedViews current={currentQuery} views={savedViews} />
       </div>
+
+      {stageFilter ? (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="rounded-full bg-brand/10 px-3 py-1 font-medium text-brand">
+            {t("stageFilter", { name: stageFilter.name })}
+          </span>
+          <Link href={withoutStage} className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground">
+            <X className="size-3.5" />
+            {t("clearStage")}
+          </Link>
+        </div>
+      ) : null}
 
       {view === "list" ? <OpportunityList rows={rows} /> : <Board columns={board.columns} />}
     </div>

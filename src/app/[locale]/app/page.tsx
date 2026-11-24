@@ -12,7 +12,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
-import { getDashboardInsights } from "@/lib/queries/insights";
+import { getDashboardInsights, getFunnelChart } from "@/lib/queries/insights";
 import { getSalesReport, type SalesPeriod } from "@/lib/queries/sales-report";
 import { getSalesLeaderboard, getMonthlyTrend } from "@/lib/queries/dashboard-extra";
 import { getGoals, currentMonth } from "@/lib/queries/goals";
@@ -21,6 +21,7 @@ import { hasFeatureByModules, hasModule } from "@/config/modules";
 import { ModulesHome } from "@/components/dashboard/modules-home";
 import { PieCard } from "@/components/dashboard/pie-card";
 import { DashboardPeriod } from "@/components/dashboard/dashboard-period";
+import { DashboardFunnelSelect } from "@/components/dashboard/dashboard-funnel-select";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
@@ -36,7 +37,7 @@ export default async function DashboardPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; funnel?: string }>;
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
@@ -47,14 +48,16 @@ export default async function DashboardPage({
   }
   const t = await getTranslations("app.dashboard");
   const tr = await getTranslations("crm.reports");
-  const period = asPeriod((await searchParams).period);
+  const sp = await searchParams;
+  const period = asPeriod(sp.period);
 
-  const [ins, report, leaderboard, goals, trend] = await Promise.all([
+  const [ins, report, leaderboard, goals, trend, funnel] = await Promise.all([
     getDashboardInsights(ctx.organizationId),
     getSalesReport(ctx.organizationId, period),
     getSalesLeaderboard(ctx.organizationId, period),
     getGoals(ctx.organizationId, currentMonth()),
     getMonthlyTrend(ctx.organizationId, 6),
+    getFunnelChart(ctx.organizationId, sp.funnel),
   ]);
   const brl = new Intl.NumberFormat(locale === "pt" ? "pt-BR" : "en-US", {
     style: "currency",
@@ -69,7 +72,9 @@ export default async function DashboardPage({
   };
   const pct = (n: number) => `${Math.round(n * 100)}%`;
   const maxReason = Math.max(1, ...report.lossReasons.map((l) => l.count));
-  const maxStageValue = Math.max(1, ...ins.stages.map((s) => s.value));
+  const maxStageValue = Math.max(1, ...funnel.stages.map((s) => s.value));
+  const funnelCount = funnel.stages.reduce((a, s) => a + s.count, 0);
+  const funnelValue = funnel.stages.reduce((a, s) => a + s.value, 0);
   const maxLeader = Math.max(1, ...leaderboard.map((r) => r.wonValue));
   const maxTrend = Math.max(1, ...trend.map((p) => p.wonValue));
 
@@ -185,37 +190,59 @@ export default async function DashboardPage({
       <PieCard models={pieModels} defaultModel="opps_by_stage" />
 
       <section className="glass rounded-xl border border-border p-5 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">{t("funnelTitle")}</h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-semibold">{t("funnelTitle")}</h2>
+            {funnel.pipelineId && funnel.pipelines.length > 1 ? (
+              <DashboardFunnelSelect value={funnel.pipelineId} pipelines={funnel.pipelines} />
+            ) : null}
+          </div>
           <Link
-            href="/app/crm"
+            href={funnel.pipelineId ? `/app/crm?pipeline=${funnel.pipelineId}` : "/app/crm"}
             className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
           >
             {t("viewPipeline")}
             <ArrowRight className="size-4" />
           </Link>
         </div>
-        {ins.stages.length === 0 ? (
+        {funnel.stages.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">{t("emptyFunnel")}</p>
         ) : (
-          <ul className="flex flex-col gap-3">
-            {ins.stages.map((s) => (
-              <li key={s.id} className="flex items-center gap-3">
-                <span className="w-32 shrink-0 truncate text-sm">{s.name}</span>
-                <div className="h-6 flex-1 overflow-hidden rounded-md bg-muted">
-                  <div
-                    className="flex h-full items-center rounded-md bg-brand/80 px-2"
-                    style={{ width: `${Math.max(6, (s.value / maxStageValue) * 100)}%` }}
+          <>
+            <ul className="flex flex-col gap-1">
+              {funnel.stages.map((s) => (
+                <li key={s.id}>
+                  {/* Each bar opens the list of that stage's opportunities. */}
+                  <Link
+                    href={`/app/crm?pipeline=${funnel.pipelineId}&view=list&stage=${s.id}`}
+                    title={t("openStageList", { stage: s.name })}
+                    className="flex items-center gap-3 rounded-md px-1 py-1 transition-colors hover:bg-muted/60"
                   >
-                    <span className="truncate text-xs font-medium text-brand-foreground">
-                      {brl.format(s.value)}
-                    </span>
-                  </div>
-                </div>
-                <span className="w-10 shrink-0 text-right text-sm text-muted-foreground">{s.count}</span>
-              </li>
-            ))}
-          </ul>
+                    <span className="w-32 shrink-0 truncate text-sm">{s.name}</span>
+                    <div className="h-6 flex-1 overflow-hidden rounded-md bg-muted">
+                      <div
+                        className="flex h-full items-center rounded-md bg-brand/80 px-2"
+                        style={{ width: `${Math.max(6, (s.value / maxStageValue) * 100)}%` }}
+                      >
+                        <span className="truncate text-xs font-medium text-brand-foreground">
+                          {brl.format(s.value)}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="w-10 shrink-0 text-right text-sm text-muted-foreground">{s.count}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 flex items-center justify-between border-t border-border px-1 pt-3 text-sm">
+              <span className="font-medium">{t("funnelTotal")}</span>
+              <span className="text-muted-foreground">
+                <span className="font-semibold text-foreground">{brl.format(funnelValue)}</span>
+                {" · "}
+                {t("funnelTotalCount", { count: funnelCount })}
+              </span>
+            </div>
+          </>
         )}
       </section>
 
