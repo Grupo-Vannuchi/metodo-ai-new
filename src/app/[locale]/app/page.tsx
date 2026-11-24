@@ -14,7 +14,7 @@ import {
 import { requireOrgContext } from "@/lib/tenant";
 import { getDashboardInsights, getFunnelChart } from "@/lib/queries/insights";
 import { getSalesReport, type SalesPeriod } from "@/lib/queries/sales-report";
-import { getSalesLeaderboard, getMonthlyTrend } from "@/lib/queries/dashboard-extra";
+import { getSalesLeaderboard, getMonthlyTrend, getTopProducts, getTopLocations } from "@/lib/queries/dashboard-extra";
 import { getGoals, currentMonth } from "@/lib/queries/goals";
 import { PIE_MODELS, PIE_FINANCE_MODELS } from "@/lib/queries/dashboard";
 import { hasFeatureByModules, hasModule } from "@/config/modules";
@@ -51,13 +51,15 @@ export default async function DashboardPage({
   const sp = await searchParams;
   const period = asPeriod(sp.period);
 
-  const [ins, report, leaderboard, goals, trend, funnel] = await Promise.all([
+  const [ins, report, leaderboard, goals, trend, funnel, topProducts, topLocations] = await Promise.all([
     getDashboardInsights(ctx.organizationId),
     getSalesReport(ctx.organizationId, period),
     getSalesLeaderboard(ctx.organizationId, period),
     getGoals(ctx.organizationId, currentMonth()),
     getMonthlyTrend(ctx.organizationId, 6),
     getFunnelChart(ctx.organizationId, sp.funnel),
+    getTopProducts(ctx.organizationId, period),
+    getTopLocations(ctx.organizationId, period),
   ]);
   const brl = new Intl.NumberFormat(locale === "pt" ? "pt-BR" : "en-US", {
     style: "currency",
@@ -75,6 +77,9 @@ export default async function DashboardPage({
   const maxStageValue = Math.max(1, ...funnel.stages.map((s) => s.value));
   const funnelCount = funnel.stages.reduce((a, s) => a + s.count, 0);
   const funnelValue = funnel.stages.reduce((a, s) => a + s.value, 0);
+  const maxProduct = Math.max(1, ...topProducts.map((p) => p.value));
+  const maxLocation = Math.max(1, ...topLocations.map((l) => l.count));
+  const qtyFmt = new Intl.NumberFormat(locale === "pt" ? "pt-BR" : "en-US", { maximumFractionDigits: 2 });
   const maxLeader = Math.max(1, ...leaderboard.map((r) => r.wonValue));
   const maxTrend = Math.max(1, ...trend.map((p) => p.wonValue));
 
@@ -279,6 +284,56 @@ export default async function DashboardPage({
                       <div className="h-full rounded-md bg-red-500/70" style={{ width: `${Math.max(6, (l.count / maxReason) * 100)}%` }} />
                     </div>
                     <span className="w-6 shrink-0 text-right text-xs text-muted-foreground">{l.count}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        {/* Rankings for the same period. */}
+        <div className="mt-6 grid gap-6 border-t border-border pt-5 lg:grid-cols-2">
+          <div>
+            <p className="mb-2 text-xs font-medium text-muted-foreground">{t("topProductsTitle")}</p>
+            {topProducts.length === 0 ? (
+              <p className="py-4 text-center text-xs text-muted-foreground">{t("topProductsEmpty")}</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {topProducts.map((p) => (
+                  <li key={p.key} className="flex items-center gap-2">
+                    <span className="w-32 shrink-0 truncate text-xs" title={p.name}>{p.name}</span>
+                    <div className="h-4 flex-1 overflow-hidden rounded-md bg-muted">
+                      <div className="h-full rounded-md bg-brand/70" style={{ width: `${Math.max(6, (p.value / maxProduct) * 100)}%` }} />
+                    </div>
+                    <span className="w-44 shrink-0 text-right text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">{brl.format(p.value)}</span>
+                      {" · "}
+                      {t("topProductsDetail", { qty: qtyFmt.format(p.quantity), count: p.proposals })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-medium text-muted-foreground">{t("topLocationsTitle")}</p>
+            {topLocations.length === 0 ? (
+              <p className="py-4 text-center text-xs text-muted-foreground">{t("topLocationsEmpty")}</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {topLocations.map((l) => (
+                  <li key={l.key} className="flex items-center gap-2">
+                    <span className={cn("w-32 shrink-0 truncate text-xs", !l.label && "italic text-muted-foreground")} title={l.label ?? undefined}>
+                      {l.label ?? t("noCity")}
+                    </span>
+                    <div className="h-4 flex-1 overflow-hidden rounded-md bg-muted">
+                      <div className="h-full rounded-md bg-sky-500/70" style={{ width: `${Math.max(6, (l.count / maxLocation) * 100)}%` }} />
+                    </div>
+                    <span className="w-44 shrink-0 text-right text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">{t("topLocationsCount", { count: l.count })}</span>
+                      {" · "}
+                      {brl.format(l.value)}
+                    </span>
                   </li>
                 ))}
               </ul>
