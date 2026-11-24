@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
+import { canAccessScreen } from "@/lib/access";
+import { audit } from "@/lib/audit";
+import { FUNNEL_SEND_MAX, sendContactsToFunnel } from "@/lib/crm/contacts-to-funnel";
 import {
   addContactsToFolder,
   isFolderArg,
@@ -133,6 +136,41 @@ export async function bulkTagContacts(ids: string[], tag: string): Promise<BulkR
     return { ok: true, count };
   } catch (error) {
     console.error("bulkTagContacts failed", error);
+    return { ok: false, error: "unknown" };
+  }
+}
+
+export type FunnelSendActionResult =
+  | { ok: true; created: number; skipped: number }
+  | { ok: false; error: "unauthorized" | "empty" | "invalid" | "tooMany" | "unknown" };
+
+/** "Enviar ao funil": each contact becomes an opportunity in `stageId` (rules in src/lib/crm/contacts-to-funnel.ts). Needs the
+ * contacts and the funnel screens. A selection over FUNNEL_SEND_MAX is refused, never cut. */
+export async function bulkSendContactsToFunnel(
+  ids: string[],
+  stageId: string,
+  productServiceId: string | null,
+): Promise<FunnelSendActionResult> {
+  if (Array.isArray(ids) && new Set(ids).size > FUNNEL_SEND_MAX) return { ok: false, error: "tooMany" };
+  const p = await prep(ids);
+  if ("error" in p) return { ok: false, error: p.error };
+  if (!canAccessScreen(p.ctx, "contacts") || !canAccessScreen(p.ctx, "crm")) return { ok: false, error: "unauthorized" };
+  if (typeof stageId !== "string" || !stageId || stageId.length > 40) return { ok: false, error: "invalid" };
+  if (productServiceId !== null && (typeof productServiceId !== "string" || productServiceId.length > 40)) {
+    return { ok: false, error: "invalid" };
+  }
+  try {
+    const res = await sendContactsToFunnel(p.ctx.organizationId, p.ctx.userId, {
+      contactIds: p.ids,
+      stageId,
+      productServiceId: productServiceId || null,
+    });
+    if (!res) return { ok: false, error: "invalid" };
+    await audit(p.ctx, { action: "contacts.toFunnel", entity: "contacts", meta: { stageId, ...res } });
+    revalidatePath("/app/crm");
+    return { ok: true, ...res };
+  } catch (error) {
+    console.error("bulkSendContactsToFunnel failed", error);
     return { ok: false, error: "unknown" };
   }
 }

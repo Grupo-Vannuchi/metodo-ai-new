@@ -29,6 +29,7 @@ export const AUDIT_ACTIONS = [
   "extraction.started",
   "extraction.imported",
   "extraction.toFunnel",
+  "contacts.toFunnel",
   "finance.entry.created",
   "finance.entry.updated",
   "finance.entry.deleted",

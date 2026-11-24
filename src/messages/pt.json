@@ -1457,7 +1457,30 @@
       "delete": "Excluir",
       "confirmDelete": "Excluir {count} item(ns)? Esta ação não pode ser desfeita.",
       "clear": "Limpar seleção",
-      "addToGroup": "Adicionar a grupo do WhatsApp"
+      "addToGroup": "Adicionar a grupo do WhatsApp",
+      "sendToFunnel": "Enviar ao funil"
+    },
+    "funnelSend": {
+      "title": "Enviar ao funil",
+      "subtitle": "{count, plural, one {# contato vira oportunidade} other {# contatos viram oportunidades}} na etapa escolhida.",
+      "pipeline": "Funil",
+      "stage": "Etapa",
+      "product": "Produto ou serviço (opcional)",
+      "productNone": "— Nenhum —",
+      "rules": "Cada contato vira uma oportunidade com o nome dele, sob a sua responsabilidade. Quem já tem uma oportunidade aberta fica de fora. As automações de \"oportunidade criada\" não rodam neste envio.",
+      "noPipeline": "Crie um funil com etapas antes de enviar.",
+      "send": "Enviar {count}",
+      "sending": "Enviando…",
+      "cancel": "Cancelar",
+      "close": "Fechar",
+      "done": "{created, plural, =0 {Nenhuma oportunidade criada} one {# oportunidade criada} other {# oportunidades criadas}}{skipped, plural, =0 {} one { · # contato já tinha oportunidade aberta} other { · # contatos já tinham oportunidade aberta}}",
+      "error": {
+        "unauthorized": "Você não tem acesso ao funil.",
+        "empty": "Nenhum contato selecionado.",
+        "invalid": "Funil, etapa ou produto não encontrado. Recarregue a página e tente de novo.",
+        "tooMany": "No máximo 1.000 contatos por envio.",
+        "unknown": "Não foi possível enviar. Tente de novo."
+      }
     },
     "groupAdd": {
       "button": "Adicionar a grupo do WhatsApp",
@@ -3445,6 +3468,9 @@
         "started": "Iniciou uma prospecção",
         "imported": "Importou leads para o CRM",
         "toFunnel": "Enviou leads para o funil"
+      },
+      "contacts": {
+        "toFunnel": "Enviou contatos para o funil"
       },
       "finance": {
         "entry": {

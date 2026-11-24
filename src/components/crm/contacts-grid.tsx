@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Trash2, Phone, Mail, Building2, Users } from "lucide-react";
+import { Trash2, Phone, Mail, Building2, Users, Kanban } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/app/avatar";
@@ -12,6 +12,7 @@ import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { FolderExplorer, type FolderColumn, type ExplorerLabels } from "@/components/crm/folder-explorer";
 import { BulkBar } from "@/components/crm/bulk-bar";
 import { GroupAddDialog } from "@/components/crm/group-add-dialog";
+import { SendToFunnelDialog, type FunnelOptions } from "@/components/crm/send-to-funnel-dialog";
 import type { GroupAddSource } from "@/lib/whatsapp/group-add/service";
 import { createFolder, renameFolder, deleteFolder } from "@/app/actions/contact-folders";
 import { deleteContact } from "@/app/actions/contacts";
@@ -183,17 +184,30 @@ function ContactList({
  * `canAddToGroup` comes from the server (the Atendimento module is installed and the organization is on the pilot list,
  * WHATSAPP_GROUP_ADD_ORG_IDS): it turns on the two entries of "Adicionar a
  * grupo do WhatsApp", the button of the open folder and the one of the selection bar, which open the same dialog.
+ * `funnel` too (null when the member doesn't see the funnel): the funnels and products of "Enviar ao funil", with the
+ * same two entries (the whole open folder, e.g. a WhatsApp group's, or the selection).
  */
-export function ContactsGrid({ columns, canAddToGroup }: { columns: ContactColumn[]; canAddToGroup: boolean }) {
+export function ContactsGrid({
+  columns,
+  canAddToGroup,
+  funnel,
+}: {
+  columns: ContactColumn[];
+  canAddToGroup: boolean;
+  funnel: FunnelOptions | null;
+}) {
   const t = useTranslations("crm.contacts");
   const tc = useTranslations("crm.common");
   const tg = useTranslations("crm.groupAdd");
+  const tb = useTranslations("crm.bulk");
   const router = useRouter();
   const undo = useUndo();
 
   // What the dialog is open for: the source of the round and how many contacts the member sees in it. Kept here, outside the
   // explorer, so the dialog is not inside the open folder's section (whose mouse handler starts the selection box).
   const [groupAdd, setGroupAdd] = useState<{ source: GroupAddSource; count: number } | null>(null);
+  // The contacts "Enviar ao funil" is open for, and what clears the selection once they're sent (nothing for a whole folder).
+  const [toFunnel, setToFunnel] = useState<{ ids: string[]; clear: () => void } | null>(null);
 
   // Ids hidden optimistically while an undoable delete is pending. Reconciled
   // against fresh server data: keep only ids still present (i.e. not yet
@@ -283,18 +297,33 @@ export function ContactsGrid({ columns, canAddToGroup }: { columns: ContactColum
           />
         )}
         renderOpenFolderActions={
-          canAddToGroup
+          canAddToGroup || funnel
             ? (column) =>
                 column.items.length > 0 ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setGroupAdd({ source: { kind: "folder", folderId: column.id }, count: column.items.length })}
-                  >
-                    <Users className="size-4" />
-                    {tg("button")}
-                  </Button>
+                  <>
+                    {funnel ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setToFunnel({ ids: column.items.map((c) => c.id), clear: () => {} })}
+                      >
+                        <Kanban className="size-4" />
+                        {tb("sendToFunnel")}
+                      </Button>
+                    ) : null}
+                    {canAddToGroup ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setGroupAdd({ source: { kind: "folder", folderId: column.id }, count: column.items.length })}
+                      >
+                        <Users className="size-4" />
+                        {tg("button")}
+                      </Button>
+                    ) : null}
+                  </>
                 ) : null
             : undefined
         }
@@ -330,6 +359,7 @@ export function ContactsGrid({ columns, canAddToGroup }: { columns: ContactColum
             onAddToGroup={
               canAddToGroup ? () => setGroupAdd({ source: { kind: "contacts", contactIds: ids }, count: ids.length }) : undefined
             }
+            onSendToFunnel={funnel ? () => setToFunnel({ ids, clear }) : undefined}
             onDelete={async () => {
               clear();
               deleteWithUndo(ids, () => bulkDeleteContacts(ids));
@@ -340,6 +370,17 @@ export function ContactsGrid({ columns, canAddToGroup }: { columns: ContactColum
       />
       {canAddToGroup && groupAdd ? (
         <GroupAddDialog source={groupAdd.source} count={groupAdd.count} onClose={() => setGroupAdd(null)} />
+      ) : null}
+      {funnel && toFunnel ? (
+        <SendToFunnelDialog
+          contactIds={toFunnel.ids}
+          options={funnel}
+          onClose={() => setToFunnel(null)}
+          onDone={() => {
+            toFunnel.clear();
+            setToFunnel(null);
+          }}
+        />
       ) : null}
     </>
   );

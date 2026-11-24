@@ -1,7 +1,10 @@
 import { getTranslations } from "next-intl/server";
 import { Plus } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
+import { canAccessScreen } from "@/lib/access";
 import { hasModule } from "@/config/modules";
+import { listPipelinesWithStages } from "@/lib/queries/pipelines";
+import { productServiceOptions } from "@/lib/queries/crm";
 import { isGroupAddEnabled } from "@/lib/whatsapp/group-add/pilot";
 import { getContactsBoard } from "@/lib/queries/contact-folders";
 import { findContactDuplicates } from "@/lib/queries/duplicates";
@@ -24,10 +27,15 @@ export default async function ContactsPage({
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("crm.contacts");
 
-  const [{ columns }, dupes] = await Promise.all([
+  // "Enviar ao funil" opens opportunities, so only a member who sees the funnel gets it (the action checks it again).
+  const canSendToFunnel = canAccessScreen(ctx, "crm");
+  const [{ columns }, dupes, pipelines, products] = await Promise.all([
     getContactsBoard(ctx.organizationId),
     findContactDuplicates(ctx.organizationId),
+    canSendToFunnel ? listPipelinesWithStages(ctx.organizationId) : null,
+    canSendToFunnel ? productServiceOptions(ctx.organizationId) : null,
   ]);
+  const funnel = pipelines && products ? { pipelines, products } : null;
   // "Adicionar a grupo do WhatsApp" sends from the member's number of Conversas, so it needs the Atendimento module (the
   // layout already gates the screen and the CRM), and the organization on the pilot list (WHATSAPP_GROUP_ADD_ORG_IDS).
   // Resolved here and sent down as a prop; the actions check both again.
@@ -51,7 +59,7 @@ export default async function ContactsPage({
         </div>
       </div>
 
-      <ContactsGrid columns={columns} canAddToGroup={canAddToGroup} />
+      <ContactsGrid columns={columns} canAddToGroup={canAddToGroup} funnel={funnel} />
     </div>
   );
 }

@@ -1457,7 +1457,30 @@
       "delete": "Delete",
       "confirmDelete": "Delete {count} item(s)? This can't be undone.",
       "clear": "Clear selection",
-      "addToGroup": "Add to a WhatsApp group"
+      "addToGroup": "Add to a WhatsApp group",
+      "sendToFunnel": "Send to funnel"
+    },
+    "funnelSend": {
+      "title": "Send to funnel",
+      "subtitle": "{count, plural, one {# contact becomes an opportunity} other {# contacts become opportunities}} in the chosen stage.",
+      "pipeline": "Funnel",
+      "stage": "Stage",
+      "product": "Product or service (optional)",
+      "productNone": "— None —",
+      "rules": "Each contact becomes an opportunity under its own name, owned by you. Contacts that already have an open opportunity are left out. \"Opportunity created\" automations don't run on this send.",
+      "noPipeline": "Create a funnel with stages before sending.",
+      "send": "Send {count}",
+      "sending": "Sending…",
+      "cancel": "Cancel",
+      "close": "Close",
+      "done": "{created, plural, =0 {No opportunity created} one {# opportunity created} other {# opportunities created}}{skipped, plural, =0 {} one { · # contact already had an open opportunity} other { · # contacts already had an open opportunity}}",
+      "error": {
+        "unauthorized": "You don't have access to the funnel.",
+        "empty": "No contact selected.",
+        "invalid": "Funnel, stage or product not found. Reload the page and try again.",
+        "tooMany": "At most 1,000 contacts per send.",
+        "unknown": "Couldn't send. Try again."
+      }
     },
     "groupAdd": {
       "button": "Add to a WhatsApp group",
@@ -3445,6 +3468,9 @@
         "started": "Started a prospecting run",
         "imported": "Imported leads into the CRM",
         "toFunnel": "Sent leads to the funnel"
+      },
+      "contacts": {
+        "toFunnel": "Sent contacts to the funnel"
       },
       "finance": {
         "entry": {

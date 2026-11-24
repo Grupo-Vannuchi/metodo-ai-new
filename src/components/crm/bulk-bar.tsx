@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { FolderInput, FolderMinus, FolderPlus, Tag, Trash2, Users, X } from "lucide-react";
+import { FolderInput, FolderMinus, FolderPlus, Kanban, Tag, Trash2, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
  * grace period + "Undo" toast), so there's no confirm here. `onTag` is optional —
  * companies don't have tags — and so is `onAddToGroup`, which only contacts have
  * (and only where the Atendimento module is installed): it opens the dialog that
- * adds the selection to a WhatsApp group.
+ * adds the selection to a WhatsApp group. `onSendToFunnel`, contacts only and only
+ * for who sees the funnel, opens the one that makes them opportunities.
  */
 export function BulkBar({
   count,
@@ -23,6 +24,7 @@ export function BulkBar({
   openFolderId = null,
   onTag,
   onAddToGroup,
+  onSendToFunnel,
   onDelete,
   onClear,
 }: {
@@ -37,6 +39,7 @@ export function BulkBar({
   openFolderId?: string | null;
   onTag?: (tag: string) => Promise<unknown>;
   onAddToGroup?: () => void;
+  onSendToFunnel?: () => void;
   onDelete: () => Promise<unknown>;
   onClear: () => void;
 }) {
@@ -176,6 +179,13 @@ export function BulkBar({
         <Button type="button" size="sm" variant="outline" disabled={pending} onClick={onAddToGroup}>
           <Users className="size-4" />
           {t("addToGroup")}
+        </Button>
+      ) : null}
+
+      {onSendToFunnel ? (
+        <Button type="button" size="sm" variant="outline" disabled={pending} onClick={onSendToFunnel}>
+          <Kanban className="size-4" />
+          {t("sendToFunnel")}
         </Button>
       ) : null}
 
