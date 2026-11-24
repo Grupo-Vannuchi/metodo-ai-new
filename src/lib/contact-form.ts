@@ -1,4 +1,5 @@
 import type { ContactInput } from "@/lib/validations/contact";
+import { formatDocument } from "@/lib/document";
 
 export type ContactFormValues = {
   name: string;
@@ -6,12 +7,13 @@ export type ContactFormValues = {
   phone: string;
   role: string;
   companyId: string;
+  cpf: string;
   tags: string;
   optedOut: boolean;
 };
 
 export function emptyContactForm(): ContactFormValues {
-  return { name: "", email: "", phone: "", role: "", companyId: "", tags: "", optedOut: false };
+  return { name: "", email: "", phone: "", role: "", companyId: "", cpf: "", tags: "", optedOut: false };
 }
 
 export type ContactRow = {
@@ -20,6 +22,7 @@ export type ContactRow = {
   phone: string | null;
   role: string | null;
   companyId: string | null;
+  cpf: string | null;
   tags: string[];
   optedOut: boolean;
 };
@@ -31,6 +34,7 @@ export function contactToForm(row: ContactRow): ContactFormValues {
     phone: row.phone ?? "",
     role: row.role ?? "",
     companyId: row.companyId ?? "",
+    cpf: row.cpf ? formatDocument("CPF", row.cpf) : "",
     tags: row.tags.join(", "),
     optedOut: row.optedOut,
   };
@@ -43,6 +47,7 @@ export function formToContactInput(values: ContactFormValues): ContactInput {
     phone: values.phone.trim(),
     role: values.role.trim(),
     companyId: values.companyId.trim(),
+    cpf: values.cpf.trim(),
     tags: values.tags.trim(),
     optedOut: values.optedOut,
   };

@@ -16,6 +16,7 @@ import { GROUP_ADD_TIME_ZONE } from "@/components/crm/group-add-format";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/routing";
+import { formatDocument } from "@/lib/document";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,7 @@ export default async function ContactViewPage({
   const fields: { label: string; value: string }[] = [
     { label: t("email"), value: contact.email || "—" },
     { label: t("phone"), value: contact.phone || "—" },
+    { label: t("cpf"), value: contact.cpf ? formatDocument("CPF", contact.cpf) : "—" },
     { label: t("role"), value: contact.role || "—" },
     { label: t("company"), value: contact.company?.name ?? "—" },
     { label: t("tags"), value: contact.tags.length ? contact.tags.join(", ") : "—" },

@@ -367,6 +367,16 @@ tabela ou coluna nova direto no Supabase.
   código atual da produção continua funcionando com ela.
 - **Não** use `migrate deploy`.
 - Sem ela, o deploy funciona até alguém escolher "Declinada"; aí a gravação falha.
+- **Aplicada no Supabase em 24/11/2026; PRs #280, #281 e #282 juntados no mesmo dia.**
+
+**Antes do merge da branch `feature/crm-contato-cpf` (o CPF no contato):**
+- Aplicar no Supabase `prisma/migrations/20261124130000_contact_cpf/migration.sql`:
+  `npx prisma db execute --file prisma/migrations/20261124130000_contact_cpf/migration.sql --schema prisma/schema.prisma`;
+  depois, `npx prisma migrate resolve --applied 20261124130000_contact_cpf`.
+- Ela só acrescenta a coluna `cpf` (texto, opcional) na tabela `contacts` (`ADD COLUMN IF NOT EXISTS`). Não mexe em linha
+  existente, e o código atual da produção continua funcionando com ela.
+- **Não** use `migrate deploy`.
+- **Sem ela, o deploy quebra as telas de contato:** o Prisma lê a coluna `cpf` em toda consulta de contato.
 
 ### E-mail: caixa de entrada por IMAP
 

@@ -8,6 +8,7 @@ import { Input, Label, FieldError } from "@/components/ui/field";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { formatBrPhone, isValidBrPhone } from "@/lib/phone";
+import { formatDocument, isValidCPF } from "@/lib/document";
 import { useRegisterAssistantForm } from "@/components/app/assistant/form-store";
 import type { FormBridge } from "@/lib/assistant/form-bridge";
 import {
@@ -48,6 +49,14 @@ export function ContactForm({
   // Mask the phone field as the user types and keep RHF's value in sync.
   const phoneField = register("phone", {
     validate: (v) => isValidBrPhone(v) || tv("phone"),
+  });
+  // A contact belongs to a company or carries a CPF (same rule on the server).
+  const cpfField = register("cpf", {
+    validate: (v, values) => {
+      if (v && !isValidCPF(v)) return t("cpfInvalid");
+      if (!v && !values.companyId) return t("companyOrCpf");
+      return true;
+    },
   });
 
   // AI copilot pre-fill (review only; never saves).
@@ -135,12 +144,31 @@ export function ContactForm({
           </div>
           <div>
             <Label htmlFor="companyId">{t("company")}</Label>
-            <select id="companyId" className={selectCls} {...register("companyId")}>
+            <select id="companyId" className={selectCls} {...register("companyId", { deps: ["cpf"] })}>
               <option value="">{t("noCompany")}</option>
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+          </div>
+          <div>
+            <Label htmlFor="cpf">{t("cpf")}</Label>
+            <Input
+              id="cpf"
+              inputMode="numeric"
+              placeholder="000.000.000-00"
+              aria-invalid={Boolean(errors.cpf)}
+              {...cpfField}
+              onChange={(e) => {
+                e.target.value = formatDocument("CPF", e.target.value);
+                cpfField.onChange(e);
+              }}
+            />
+            {errors.cpf ? (
+              <FieldError>{errors.cpf.message}</FieldError>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground">{t("cpfHint")}</p>
+            )}
           </div>
           <div className="sm:col-span-2">
             <Label htmlFor="tags">{t("tags")}</Label>
