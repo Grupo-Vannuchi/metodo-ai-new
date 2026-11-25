@@ -7,13 +7,14 @@ import { hasFeatureByModules } from "@/config/modules";
 import { isAssistantConfigured } from "@/lib/assistant/config";
 import { isAssistantOverDailyLimit } from "@/lib/assistant/quota";
 import { makeRateLimiter } from "@/lib/ratelimit";
+import { audit } from "@/lib/audit";
 import { draftProposalScope } from "@/lib/proposals/ai-scope";
 
 export type ProposalScopeResult =
   | { ok: true; text: string }
   | {
       ok: false;
-      error: "unauthorized" | "not_available" | "daily_limit" | "rate_limited" | "invalid" | "refused" | "unknown";
+      error: "unauthorized" | "not_available" | "daily_limit" | "rate_limited" | "invalid" | "refused" | "cut" | "unknown";
     };
 
 const scopeSchema = z.object({
@@ -53,6 +54,13 @@ export async function generateProposalScope(input: z.input<typeof scopeSchema>):
     const { success } = await limiter.limit(`${ctx.organizationId}:${ctx.userId}`);
     if (!success) return { ok: false, error: "rate_limited" };
   }
+  // Logged before the call, so every request that reaches the API counts toward the org's daily AI limit
+  // (assistantDailyCount reads these rows), whatever the API answers.
+  await audit(ctx, {
+    action: "assistant.proposal_scope",
+    entity: "Proposal",
+    meta: { opportunityId: parsed.data.opportunityId || null },
+  });
 
   try {
     const res = await draftProposalScope(ctx.organizationId, ctx.organization.name, parsed.data);

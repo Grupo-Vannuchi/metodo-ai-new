@@ -23,12 +23,13 @@ export type ScopeInput = {
   current: string;
 };
 
-export type ScopeOutcome = { ok: true; text: string } | { ok: false; error: "refused" | "unavailable" | "unknown" };
+export type ScopeOutcome = { ok: true; text: string } | { ok: false; error: "refused" | "unavailable" | "cut" | "unknown" };
 
 /** The longest text the field takes (validations/proposal.ts: intro up to 12000). */
 const MAX_TEXT = 12_000;
-/** A request that hangs is cut before the host's own limit on the page's request. */
-const TIMEOUT_MS = 45_000;
+/** A request that hangs is cut before the host's own limit on the page's request. No automatic retry (the SDK would repeat
+ * a timeout and double the wait): the person clicks again. A normal generation takes 10–15 s. */
+const TIMEOUT_MS = 40_000;
 /** Models that take the server-side refusal fallback (fallbacks: "default"); any other model goes without it. */
 const FALLBACK_MODELS = new Set(["claude-fable-5-2", "claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"]);
 
@@ -121,9 +122,11 @@ export async function draftProposalScope(
           ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }
           : {}),
       },
-      { timeout: TIMEOUT_MS, maxRetries: 1 },
+      { timeout: TIMEOUT_MS, maxRetries: 0 },
     );
     if (response.stop_reason === "refusal") return { ok: false, error: "refused" };
+    // Cut at max_tokens (thinking shares them with the text): half a scope must not reach the field as if it were whole.
+    if (response.stop_reason === "max_tokens") return { ok: false, error: "cut" };
     const text = response.content
       .flatMap((b) => (b.type === "text" ? [b.text] : []))
       .join("")
@@ -141,7 +144,8 @@ export async function draftProposalScope(
     }
     if (error instanceof Anthropic.APIError) {
       console.error(`[proposal-scope] API error ${error.status}`, error.message);
-      return { ok: false, error: "unknown" };
+      // 5xx and 529 (overloaded) pass: "try again in a moment", like a 429.
+      return { ok: false, error: (error.status ?? 0) >= 500 ? "unavailable" : "unknown" };
     }
     throw error;
   }

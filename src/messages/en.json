@@ -834,6 +834,7 @@
           "rate_limited": "Too many requests in a row. Wait a minute and try again.",
           "invalid": "A field is longer than allowed.",
           "refused": "The AI didn't generate this text. Adjust the instruction and try again.",
+          "cut": "The text came out too long and was cut. Try again with a shorter instruction.",
           "unknown": "Couldn't generate the text. Try again."
         }
       },
@@ -3556,7 +3557,8 @@
         "email_sent": "Copilot sent an email",
         "automation_created": "Copilot created an automation",
         "contact_tagged": "Copilot tagged a contact",
-        "team_message_sent": "Copilot sent a team chat message"
+        "team_message_sent": "Copilot sent a team chat message",
+        "proposal_scope": "Drafted a proposal scope with AI"
       }
     },
     "entities": {
@@ -3571,6 +3573,7 @@
       "Membership": "Team",
       "Task": "Task",
       "Opportunity": "Opportunity",
+      "Proposal": "Proposal",
       "AutomationRule": "Automation",
       "TeamChat": "Team chat",
       "TaskBoardColumn": "Task board",

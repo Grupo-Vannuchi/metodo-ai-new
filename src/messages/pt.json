@@ -834,6 +834,7 @@
           "rate_limited": "Muitos pedidos seguidos. Espere um minuto e tente de novo.",
           "invalid": "Algum campo passou do tamanho permitido.",
           "refused": "A IA não gerou este texto. Ajuste a instrução e tente de novo.",
+          "cut": "O texto ficou longo demais e foi cortado. Tente de novo com uma instrução mais curta.",
           "unknown": "Não foi possível gerar o texto. Tente de novo."
         }
       },
@@ -3556,7 +3557,8 @@
         "email_sent": "Copiloto enviou um e-mail",
         "automation_created": "Copiloto criou uma automação",
         "contact_tagged": "Copiloto adicionou uma tag ao contato",
-        "team_message_sent": "Copiloto enviou mensagem no chat de equipe"
+        "team_message_sent": "Copiloto enviou mensagem no chat de equipe",
+        "proposal_scope": "Gerou o escopo de uma proposta com IA"
       }
     },
     "entities": {
@@ -3571,6 +3573,7 @@
       "Membership": "Equipe",
       "Task": "Tarefa",
       "Opportunity": "Oportunidade",
+      "Proposal": "Proposta",
       "AutomationRule": "Automação",
       "TeamChat": "Chat de equipe",
       "TaskBoardColumn": "Quadro de tarefas",
