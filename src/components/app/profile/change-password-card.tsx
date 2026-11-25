@@ -7,7 +7,7 @@ import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/field";
 import { PasswordInput } from "@/components/ui/password-input";
-import { changePassword } from "@/app/actions/account";
+import { changePassword, sendSetPasswordLink } from "@/app/actions/account";
 
 /**
  * Security-tab card to change (or, for Google-only accounts, first-set) the
@@ -21,6 +21,7 @@ export function ChangePasswordCard({ hasPassword }: { hasPassword: boolean }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -44,6 +45,39 @@ export function ChangePasswordCard({ hasPassword }: { hasPassword: boolean }) {
         setError(t(`security.error.${r.error}`));
       }
     });
+  }
+
+  // An account without a password (Google/Microsoft only) sets the first one through a link sent to its e-mail.
+  if (!hasPassword) {
+    return (
+      <div className="rounded-2xl border border-border bg-card/60 p-5 backdrop-blur-sm">
+        <div className="flex items-center gap-2">
+          <KeyRound className="size-4 text-brand" />
+          <h3 className="text-sm font-semibold">{t("security.setTitle")}</h3>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">{t("security.setDesc")}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("security.setLinkHint")}</p>
+        {linkSentTo ? <p className="mt-3 text-sm text-green-600">{t("security.setLinkSent", { email: linkSentTo })}</p> : null}
+        {error ? <p role="alert" className="mt-3 text-sm text-red-500">{error}</p> : null}
+        <div className="mt-4">
+          <Button
+            type="button"
+            size="sm"
+            disabled={pending}
+            onClick={() => {
+              setError(null);
+              start(async () => {
+                const r = await sendSetPasswordLink();
+                if (r.ok) setLinkSentTo(r.email);
+                else setError(r.error === "rate_limited" ? ta("errors.rate_limited") : t("security.error.unknown"));
+              });
+            }}
+          >
+            {pending ? t("saving") : t("security.setLinkCta")}
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (

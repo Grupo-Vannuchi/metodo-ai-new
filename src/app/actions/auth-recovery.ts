@@ -3,12 +3,12 @@
 import { hasLocale } from "next-intl";
 import { prisma } from "@/lib/prisma";
 import { createSession } from "@/lib/session";
-import { hashPassword } from "@/lib/password";
+import { hashPassword, verifyPassword } from "@/lib/password";
 import { makeRateLimiter } from "@/lib/ratelimit";
 import { env } from "@/lib/env";
 import { sendEmail } from "@/lib/email/send";
 import { renderPasswordResetEmail } from "@/lib/email/templates";
-import { consumeAuthToken, issueAuthToken, RESET_TTL_MS } from "@/lib/auth-tokens";
+import { consumeAuthToken, issueAuthToken, peekAuthToken, RESET_TTL_MS } from "@/lib/auth-tokens";
 import { sendVerificationEmail, sendWelcomeEmail } from "@/lib/auth-email";
 import { emailOnlySchema, resetPasswordSchema } from "@/lib/validations/auth";
 import { redirect } from "@/i18n/navigation";
@@ -18,10 +18,32 @@ import { defaultLocale, routing } from "@/i18n/routing";
  * Confirm an e-mail from the verification link. On success it verifies the
  * account, sends the welcome e-mail and signs the user in (the link came from a
  * confirm button, not a GET, so this can't be triggered by an e-mail scanner).
- * Returns an error only on a bad/expired/used token.
+ *
+ * An account with a password confirms only with it. Whoever created the account chose the password; the owner of the
+ * inbox may be someone else (a signup with another person's address, or an invite accepted by whoever sent it), and a
+ * click alone would confirm the account with a password the owner doesn't know. That owner can't confirm and gets the
+ * account back through "Esqueci a senha" (the reset confirms the address and ends every session). A wrong password does
+ * not spend the link; attempts per link are limited.
  */
-export async function verifyEmail(token: string, localeStr: string): Promise<{ error: "invalid" }> {
+export async function verifyEmail(
+  token: string,
+  password: string,
+  localeStr: string,
+): Promise<{ error: "invalid" | "wrong_password" | "rate_limited" }> {
   const locale = hasLocale(routing.locales, localeStr) ? localeStr : defaultLocale;
+  if (typeof token !== "string" || typeof password !== "string" || password.length > 200) return { error: "invalid" };
+
+  const owner = await peekAuthToken(token, "EMAIL_VERIFICATION");
+  if (!owner) return { error: "invalid" };
+  const limiter = makeRateLimiter("verify-email", 10, 600);
+  if (limiter) {
+    const { success } = await limiter.limit(owner);
+    if (!success) return { error: "rate_limited" };
+  }
+  const account = await prisma.user.findUnique({ where: { id: owner }, select: { passwordHash: true } });
+  if (account?.passwordHash && !(await verifyPassword(password, account.passwordHash))) {
+    return { error: "wrong_password" };
+  }
 
   const userId = await consumeAuthToken(token, "EMAIL_VERIFICATION");
   if (!userId) return { error: "invalid" };

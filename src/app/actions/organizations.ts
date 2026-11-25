@@ -6,7 +6,8 @@ import { deleteSession } from "@/lib/session";
 import { sendVerificationEmail } from "@/lib/auth-email";
 import { getOrgContext, assertRole } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
-import { hashPassword } from "@/lib/password";
+import { hashPassword, verifyPassword } from "@/lib/password";
+import { makeRateLimiter } from "@/lib/ratelimit";
 import { coreProfileData } from "@/lib/profile";
 import { LIMITS } from "@/config/limits";
 import {
@@ -265,7 +266,16 @@ export async function revokeInvitation(invitationId: string): Promise<Invitation
 }
 
 export type AcceptState = {
-  error: "invalid" | "expired" | "seat_limit" | "already_in_team" | "generic" | null;
+  error:
+    | "invalid"
+    | "expired"
+    | "seat_limit"
+    | "already_in_team"
+    | "wrong_password"
+    | "set_password_first"
+    | "rate_limited"
+    | "generic"
+    | null;
   /** Set when an existing user joined — they must log in to continue. */
   joinedExisting?: boolean;
   /** Set when a new account was created: it must confirm its e-mail before the first login (like a signup). */
@@ -308,8 +318,21 @@ export async function acceptInvitation(
     return { error: "already_in_team" };
   }
 
-  // Existing account → just add membership (idempotent) and ask them to log in.
+  // Existing account → add the membership (idempotent) and ask them to log in. Only with the account's password: the invite
+  // link is also shown to whoever invited, and opening it must not put someone's account into a company without them.
   if (existingUser) {
+    const limiter = makeRateLimiter("invite-accept", 10, 600);
+    if (limiter) {
+      const { success } = await limiter.limit(invitation.id);
+      if (!success) return { error: "rate_limited" };
+    }
+    // An account that signs in only with Google/Microsoft has no password to show: it sets one through "Esqueci a senha"
+    // (the link goes to its inbox) and opens the invite again.
+    if (!existingUser.passwordHash) return { error: "set_password_first" };
+    const password = String(formData.get("password") ?? "");
+    if (!password || password.length > 200 || !(await verifyPassword(password, existingUser.passwordHash))) {
+      return { error: "wrong_password" };
+    }
     try {
       await prisma.$transaction(async (tx) => {
         await tx.membership.upsert({
