@@ -118,7 +118,8 @@ export async function resetPassword(input: {
   if (!userId) return { ok: false, error: "invalid" };
 
   const passwordHash = await hashPassword(parsed.data.password);
-  await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+  // A reset ends every session signed so far (src/lib/session.ts): whoever was in with the old password is out.
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash, sessionVersion: { increment: 1 } } });
   // A successful reset proves the address — verify it if it wasn't already.
   await prisma.user.updateMany({
     where: { id: userId, emailVerified: null },

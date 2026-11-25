@@ -103,7 +103,8 @@ export async function resolveOAuthSession(
         : [
             prisma.user.update({
               where: { id: existing.id },
-              data: { emailVerified: new Date(), passwordHash: null },
+              // And any session signed for it so far ends (src/lib/session.ts): it came from that unproven password.
+              data: { emailVerified: new Date(), passwordHash: null, sessionVersion: { increment: 1 } },
             }),
           ]),
     ]);

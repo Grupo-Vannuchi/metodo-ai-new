@@ -424,7 +424,7 @@ porque nenhuma chave estrangeira impede a exclusão.
 - uma identidade já ligada entra sem olhar o e-mail;
 - um e-mail não verificado não liga nem cria conta;
 - um e-mail verificado liga ao usuário que tem esse e-mail: a senha de uma conta confirmada fica, e a de uma conta cujo e-mail
-  nunca foi confirmado sai;
+  nunca foi confirmado sai, junto com as sessões abertas dela (a versão da sessão sobe);
 - um e-mail novo cria usuário e empresa.
 
 Cria a empresa `OAUTH-DB-<carimbo>` e usuários `oauth-db-*-<carimbo>@test.local`, e apaga tudo o que criou, inclusive a empresa

@@ -3102,7 +3102,12 @@
       "confirmPassword": "Confirmar nova senha",
       "changeCta": "Alterar senha",
       "setCta": "Definir senha",
-      "saved": "Senha atualizada.",
+      "saved": "Senha atualizada. Os outros aparelhos foram desconectados.",
+      "othersTitle": "Sair dos outros aparelhos",
+      "othersDesc": "Encerra o acesso em todos os outros aparelhos e navegadores onde sua conta está aberta. Este aqui continua conectado.",
+      "othersCta": "Sair dos outros aparelhos",
+      "othersRunning": "Saindo…",
+      "othersDone": "Pronto. Os outros aparelhos foram desconectados.",
       "errorTooShort": "A senha deve ter ao menos 8 caracteres.",
       "errorMismatch": "As senhas não coincidem.",
       "error": {

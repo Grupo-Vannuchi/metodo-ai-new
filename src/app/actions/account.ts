@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getOrgContext } from "@/lib/tenant";
+import { createSession, revokeUserSessions } from "@/lib/session";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { changePasswordSchema } from "@/lib/validations/auth";
 
@@ -41,12 +42,35 @@ export async function changePassword(formData: FormData): Promise<PasswordResult
     }
 
     const passwordHash = await hashPassword(parsed.data.password);
-    await prisma.user.update({ where: { id: ctx.userId }, data: { passwordHash } });
+    // A new password ends every other session (one opened with the old password, or copied, stops working); this device
+    // gets a fresh session signed with the new version.
+    await prisma.user.update({
+      where: { id: ctx.userId },
+      data: { passwordHash, sessionVersion: { increment: 1 } },
+    });
+    await createSession({ userId: ctx.userId, organizationId: ctx.organizationId, role: ctx.role });
     revalidatePath("/app/settings/profile");
     return { ok: true, hadPassword };
   } catch (error) {
     console.error("Failed to change password", error);
     return { ok: false, error: "unknown" };
+  }
+}
+
+/**
+ * "Sair dos outros aparelhos": ends every session of the signed-in user except this one (src/lib/session.ts raises the
+ * user's session version; this device gets a fresh session). For a lost phone, a shared computer, a suspicion.
+ */
+export async function signOutOtherDevices(): Promise<{ ok: boolean }> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false };
+  try {
+    await revokeUserSessions(ctx.userId);
+    await createSession({ userId: ctx.userId, organizationId: ctx.organizationId, role: ctx.role });
+    return { ok: true };
+  } catch (error) {
+    console.error("Failed to sign out other devices", error);
+    return { ok: false };
   }
 }
 
