@@ -131,8 +131,13 @@ Para leitura por id vale o mesmo raciocínio: o par é `findFirst({ where: { id 
 
 ## Onde cada coisa vive
 
-- **Leitura:** DAL em [src/lib/queries/](../../src/lib/queries/) — 57 arquivos, um por
+- **Leitura:** DAL em [src/lib/queries/](../../src/lib/queries/) — 60 arquivos, um por
   domínio, mais a pasta `mcp/` (abaixo). O mais novo é
+  [contact-emails.ts](../../src/lib/queries/contact-emails.ts): os envios em massa de um contato, para a seção
+  "E-mails" da ficha (`listContactBroadcasts`, por `tenantDb`). O destinatário aponta para o contato sem chave
+  estrangeira, e quem veio de planilha nem tem `contactId`, então a busca é pelo id OU pelo endereço. Os
+  e-mails da caixa da empresa, na mesma seção, vêm das caixas (`listInboxFrom` e `listImapInboxFrom`), que
+  leem a conta pela empresa. Antes dele, o mais novo era
   [whatsapp-group-add.ts](../../src/lib/queries/whatsapp-group-add.ts): o acompanhamento de uma rodada de
   "Adicionar a grupo do WhatsApp" (`getGroupAddRunView`, com o motivo da pausa, a espera e o `lastError`) e
   o registro no contato (`listContactGroupAdds`, com a data e a situação da rodada), os dois com

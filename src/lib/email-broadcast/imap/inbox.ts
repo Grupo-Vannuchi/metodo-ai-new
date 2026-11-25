@@ -592,6 +592,36 @@ export function loadImapInboxView(
   });
 }
 
+/**
+ * The newest e-mails in the Inbox sent BY one address, for the contact's page (spec: e-mail in the contact's history), as
+ * the Microsoft inbox does it (listInboxFrom). The server's FROM matches part of the address ("ana@x.com" also finds
+ * "joana@x.com"), so the newest INBOX_PAGE_SIZE it finds are read and only the exact sender is kept. Reads envelopes only,
+ * never marks anything read. A search the server refuses is "not_found", as in the inbox tab. `address` comes normalized
+ * (trimmed, lowercase).
+ */
+export function listImapInboxFrom(
+  organizationId: string,
+  address: string,
+  limit: number,
+): Promise<MailboxResult<InboxMessageSummary[]>> {
+  const from = cleanSearch(address);
+  return withInbox<InboxMessageSummary[]>(organizationId, async (client, mailbox) => {
+    if (!from) return { ok: true, data: [] };
+    const uidValidity = Number(mailbox.uidValidity);
+    const uids = await searchUids(client, { from });
+    if (uids === null) return NOT_FOUND;
+    const newest = uids.sort((a, b) => b - a).slice(0, INBOX_PAGE_SIZE);
+    if (newest.length === 0) return { ok: true, data: [] };
+    const rows = await fetchListRows(client, newest.join(","), { byUid: true, ids: newest });
+    const messages = rows
+      .sort((a, b) => b.uid - a.uid)
+      .map((m) => summaryOf(m, uidValidity))
+      .filter((m) => m.from.email === address)
+      .slice(0, limit);
+    return { ok: true, data: messages };
+  });
+}
+
 /** Unread e-mails in the Inbox, for the channel card and the tab. Null when it can't be read now. */
 export async function imapUnreadCount(organizationId: string): Promise<number | null> {
   const res = await withImap<number>(organizationId, async (client) => {
