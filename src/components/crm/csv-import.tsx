@@ -9,6 +9,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { parseCsv } from "@/lib/csv";
 import { adaptContactCsv, type ContactCsvPreset } from "@/lib/crm/contact-csv-presets";
+import { autoMapColumns } from "@/lib/crm/csv-columns";
 import { importContactsCsv, importCompaniesCsv, type ImportResult } from "@/app/actions/import-csv";
 
 type Entity = "contacts" | "companies";
@@ -20,8 +21,8 @@ const FIELDS: Record<Entity, { key: string; required?: boolean; aliases: string[
     { key: "name", required: true, aliases: ["nome", "name", "contato", "cliente", "nome completo"] },
     { key: "email", aliases: ["email", "e mail"] },
     { key: "phone", aliases: ["telefone", "celular", "fone", "phone", "whatsapp", "tel", "numero"] },
-    { key: "role", aliases: ["cargo", "funcao", "role", "position", "papel"] },
-    { key: "company", aliases: ["empresa", "company", "organizacao", "companhia"] },
+    { key: "role", aliases: ["cargo", "funcao", "role", "position", "papel", "job title", "organization title"] },
+    { key: "company", aliases: ["empresa", "company", "organizacao", "companhia", "organization"] },
     { key: "tags", aliases: ["tags", "etiquetas", "marcadores", "grupo"] },
   ],
   companies: [
@@ -36,29 +37,9 @@ const FIELDS: Record<Entity, { key: string; required?: boolean; aliases: string[
   ],
 };
 
-const norm = (s: string) =>
-  s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "") // strip diacritics
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-
-/** Best-effort header → field guess. Each field is claimed at most once. */
+/** Best-effort header → field guess (rules in src/lib/crm/csv-columns.ts). Each field is claimed at most once. */
 function autoMap(entity: Entity, headers: string[]): (string | null)[] {
-  const fields = FIELDS[entity];
-  const used = new Set<string>();
-  return headers.map((h) => {
-    const n = norm(h);
-    const hit = fields.find(
-      (f) => !used.has(f.key) && f.aliases.some((a) => n === a || n.includes(a)),
-    );
-    if (hit) {
-      used.add(hit.key);
-      return hit.key;
-    }
-    return null;
-  });
+  return autoMapColumns(FIELDS[entity], headers);
 }
 
 export function CsvImport({ entity }: { entity: Entity }) {
