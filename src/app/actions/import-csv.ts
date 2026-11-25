@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { formatBrPhone, brPhoneKey } from "@/lib/phone";
 import { onlyDigits } from "@/lib/cnpj";
 import { ensureContactFolder, ensureCompanyFolder, lazyFolder } from "@/lib/crm/import-folders";
+import { normalizeImportPhone } from "@/lib/crm/import-phone";
 
 /**
  * Bulk import from a spreadsheet (CSV). The client parses + column-maps the file
@@ -22,21 +23,42 @@ import { ensureContactFolder, ensureCompanyFolder, lazyFolder } from "@/lib/crm/
 const MAX_ROWS = 5000;
 /** Contacts written per INSERT (and per transaction, with their folder links). */
 const CREATE_CHUNK = 500;
+/** The batch folder's date and time, in Brasília whatever the server's own time zone. */
 const dateTag = () => {
   const d = new Date();
-  return `${d.toLocaleDateString("pt-BR")} ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+  const timeZone = "America/Sao_Paulo";
+  return `${d.toLocaleDateString("pt-BR", { timeZone })} ${d.toLocaleTimeString("pt-BR", { timeZone, hour: "2-digit", minute: "2-digit" })}`;
 };
 
+/**
+ * The screen sends a big file in parts (src/components/crm/csv-import.tsx): every part after the first passes the folder
+ * the first one returned (`folderId`), so one file is one folder even across a minute boundary. The id comes from the client:
+ * it is used only when it is a folder of this org (read through tenantDb); otherwise the part opens its own dated folder.
+ */
+export type ImportOptions = { folderId?: string | null };
+
 export type ImportResult =
-  | { ok: true; created: number; skipped: number }
+  | {
+      ok: true;
+      created: number;
+      skipped: number;
+      /** The folder this part filed into (null when it created nothing): the next part sends it back. */
+      folderId: string | null;
+      /** Contacts whose phone cell had more than one number (one was kept). */
+      multiPhone: number;
+    }
   | { ok: false; error: "unauthorized" | "empty" | "too_many" | "unknown" };
+
+/** A folder id sent back by the screen: a short opaque string, or nothing. */
+const folderIdOf = (opts: ImportOptions | undefined): string | null =>
+  typeof opts?.folderId === "string" && opts.folderId.length > 0 && opts.folderId.length <= 40 ? opts.folderId : null;
 
 const clean = (s: string | undefined, max = 200) => (s ?? "").toString().trim().slice(0, max);
 const looksEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
 type ContactRow = { name?: string; email?: string; phone?: string; role?: string; tags?: string; company?: string };
 
-export async function importContactsCsv(rows: ContactRow[]): Promise<ImportResult> {
+export async function importContactsCsv(rows: ContactRow[], opts?: ImportOptions): Promise<ImportResult> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false, error: "unauthorized" };
   if (!Array.isArray(rows) || rows.length === 0) return { ok: false, error: "empty" };
@@ -73,12 +95,18 @@ export async function importContactsCsv(rows: ContactRow[]): Promise<ImportResul
 
     const toCreate: Prisma.ContactCreateManyInput[] = [];
     let skipped = 0;
+    let multiPhone = 0;
 
     for (const raw of rows) {
       const name = clean(raw.name, 160);
       const email = clean(raw.email, 200).toLowerCase();
-      const phoneRaw = clean(raw.phone, 40);
-      const phoneKey = phoneRaw ? brPhoneKey(onlyDigits(phoneRaw)) || null : null;
+      const phoneRaw = clean(raw.phone, 120);
+      // One number out of the cell (WhatsApp ids, two numbers, a trunk 0: src/lib/crm/import-phone.ts).
+      const phoneNorm = phoneRaw ? normalizeImportPhone(phoneRaw) : null;
+      const phoneKey = phoneNorm ? brPhoneKey(phoneNorm.value) || null : null;
+      const phone = phoneNorm
+        ? (phoneNorm.foreign ? phoneNorm.value : formatBrPhone(phoneNorm.value) || phoneNorm.value).slice(0, 40)
+        : null;
 
       if (!name && !email && !phoneRaw) {
         skipped++;
@@ -96,23 +124,29 @@ export async function importContactsCsv(rows: ContactRow[]): Promise<ImportResul
 
       toCreate.push({
         organizationId,
-        name: name || formatBrPhone(phoneRaw) || email || "Contato",
+        name: name || phone || email || "Contato",
         email: email && looksEmail(email) ? email : null,
-        phone: phoneRaw ? formatBrPhone(onlyDigits(phoneRaw)) || phoneRaw : null,
+        phone,
         role: clean(raw.role, 120) || null,
         companyId: await companyIdOf(clean(raw.company, 160)),
         tags: tags.length ? tags : ["importação"],
         source: "csv-import",
       });
+      if (phoneNorm && phoneNorm.extra > 0) multiPhone++;
       if (phoneKey) knownPhone.add(phoneKey);
       if (email) knownEmail.add(email);
     }
 
-    // The batch's folder only when something is filed, then the contacts in chunks: each chunk and its folder links in
-    // one transaction (a contact without its link would be skipped on a retry and never filed). createManyAndReturn is
-    // not in WHERE_OPS of tenantDb (docs/guia/03-multi-tenancy.md): organizationId goes by hand, here and in the links.
+    // The batch's folder only when something is filed (the one an earlier part of the same file opened, when it is this
+    // org's), then the contacts in chunks: each chunk and its folder links in one transaction (a contact without its link
+    // would be skipped on a retry and never filed). createManyAndReturn is not in WHERE_OPS of tenantDb
+    // (docs/guia/03-multi-tenancy.md): organizationId goes by hand, here and in the links.
+    let folderId: string | null = null;
     if (toCreate.length > 0) {
-      const folderId = await ensureContactFolder(db, organizationId, `Importação CSV · ${dateTag()}`);
+      const sent = folderIdOf(opts);
+      const reuse = sent ? await db.contactFolder.findFirst({ where: { id: sent }, select: { id: true } }) : null;
+      const target = reuse?.id ?? (await ensureContactFolder(db, organizationId, `Importação CSV · ${dateTag()}`));
+      folderId = target;
       for (let i = 0; i < toCreate.length; i += CREATE_CHUNK) {
         await db.$transaction(async (tx) => {
           const made = await tx.contact.createManyAndReturn({
@@ -120,14 +154,14 @@ export async function importContactsCsv(rows: ContactRow[]): Promise<ImportResul
             select: { id: true },
           });
           await tx.contactFolderLink.createMany({
-            data: made.map((c) => ({ organizationId, contactId: c.id, folderId })),
+            data: made.map((c) => ({ organizationId, contactId: c.id, folderId: target })),
           });
         });
       }
     }
 
     revalidatePath("/app/contacts");
-    return { ok: true, created: toCreate.length, skipped };
+    return { ok: true, created: toCreate.length, skipped, folderId: folderId ?? folderIdOf(opts), multiPhone };
   } catch (error) {
     console.error("Failed to import contacts CSV", error);
     return { ok: false, error: "unknown" };
@@ -145,7 +179,7 @@ type CompanyRow = {
   notes?: string;
 };
 
-export async function importCompaniesCsv(rows: CompanyRow[]): Promise<ImportResult> {
+export async function importCompaniesCsv(rows: CompanyRow[], opts?: ImportOptions): Promise<ImportResult> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false, error: "unauthorized" };
   if (!Array.isArray(rows) || rows.length === 0) return { ok: false, error: "empty" };
@@ -153,9 +187,14 @@ export async function importCompaniesCsv(rows: CompanyRow[]): Promise<ImportResu
 
   try {
     const db = tenantDb(ctx.organizationId);
-    const folder = lazyFolder(() =>
-      ensureCompanyFolder(db, ctx.organizationId, `Importação CSV · ${dateTag()}`),
-    );
+    // The folder an earlier part of the same file opened, when it is this org's; else this part's own dated one.
+    let usedFolder: string | null = null;
+    const folder = lazyFolder(async () => {
+      const sent = folderIdOf(opts);
+      const reuse = sent ? await db.companyFolder.findFirst({ where: { id: sent }, select: { id: true } }) : null;
+      usedFolder = reuse?.id ?? (await ensureCompanyFolder(db, ctx.organizationId, `Importação CSV · ${dateTag()}`));
+      return usedFolder;
+    });
 
     const seenCnpj = new Set<string>();
     const seenName = new Set<string>();
@@ -212,7 +251,7 @@ export async function importCompaniesCsv(rows: CompanyRow[]): Promise<ImportResu
     }
 
     revalidatePath("/app/companies");
-    return { ok: true, created, skipped };
+    return { ok: true, created, skipped, folderId: usedFolder ?? folderIdOf(opts), multiPhone: 0 };
   } catch (error) {
     console.error("Failed to import companies CSV", error);
     return { ok: false, error: "unknown" };
