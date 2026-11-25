@@ -42,6 +42,20 @@ export async function issueAuthToken(
  * otherwise. The `updateMany` guard on `consumedAt` makes it strictly single-use
  * even under a race (e.g. an e-mail scanner prefetch + a real click).
  */
+/**
+ * The userId a token is valid for (right purpose, not expired, not used), WITHOUT consuming it: for a check that must pass
+ * before the token is spent (the e-mail confirmation asks for the account's password, and a wrong one must not burn the
+ * link). Consume it afterwards with consumeAuthToken.
+ */
+export async function peekAuthToken(token: string, purpose: AuthTokenPurpose): Promise<string | null> {
+  const row = await prisma.authToken.findUnique({
+    where: { tokenHash: hashToken(token) },
+    select: { userId: true, purpose: true, expiresAt: true, consumedAt: true },
+  });
+  if (!row || row.purpose !== purpose || row.consumedAt || row.expiresAt.getTime() < Date.now()) return null;
+  return row.userId;
+}
+
 export async function consumeAuthToken(
   token: string,
   purpose: AuthTokenPurpose,

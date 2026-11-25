@@ -164,6 +164,8 @@
       "subtitle": "You were invited to {org} ({email})",
       "submit": "Accept invitation",
       "joined": "Invitation accepted. Log in to continue.",
+      "existingHint": "This invite is for an account that already exists. Enter its password to accept.",
+      "existingPassword": "Your account password",
       "invalidTitle": "Invalid invitation",
       "invalidBody": "This invitation has expired or was already used."
     },
@@ -174,6 +176,8 @@
       "seat_limit": "The organization has reached its seat limit.",
       "rate_limited": "Too many attempts. Wait a minute and try again.",
       "already_in_team": "You already belong to a team. Leave it (in Settings) before accepting this invite.",
+      "wrong_password": "Wrong password.",
+      "set_password_first": "This account signs in only with Google or Microsoft. Create a password at \"Forgot password\" and open the invite again.",
       "email_not_verified": "Confirm your email before signing in. Check your inbox.",
       "oauth": "Could not sign in with {provider}. Please try again.",
       "oauth_unverified": "We couldn't confirm your email with {provider}. Sign in with email and password (or create your account that way), then connect {provider} on your profile.",
@@ -184,8 +188,11 @@
       "subtitle": "Click below to confirm your email and activate access.",
       "confirm": "Confirm my email",
       "confirming": "Confirming…",
+      "passwordLabel": "Account password",
       "invalid": "Invalid or expired link.",
-      "backToLogin": "Back to login"
+      "wrongPassword": "Wrong password.",
+      "backToLogin": "Back to login",
+      "notYou": "Didn't create this account? Get access back at"
     },
     "verifyEmail": {
       "title": "Confirm new email",
@@ -3102,6 +3109,9 @@
       "confirmPassword": "Confirm new password",
       "changeCta": "Change password",
       "setCta": "Set password",
+      "setLinkHint": "For security, the password is set through a link sent to your e-mail.",
+      "setLinkCta": "Send a link to set the password",
+      "setLinkSent": "We sent a link to {email}. Open the e-mail to set the password.",
       "saved": "Password updated. Your other devices were signed out.",
       "othersTitle": "Sign out of other devices",
       "othersDesc": "Ends access on every other device and browser where your account is open. This one stays signed in.",
@@ -3115,6 +3125,7 @@
         "invalid": "Check the fields.",
         "current_required": "Enter your current password.",
         "current_invalid": "Current password is incorrect.",
+        "use_link": "Set the password through the link sent to your e-mail.",
         "unknown": "Couldn't save. Please try again."
       }
     },
@@ -3123,6 +3134,7 @@
       "desc": "Change the email you use to sign in. We confirm the change via a link sent to the new address.",
       "current": "Current email",
       "open": "Change email",
+      "needPassword": "To change the e-mail, first create a password (password card on this tab): the link goes to the current e-mail.",
       "changeAgain": "Change to another email",
       "newEmail": "New email",
       "newEmailPlaceholder": "you@company.com",
@@ -3139,6 +3151,7 @@
         "same": "That's already your current email.",
         "taken": "This email is already used by another account.",
         "wrong_password": "Current password is incorrect.",
+        "set_password_first": "Create a password before changing the e-mail.",
         "unauthorized": "Session expired. Please sign in again.",
         "unknown": "Couldn't complete. Please try again."
       }

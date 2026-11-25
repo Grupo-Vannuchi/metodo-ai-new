@@ -164,6 +164,8 @@
       "subtitle": "Você foi convidado para {org} ({email})",
       "submit": "Aceitar convite",
       "joined": "Convite aceito. Faça login para continuar.",
+      "existingHint": "Este convite é para uma conta que já existe. Digite a senha dela para aceitar.",
+      "existingPassword": "Senha da sua conta",
       "invalidTitle": "Convite inválido",
       "invalidBody": "Este convite expirou ou já foi utilizado."
     },
@@ -174,6 +176,8 @@
       "seat_limit": "A organização atingiu o limite de assentos.",
       "rate_limited": "Muitas tentativas. Aguarde um minuto e tente de novo.",
       "already_in_team": "Você já faz parte de uma equipe. Saia dela (em Configurações) antes de aceitar este convite.",
+      "wrong_password": "Senha incorreta.",
+      "set_password_first": "Esta conta entra só com Google ou Microsoft. Crie uma senha em \"Esqueci a senha\" e abra o convite de novo.",
       "email_not_verified": "Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada.",
       "oauth": "Não foi possível entrar com {provider}. Tente novamente.",
       "oauth_unverified": "Não conseguimos confirmar seu e-mail na conta {provider}. Entre com e-mail e senha (ou crie sua conta assim) e depois conecte a conta {provider} no seu perfil.",
@@ -184,8 +188,11 @@
       "subtitle": "Clique abaixo para confirmar seu e-mail e ativar o acesso.",
       "confirm": "Confirmar meu e-mail",
       "confirming": "Confirmando…",
+      "passwordLabel": "Senha da conta",
       "invalid": "Link inválido ou expirado.",
-      "backToLogin": "Voltar ao login"
+      "wrongPassword": "Senha incorreta.",
+      "backToLogin": "Voltar ao login",
+      "notYou": "Não foi você que criou esta conta? Recupere o acesso em"
     },
     "verifyEmail": {
       "title": "Confirmar novo e-mail",
@@ -3102,6 +3109,9 @@
       "confirmPassword": "Confirmar nova senha",
       "changeCta": "Alterar senha",
       "setCta": "Definir senha",
+      "setLinkHint": "Por segurança, a senha é definida por um link enviado ao seu e-mail.",
+      "setLinkCta": "Enviar link para definir a senha",
+      "setLinkSent": "Enviamos um link para {email}. Abra o e-mail para definir a senha.",
       "saved": "Senha atualizada. Os outros aparelhos foram desconectados.",
       "othersTitle": "Sair dos outros aparelhos",
       "othersDesc": "Encerra o acesso em todos os outros aparelhos e navegadores onde sua conta está aberta. Este aqui continua conectado.",
@@ -3115,6 +3125,7 @@
         "invalid": "Verifique os campos.",
         "current_required": "Informe sua senha atual.",
         "current_invalid": "Senha atual incorreta.",
+        "use_link": "Defina a senha pelo link enviado ao seu e-mail.",
         "unknown": "Não foi possível salvar. Tente novamente."
       }
     },
@@ -3123,6 +3134,7 @@
       "desc": "Altere o e-mail usado para entrar. Confirmamos a mudança por um link enviado ao novo endereço.",
       "current": "E-mail atual",
       "open": "Alterar e-mail",
+      "needPassword": "Para trocar o e-mail, crie antes uma senha (cartão de senha nesta mesma aba): o link vai para o e-mail atual.",
       "changeAgain": "Alterar para outro e-mail",
       "newEmail": "Novo e-mail",
       "newEmailPlaceholder": "voce@empresa.com",
@@ -3139,6 +3151,7 @@
         "same": "Este já é o seu e-mail atual.",
         "taken": "Este e-mail já está em uso por outra conta.",
         "wrong_password": "Senha atual incorreta.",
+        "set_password_first": "Crie uma senha antes de trocar o e-mail.",
         "unauthorized": "Sessão expirada. Entre novamente.",
         "unknown": "Não foi possível concluir. Tente novamente."
       }

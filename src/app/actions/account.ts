@@ -4,12 +4,17 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getOrgContext } from "@/lib/tenant";
 import { createSession, revokeUserSessions } from "@/lib/session";
+import { makeRateLimiter } from "@/lib/ratelimit";
+import { issueAuthToken, RESET_TTL_MS } from "@/lib/auth-tokens";
+import { renderPasswordResetEmail } from "@/lib/email/templates";
+import { sendEmail } from "@/lib/email/send";
+import { env } from "@/lib/env";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { changePasswordSchema } from "@/lib/validations/auth";
 
 export type PasswordResult =
   | { ok: true; hadPassword: boolean }
-  | { ok: false; error: "unauthorized" | "invalid" | "current_required" | "current_invalid" | "unknown" };
+  | { ok: false; error: "unauthorized" | "invalid" | "current_required" | "current_invalid" | "use_link" | "unknown" };
 
 /**
  * Change (or first-set) the signed-in user's password from the Security tab.
@@ -34,12 +39,13 @@ export async function changePassword(formData: FormData): Promise<PasswordResult
     if (!user) return { ok: false, error: "unauthorized" };
 
     const hadPassword = Boolean(user.passwordHash);
-    if (hadPassword) {
-      const current = parsed.data.currentPassword ?? "";
-      if (!current) return { ok: false, error: "current_required" };
-      const valid = await verifyPassword(current, user.passwordHash!);
-      if (!valid) return { ok: false, error: "current_invalid" };
-    }
+    // An account without a password (Google/Microsoft only) sets its first one through a link sent to its inbox
+    // (sendSetPasswordLink), never here: a session alone would let whoever holds it add a password and keep the account.
+    if (!hadPassword) return { ok: false, error: "use_link" };
+    const current = parsed.data.currentPassword ?? "";
+    if (!current) return { ok: false, error: "current_required" };
+    const valid = await verifyPassword(current, user.passwordHash!);
+    if (!valid) return { ok: false, error: "current_invalid" };
 
     const passwordHash = await hashPassword(parsed.data.password);
     // A new password ends every other session (one opened with the old password, or copied, stops working); this device
@@ -53,6 +59,33 @@ export async function changePassword(formData: FormData): Promise<PasswordResult
     return { ok: true, hadPassword };
   } catch (error) {
     console.error("Failed to change password", error);
+    return { ok: false, error: "unknown" };
+  }
+}
+
+/**
+ * First password of an account that signs in only with Google/Microsoft: sends the password link to the account's own
+ * e-mail (the same "redefinir senha" link, which also ends every session when used). Whoever holds the session but not the
+ * inbox can't set it. Limited to 3 links per 5 minutes per account.
+ */
+export async function sendSetPasswordLink(): Promise<{ ok: true; email: string } | { ok: false; error: "unauthorized" | "has_password" | "rate_limited" | "unknown" }> {
+  const ctx = await getOrgContext();
+  if (!ctx) return { ok: false, error: "unauthorized" };
+  try {
+    const user = await prisma.user.findUnique({ where: { id: ctx.userId }, select: { name: true, email: true, passwordHash: true } });
+    if (!user) return { ok: false, error: "unauthorized" };
+    if (user.passwordHash) return { ok: false, error: "has_password" };
+    const limiter = makeRateLimiter("set-password-link", 3, 300);
+    if (limiter) {
+      const { success } = await limiter.limit(ctx.userId);
+      if (!success) return { ok: false, error: "rate_limited" };
+    }
+    const token = await issueAuthToken(ctx.userId, "PASSWORD_RESET", RESET_TTL_MS);
+    const { subject, html } = renderPasswordResetEmail({ name: user.name, resetUrl: `${env.NEXT_PUBLIC_SITE_URL}/reset/${token}` });
+    await sendEmail({ to: user.email, subject, html });
+    return { ok: true, email: user.email };
+  } catch (error) {
+    console.error("Failed to send the set-password link", error);
     return { ok: false, error: "unknown" };
   }
 }

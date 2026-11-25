@@ -95,7 +95,23 @@ export function AcceptInviteForm({
             />
           </div>
         </>
-      ) : null}
+      ) : (
+        <div>
+          <p className="mb-3 text-sm text-muted-foreground">{t("invite.existingHint")}</p>
+          <Label htmlFor="password">{t("invite.existingPassword")}</Label>
+          <PasswordInput
+            id="password"
+            name="password"
+            autoComplete="current-password"
+            required
+            showLabel={t("showPassword")}
+            hideLabel={t("hidePassword")}
+          />
+          <Link href="/forgot" className="mt-2 inline-block text-xs font-medium text-brand hover:underline">
+            {t("login.forgot")}
+          </Link>
+        </div>
+      )}
 
       {state.error ? (
         <p role="alert" className="text-sm text-red-500">
