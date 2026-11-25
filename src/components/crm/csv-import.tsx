@@ -8,6 +8,7 @@ import { useRouter } from "@/i18n/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { parseCsv } from "@/lib/csv";
+import { adaptContactCsv, type ContactCsvPreset } from "@/lib/crm/contact-csv-presets";
 import { importContactsCsv, importCompaniesCsv, type ImportResult } from "@/app/actions/import-csv";
 
 type Entity = "contacts" | "companies";
@@ -69,6 +70,8 @@ export function CsvImport({ entity }: { entity: Entity }) {
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<string[][]>([]);
   const [mapping, setMapping] = useState<(string | null)[]>([]);
+  // The address book the file came from (Google Contatos, Outlook), when it was recognized and rearranged.
+  const [preset, setPreset] = useState<ContactCsvPreset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [pending, start] = useTransition();
@@ -82,6 +85,7 @@ export function CsvImport({ entity }: { entity: Entity }) {
     setHeaders([]);
     setRows([]);
     setMapping([]);
+    setPreset(null);
     setError(null);
     setResult(null);
   }
@@ -95,11 +99,15 @@ export function CsvImport({ entity }: { entity: Entity }) {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const parsed = parseCsv(String(reader.result ?? ""));
-        if (parsed.headers.length === 0 || parsed.rows.length === 0) {
+        const raw = parseCsv(String(reader.result ?? ""));
+        if (raw.headers.length === 0 || raw.rows.length === 0) {
           setError(t("noRows"));
           return;
         }
+        // A contact file exported from Google Contatos or Outlook comes rearranged into the columns below.
+        const adapted = entity === "contacts" ? adaptContactCsv(raw) : { preset: null, table: raw };
+        const parsed = adapted.table;
+        setPreset(adapted.preset);
         setFileName(file.name);
         setHeaders(parsed.headers);
         setRows(parsed.rows);
@@ -184,6 +192,9 @@ export function CsvImport({ entity }: { entity: Entity }) {
                   ) : (
                     <>
                       <p className="text-sm text-muted-foreground">{t("hint")}</p>
+                      {entity === "contacts" ? (
+                        <p className="mt-1 text-sm text-muted-foreground">{t("hintAddressBook")}</p>
+                      ) : null}
 
                       <div className="mt-3">
                         <input ref={fileInput} type="file" accept=".csv,text/csv" className="hidden" onChange={pickFile} />
@@ -204,6 +215,11 @@ export function CsvImport({ entity }: { entity: Entity }) {
 
                       {headers.length > 0 ? (
                         <>
+                          {preset ? (
+                            <p className="mt-4 rounded-lg border border-brand/30 bg-brand/5 px-3 py-2 text-sm">
+                              {t("recognized", { source: preset === "outlook" ? "outlook" : "google" })}
+                            </p>
+                          ) : null}
                           <p className="mt-5 text-xs font-medium text-muted-foreground">
                             {t("rowsFound", { n: rowCount })} · {t("mapTitle")}
                           </p>
