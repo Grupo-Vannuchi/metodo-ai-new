@@ -15,6 +15,7 @@ import { createProposal, updateProposal } from "@/app/actions/proposals";
 import type { ProposalFormOptions } from "@/lib/queries/proposals";
 import type { ProposalStatusKey } from "@/lib/validations/proposal";
 import { useRegisterAssistantForm } from "@/components/app/assistant/form-store";
+import { ProposalScopeAi } from "@/components/proposals/proposal-scope-ai";
 import type { FormBridge } from "@/lib/assistant/form-bridge";
 
 const selectCls = cn(
@@ -65,10 +66,13 @@ export function ProposalForm({
   id,
   defaults,
   options,
+  aiScope = false,
 }: {
   id?: string; // present = edit mode
   defaults: ProposalFormDefaults;
   options: ProposalFormOptions;
+  /** "Gerar escopo com IA" under the scope field: resolved by the page (AI module + configured key). */
+  aiScope?: boolean;
 }) {
   const t = useTranslations("proposals");
   const tv = useTranslations("validation");
@@ -83,6 +87,7 @@ export function ProposalForm({
     register,
     handleSubmit,
     setValue,
+    getValues,
     control,
     formState: { errors, isSubmitting },
   } = useForm<Scalars>({ defaultValues: defaults });
@@ -422,6 +427,26 @@ export function ProposalForm({
             <Label htmlFor="intro">{t("form.intro")}</Label>
             <Textarea id="intro" rows={4} {...register("intro")} />
             <p className="mt-1 text-xs text-muted-foreground">{t("form.introHint")}</p>
+            {aiScope ? (
+              <ProposalScopeAi
+                collect={() => {
+                  const v = getValues();
+                  return {
+                    title: v.title,
+                    clientCompany: v.clientCompany,
+                    clientName: v.clientName,
+                    items: items.map((it) => ({
+                      name: it.name,
+                      description: it.description,
+                      quantity: Number(it.quantity) || 0,
+                    })),
+                    opportunityId: defaults.opportunityId,
+                    current: v.intro,
+                  };
+                }}
+                onUse={(text) => setValue("intro", text, { shouldDirty: true })}
+              />
+            ) : null}
           </div>
           <div className="sm:col-span-2">
             <Label htmlFor="notes">{t("form.notes")}</Label>

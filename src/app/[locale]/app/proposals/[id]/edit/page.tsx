@@ -1,6 +1,8 @@
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { requireOrgContext } from "@/lib/tenant";
+import { hasFeatureByModules } from "@/config/modules";
+import { isAssistantConfigured } from "@/lib/assistant/config";
 import { getProposal, proposalFormOptions } from "@/lib/queries/proposals";
 import { ProposalForm, type ProposalFormDefaults } from "@/components/proposals/proposal-form";
 import { resolveLocale } from "@/i18n/routing";
@@ -52,7 +54,7 @@ export default async function EditProposalPage({
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <h1 className="text-2xl font-bold tracking-tight">{t("form.editTitle")}</h1>
-      <ProposalForm id={id} defaults={defaults} options={options} />
+      <ProposalForm id={id} defaults={defaults} options={options} aiScope={hasFeatureByModules(ctx.modules, "assistant") && isAssistantConfigured()} />
     </div>
   );
 }
