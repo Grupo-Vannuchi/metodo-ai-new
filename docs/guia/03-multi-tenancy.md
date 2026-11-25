@@ -137,7 +137,9 @@ Para leitura por id vale o mesmo raciocínio: o par é `findFirst({ where: { id 
   "E-mails" da ficha (`listContactBroadcasts`, por `tenantDb`). O destinatário aponta para o contato sem chave
   estrangeira, e quem veio de planilha nem tem `contactId`, então a busca é pelo id OU pelo endereço. Os
   e-mails da caixa da empresa, na mesma seção, vêm das caixas (`listInboxFrom` e `listImapInboxFrom`), que
-  leem a conta pela empresa. Antes dele, o mais novo era
+  leem a conta pela empresa, e só quando a pessoa clica em "Ver e-mails recebidos" (`?caixa=1`): cada leitura
+  é um login IMAP novo, e o provedor pode bloquear a conta, que costuma ser a mesma do envio em massa. Antes
+  dele, o mais novo era
   [whatsapp-group-add.ts](../../src/lib/queries/whatsapp-group-add.ts): o acompanhamento de uma rodada de
   "Adicionar a grupo do WhatsApp" (`getGroupAddRunView`, com o motivo da pausa, a espera e o `lastError`) e
   o registro no contato (`listContactGroupAdds`, com a data e a situação da rodada), os dois com
