@@ -14,6 +14,16 @@ const BROADCAST_LIMIT = 10;
 
 type InboxBlock = { channel: MailboxChannel; result: MailboxResult<InboxMessageSummary[]> };
 
+/** The mass e-mails, or null when the database couldn't answer now: the section says so, the rest of the page stands. */
+async function readBroadcasts(organizationId: string, contactId: string, address: string | null) {
+  try {
+    return await listContactBroadcasts(organizationId, contactId, address, BROADCAST_LIMIT);
+  } catch (error) {
+    console.error("[contact-emails] broadcasts failed", error);
+    return null;
+  }
+}
+
 /** A mailbox that throws (a bug, a dropped connection the module didn't catch) is a "try again", never a broken page. */
 async function readInbox(channel: MailboxChannel, run: () => Promise<MailboxResult<InboxMessageSummary[]>>): Promise<InboxBlock> {
   try {
@@ -30,25 +40,31 @@ async function readInbox(channel: MailboxChannel, run: () => Promise<MailboxResu
  * the mass e-mails the contact was in, each opening its report. The page decides who sees it (the E-mail screen and the
  * Marketing module) and `showInbox` (the Inbox screen too). A mailbox that isn't connected doesn't show; one that can't be
  * read now says so. Rendered inside a Suspense: a slow mailbox never holds the rest of the page.
+ *
+ * The mailboxes are read only when asked (`loadInbox`, the page's `?caixa=1`, behind a button): every read is a new IMAP
+ * login, and a contact's page is opened far more often than the inbox tab; a provider that caps logins could lock the same
+ * account the mass e-mails go out from. The mass e-mails are the database only, so they always show.
  */
 export async function ContactEmails({
   organizationId,
   contactId,
   email,
   showInbox,
+  loadInbox,
 }: {
   organizationId: string;
   contactId: string;
   email: string | null;
   showInbox: boolean;
+  loadInbox: boolean;
 }) {
   const t = await getTranslations("crm.contacts.emails");
   const format = await getFormatter();
   const address = email?.trim().toLowerCase() || null;
-  const readMailboxes = showInbox && address !== null;
+  const readMailboxes = showInbox && loadInbox && address !== null;
 
   const [broadcasts, ...inboxes] = await Promise.all([
-    listContactBroadcasts(organizationId, contactId, address, BROADCAST_LIMIT),
+    readBroadcasts(organizationId, contactId, address),
     ...(readMailboxes && microsoftMailConfigured()
       ? [readInbox("microsoft", () => listInboxFrom(organizationId, address, INBOX_LIMIT))]
       : []),
@@ -71,6 +87,15 @@ export async function ContactEmails({
           </h3>
           {address === null ? (
             <p className="text-sm text-muted-foreground">{t("noEmail")}</p>
+          ) : !loadInbox ? (
+            <Link
+              href={`/app/contacts/${contactId}?caixa=1`}
+              scroll={false}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm transition-colors hover:border-brand/40 hover:text-brand"
+            >
+              <Mail className="size-4" />
+              {t("inboxLoad")}
+            </Link>
           ) : shown.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("noMailbox")}</p>
           ) : (
@@ -127,7 +152,9 @@ export async function ContactEmails({
           <Send className="size-3.5" />
           {t("broadcastsTitle")}
         </h3>
-        {broadcasts.length === 0 ? (
+        {broadcasts === null ? (
+          <p className="text-sm text-muted-foreground">{t("broadcastsError")}</p>
+        ) : broadcasts.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("broadcastsEmpty")}</p>
         ) : (
           <ul className="flex flex-col gap-1.5 text-sm">

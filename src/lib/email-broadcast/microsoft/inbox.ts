@@ -236,9 +236,11 @@ export function listInboxFrom(
   return withMailbox<InboxMessageSummary[]>(organizationId, async ({ token }) => {
     if (!search) return { ok: true, data: [] };
     const params = new URLSearchParams({ $select: SUMMARY_SELECT, $top: String(INBOX_PAGE_SIZE), $search: search });
+    // 10 s like the other inbox reads: a slow Microsoft leaves the contact's page with a notice, not 30 s of a skeleton.
     const list = await graphCall<{ value?: unknown[] }>(`${GRAPH}/me/mailFolders/inbox/messages?${params.toString()}`, {
       method: "GET",
       token,
+      timeoutMs: 10_000,
     });
     if (!list.ok) return list;
     const messages = (list.data.value ?? [])

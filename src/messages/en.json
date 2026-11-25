@@ -1774,6 +1774,7 @@
       "emails": {
         "title": "E-mails",
         "inboxTitle": "Received in the company mailbox",
+        "inboxLoad": "See received e-mails",
         "channelMicrosoft": "Microsoft account",
         "channelSmtp": "Other provider (IMAP)",
         "inboxEmpty": "No e-mail received from this address.",
@@ -1786,6 +1787,7 @@
         "noSubject": "(no subject)",
         "broadcastsTitle": "Mass e-mails",
         "broadcastsEmpty": "No mass e-mail to this contact.",
+        "broadcastsError": "Couldn't load the mass e-mails right now. Open the page again in a moment.",
         "loading": "Loading e-mails…",
         "status": {
           "QUEUED": "Queued",

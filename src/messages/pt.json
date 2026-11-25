@@ -1774,6 +1774,7 @@
       "emails": {
         "title": "E-mails",
         "inboxTitle": "Recebidos na caixa da empresa",
+        "inboxLoad": "Ver e-mails recebidos",
         "channelMicrosoft": "Conta Microsoft",
         "channelSmtp": "Outro provedor (IMAP)",
         "inboxEmpty": "Nenhum e-mail recebido deste endereço.",
@@ -1786,6 +1787,7 @@
         "noSubject": "(sem assunto)",
         "broadcastsTitle": "Envios em massa",
         "broadcastsEmpty": "Nenhum envio em massa para este contato.",
+        "broadcastsError": "Não foi possível carregar os envios agora. Abra a página de novo em instantes.",
         "loading": "Carregando e-mails…",
         "status": {
           "QUEUED": "Na fila",

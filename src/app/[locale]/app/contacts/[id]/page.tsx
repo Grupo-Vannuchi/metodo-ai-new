@@ -25,10 +25,15 @@ export const dynamic = "force-dynamic";
 
 export default async function ContactViewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string; id: string }>;
+  searchParams: Promise<{ caixa?: string | string[] }>;
 }) {
   const { locale: rawLocale, id } = await params;
+  // "Ver e-mails recebidos" asked for the company mailbox (see ContactEmails: read only on demand).
+  const caixa = (await searchParams).caixa;
+  const loadInbox = (Array.isArray(caixa) ? caixa[0] : caixa) === "1";
   const locale = resolveLocale(rawLocale);
   const ctx = await requireOrgContext(locale);
   const t = await getTranslations("crm.contacts");
@@ -164,6 +169,7 @@ export default async function ContactViewPage({
             contactId={contact.id}
             email={contact.email}
             showInbox={canEmailInbox}
+            loadInbox={loadInbox}
           />
         </Suspense>
       ) : null}
