@@ -12,7 +12,10 @@ import { defaultLocale, routing } from "@/i18n/routing";
 
 export type EmailChangeResult =
   | { ok: true }
-  | { ok: false; error: "unauthorized" | "invalid" | "same" | "taken" | "wrong_password" | "unknown" };
+  | {
+      ok: false;
+      error: "unauthorized" | "invalid" | "same" | "taken" | "wrong_password" | "set_password_first" | "unknown";
+    };
 
 const requestSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(200),
@@ -20,8 +23,8 @@ const requestSchema = z.object({
 });
 
 /**
- * Request an e-mail change (double opt-in). Verifies the current password when
- * the account has one, checks the new address is free, stores it as
+ * Request an e-mail change (double opt-in). Verifies the current password (an
+ * account without one sets a password first), checks the new address is free, stores it as
  * `pendingEmail` and sends a confirmation link TO the new address. Nothing
  * changes until that link is confirmed (see `confirmEmailChange`).
  */
@@ -44,12 +47,13 @@ export async function requestEmailChange(formData: FormData): Promise<EmailChang
 
   if (newEmail === user.email.toLowerCase()) return { ok: false, error: "same" };
 
-  // Re-authenticate with the current password when the account has one.
-  if (user.passwordHash) {
-    const password = parsed.data.password ?? "";
-    if (!password || !(await verifyPassword(password, user.passwordHash))) {
-      return { ok: false, error: "wrong_password" };
-    }
+  // Re-authenticate with the current password. An account without one (Google/Microsoft only) sets a password first, by
+  // the link sent to its CURRENT address (sendSetPasswordLink): a session alone must not move the account to another
+  // address, whose confirmation link would go to that new address.
+  if (!user.passwordHash) return { ok: false, error: "set_password_first" };
+  const password = parsed.data.password ?? "";
+  if (!password || !(await verifyPassword(password, user.passwordHash))) {
+    return { ok: false, error: "wrong_password" };
   }
 
   // The address must not already belong to another account.

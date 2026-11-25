@@ -321,9 +321,11 @@ export async function acceptInvitation(
   // Existing account → add the membership (idempotent) and ask them to log in. Only with the account's password: the invite
   // link is also shown to whoever invited, and opening it must not put someone's account into a company without them.
   if (existingUser) {
-    const limiter = makeRateLimiter("invite-accept", 10, 600);
+    // The same budget as the login (5 per minute per address): one person may be invited many times, and every invite must
+    // not be a fresh set of password guesses.
+    const limiter = makeRateLimiter("login", 5, 60);
     if (limiter) {
-      const { success } = await limiter.limit(invitation.id);
+      const { success } = await limiter.limit(existingUser.email.toLowerCase());
       if (!success) return { error: "rate_limited" };
     }
     // An account that signs in only with Google/Microsoft has no password to show: it sets one through "Esqueci a senha"

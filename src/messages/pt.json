@@ -3134,6 +3134,7 @@
       "desc": "Altere o e-mail usado para entrar. Confirmamos a mudança por um link enviado ao novo endereço.",
       "current": "E-mail atual",
       "open": "Alterar e-mail",
+      "needPassword": "Para trocar o e-mail, crie antes uma senha (cartão de senha nesta mesma aba): o link vai para o e-mail atual.",
       "changeAgain": "Alterar para outro e-mail",
       "newEmail": "Novo e-mail",
       "newEmailPlaceholder": "voce@empresa.com",
@@ -3150,6 +3151,7 @@
         "same": "Este já é o seu e-mail atual.",
         "taken": "Este e-mail já está em uso por outra conta.",
         "wrong_password": "Senha atual incorreta.",
+        "set_password_first": "Crie uma senha antes de trocar o e-mail.",
         "unauthorized": "Sessão expirada. Entre novamente.",
         "unknown": "Não foi possível concluir. Tente novamente."
       }

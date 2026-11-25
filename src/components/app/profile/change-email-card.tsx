@@ -100,8 +100,10 @@ export function ChangeEmailCard({
         <p className="mt-3 rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-600">{t("sent", { email: sentTo })}</p>
       ) : null}
 
-      {/* Change form (collapsed by default) */}
-      {open ? (
+      {/* Change form (collapsed by default). An account without a password sets one first (the password card beside). */}
+      {!hasPassword ? (
+        <p className="mt-4 text-xs text-muted-foreground">{t("needPassword")}</p>
+      ) : open ? (
         <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-4">
           <div>
             <Label htmlFor="newEmail">{t("newEmail")}</Label>
