@@ -14,8 +14,9 @@ import { importContactsCsv, importCompaniesCsv, type ImportResult } from "@/app/
 
 type Entity = "contacts" | "companies";
 
-/** Rows per action call. */
-const PART_SIZE = 1000;
+/** Rows per action call. The same as the server's write batch (CREATE_CHUNK in import-csv.ts): a part is one transaction, so a
+ * part that fails saved nothing, and "Continuar" never writes a row of it twice. */
+const PART_SIZE = 500;
 /** Rows per file (the same cap the action has per call, kept for the whole file). */
 const MAX_ROWS_TOTAL = 5000;
 
