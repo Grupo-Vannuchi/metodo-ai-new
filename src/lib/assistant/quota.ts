@@ -11,11 +11,21 @@ export function startOfToday(): Date {
   return d;
 }
 
-/** Copilot uses today = user turns stored since midnight (org-wide). */
+/** AI uses outside the copilot chat that count toward the same daily limit, by their audit action. */
+export const AI_USE_AUDIT_ACTIONS = ["assistant.proposal_scope"] as const;
+
+/**
+ * Copilot uses today (org-wide): the user turns stored since midnight, plus the other AI uses, each logged in the audit
+ * trail ("Gerar escopo com IA" in the proposal form, src/app/actions/proposal-ai.ts).
+ */
 export async function assistantDailyCount(organizationId: string): Promise<number> {
-  return tenantDb(organizationId).assistantMessage.count({
-    where: { role: "user", createdAt: { gte: startOfToday() } },
-  });
+  const db = tenantDb(organizationId);
+  const since = startOfToday();
+  const [chat, other] = await Promise.all([
+    db.assistantMessage.count({ where: { role: "user", createdAt: { gte: since } } }),
+    db.auditLog.count({ where: { action: { in: [...AI_USE_AUDIT_ACTIONS] }, createdAt: { gte: since } } }),
+  ]);
+  return chat + other;
 }
 
 /** True when the org has hit its plan's daily copilot limit. */

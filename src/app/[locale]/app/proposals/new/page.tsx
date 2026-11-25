@@ -1,5 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { requireOrgContext } from "@/lib/tenant";
+import { hasFeatureByModules } from "@/config/modules";
+import { isAssistantConfigured } from "@/lib/assistant/config";
 import { proposalFormOptions, proposalPrefillFromOpportunity } from "@/lib/queries/proposals";
 import { listProposalTemplateOptions } from "@/lib/queries/proposal-templates";
 import { ProposalForm, type ProposalFormDefaults } from "@/components/proposals/proposal-form";
@@ -58,7 +60,7 @@ export default async function NewProposalPage({
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <h1 className="text-2xl font-bold tracking-tight">{t("form.newTitle")}</h1>
       <ProposalTemplatePicker templates={templates} opportunityId={oppId} />
-      <ProposalForm defaults={defaults} options={options} />
+      <ProposalForm defaults={defaults} options={options} aiScope={hasFeatureByModules(ctx.modules, "assistant") && isAssistantConfigured()} />
     </div>
   );
 }

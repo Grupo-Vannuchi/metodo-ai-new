@@ -815,6 +815,29 @@
       "validUntil": "Valid until",
       "intro": "Introduction / terms",
       "introHint": "This text appears on the exported document.",
+      "ai": {
+        "button": "Draft scope with AI",
+        "instructionLabel": "What should the AI take into account? (optional)",
+        "instructionPlaceholder": "E.g.: 200 m² home build, 60-day deadline, includes ART",
+        "uses": "The AI uses the title, the client, the items and the opportunity linked to this proposal.",
+        "useCurrent": "Use the current text as a base",
+        "generate": "Generate",
+        "generating": "Generating…",
+        "regenerate": "Generate again",
+        "use": "Use this text",
+        "discard": "Discard",
+        "review": "Review before saving: the AI can make mistakes, and what was missing from the data shows as [a definir].",
+        "error": {
+          "unauthorized": "You don't have access to proposals.",
+          "not_available": "The AI isn't available right now. Try again in a moment.",
+          "daily_limit": "The company reached its daily AI usage limit.",
+          "rate_limited": "Too many requests in a row. Wait a minute and try again.",
+          "invalid": "A field is longer than allowed.",
+          "refused": "The AI didn't generate this text. Adjust the instruction and try again.",
+          "cut": "The text came out too long and was cut. Try again with a shorter instruction.",
+          "unknown": "Couldn't generate the text. Try again."
+        }
+      },
       "notes": "Internal notes",
       "notesHint": "Team only — not shown on the document.",
       "statusLabel": "Status",
@@ -3534,7 +3557,8 @@
         "email_sent": "Copilot sent an email",
         "automation_created": "Copilot created an automation",
         "contact_tagged": "Copilot tagged a contact",
-        "team_message_sent": "Copilot sent a team chat message"
+        "team_message_sent": "Copilot sent a team chat message",
+        "proposal_scope": "Drafted a proposal scope with AI"
       }
     },
     "entities": {
@@ -3549,6 +3573,7 @@
       "Membership": "Team",
       "Task": "Task",
       "Opportunity": "Opportunity",
+      "Proposal": "Proposal",
       "AutomationRule": "Automation",
       "TeamChat": "Team chat",
       "TaskBoardColumn": "Task board",

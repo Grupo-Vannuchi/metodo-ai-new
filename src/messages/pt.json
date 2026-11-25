@@ -815,6 +815,29 @@
       "validUntil": "Válida até",
       "intro": "Introdução / condições",
       "introHint": "Este texto aparece no documento exportado.",
+      "ai": {
+        "button": "Gerar escopo com IA",
+        "instructionLabel": "O que a IA deve considerar? (opcional)",
+        "instructionPlaceholder": "Ex.: obra residencial de 200 m², prazo de 60 dias, inclui ART",
+        "uses": "A IA usa o título, o cliente, os itens e a oportunidade ligada a esta proposta.",
+        "useCurrent": "Usar o texto atual como base",
+        "generate": "Gerar",
+        "generating": "Gerando…",
+        "regenerate": "Gerar de novo",
+        "use": "Usar este texto",
+        "discard": "Descartar",
+        "review": "Revise antes de salvar: a IA pode errar, e o que faltou nos dados aparece como [a definir].",
+        "error": {
+          "unauthorized": "Você não tem acesso às propostas.",
+          "not_available": "A IA não está disponível agora. Tente de novo em instantes.",
+          "daily_limit": "A empresa atingiu o limite diário de uso da IA.",
+          "rate_limited": "Muitos pedidos seguidos. Espere um minuto e tente de novo.",
+          "invalid": "Algum campo passou do tamanho permitido.",
+          "refused": "A IA não gerou este texto. Ajuste a instrução e tente de novo.",
+          "cut": "O texto ficou longo demais e foi cortado. Tente de novo com uma instrução mais curta.",
+          "unknown": "Não foi possível gerar o texto. Tente de novo."
+        }
+      },
       "notes": "Notas internas",
       "notesHint": "Só para a equipe — não aparece no documento.",
       "statusLabel": "Situação",
@@ -3534,7 +3557,8 @@
         "email_sent": "Copiloto enviou um e-mail",
         "automation_created": "Copiloto criou uma automação",
         "contact_tagged": "Copiloto adicionou uma tag ao contato",
-        "team_message_sent": "Copiloto enviou mensagem no chat de equipe"
+        "team_message_sent": "Copiloto enviou mensagem no chat de equipe",
+        "proposal_scope": "Gerou o escopo de uma proposta com IA"
       }
     },
     "entities": {
@@ -3549,6 +3573,7 @@
       "Membership": "Equipe",
       "Task": "Tarefa",
       "Opportunity": "Oportunidade",
+      "Proposal": "Proposta",
       "AutomationRule": "Automação",
       "TeamChat": "Chat de equipe",
       "TaskBoardColumn": "Quadro de tarefas",
