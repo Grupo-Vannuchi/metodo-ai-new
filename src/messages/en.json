@@ -1692,7 +1692,11 @@
       "needName": "Map at least the name column.",
       "importBtn": "Import {n}",
       "importing": "Importing…",
+      "progress": "Importing… {done} of {total}",
       "done": "{created} imported, {skipped} skipped (duplicates or empty).",
+      "multiPhone": "{n, plural, one {# contact had} other {# contacts had}} more than one phone: the mobile (or the first) was kept.",
+      "stopped": "{created} imported and {skipped} skipped so far. The import stopped at record {at} of {total}.",
+      "resume": "Continue from record {at}",
       "cancel": "Cancel",
       "close": "Close",
       "fields": {

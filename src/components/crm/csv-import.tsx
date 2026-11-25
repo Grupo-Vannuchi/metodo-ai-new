@@ -14,6 +14,14 @@ import { importContactsCsv, importCompaniesCsv, type ImportResult } from "@/app/
 
 type Entity = "contacts" | "companies";
 
+/** Rows per action call. */
+const PART_SIZE = 1000;
+/** Rows per file (the same cap the action has per call, kept for the whole file). */
+const MAX_ROWS_TOTAL = 5000;
+
+type Totals = { created: number; skipped: number; multiPhone: number; folderId: string | null };
+const NO_TOTALS: Totals = { created: 0, skipped: 0, multiPhone: 0, folderId: null };
+
 /** Target fields per entity, in display order. `required` marks name. Aliases
  * are normalized header names we auto-match against. */
 const FIELDS: Record<Entity, { key: string; required?: boolean; aliases: string[] }[]> = {
@@ -53,6 +61,9 @@ export function CsvImport({ entity }: { entity: Entity }) {
   const [mapping, setMapping] = useState<(string | null)[]>([]);
   // The address book the file came from (Google Contatos, Outlook), when it was recognized and rearranged.
   const [preset, setPreset] = useState<ContactCsvPreset | null>(null);
+  // While parts are being sent: how far it got. After a part failed: the totals so far and where to continue.
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [stopped, setStopped] = useState<(Totals & { at: number; payload: Record<string, string>[] }) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [pending, start] = useTransition();
@@ -67,6 +78,8 @@ export function CsvImport({ entity }: { entity: Entity }) {
     setRows([]);
     setMapping([]);
     setPreset(null);
+    setProgress(null);
+    setStopped(null);
     setError(null);
     setResult(null);
   }
@@ -74,6 +87,7 @@ export function CsvImport({ entity }: { entity: Entity }) {
   function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
     setError(null);
     setResult(null);
+    setStopped(null);
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
@@ -113,18 +127,66 @@ export function CsvImport({ entity }: { entity: Entity }) {
       .filter((o) => Object.values(o).some(Boolean));
   }
 
+  /**
+   * Sends the rows in parts of PART_SIZE, one action call each (a call's body stays far under the 1 MB limit of a server
+   * action, and a failure leaves what came before saved). Every part after the first passes the folder the first one opened,
+   * so the file lands in one folder. A part that fails stops the run where it was: the screen says how many were imported and
+   * offers to continue from there, which sends the rest (not the whole file again: rows with only a name would repeat).
+   */
+  async function runParts(payload: Record<string, string>[], from: number, acc: Totals) {
+    const send = entity === "contacts" ? importContactsCsv : importCompaniesCsv;
+    let totals = acc;
+    for (let i = from; i < payload.length; i += PART_SIZE) {
+      setProgress({ done: i, total: payload.length });
+      let r: ImportResult;
+      try {
+        r = await send(payload.slice(i, i + PART_SIZE), { folderId: totals.folderId });
+      } catch {
+        r = { ok: false, error: "unknown" };
+      }
+      if (!r.ok) {
+        setProgress(null);
+        if (i === 0) {
+          setResult(r);
+        } else {
+          setStopped({ ...totals, at: i, payload });
+          router.refresh();
+        }
+        return;
+      }
+      totals = {
+        created: totals.created + r.created,
+        skipped: totals.skipped + r.skipped,
+        multiPhone: totals.multiPhone + r.multiPhone,
+        folderId: r.folderId ?? totals.folderId,
+      };
+    }
+    setProgress(null);
+    setStopped(null);
+    setResult({ ok: true, ...totals });
+    router.refresh();
+  }
+
   function submit() {
     if (!hasName) {
       setError(t("needName"));
       return;
     }
     setError(null);
+    setResult(null);
     const payload = buildRows();
-    start(async () => {
-      const r = entity === "contacts" ? await importContactsCsv(payload) : await importCompaniesCsv(payload);
-      setResult(r);
-      if (r.ok) router.refresh();
-    });
+    if (payload.length > MAX_ROWS_TOTAL) {
+      setResult({ ok: false, error: "too_many" });
+      return;
+    }
+    start(() => runParts(payload, 0, NO_TOTALS));
+  }
+
+  function resume() {
+    if (!stopped) return;
+    const { payload, at, ...totals } = stopped;
+    setStopped(null);
+    start(() => runParts(payload, at, totals));
   }
 
   const rowCount = rows.length;
@@ -168,6 +230,9 @@ export function CsvImport({ entity }: { entity: Entity }) {
                         <Upload className="size-6" />
                       </div>
                       <p className="text-sm">{t("done", { created: result.created, skipped: result.skipped })}</p>
+                      {result.multiPhone > 0 ? (
+                        <p className="text-sm text-muted-foreground">{t("multiPhone", { n: result.multiPhone })}</p>
+                      ) : null}
                       <Button type="button" size="sm" onClick={() => setOpen(false)}>{t("close")}</Button>
                     </div>
                   ) : (
@@ -192,6 +257,16 @@ export function CsvImport({ entity }: { entity: Entity }) {
                       {error ? <p className="mt-3 text-sm text-red-500">{error}</p> : null}
                       {result && !result.ok ? (
                         <p className="mt-3 text-sm text-red-500">{t(`err.${result.error}`)}</p>
+                      ) : null}
+                      {stopped ? (
+                        <p role="alert" className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
+                          {t("stopped", {
+                            created: stopped.created,
+                            skipped: stopped.skipped,
+                            at: stopped.at + 1,
+                            total: stopped.payload.length,
+                          })}
+                        </p>
                       ) : null}
 
                       {headers.length > 0 ? (
@@ -262,9 +337,19 @@ export function CsvImport({ entity }: { entity: Entity }) {
                     <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)} disabled={pending}>
                       {t("cancel")}
                     </Button>
-                    <Button type="button" size="sm" onClick={submit} disabled={pending || !hasName}>
-                      {pending ? t("importing") : t("importBtn", { n: rowCount })}
-                    </Button>
+                    {stopped && !pending ? (
+                      <Button type="button" size="sm" onClick={resume}>
+                        {t("resume", { at: stopped.at + 1 })}
+                      </Button>
+                    ) : (
+                      <Button type="button" size="sm" onClick={submit} disabled={pending || !hasName}>
+                        {pending
+                          ? progress
+                            ? t("progress", { done: progress.done, total: progress.total })
+                            : t("importing")
+                          : t("importBtn", { n: rowCount })}
+                      </Button>
+                    )}
                   </div>
                 ) : null}
               </div>

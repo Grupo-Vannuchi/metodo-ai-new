@@ -1692,7 +1692,11 @@
       "needName": "Mapeie ao menos a coluna de nome.",
       "importBtn": "Importar {n}",
       "importing": "Importando…",
+      "progress": "Importando… {done} de {total}",
       "done": "{created} importado(s), {skipped} ignorado(s) (duplicados ou vazios).",
+      "multiPhone": "{n, plural, one {# contato tinha} other {# contatos tinham}} mais de um telefone: ficou o celular (ou o primeiro).",
+      "stopped": "{created} importado(s) e {skipped} ignorado(s) até aqui. A importação parou no registro {at} de {total}.",
+      "resume": "Continuar do registro {at}",
       "cancel": "Cancelar",
       "close": "Fechar",
       "fields": {
