@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { Prisma } from "@prisma/client";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
@@ -19,6 +20,8 @@ import { ensureContactFolder, ensureCompanyFolder, lazyFolder } from "@/lib/crm/
  */
 
 const MAX_ROWS = 5000;
+/** Contacts written per INSERT (and per transaction, with their folder links). */
+const CREATE_CHUNK = 500;
 const dateTag = () => {
   const d = new Date();
   return `${d.toLocaleDateString("pt-BR")} ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
@@ -41,68 +44,49 @@ export async function importContactsCsv(rows: ContactRow[]): Promise<ImportResul
 
   try {
     const db = tenantDb(ctx.organizationId);
-    const folder = lazyFolder(() =>
-      ensureContactFolder(db, ctx.organizationId, `Importação CSV · ${dateTag()}`),
-    );
+    const organizationId = ctx.organizationId;
 
-    // Resolve company links by exact (case-insensitive) name — no new companies
-    // are created here, an unmatched name just leaves the contact unlinked.
-    const companyByName = new Map<string, string>();
+    // What the org already has, read once (a few thousand rows in one request used to mean ~3 queries each, ~10k round
+    // trips, past the host's request time). Phones compare by brPhoneKey, e-mails lowercase, as before.
+    const existing = await db.contact.findMany({
+      where: { OR: [{ phone: { not: null } }, { email: { not: null } }] },
+      select: { phone: true, email: true },
+    });
+    const knownPhone = new Set(existing.map((c) => brPhoneKey(c.phone ?? "")).filter(Boolean));
+    const knownEmail = new Set(existing.map((c) => (c.email ?? "").trim().toLowerCase()).filter(Boolean));
 
-    const seenPhone = new Set<string>();
-    const seenEmail = new Set<string>();
-    let created = 0;
+    // Company links by exact (case-insensitive) name: no new companies are created here, an unmatched name just leaves
+    // the contact unlinked. Read once, and only when some row names a company.
+    let companyByName: Map<string, string> | null = null;
+    const companyIdOf = async (companyName: string): Promise<string | null> => {
+      if (!companyName) return null;
+      if (!companyByName) {
+        const companies = await db.company.findMany({ select: { id: true, name: true }, orderBy: { createdAt: "asc" } });
+        companyByName = new Map();
+        for (const c of companies) {
+          const k = c.name.trim().toLowerCase();
+          if (!companyByName.has(k)) companyByName.set(k, c.id);
+        }
+      }
+      return companyByName.get(companyName.toLowerCase()) ?? null;
+    };
+
+    const toCreate: Prisma.ContactCreateManyInput[] = [];
     let skipped = 0;
 
     for (const raw of rows) {
       const name = clean(raw.name, 160);
       const email = clean(raw.email, 200).toLowerCase();
       const phoneRaw = clean(raw.phone, 40);
-      const phoneKey = phoneRaw ? brPhoneKey(onlyDigits(phoneRaw)) : null;
+      const phoneKey = phoneRaw ? brPhoneKey(onlyDigits(phoneRaw)) || null : null;
 
       if (!name && !email && !phoneRaw) {
         skipped++;
         continue;
       }
-      // In-batch dedupe on whichever identifier we have.
-      if (phoneKey && seenPhone.has(phoneKey)) { skipped++; continue; }
-      if (!phoneKey && email && seenEmail.has(email)) { skipped++; continue; }
-
-      // Dedupe against existing contacts (phone first, then e-mail).
-      let dupe = false;
-      if (phoneKey) {
-        const hit = await prisma.$queryRaw<{ id: string }[]>`
-          SELECT id FROM contacts
-          WHERE "organizationId" = ${ctx.organizationId}
-            AND phone IS NOT NULL
-            AND right(regexp_replace(phone, '[^0-9]', '', 'g'), 11) = ${phoneKey}
-          LIMIT 1`;
-        dupe = Boolean(hit[0]);
-      } else if (email && looksEmail(email)) {
-        dupe = Boolean(
-          await db.contact.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true } }),
-        );
-      }
-      if (dupe) { skipped++; continue; }
-
-      // Optional company link by name.
-      let companyId: string | null = null;
-      const companyName = clean(raw.company, 160);
-      if (companyName) {
-        const key = companyName.toLowerCase();
-        if (companyByName.has(key)) {
-          companyId = companyByName.get(key)!;
-        } else {
-          const co = await db.company.findFirst({
-            where: { name: { equals: companyName, mode: "insensitive" } },
-            select: { id: true },
-          });
-          if (co) {
-            companyId = co.id;
-            companyByName.set(key, co.id);
-          }
-        }
-      }
+      // Dedupe against the org and the rows before it: by phone when there is one, else by e-mail.
+      if (phoneKey && knownPhone.has(phoneKey)) { skipped++; continue; }
+      if (!phoneKey && email && knownEmail.has(email)) { skipped++; continue; }
 
       const tags = clean(raw.tags, 300)
         .split(/[;,]/)
@@ -110,27 +94,40 @@ export async function importContactsCsv(rows: ContactRow[]): Promise<ImportResul
         .filter(Boolean)
         .slice(0, 20);
 
-      await db.contact.create({
-        data: {
-          organizationId: ctx.organizationId,
-          name: name || formatBrPhone(phoneRaw) || email || "Contato",
-          email: email && looksEmail(email) ? email : null,
-          phone: phoneRaw ? formatBrPhone(onlyDigits(phoneRaw)) || phoneRaw : null,
-          role: clean(raw.role, 120) || null,
-          companyId,
-          tags: tags.length ? tags : ["importação"],
-          source: "csv-import",
-          // organizationId by hand: the tenantDb extends does not reach a nested create.
-          folderLinks: { create: { organizationId: ctx.organizationId, folderId: await folder() } },
-        },
+      toCreate.push({
+        organizationId,
+        name: name || formatBrPhone(phoneRaw) || email || "Contato",
+        email: email && looksEmail(email) ? email : null,
+        phone: phoneRaw ? formatBrPhone(onlyDigits(phoneRaw)) || phoneRaw : null,
+        role: clean(raw.role, 120) || null,
+        companyId: await companyIdOf(clean(raw.company, 160)),
+        tags: tags.length ? tags : ["importação"],
+        source: "csv-import",
       });
-      if (phoneKey) seenPhone.add(phoneKey);
-      if (email) seenEmail.add(email);
-      created++;
+      if (phoneKey) knownPhone.add(phoneKey);
+      if (email) knownEmail.add(email);
+    }
+
+    // The batch's folder only when something is filed, then the contacts in chunks: each chunk and its folder links in
+    // one transaction (a contact without its link would be skipped on a retry and never filed). createManyAndReturn is
+    // not in WHERE_OPS of tenantDb (docs/guia/03-multi-tenancy.md): organizationId goes by hand, here and in the links.
+    if (toCreate.length > 0) {
+      const folderId = await ensureContactFolder(db, organizationId, `Importação CSV · ${dateTag()}`);
+      for (let i = 0; i < toCreate.length; i += CREATE_CHUNK) {
+        await db.$transaction(async (tx) => {
+          const made = await tx.contact.createManyAndReturn({
+            data: toCreate.slice(i, i + CREATE_CHUNK),
+            select: { id: true },
+          });
+          await tx.contactFolderLink.createMany({
+            data: made.map((c) => ({ organizationId, contactId: c.id, folderId })),
+          });
+        });
+      }
     }
 
     revalidatePath("/app/contacts");
-    return { ok: true, created, skipped };
+    return { ok: true, created: toCreate.length, skipped };
   } catch (error) {
     console.error("Failed to import contacts CSV", error);
     return { ok: false, error: "unknown" };
