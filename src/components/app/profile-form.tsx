@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { ProfileCoreFields } from "@/components/auth/profile-core-fields";
 import { AvatarUploader } from "@/components/app/profile/avatar-uploader";
 import { ChangePasswordCard } from "@/components/app/profile/change-password-card";
+import { SignOutOthersCard } from "@/components/app/profile/sign-out-others-card";
 import { ChangeEmailCard } from "@/components/app/profile/change-email-card";
 import { ConnectedAccountsCard } from "@/components/app/profile/connected-accounts-card";
 import { updateProfile } from "@/app/actions/profile";
@@ -193,6 +194,7 @@ export function ProfileClient({ profile, security }: { profile: ProfileView; sec
           pendingEmail={security.pendingEmail}
         />
         <ChangePasswordCard hasPassword={security.hasPassword} />
+        <SignOutOthersCard />
         <ConnectedAccountsCard
           email={profile.email}
           emailVerified={security.emailVerified}

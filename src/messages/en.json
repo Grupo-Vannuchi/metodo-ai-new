@@ -3102,7 +3102,12 @@
       "confirmPassword": "Confirm new password",
       "changeCta": "Change password",
       "setCta": "Set password",
-      "saved": "Password updated.",
+      "saved": "Password updated. Your other devices were signed out.",
+      "othersTitle": "Sign out of other devices",
+      "othersDesc": "Ends access on every other device and browser where your account is open. This one stays signed in.",
+      "othersCta": "Sign out of other devices",
+      "othersRunning": "Signing out…",
+      "othersDone": "Done. The other devices were signed out.",
       "errorTooShort": "Password must be at least 8 characters.",
       "errorMismatch": "Passwords don't match.",
       "error": {

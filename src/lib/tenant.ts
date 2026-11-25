@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
-import { getSession, type SessionRole } from "@/lib/session";
+import { getSession, sessionVersionMatches, type SessionRole } from "@/lib/session";
 import { resolveAllowedScreens } from "@/lib/access";
 import { redirect } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
@@ -58,7 +58,7 @@ export const getOrgContext = cache(async (): Promise<OrgContext | null> => {
       role: true,
       accessTemplateId: true,
       accessTemplate: { select: { screens: true } },
-      user: { select: { id: true, name: true, email: true } },
+      user: { select: { id: true, name: true, email: true, sessionVersion: true } },
       organization: {
         select: {
           id: true,
@@ -73,6 +73,8 @@ export const getOrgContext = cache(async (): Promise<OrgContext | null> => {
   });
 
   if (!membership) return null;
+  // A session signed before the user's sessions were revoked (password changed or reset, "Sair dos outros aparelhos").
+  if (!sessionVersionMatches(session, membership.user.sessionVersion)) return null;
 
   const templateScreens = membership.accessTemplate?.screens ?? null;
   const { modules, onboardedAt, ownerId, ...organization } = membership.organization;
@@ -81,7 +83,7 @@ export const getOrgContext = cache(async (): Promise<OrgContext | null> => {
     userId: membership.user.id,
     organizationId: membership.organization.id,
     role: membership.role,
-    user: membership.user,
+    user: { id: membership.user.id, name: membership.user.name, email: membership.user.email },
     organization,
     accountOwnerId: ownerId,
     isAccountOwner: ownerId != null && ownerId === membership.user.id,

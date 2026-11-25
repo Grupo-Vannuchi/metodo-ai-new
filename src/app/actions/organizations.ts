@@ -2,7 +2,8 @@
 
 import { hasLocale } from "next-intl";
 import { prisma } from "@/lib/prisma";
-import { createSession, deleteSession } from "@/lib/session";
+import { deleteSession } from "@/lib/session";
+import { sendVerificationEmail } from "@/lib/auth-email";
 import { getOrgContext, assertRole } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
 import { hashPassword } from "@/lib/password";
@@ -267,6 +268,9 @@ export type AcceptState = {
   error: "invalid" | "expired" | "seat_limit" | "already_in_team" | "generic" | null;
   /** Set when an existing user joined — they must log in to continue. */
   joinedExisting?: boolean;
+  /** Set when a new account was created: it must confirm its e-mail before the first login (like a signup). */
+  needsVerification?: boolean;
+  email?: string;
 };
 
 /**
@@ -278,7 +282,6 @@ export async function acceptInvitation(
   _prev: AcceptState,
   formData: FormData,
 ): Promise<AcceptState> {
-  const locale = localeFrom(formData);
   const token = String(formData.get("token") ?? "");
   if (!token) return { error: "invalid" };
 
@@ -354,8 +357,8 @@ export async function acceptInvitation(
           name: parsed.data.name,
           email: invitation.email,
           passwordHash,
-          // The invite was e-mailed to this address, so it's already proven.
-          emailVerified: new Date(),
+          // emailVerified stays null, as in a signup: the invite link is also shown to whoever invited (to copy when the
+          // e-mail fails), so opening it doesn't prove who reads this inbox. The confirmation link sent below does.
           profile: { create: coreProfileData(parsed.data) },
         },
       });
@@ -377,13 +380,9 @@ export async function acceptInvitation(
     return { error: "generic" };
   }
 
-  await createSession({
-    userId,
-    organizationId: invitation.organizationId,
-    role: invitation.role,
-  });
-  redirect({ href: "/app", locale });
-  throw new Error("unreachable: redirect halts execution");
+  // No session yet: the account enters once the e-mail is confirmed (verifyEmail opens the session in this org).
+  await sendVerificationEmail(userId, parsed.data.name, invitation.email);
+  return { error: null, needsVerification: true, email: invitation.email };
 }
 
 export type MemberActionResult =

@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/session";
+import { getSession, sessionVersionMatches } from "@/lib/session";
 
 export type CurrentUser = {
   id: string;
@@ -21,8 +21,11 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const session = await getSession();
   if (!session) return null;
 
-  return prisma.user.findUnique({
+  const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true, email: true, sessionVersion: true },
   });
+  // A session signed before the user's sessions were revoked is no session (src/lib/session.ts).
+  if (!user || !sessionVersionMatches(session, user.sessionVersion)) return null;
+  return { id: user.id, name: user.name, email: user.email };
 });

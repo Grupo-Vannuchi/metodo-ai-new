@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
-import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS, sealSession, getSession } from "@/lib/session";
+import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS, sealSession, getValidSession } from "@/lib/session";
 import { OAUTH } from "@/lib/oauth/providers";
 import { isOAuthProvider } from "@/lib/oauth/shared";
 import { resolveOAuthSession, linkOAuthAccount } from "@/lib/oauth/session";
@@ -85,7 +85,9 @@ export async function GET(
     // session change). A stale link cookie without a session falls through to
     // normal sign-in.
     if (isLink) {
-      const session = await getSession();
+      // Only a session still valid (its version is the user's) may attach an identity: a revoked one, e.g. copied before a
+      // password change, must not be able to add a way back into the account.
+      const session = await getValidSession();
       if (session) {
         const linked = await linkOAuthAccount(session.userId, provider, profile);
         const dest = linked.ok

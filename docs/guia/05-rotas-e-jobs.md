@@ -47,7 +47,7 @@ sobrou.
 
 | Quem chama | Mecanismo | Onde vive |
 |---|---|---|
-| Usuário logado (navegador) | cookie de sessão → `getOrgContext()` | [src/lib/tenant.ts](../../src/lib/tenant.ts) |
+| Usuário logado (navegador) | cookie de sessão → `getOrgContext()`, que também confere a versão da sessão (`sv` × `User.sessionVersion`: trocar ou recuperar a senha e "Sair dos outros aparelhos" derrubam as sessões antigas). Rota que só precisa do usuário, sem empresa, usa `getValidSession()` ou `getCurrentUser()`, nunca `getSession()` puro, que só confere a assinatura (ex.: ligar Google/Microsoft em `/api/auth/[provider]/callback`) | [src/lib/tenant.ts](../../src/lib/tenant.ts), [src/lib/session.ts](../../src/lib/session.ts) |
 | Cron do hPanel (as cinco rotas de `/api/cron/*`: `campaigns`, `extractions`, `feed-cleanup`, `notifications` e `whatsapp-groups`) | header fixo → `isCronAuthorized(req)` | [src/lib/cron-auth.ts](../../src/lib/cron-auth.ts) |
 | QStash (fila de jobs) | assinatura HMAC → `verifyQStashSignature(...)` | [src/lib/queue.ts](../../src/lib/queue.ts) |
 | Evolution (webhook) | token embutido no caminho | rota de webhook, ver abaixo |

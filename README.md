@@ -377,6 +377,17 @@ tabela ou coluna nova direto no Supabase.
   existente, e o código atual da produção continua funcionando com ela.
 - **Não** use `migrate deploy`.
 - **Sem ela, o deploy quebra as telas de contato:** o Prisma lê a coluna `cpf` em toda consulta de contato.
+- **Aplicada no Supabase em 24/11/2026; PR #283 juntado no mesmo dia.**
+
+**Antes do merge da branch `fix/seguranca-identidade` (versão da sessão do usuário):**
+- Aplicar no Supabase `prisma/migrations/20261125120000_user_session_version/migration.sql`:
+  `npx prisma db execute --file prisma/migrations/20261125120000_user_session_version/migration.sql --schema prisma/schema.prisma`;
+  depois, `npx prisma migrate resolve --applied 20261125120000_user_session_version`.
+- Ela só acrescenta a coluna `sessionVersion` (inteiro, padrão 0) na tabela `users` (`ADD COLUMN IF NOT EXISTS`). Toda
+  linha existente fica com 0, que é o que as sessões abertas antes da mudança carregam: ninguém é desconectado por ela, e o
+  código atual da produção continua funcionando com ela.
+- **Não** use `migrate deploy`.
+- **Sem ela, o deploy derruba o login de todo mundo:** a sessão é conferida contra essa coluna a cada pedido.
 
 ### E-mail: caixa de entrada por IMAP
 

@@ -89,7 +89,8 @@ check("a verified address links to a confirmed account and keeps its password", 
   assert.equal(u.passwordHash, "x");
 });
 
-check("a verified address links to an unconfirmed account, confirms it and drops its password", async () => {
+check("a verified address links to an unconfirmed account, confirms it, drops its password and ends its sessions", async () => {
+  const before = await prisma.user.findUniqueOrThrow({ where: { id: ctx.unconfirmed }, select: { sessionVersion: true } });
   const r = await resolveOAuthSession("google", {
     sub: `g-unconfirmed-${stamp}`,
     email: mail("unconfirmed"),
@@ -100,6 +101,8 @@ check("a verified address links to an unconfirmed account, confirms it and drops
   const u = await prisma.user.findUniqueOrThrow({ where: { id: ctx.unconfirmed } });
   assert.notEqual(u.emailVerified, null);
   assert.equal(u.passwordHash, null);
+  // Any session signed with the dropped password stops working (src/lib/session.ts).
+  assert.equal(u.sessionVersion, before.sessionVersion + 1);
 });
 
 check("an identity already linked signs in without looking at the address", async () => {

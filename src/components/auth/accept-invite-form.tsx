@@ -1,7 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { MailCheck } from "lucide-react";
+import { resendVerification } from "@/app/actions/auth-recovery";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -24,6 +26,35 @@ export function AcceptInviteForm({
     acceptInvitation,
     initialState,
   );
+  const [resendPending, startResend] = useTransition();
+  const [resent, setResent] = useState(false);
+
+  // New account: it confirms its e-mail before the first login, like a signup (the same message and resend link).
+  if (state.needsVerification) {
+    return (
+      <div className="flex flex-col items-center gap-3 text-center">
+        <MailCheck className="size-9 text-brand" />
+        <p className="text-sm text-muted-foreground">{t("signup.verifySent", { email: state.email ?? "" })}</p>
+        {resent ? (
+          <p className="text-xs text-muted-foreground">{t("login.resent")}</p>
+        ) : (
+          <button
+            type="button"
+            disabled={resendPending}
+            onClick={() =>
+              startResend(async () => {
+                await resendVerification(state.email ?? "");
+                setResent(true);
+              })
+            }
+            className="text-xs font-medium text-brand hover:underline disabled:opacity-50"
+          >
+            {resendPending ? t("login.resending") : t("login.resend")}
+          </button>
+        )}
+      </div>
+    );
+  }
 
   if (state.joinedExisting) {
     return (

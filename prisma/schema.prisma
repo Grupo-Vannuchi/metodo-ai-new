@@ -128,12 +128,16 @@ model User {
   /// Null for accounts that only sign in via an OAuth provider (e.g. Google).
   passwordHash String?
   /// Null until the user confirms their e-mail (login is gated on this). Set
-  /// automatically for invited users and OAuth sign-ins (the provider proves it).
+  /// automatically for OAuth sign-ins (the provider proves it); an invited user
+  /// confirms it like a signup (the invite link is also shown to whoever invited).
   emailVerified DateTime?
   /// A requested new e-mail awaiting confirmation (double opt-in). The change is
   /// only applied when the link sent to this address is confirmed (EMAIL_CHANGE
   /// token). Null when there's no pending change.
   pendingEmail String?
+  /// Signed into every session (claim "sv") and checked on each request: raising it (password changed or reset, "Sair dos
+  /// outros aparelhos") ends every session signed with the old value. src/lib/session.ts.
+  sessionVersion Int      @default(0)
   /// Presence (team chat): heartbeat timestamp — "online" when recent.
   lastSeenAt   DateTime?
   /// Transient typing indicator: which chat the user is typing in, and when.
