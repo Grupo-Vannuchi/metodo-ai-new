@@ -221,6 +221,35 @@ export function loadInboxView(
   });
 }
 
+/**
+ * The newest e-mails in the Inbox sent BY one address, for the contact's page (spec: e-mail in the contact's history). One
+ * Graph call: `$search "from:<address>"` inside the Inbox folder, as the inbox tab searches, then only the rows whose sender is
+ * exactly that address (a search also matches look-alikes) and newest first (a search comes back in Microsoft's order). Reads,
+ * never marks anything read. `address` comes normalized (trimmed, lowercase).
+ */
+export function listInboxFrom(
+  organizationId: string,
+  address: string,
+  limit: number,
+): Promise<MailboxResult<InboxMessageSummary[]>> {
+  const search = graphSearchValue(`from:${address}`);
+  return withMailbox<InboxMessageSummary[]>(organizationId, async ({ token }) => {
+    if (!search) return { ok: true, data: [] };
+    const params = new URLSearchParams({ $select: SUMMARY_SELECT, $top: String(INBOX_PAGE_SIZE), $search: search });
+    const list = await graphCall<{ value?: unknown[] }>(`${GRAPH}/me/mailFolders/inbox/messages?${params.toString()}`, {
+      method: "GET",
+      token,
+    });
+    if (!list.ok) return list;
+    const messages = (list.data.value ?? [])
+      .map(summaryFromGraph)
+      .filter((m): m is InboxMessageSummary => m !== null && m.from.email === address)
+      .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
+      .slice(0, limit);
+    return { ok: true, data: messages };
+  });
+}
+
 /** The opened e-mail as the reading pane shows it: body as a sandboxed document, inline images in it. */
 async function openedMessage(
   token: string,

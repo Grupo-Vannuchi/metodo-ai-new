@@ -1,7 +1,9 @@
+import { Suspense } from "react";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { MessageCircle, ArrowRight, Pencil } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
+import { canAccessScreen } from "@/lib/access";
 import { getContact } from "@/lib/queries/contacts";
 import { getConversationByContact } from "@/lib/queries/inbox";
 import { listTasks } from "@/lib/queries/tasks";
@@ -12,6 +14,7 @@ import { hasFeatureByModules, hasModule } from "@/config/modules";
 import { StartChatButton } from "@/components/inbox/start-chat-button";
 import { TasksManager } from "@/components/tasks/tasks-manager";
 import { EntityFinanceCard } from "@/components/finance/entity-finance-card";
+import { ContactEmails, ContactEmailsSkeleton } from "@/components/crm/contact-emails";
 import { GROUP_ADD_TIME_ZONE } from "@/components/crm/group-add-format";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
@@ -36,6 +39,9 @@ export default async function ContactViewPage({
   const canFinance = hasFeatureByModules(ctx.modules, "finance");
   const canInbox = hasModule(ctx.modules, "inbox");
   const canTasks = hasModule(ctx.modules, "tasks");
+  // "E-mails": the mass e-mails need the E-mail screen (Marketing module); the company mailbox, its Inbox screen too.
+  const canEmail = hasModule(ctx.modules, "marketing") && canAccessScreen(ctx, "email");
+  const canEmailInbox = canEmail && canAccessScreen(ctx, "emailInbox");
   const [contact, conversation, rawMembers, tasks, finance, groupAdds] = await Promise.all([
     getContact(ctx.organizationId, id),
     canInbox ? getConversationByContact(ctx.organizationId, id, ctx.userId) : Promise.resolve(null),
@@ -150,6 +156,17 @@ export default async function ContactViewPage({
       </dl>
 
       {finance ? <EntityFinanceCard data={finance} /> : null}
+
+      {canEmail ? (
+        <Suspense fallback={<ContactEmailsSkeleton />}>
+          <ContactEmails
+            organizationId={ctx.organizationId}
+            contactId={contact.id}
+            email={contact.email}
+            showInbox={canEmailInbox}
+          />
+        </Suspense>
+      ) : null}
 
       {canTasks ? (
         <section className="rounded-xl border border-border bg-card p-5">

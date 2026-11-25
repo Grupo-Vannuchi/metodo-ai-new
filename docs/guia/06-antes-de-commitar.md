@@ -341,7 +341,10 @@ seguinte responde `reconnect` sem abrir conexão nenhuma; um login recusado com 
 conta intacta). Servidores de mentira em loopback provam o que o imapflow esconde, porque ele responde
 `false`, `undefined` ou `[]` quando a conexão cai, sem erro. O `inbox.ts` roda de verdade contra eles
 (`openImap` recusa loopback de propósito, então o check troca o `imapRequest` que o `inbox.ts` exporta, o mesmo
-que baixa o teto de tempo e de bytes para caberem em frações de segundo): busca recusada é `not_found`; lista,
+que baixa o teto de tempo e de bytes para caberem em frações de segundo): busca recusada é `not_found`;
+`listImapInboxFrom` (os e-mails de um remetente, na ficha do contato) pede `FROM`, fica só com o remetente
+exato (o `FROM` do servidor casa parte do endereço), vem do mais novo, respeita o limite e não marca nada
+como lido; lista,
 contagem ou STATUS recusados, conexão perdida ou cortada no meio do pedido (no STATUS, na busca, na lista, ao
 abrir, entre o tamanho e o arquivo de um download, antes da marca de lido) e estouro do tempo são `temporary`,
 nunca uma caixa vazia, um 404 ou um zero; um servidor que despeja linhas que ninguém pediu é cortado depois de

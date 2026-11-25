@@ -39,6 +39,7 @@ import {
   fetchListRows,
   imapRequest,
   imapUnreadCount,
+  listImapInboxFrom,
   loadImapInboxView,
   openMessage,
   replyToImapMessage,
@@ -829,6 +830,32 @@ check("a search the server refuses is not_found; a refused list or count is not 
   // The count on its own, with its STATUS refused: no number, which is not a zero.
   assert.equal(await againstFake({ on: refuse("STATUS") }, () => imapUnreadCount(ctx.orgId)), null);
   assert.equal(await againstFake({}, () => imapUnreadCount(ctx.orgId)), 2, "the control: the same count against a server that answers");
+});
+
+check("listImapInboxFrom (the contact's page): asks FROM, keeps only the exact sender, newest first, capped, marks nothing read", async (ctx) => {
+  // The fake's Inbox: two e-mails from fulano@exemplo.com.br, and its SEARCH answers both to any query, as a FROM that
+  // matches part of an address would ("ana@" inside "joana@").
+  const record = newFakeRecord();
+  const both = await againstFake({ record }, () => listImapInboxFrom(ctx.orgId, "fulano@exemplo.com.br", 5));
+  assert.ok(both.ok, JSON.stringify(both));
+  assert.deepEqual(
+    both.data.map((m) => [m.subject, m.from.email]),
+    [
+      ["m2", "fulano@exemplo.com.br"],
+      ["m1", "fulano@exemplo.com.br"],
+    ],
+  );
+  assert.ok(
+    record.lines.some((l) => /UID SEARCH FROM "?fulano@exemplo\.com\.br"?/i.test(l)),
+    record.lines.filter((l) => /SEARCH/i.test(l)).join(" | "),
+  );
+  assert.ok(!record.lines.some((l) => /STORE/i.test(l)), "nothing is marked read");
+  const one = await againstFake({}, () => listImapInboxFrom(ctx.orgId, "fulano@exemplo.com.br", 1));
+  assert.ok(one.ok && one.data.length === 1 && one.data[0].subject === "m2", "capped at the limit, the newest kept");
+  const other = await againstFake({}, () => listImapInboxFrom(ctx.orgId, "ana@exemplo.com.br", 5));
+  assert.ok(other.ok && other.data.length === 0, "another sender found by the server is left out");
+  const refused = await againstFake({ on: refuse("UID SEARCH") }, () => listImapInboxFrom(ctx.orgId, "fulano@exemplo.com.br", 5));
+  assert.equal(reason(refused), "not_found", "a refused search fails, it is never an empty list");
 });
 
 check("a connection lost or cut in the middle of a request is temporary: never an empty inbox, a 404 or a zero", async (ctx) => {
