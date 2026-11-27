@@ -78,7 +78,9 @@ por quase uma hora. O label é a confirmação de quem aplicou: não o ponha "pa
 trava contra esquecimento, não contra intenção — qualquer um com acesso de escrita põe o label.
 
 O check lê os labels e a lista de arquivos direto da API a cada execução (um "Re-run" depois de tirar o
-label não passa). PR com mais de 3000 arquivos falha, porque a API não lista todos: confira à mão. E um
+label não passa). PR com mais de 3000 arquivos falha, porque a API não lista todos: confira à mão. Num
+PR pequeno recém-aberto, o GitHub às vezes demora uns segundos para contar os arquivos e o check falha
+com "listou X de Y": não é migration, basta um "Re-run" do check. E um
 PR que muda `prisma/schema.prisma` sem migration passa com um aviso amarelo, porque às vezes é de
 propósito (o parágrafo abaixo).
 
