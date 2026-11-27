@@ -510,10 +510,14 @@ sem as duas variáveis, nenhum limite vale. A cota diária da IA não depende de
 O limitador **deixa passar quando o Redis falha** (token errado, erro, mais de 2 s sem resposta ou
 fora do ar) e registra `[ratelimit] <prefixo>: Redis unavailable, letting the request through (…)` no log, no
 máximo uma vez por minuto por prefixo e sem o e-mail. Então ligar o Redis nunca derruba o login: no pior caso,
-volta a ser como sem ele. Coberto pelo `npm run check:ratelimit` ([guia 06](docs/guia/06-antes-de-commitar.md)).
+volta a ser como sem ele. **Ver essa linha no log quer dizer que os limites estão desligados** naquele momento.
+O Redis só recebe um hash de cada e-mail ou id (`rateLimitKey`), nunca o dado em si. Coberto pelo
+`npm run check:ratelimit` ([guia 06](docs/guia/06-antes-de-commitar.md)).
 
 1. Crie um banco **Redis** no console da Upstash (plano gratuito; região mais perto do Brasil, `sa-east-1`) e
-   copie, da aba **REST API**, a `UPSTASH_REDIS_REST_URL` e o `UPSTASH_REDIS_REST_TOKEN`.
+   copie, da aba **REST API**, a `UPSTASH_REDIS_REST_URL` e o `UPSTASH_REDIS_REST_TOKEN`. Ligue também o
+   **alerta de uso** do banco no console: cada tentativa conta como comando, e quem esgota a cota do plano
+   desliga os limites em silêncio (sobra só a linha `[ratelimit]` no log).
 2. Cadastre as duas nas variáveis de ambiente do app no hPanel e **reinicie o app** (as variáveis só são lidas
    na subida). O token é segredo: não cole em chat nem em PR.
 3. Confira: 6 tentativas de login seguidas, dentro de um minuto, com um e-mail que não existe. As 5 primeiras

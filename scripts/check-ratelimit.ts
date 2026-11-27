@@ -7,6 +7,7 @@
  * (fail-open) instead of taking login with it. Run with `npm run check:ratelimit`.
  */
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 
@@ -94,14 +95,16 @@ async function main() {
       assert.notEqual(makeRateLimiter("check-login", 4, 60), a, "another limit is another limiter");
     });
 
-    await check("within the limit passes, over it blocks, and each identifier has its own count", async () => {
+    await check("within the limit passes, over it blocks, each identifier counts apart, and Redis sees a hash", async () => {
       const limiter = makeRateLimiter("check-login", 3, 60)!;
       const results: boolean[] = [];
       for (let i = 0; i < 4; i++) results.push((await limiter.limit("ana@example.com")).success);
       assert.deepEqual(results, [true, true, true, false]);
       assert.equal((await limiter.limit("bia@example.com")).success, true, "another e-mail is not blocked");
       assert.ok(seen.auth.every((a) => a === "Bearer check-ratelimit-dummy-token"), "sends the token");
-      assert.ok(seen.keys.some((k) => k.startsWith("check-login:ana@example.com:")), `key: ${seen.keys[0]}`);
+      const hashed = createHash("sha256").update("ana@example.com").digest("hex").slice(0, 32);
+      assert.ok(seen.keys.some((k) => k.startsWith(`check-login:${hashed}:`)), `key: ${seen.keys[0]}`);
+      assert.ok(!seen.keys.some((k) => k.includes("@")), "Redis never sees the e-mail");
       assert.equal(warningsFor("check-login").length, 0, "no warning while Redis answers");
     });
 

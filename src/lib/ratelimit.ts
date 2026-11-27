@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { Redis } from "@upstash/redis";
 import { Ratelimit } from "@upstash/ratelimit";
 import { env } from "@/lib/env";
@@ -13,7 +14,8 @@ import { env } from "@/lib/env";
  * answer must not take login down with it. Every check settles within
  * `RATE_LIMIT_TIMEOUT_MS`; on an error or a timeout it lets the request through
  * and logs `[ratelimit] <prefix>: …` (at most once a minute per prefix). That
- * is the same protection as having no Redis at all, never worse.
+ * is the same protection as having no Redis at all, never worse. Redis only
+ * sees a hash of each identifier (`rateLimitKey`), never the e-mail.
  * Covered by `npm run check:ratelimit`.
  */
 export type RateLimiter = { limit(identifier: string): Promise<{ success: boolean }> };
@@ -40,6 +42,14 @@ export function getRedis(): Redis | null {
     retry: { retries: 1, backoff: () => 200 },
   });
   return redis;
+}
+
+/**
+ * What goes to Redis instead of the identifier: identifiers are e-mails and
+ * user ids, and Upstash is a third party, so only a hash leaves the app.
+ */
+export function rateLimitKey(identifier: string): string {
+  return createHash("sha256").update(identifier).digest("hex").slice(0, 32);
 }
 
 function warnUnavailable(prefix: string, reason: unknown): void {
@@ -82,7 +92,7 @@ export function makeRateLimiter(
   const limiter: RateLimiter = {
     async limit(identifier) {
       try {
-        const res = await inner.limit(identifier);
+        const res = await inner.limit(rateLimitKey(identifier));
         if (res.reason === "timeout") warnUnavailable(prefix, `no answer in ${RATE_LIMIT_TIMEOUT_MS} ms`);
         return { success: res.success };
       } catch (e) {
