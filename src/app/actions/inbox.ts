@@ -16,11 +16,19 @@ import { createWhatsappContacts, type WhatsappContactRow } from "@/lib/crm/whats
 import { MAX_IMPORT_GROUPS, planGroupImport } from "@/lib/whatsapp/group-import";
 import { purgeConversationMedia } from "@/lib/whatsapp/media";
 import { applyReaction, myReaction } from "@/lib/whatsapp/reactions";
+import { canAccessConversation } from "@/lib/queries/inbox";
+
+/** Per-user WhatsApp: a conversation is acted on only by whoever connected its number, admins included,
+ * like the inbox list itself (lib/queries/inbox.ts). Another member's id is a no-op. */
+function ownsConversation(ctx: { organizationId: string; userId: string; role: string }, id: string): Promise<boolean> {
+  return canAccessConversation(ctx.organizationId, id, { userId: ctx.userId, role: ctx.role });
+}
 
 /** Reset a conversation's unread counter (called when it's opened). */
 export async function markConversationRead(id: string): Promise<{ ok: boolean }> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false };
+  if (!(await ownsConversation(ctx, id))) return { ok: false };
   try {
     const db = tenantDb(ctx.organizationId);
     await db.conversation.updateMany({ where: { id }, data: { unreadCount: 0 } });
@@ -183,6 +191,11 @@ export async function startConversation(input: {
       select: { id: true },
     });
     if (!conn) return { ok: false, error: "no_connection" };
+    // The CRM contact to link must be this org's (the id comes from the client).
+    if (input.contactId) {
+      const contact = await db.contact.findFirst({ where: { id: input.contactId }, select: { id: true } });
+      if (!contact) return { ok: false, error: "invalid" };
+    }
 
     const convo = await db.conversation.upsert({
       where: { connectionId_remoteJid: { connectionId: conn.id, remoteJid } },
@@ -264,6 +277,7 @@ export async function reactToMessage(messageId: string, emoji: string): Promise<
 export async function pinConversation(id: string, pinned: boolean): Promise<Ok> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false };
+  if (!(await ownsConversation(ctx, id))) return { ok: false };
   try {
     await tenantDb(ctx.organizationId).conversation.updateMany({ where: { id }, data: { pinned } });
     revalidatePath("/app/inbox");
@@ -278,6 +292,7 @@ export async function pinConversation(id: string, pinned: boolean): Promise<Ok> 
 export async function renameConversation(id: string, name: string | null): Promise<Ok> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false };
+  if (!(await ownsConversation(ctx, id))) return { ok: false };
   const customName = name && name.trim() ? name.trim().slice(0, 80) : null;
   try {
     await tenantDb(ctx.organizationId).conversation.updateMany({ where: { id }, data: { customName } });
@@ -295,9 +310,8 @@ export async function deleteConversation(id: string): Promise<Ok> {
   if (!ctx) return { ok: false };
   try {
     const db = tenantDb(ctx.organizationId);
-    // Only the org's own conversation; if it isn't, both calls are no-ops.
-    const owned = await db.conversation.findFirst({ where: { id }, select: { id: true } });
-    if (!owned) return { ok: false };
+    // Only a conversation on the caller's own number (not just the org's): deleting purges its media.
+    if (!(await ownsConversation(ctx, id))) return { ok: false };
     // LGPD: drop stored media before the messages cascade away (best-effort).
     await purgeConversationMedia(ctx.organizationId, [id]).catch(() => {});
     await db.conversation.deleteMany({ where: { id } });
@@ -313,6 +327,7 @@ export async function deleteConversation(id: string): Promise<Ok> {
 export async function moveConversation(id: string, folderId: string | null): Promise<Ok> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false };
+  if (!(await ownsConversation(ctx, id))) return { ok: false };
   const db = tenantDb(ctx.organizationId);
   try {
     if (folderId) {

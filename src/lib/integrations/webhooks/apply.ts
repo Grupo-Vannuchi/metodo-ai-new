@@ -7,25 +7,25 @@ import {
 } from "@/lib/integrations/webhooks/delivery";
 
 /**
- * Apply provider delivery acks to campaign recipients. Matches by the provider's
- * message id and only moves status forward. Returns the matched org (to stamp on
- * the webhook event) or null. Used by both webhook routes.
+ * Apply provider delivery acks to campaign recipients of `organizationId` (the
+ * org of the connection that sent the webhook). Matches by the provider's
+ * message id and only moves status forward. Scoped by org so a connection's
+ * webhook can't move another company's recipients, even knowing a message id.
  */
 export async function applyCampaignDeliveryUpdates(
+  organizationId: string,
   updates: DeliveryUpdate[],
-): Promise<string | null> {
-  let orgId: string | null = null;
+): Promise<void> {
   for (const u of updates) {
     const recipients = await prisma.campaignRecipient.findMany({
-      where: { providerMessageId: u.providerMessageId },
-      select: { id: true, status: true, organizationId: true },
+      where: { providerMessageId: u.providerMessageId, organizationId },
+      select: { id: true, status: true },
     });
     for (const r of recipients) {
-      orgId ??= r.organizationId;
       const next = resolveTransition(r.status as RecipientStatusName, u.status);
       if (!next) continue;
-      await prisma.campaignRecipient.update({
-        where: { id: r.id },
+      await prisma.campaignRecipient.updateMany({
+        where: { id: r.id, organizationId },
         data: {
           status: next,
           ...(next === "FAILED"
@@ -35,7 +35,6 @@ export async function applyCampaignDeliveryUpdates(
       });
     }
   }
-  return orgId;
 }
 
 /** Apply the same delivery acks to inbox messages (outbound message status). */

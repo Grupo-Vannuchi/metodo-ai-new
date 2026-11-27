@@ -7,6 +7,7 @@ import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { decryptCredentials, encryptCredentials } from "@/lib/integrations/crypto";
 import { resolveEvoCreds } from "@/lib/integrations/evolution-creds";
+import { canManageConnection, ownsConnection } from "@/lib/integrations/connection-access";
 import {
   createInstance,
   connect,
@@ -123,6 +124,8 @@ export async function connectEvolution(
 ): Promise<EvolutionConnectResult> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false, error: "unauthorized" };
+  // Only the number's owner asks for its QR, whatever the role (connection-access.ts).
+  if (!(await ownsConnection(tenantDb(ctx.organizationId), ctx.userId, id))) return { ok: false, error: "not_found" };
 
   const creds = await loadEvoCreds(ctx.organizationId, id);
   if (!creds) return { ok: false, error: "not_found" };
@@ -149,6 +152,7 @@ export type EvolutionStatusResult = { ok: boolean; state: EvoState };
 export async function evolutionStatus(id: string): Promise<EvolutionStatusResult> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false, state: "unknown" };
+  if (!(await canManageConnection(tenantDb(ctx.organizationId), ctx, id))) return { ok: false, state: "unknown" };
 
   const creds = await loadEvoCreds(ctx.organizationId, id);
   if (!creds) return { ok: false, state: "unknown" };
@@ -171,6 +175,8 @@ export async function evolutionStatus(id: string): Promise<EvolutionStatusResult
 export async function disconnectEvolution(id: string): Promise<{ ok: boolean }> {
   const ctx = await getOrgContext();
   if (!ctx) return { ok: false };
+  // The owner, or an ADMIN/OWNER (e.g. a number someone left behind); never another member.
+  if (!(await canManageConnection(tenantDb(ctx.organizationId), ctx, id))) return { ok: false };
 
   const creds = await loadEvoCreds(ctx.organizationId, id);
   if (!creds) return { ok: false };

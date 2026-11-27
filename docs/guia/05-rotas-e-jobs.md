@@ -182,7 +182,7 @@ rejeita tudo (falha fechado), não abre.
 Entra por `/api/webhooks/evolution/[connectionId]/[token]` — o `connectionId` resolve o tenant,
 e o `token` (gerado por conexão, guardado em `meta.webhookToken`) autentica a chamada, porque a
 Evolution não assina os webhooks que envia. Real,
-[a rota do webhook](../../src/app/api/webhooks/evolution/[connectionId]/[token]/route.ts#L28-L38):
+[a rota do webhook](../../src/app/api/webhooks/evolution/[connectionId]/[token]/route.ts):
 
 ```ts
   const conn = await prisma.integrationConnection.findUnique({
@@ -193,10 +193,18 @@ Evolution não assina os webhooks que envia. Real,
     return new Response("Unknown connection", { status: 404 });
   }
   const expected = (conn.meta as { webhookToken?: string } | null)?.webhookToken;
-  if (!expected || token !== expected) {
+  // Constant-time, like the cron and MCP guards: the token is the only proof of who calls.
+  const given = Buffer.from(token);
+  const want = Buffer.from(expected ?? "");
+  if (!expected || given.length !== want.length || !timingSafeEqual(given, want)) {
     return new Response("Unauthorized", { status: 401 });
   }
 ```
+
+A comparação é em tempo constante desde 27/11/2026 (antes era `!==`). Tudo o que a rota grava fica na empresa da
+conexão (`conn.organizationId`), inclusive os recibos de entrega das campanhas: `applyCampaignDeliveryUpdates`
+([src/lib/integrations/webhooks/apply.ts](../../src/lib/integrations/webhooks/apply.ts)) recebe essa empresa e
+filtra por ela, então o webhook de uma conexão não mexe no destinatário de outra empresa, nem sabendo o id da mensagem.
 
 **Não existe webhook genérico.** Até 27/11/2026 havia um `/api/webhooks/[provider]` que aceitava POST de
 qualquer um, sem autenticação nenhuma, gravava o evento e aplicava os recibos de entrega nas campanhas. Nada no

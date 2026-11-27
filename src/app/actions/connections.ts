@@ -8,6 +8,7 @@ import { encryptCredentials, decryptCredentials } from "@/lib/integrations/crypt
 import { connectionState } from "@/lib/integrations/evolution-client";
 import { searchPlacesPage } from "@/lib/prospecting/places";
 import { audit } from "@/lib/audit";
+import { canManageConnection } from "@/lib/integrations/connection-access";
 import { providerSpec, type IntegrationProviderKey } from "@/lib/integrations/registry";
 import { LIMITS } from "@/config/limits";
 import {
@@ -26,17 +27,6 @@ import {
 export type ConnectionActionResult =
   | { ok: true; id: string }
   | { ok: false; error: "unauthorized" | "invalid" | "limit" | "number_exists" | "unknown" };
-
-/** Members may only act on connections they own; OWNER/ADMIN on any (org-scoped). */
-async function canManageConnection(
-  db: ReturnType<typeof tenantDb>,
-  ctx: { role: string; userId: string },
-  id: string,
-): Promise<boolean> {
-  if (ctx.role !== "MEMBER") return true;
-  const conn = await db.integrationConnection.findFirst({ where: { id }, select: { ownerId: true } });
-  return conn !== null && conn.ownerId === ctx.userId;
-}
 
 export async function createConnection(
   input: ConnectionInput,
