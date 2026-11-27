@@ -70,6 +70,11 @@ O MétodoAI **deixou de ser um SaaS de planos fixos** e virou uma **plataforma m
 - **Multi-membership:** um usuário pode ter várias `Membership` (o `@@unique([userId])` foi removido). Na prática, só o **dono** cria/alterna empresas (via `createCompany`/`switchCompany` em `src/app/actions/account-companies.ts`); convidados continuam em uma empresa só (o convite bloqueia multi-org).
 - `getOrgContext()`/`requireOrgContext()` (`src/lib/tenant.ts`) resolvem a org ativa da sessão, o papel, o template de acesso, as telas permitidas, **os módulos instalados**, o `accountOwnerId` e `isAccountOwner`.
 - Trocar de empresa = re-selar o cookie de sessão com outro `organizationId`.
+- **E-mail de login sem diferenciar maiúsculas.** Desde 27/11/2026 todo e-mail de usuário é gravado em minúsculas
+  (os esquemas zod de cadastro, login, convite e troca de e-mail convertem; os provedores OAuth já convertiam). Contas
+  antigas podem ter maiúsculas, e o `@unique` do `User.email` diferencia, então **toda busca de usuário por e-mail passa
+  por `src/lib/user-email.ts`** (`findUserIdByEmail`, `isEmailTaken`), nunca por `findUnique({ where: { email } })`.
+  Antes disso, o cadastro e o login social criavam uma segunda conta para a mesma caixa.
 
 ### 3.3 Sistema modular & gating
 - **Fonte única:** `src/config/modules.ts` (registro dos módulos, telas, dependências, detalhes da Loja) e `src/config/limits.ts` (limites globais — não há mais planos).

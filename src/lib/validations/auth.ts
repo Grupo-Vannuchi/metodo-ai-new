@@ -10,14 +10,14 @@ import { coreProfileShape, refineDocument } from "./profile";
  */
 
 export const loginSchema = z.object({
-  email: z.string().trim().email().max(200),
+  email: z.string().trim().toLowerCase().email().max(200),
   password: z.string().min(1).max(200),
 });
 
 export const signupSchema = z
   .object({
     name: z.string().trim().min(2, "Informe seu nome.").max(120),
-    email: z.string().trim().email("E-mail inválido.").max(200),
+    email: z.string().trim().toLowerCase().email("E-mail inválido.").max(200),
     password: z
       .string()
       .min(8, "A senha deve ter ao menos 8 caracteres.")
@@ -44,7 +44,7 @@ export const acceptInviteSchema = z
 
 /** "Forgot password" — just the e-mail to send the reset link to. */
 export const emailOnlySchema = z.object({
-  email: z.string().trim().email().max(200),
+  email: z.string().trim().toLowerCase().email().max(200),
 });
 
 /** Choosing a new password from a reset link. */

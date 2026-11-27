@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { createSession } from "@/lib/session";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { makeRateLimiter } from "@/lib/ratelimit";
+import { findUserIdByEmail } from "@/lib/user-email";
 import { env } from "@/lib/env";
 import { sendEmail } from "@/lib/email/send";
 import { renderPasswordResetEmail } from "@/lib/email/templates";
@@ -86,10 +87,13 @@ export async function resendVerification(email: string): Promise<{ ok: true }> {
     if (!success) return { ok: true };
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: parsed.data.email },
-    select: { id: true, name: true, email: true, emailVerified: true },
-  });
+  const userId = await findUserIdByEmail(parsed.data.email);
+  const user = userId
+    ? await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true, emailVerified: true },
+      })
+    : null;
   if (user && !user.emailVerified) {
     await sendVerificationEmail(user.id, user.name, user.email);
   }
@@ -110,10 +114,10 @@ export async function requestPasswordReset(email: string): Promise<{ ok: true }>
     if (!success) return { ok: true };
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: parsed.data.email },
-    select: { id: true, name: true, email: true },
-  });
+  const userId = await findUserIdByEmail(parsed.data.email);
+  const user = userId
+    ? await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true } })
+    : null;
   if (user) {
     const token = await issueAuthToken(user.id, "PASSWORD_RESET", RESET_TTL_MS);
     const { subject, html } = renderPasswordResetEmail({

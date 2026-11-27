@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { findUserIdByEmail, normalizeEmail } from "@/lib/user-email";
 import { slugify } from "@/lib/slug";
 import { createDefaultPipeline } from "@/lib/default-pipeline";
 import type { SessionPayload } from "@/lib/session";
@@ -85,11 +86,12 @@ export async function resolveOAuthSession(
   // We only trust the e-mail (for linking/creation) when the provider verified it.
   if (!profile.emailVerified) return { ok: false, error: "unverified" };
 
-  // 2. Existing user with this e-mail → link the identity to it.
-  const existing = await prisma.user.findUnique({
-    where: { email: profile.email },
-    select: { id: true, emailVerified: true },
-  });
+  // 2. Existing user with this e-mail (in any case: an account saved as "Fulano@…" before 27/11/2026
+  // is the same inbox) → link the identity to it.
+  const existingId = await findUserIdByEmail(profile.email);
+  const existing = existingId
+    ? await prisma.user.findUnique({ where: { id: existingId }, select: { id: true, emailVerified: true } })
+    : null;
   if (existing) {
     await prisma.$transaction([
       prisma.account.create({
@@ -120,7 +122,7 @@ export async function resolveOAuthSession(
     });
     const user = await tx.user.create({
       // No passwordHash — this account signs in through the provider only.
-      data: { name: profile.name, email: profile.email, emailVerified: new Date() },
+      data: { name: profile.name, email: normalizeEmail(profile.email), emailVerified: new Date() },
     });
     await tx.account.create({
       data: { userId: user.id, provider, providerAccountId: profile.sub },

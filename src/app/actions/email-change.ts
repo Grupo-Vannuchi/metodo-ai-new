@@ -4,6 +4,7 @@ import { z } from "zod";
 import { hasLocale } from "next-intl";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { isEmailTaken, normalizeEmail } from "@/lib/user-email";
 import { getOrgContext } from "@/lib/tenant";
 import { verifyPassword } from "@/lib/password";
 import { consumeAuthToken } from "@/lib/auth-tokens";
@@ -56,12 +57,8 @@ export async function requestEmailChange(formData: FormData): Promise<EmailChang
     return { ok: false, error: "wrong_password" };
   }
 
-  // The address must not already belong to another account.
-  const existing = await prisma.user.findFirst({
-    where: { email: newEmail, NOT: { id: ctx.userId } },
-    select: { id: true },
-  });
-  if (existing) return { ok: false, error: "taken" };
+  // The address must not already belong to another account, in any case.
+  if (await isEmailTaken(newEmail, ctx.userId)) return { ok: false, error: "taken" };
 
   try {
     await prisma.user.update({ where: { id: ctx.userId }, data: { pendingEmail: newEmail } });
@@ -109,13 +106,9 @@ export async function confirmEmailChange(
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { pendingEmail: true } });
   if (!user?.pendingEmail) return { ok: false, error: "invalid" };
-  const newEmail = user.pendingEmail;
+  const newEmail = normalizeEmail(user.pendingEmail);
 
-  const taken = await prisma.user.findFirst({
-    where: { email: newEmail, NOT: { id: userId } },
-    select: { id: true },
-  });
-  if (taken) {
+  if (await isEmailTaken(newEmail, userId)) {
     await prisma.user.update({ where: { id: userId }, data: { pendingEmail: null } });
     return { ok: false, error: "taken" };
   }

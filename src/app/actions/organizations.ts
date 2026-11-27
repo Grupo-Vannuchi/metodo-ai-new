@@ -8,6 +8,7 @@ import { getOrgContext, assertRole } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { makeRateLimiter } from "@/lib/ratelimit";
+import { findUserIdByEmail, normalizeEmail } from "@/lib/user-email";
 import { coreProfileData } from "@/lib/profile";
 import { LIMITS } from "@/config/limits";
 import {
@@ -127,10 +128,13 @@ export async function inviteMember(
   if (members >= LIMITS.seatLimit) return { error: "seat_limit" };
 
   // One team per user: refuse if the invitee already belongs to a team.
-  const target = await prisma.user.findUnique({
-    where: { email: parsed.data.email },
-    select: { memberships: { select: { organizationId: true }, take: 1 } },
-  });
+  const targetId = await findUserIdByEmail(parsed.data.email);
+  const target = targetId
+    ? await prisma.user.findUnique({
+        where: { id: targetId },
+        select: { memberships: { select: { organizationId: true }, take: 1 } },
+      })
+    : null;
   if (target && target.memberships.length > 0) {
     return {
       error:
@@ -304,10 +308,14 @@ export async function acceptInvitation(
   const members = await countMembers(invitation.organizationId);
   if (members >= LIMITS.seatLimit) return { error: "seat_limit" };
 
-  const existingUser = await prisma.user.findUnique({
-    where: { email: invitation.email },
-    include: { memberships: { select: { organizationId: true } } },
-  });
+  // Ignoring case: an invitation (or an account) saved before 27/11/2026 may carry capitals.
+  const existingUserId = await findUserIdByEmail(invitation.email);
+  const existingUser = existingUserId
+    ? await prisma.user.findUnique({
+        where: { id: existingUserId },
+        include: { memberships: { select: { organizationId: true } } },
+      })
+    : null;
 
   // One team per user: an existing user already in another team must leave it
   // before joining. Being already in THIS org is fine (idempotent re-accept).
@@ -380,7 +388,7 @@ export async function acceptInvitation(
       const user = await tx.user.create({
         data: {
           name: parsed.data.name,
-          email: invitation.email,
+          email: normalizeEmail(invitation.email),
           passwordHash,
           // emailVerified stays null, as in a signup: the invite link is also shown to whoever invited (to copy when the
           // e-mail fails), so opening it doesn't prove who reads this inbox. The confirmation link sent below does.

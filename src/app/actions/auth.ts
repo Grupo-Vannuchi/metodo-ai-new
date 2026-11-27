@@ -9,6 +9,7 @@ import { slugify } from "@/lib/slug";
 import { createDefaultPipeline } from "@/lib/default-pipeline";
 import { coreProfileData } from "@/lib/profile";
 import { makeRateLimiter } from "@/lib/ratelimit";
+import { findUserIdByEmail, isEmailTaken } from "@/lib/user-email";
 import { sendVerificationEmail } from "@/lib/auth-email";
 import { loginSchema, signupSchema } from "@/lib/validations/auth";
 import { redirect } from "@/i18n/navigation";
@@ -64,12 +65,15 @@ export async function login(
     if (!success) return { error: "rate_limited" };
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: parsed.data.email },
-    include: {
-      memberships: { orderBy: { createdAt: "asc" }, take: 1 },
-    },
-  });
+  const userId = await findUserIdByEmail(parsed.data.email);
+  const user = userId
+    ? await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          memberships: { orderBy: { createdAt: "asc" }, take: 1 },
+        },
+      })
+    : null;
   if (!user) return { error: "invalid" };
 
   // Accounts created via Google have no password — they must use "Sign in with
@@ -118,8 +122,8 @@ export async function signup(
 
   const { name, email, password, organizationName } = parsed.data;
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) return { error: "email_taken" };
+  // In any case: an old account saved as "Fulano@…" owns "fulano@…" too.
+  if (await isEmailTaken(email)) return { error: "email_taken" };
 
   const passwordHash = await hashPassword(password);
   const slug = await uniqueOrgSlug(organizationName);

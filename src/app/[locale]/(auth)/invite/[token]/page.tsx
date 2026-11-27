@@ -1,5 +1,6 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { prisma } from "@/lib/prisma";
+import { findUserIdByEmail } from "@/lib/user-email";
 import { hashInvitationToken, isInvitationExpired } from "@/lib/invitations";
 import { AcceptInviteForm } from "@/components/auth/accept-invite-form";
 import { Logo } from "@/components/layout/logo";
@@ -42,10 +43,7 @@ export default async function InvitePage({
     );
   }
 
-  const existingUser = await prisma.user.findUnique({
-    where: { email: invitation.email },
-    select: { id: true },
-  });
+  const existingUser = (await findUserIdByEmail(invitation.email)) !== null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -59,7 +57,7 @@ export default async function InvitePage({
           })}
         </p>
       </div>
-      <AcceptInviteForm token={token} existingUser={existingUser !== null} />
+      <AcceptInviteForm token={token} existingUser={existingUser} />
     </div>
   );
 }

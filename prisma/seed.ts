@@ -26,7 +26,8 @@ function slugify(value: string): string {
 }
 
 async function main() {
-  const email = process.env.SEED_OWNER_EMAIL ?? "owner@metodoai.local";
+  // Saved in lower case, like every sign-in e-mail since 27/11/2026 (src/lib/user-email.ts).
+  const email = (process.env.SEED_OWNER_EMAIL ?? "owner@metodoai.local").trim().toLowerCase();
   const password = process.env.SEED_OWNER_PASSWORD ?? "changeme123";
   const orgName = process.env.SEED_ORG_NAME ?? "MétodoAI Demo";
   const slug = slugify(orgName) || "metodoai-demo";

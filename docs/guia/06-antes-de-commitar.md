@@ -436,11 +436,15 @@ porque nenhuma chave estrangeira impede a exclusão.
 - um e-mail não verificado não liga nem cria conta;
 - um e-mail verificado liga ao usuário que tem esse e-mail: a senha de uma conta confirmada fica, e a de uma conta cujo e-mail
   nunca foi confirmado sai, junto com as sessões abertas dela (a versão da sessão sobe);
+- uma conta antiga gravada com maiúsculas é achada pelo e-mail que o provedor manda em minúsculas, sem criar uma segunda;
+- a busca de usuário por e-mail ([src/lib/user-email.ts](../../src/lib/user-email.ts)): ignora maiúsculas, trata `_` e `%`
+  como letras (nunca como curinga), e numa duplicata antiga fica com a grafia em minúsculas;
 - um e-mail novo cria usuário e empresa.
 
 Cria a empresa `OAUTH-DB-<carimbo>` e usuários `oauth-db-*-<carimbo>@test.local`, e apaga tudo o que criou, inclusive a empresa
 que o cadastro pelo login social abre, mesmo quando falha. Se você matar o script no meio, apague à mão os usuários cujo e-mail começa
-com `oauth-db-` e as empresas deles. Precisa do Postgres do Docker e de um `.env` válido. Rode sempre que mexer em `src/lib/oauth/`.
+com `oauth-db-` e as empresas deles. Precisa do Postgres do Docker e de um `.env` válido. Rode sempre que mexer em `src/lib/oauth/`
+ou em `src/lib/user-email.ts`.
 
 **Os programas que gravam dados de teste ou de demonstração no banco só rodam contra um Postgres local.** São eles o
 `check:isolation`, o `check:crm-matches`, os `check:*:db`, o `check:mcp:e2e`, o `check:automation:e2e`, o simulador
