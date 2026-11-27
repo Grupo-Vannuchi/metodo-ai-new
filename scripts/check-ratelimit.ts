@@ -7,7 +7,7 @@
  * (fail-open) instead of taking login with it. Run with `npm run check:ratelimit`.
  */
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 
@@ -102,9 +102,11 @@ async function main() {
       assert.deepEqual(results, [true, true, true, false]);
       assert.equal((await limiter.limit("bia@example.com")).success, true, "another e-mail is not blocked");
       assert.ok(seen.auth.every((a) => a === "Bearer check-ratelimit-dummy-token"), "sends the token");
-      const hashed = createHash("sha256").update("ana@example.com").digest("hex").slice(0, 32);
-      assert.ok(seen.keys.some((k) => k.startsWith(`check-login:${hashed}:`)), `key: ${seen.keys[0]}`);
+      const keyed = createHmac("sha256", process.env.SESSION_SECRET!).update("ratelimit:ana@example.com").digest("hex").slice(0, 32);
+      const plain = createHash("sha256").update("ana@example.com").digest("hex").slice(0, 32);
+      assert.ok(seen.keys.some((k) => k.startsWith(`check-login:${keyed}:`)), `key: ${seen.keys[0]}`);
       assert.ok(!seen.keys.some((k) => k.includes("@")), "Redis never sees the e-mail");
+      assert.ok(!seen.keys.some((k) => k.includes(plain)), "nor a plain sha256 anyone could recompute");
       assert.equal(warningsFor("check-login").length, 0, "no warning while Redis answers");
     });
 

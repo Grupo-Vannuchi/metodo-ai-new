@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { Redis } from "@upstash/redis";
 import { Ratelimit } from "@upstash/ratelimit";
 import { env } from "@/lib/env";
@@ -46,10 +46,13 @@ export function getRedis(): Redis | null {
 
 /**
  * What goes to Redis instead of the identifier: identifiers are e-mails and
- * user ids, and Upstash is a third party, so only a hash leaves the app.
+ * user ids, and Upstash is a third party, so only a keyed hash leaves the app.
+ * An HMAC under a server secret (not a plain sha256), so whoever can read the
+ * Redis can't test a known e-mail by hashing it. Rotating SESSION_SECRET only
+ * resets the windows in flight (1 to 10 minutes).
  */
 export function rateLimitKey(identifier: string): string {
-  return createHash("sha256").update(identifier).digest("hex").slice(0, 32);
+  return createHmac("sha256", env.SESSION_SECRET).update(`ratelimit:${identifier}`).digest("hex").slice(0, 32);
 }
 
 function warnUnavailable(prefix: string, reason: unknown): void {

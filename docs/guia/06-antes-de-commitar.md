@@ -298,7 +298,7 @@ que falhou em produção em 17/11/2026 sem deixar nenhuma linha no log.
 `npm run check:ratelimit` cobre o limitador de tentativas ([src/lib/ratelimit.ts](../../src/lib/ratelimit.ts))
 contra um Redis falso da Upstash em 127.0.0.1 (o protocolo REST, inclusive o `/pipeline` que o cliente usa
 sozinho). Dentro do limite passa, acima bloqueia, cada identificador tem a própria contagem, e o Redis só vê o
-hash do identificador (`rateLimitKey`), nunca o e-mail. O mais
+HMAC do identificador com chave do servidor (`rateLimitKey`), nunca o e-mail nem um sha256 que se recalcule. O mais
 importante: Redis que recusa o token, responde 500, não responde em `RATE_LIMIT_TIMEOUT_MS` (2 s) ou está fora
 do ar **deixa passar** (fail-open) em vez de derrubar o login. O aviso `[ratelimit]` sai no máximo uma vez por
 minuto por prefixo e nunca com o e-mail, que a Upstash põe na mensagem de erro (`command was: [...]`). Não usa

@@ -511,7 +511,7 @@ O limitador **deixa passar quando o Redis falha** (token errado, erro, mais de 2
 fora do ar) e registra `[ratelimit] <prefixo>: Redis unavailable, letting the request through (…)` no log, no
 máximo uma vez por minuto por prefixo e sem o e-mail. Então ligar o Redis nunca derruba o login: no pior caso,
 volta a ser como sem ele. **Ver essa linha no log quer dizer que os limites estão desligados** naquele momento.
-O Redis só recebe um hash de cada e-mail ou id (`rateLimitKey`), nunca o dado em si. Coberto pelo
+O Redis só recebe um HMAC de cada e-mail ou id, com chave derivada do `SESSION_SECRET` (`rateLimitKey`), nunca o dado em si. Coberto pelo
 `npm run check:ratelimit` ([guia 06](docs/guia/06-antes-de-commitar.md)).
 
 1. Crie um banco **Redis** no console da Upstash (plano gratuito; região mais perto do Brasil, `sa-east-1`) e
