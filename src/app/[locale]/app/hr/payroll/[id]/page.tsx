@@ -6,6 +6,7 @@ import { hasFeatureByModules } from "@/config/modules";
 import { getPayrollRun } from "@/lib/queries/payroll";
 import { PayrollItems } from "@/components/hr/payroll-items";
 import { PayrollRunActions } from "@/components/hr/payroll-run-actions";
+import { canApprovePayroll } from "@/lib/hr/permissions";
 import { buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { formatBRL } from "@/lib/money";
@@ -60,6 +61,7 @@ export default async function PayrollRunPage({
           status={run.status}
           totalNet={run.totalNet}
           hasFinance={hasFinance}
+          canApprove={canApprovePayroll(ctx)}
         />
       </div>
 

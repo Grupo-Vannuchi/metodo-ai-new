@@ -28,12 +28,32 @@ const ICONS: Record<string, LucideIcon> = {
   CheckSquare,
 };
 
-/** Dashboard shown when the org hasn't installed the CRM module — the default
- *  sales dashboard doesn't apply. Surfaces the installed modules as quick links
- *  and points to the Loja to add more (or install the first one when "cru"). */
-export async function ModulesHome({ installed, userName }: { installed: string[]; userName: string }) {
+/** Screens whose page is not at `/app/<screen>` (see components/app/app-nav.tsx). */
+const SCREEN_HREF: Partial<Record<string, string>> = {
+  inboxOficial: "/app/inbox-oficial",
+  emailInbox: "/app/email",
+};
+
+/** Dashboard shown when the sales dashboard doesn't apply: the org hasn't
+ *  installed the CRM module, or the member's access template leaves the CRM out.
+ *  Surfaces the installed modules the member can open as quick links, each to its
+ *  first screen they may use, and points to the Loja to add more (or install the
+ *  first one when "cru"). */
+export async function ModulesHome({
+  installed,
+  allowedScreens,
+  userName,
+}: {
+  installed: string[];
+  allowedScreens: string[];
+  userName: string;
+}) {
   const t = await getTranslations("app.dashboard");
-  const mods = MODULES.filter((m) => installed.includes(m.id));
+  const allowed = new Set(allowedScreens);
+  // A module with no screen of its own (IA) stays listed; it links to the Loja.
+  const mods = MODULES.filter(
+    (m) => installed.includes(m.id) && (m.screens.length === 0 || m.screens.some((s) => allowed.has(s))),
+  );
 
   return (
     <div className="flex flex-col gap-8">
@@ -65,7 +85,8 @@ export async function ModulesHome({ installed, userName }: { installed: string[]
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {mods.map((m) => {
               const Icon = ICONS[m.icon] ?? Boxes;
-              const href = m.screens[0] ? `/app/${m.screens[0]}` : "/app/loja";
+              const screen = m.screens.find((s) => allowed.has(s));
+              const href = screen ? (SCREEN_HREF[screen] ?? `/app/${screen}`) : "/app/loja";
               return (
                 <Link
                   key={m.id}

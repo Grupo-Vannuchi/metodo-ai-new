@@ -10,7 +10,8 @@ const ALL = [...PIE_MODELS, ...PIE_FINANCE_MODELS] as readonly string[];
 
 /** Pie-chart data for the dashboard. Returns raw keys ({ key, value }); the
  * client localizes them. Only the pies the dashboard offers this member
- * (`availablePieModels`: module and, for tasks and finance, the screen). */
+ * (`availablePieModels`: the CRM module and screen, plus the tasks or finance
+ * screen for those pies). */
 export async function GET(req: NextRequest) {
   const ctx = await getOrgContext();
   if (!ctx) return new Response("Unauthorized", { status: 401 });

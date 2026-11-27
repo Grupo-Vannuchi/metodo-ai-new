@@ -26,8 +26,11 @@ const TYPE_ICON: Record<string, typeof Plane> = {
 
 const fmtDate = (d: Date | string) => new Date(d).toLocaleDateString("pt-BR");
 
+/** A row plus what this viewer may do with it (resolved on the server, lib/hr/permissions). */
+export type TimeOffListItem = TimeOffRow & { canDecide: boolean; canDelete: boolean };
+
 /** Time-off requests with inline approve/reject (pending ones only). */
-export function TimeOffList({ rows, canDecide }: { rows: TimeOffRow[]; canDecide: boolean }) {
+export function TimeOffList({ rows }: { rows: TimeOffListItem[] }) {
   const t = useTranslations("hr");
   const router = useRouter();
   const confirm = useConfirm();
@@ -53,7 +56,7 @@ export function TimeOffList({ rows, canDecide }: { rows: TimeOffRow[]; canDecide
       const r = await deleteTimeOff(id);
       setBusyId(null);
       if (r.ok) router.refresh();
-      else setError(t("timeOff.error.locked"));
+      else setError(t(`timeOff.error.${r.error ?? "unknown"}`));
     });
   }
 
@@ -111,9 +114,9 @@ export function TimeOffList({ rows, canDecide }: { rows: TimeOffRow[]; canDecide
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    {r.status === "PENDING" ? (
+                    {r.status === "PENDING" && (r.canDecide || r.canDelete) ? (
                       <div className="flex items-center justify-end gap-1">
-                        {canDecide ? (
+                        {r.canDecide ? (
                           <>
                             <button
                               type="button"
@@ -137,16 +140,18 @@ export function TimeOffList({ rows, canDecide }: { rows: TimeOffRow[]; canDecide
                             </button>
                           </>
                         ) : null}
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void remove(r.id)}
-                          title={t("delete")}
-                          aria-label={t("delete")}
-                          className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-red-600 disabled:opacity-50"
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
+                        {r.canDelete ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void remove(r.id)}
+                            title={t("delete")}
+                            aria-label={t("delete")}
+                            className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-red-600 disabled:opacity-50"
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        ) : null}
                       </div>
                     ) : null}
                   </td>

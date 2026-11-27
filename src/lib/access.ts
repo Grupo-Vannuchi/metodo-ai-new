@@ -8,7 +8,7 @@ import {
   OPT_IN_SCREENS,
   type Screen,
 } from "@/config/screens";
-import { hasModule, type ModuleId } from "@/config/modules";
+import { hasModule, SCREEN_MODULE, type ModuleId } from "@/config/modules";
 
 /**
  * Screen-level access control via templates.
@@ -43,6 +43,22 @@ export function canAccessScreen(
   screen: string,
 ): boolean {
   return ctx.allowedScreens.includes(screen);
+}
+
+/**
+ * For a server action that belongs to a screen: the screen's module is
+ * installed AND the member may use the screen. A page gets both from its
+ * `layout.tsx` (`requireScreen` + the module check), but an action is callable
+ * by its id without loading the page, so it repeats the check itself (guia 04).
+ * Screens no module owns (`feed`) only need the access check.
+ */
+export function canUseScreen(
+  ctx: { modules: readonly string[]; allowedScreens: string[] },
+  screen: Screen,
+): boolean {
+  const owner = SCREEN_MODULE[screen];
+  if (owner !== undefined && !hasModule(ctx.modules, owner)) return false;
+  return canAccessScreen(ctx, screen);
 }
 
 /**

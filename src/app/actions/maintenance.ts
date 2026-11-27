@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
+import { canUseScreen } from "@/lib/access";
 import { tenantDb, type TenantDb } from "@/lib/tenant-db";
 import {
   scheduleMaintenanceSchema,
@@ -27,7 +28,7 @@ async function validAsset(db: TenantDb, id: string): Promise<string | null> {
 
 export async function scheduleMaintenance(input: unknown): Promise<MaintenanceResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   const parsed = scheduleMaintenanceSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   const d = parsed.data;
@@ -64,7 +65,7 @@ export async function scheduleMaintenance(input: unknown): Promise<MaintenanceRe
  */
 export async function completeMaintenance(id: string, input: unknown): Promise<MaintenanceResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   const parsed = completeMaintenanceSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   const d = parsed.data;
@@ -127,7 +128,7 @@ export async function completeMaintenance(id: string, input: unknown): Promise<M
 
 export async function cancelMaintenance(id: string): Promise<MaintenanceResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   try {
     const db = tenantDb(ctx.organizationId);
     const ev = await db.maintenanceEvent.findFirst({ where: { id }, select: { status: true } });
@@ -144,7 +145,7 @@ export async function cancelMaintenance(id: string): Promise<MaintenanceResult> 
 
 export async function deleteMaintenance(id: string): Promise<{ ok: boolean }> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false };
   try {
     await tenantDb(ctx.organizationId).maintenanceEvent.deleteMany({ where: { id } });
     revalidatePath("/app/supplies/maintenance");

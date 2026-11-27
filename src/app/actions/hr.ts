@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
+import { canUseScreen } from "@/lib/access";
 import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { deleteMedia } from "@/lib/storage/blob";
@@ -85,7 +86,7 @@ async function toData(organizationId: string, input: EmployeeInput) {
 
 export async function createEmployee(input: EmployeeInput): Promise<HrActionResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false, error: "unauthorized" };
 
   const parsed = employeeSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
@@ -119,7 +120,7 @@ export async function createEmployee(input: EmployeeInput): Promise<HrActionResu
 
 export async function updateEmployee(id: string, input: EmployeeInput): Promise<HrActionResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false, error: "unauthorized" };
 
   const parsed = employeeSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
@@ -155,7 +156,7 @@ export async function updateEmployee(id: string, input: EmployeeInput): Promise<
 
 export async function deleteEmployee(id: string): Promise<{ ok: boolean }> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false };
+  if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false };
 
   try {
     const db = tenantDb(ctx.organizationId);
@@ -175,7 +176,7 @@ export async function deleteEmployee(id: string): Promise<{ ok: boolean }> {
 
 export async function deleteEmployeeDocument(id: string): Promise<{ ok: boolean }> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false };
+  if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false };
 
   try {
     const db = tenantDb(ctx.organizationId);
@@ -200,7 +201,7 @@ type CatalogModel = "department" | "jobRole";
 
 export async function createCatalogItem(model: CatalogModel, input: CatalogInput): Promise<HrActionResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false, error: "unauthorized" };
 
   const parsed = catalogSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
@@ -231,7 +232,7 @@ export async function renameCatalogItem(
   input: CatalogInput,
 ): Promise<HrActionResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false, error: "unauthorized" };
 
   const parsed = catalogSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
@@ -259,7 +260,7 @@ export async function renameCatalogItem(
 /** Delete a department/role. Employees keep their record (the FK is SetNull). */
 export async function deleteCatalogItem(model: CatalogModel, id: string): Promise<{ ok: boolean }> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false };
+  if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false };
 
   try {
     const db = tenantDb(ctx.organizationId);
