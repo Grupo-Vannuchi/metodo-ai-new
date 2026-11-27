@@ -295,6 +295,16 @@ carregar. Rode sempre que mexer em `channels/evolution.ts` ou em
 [src/app/api/inbox/messages/media/route.ts](../../src/app/api/inbox/messages/media/route.ts). Nasceu do envio
 que falhou em produção em 17/11/2026 sem deixar nenhuma linha no log.
 
+`npm run check:ratelimit` cobre o limitador de tentativas ([src/lib/ratelimit.ts](../../src/lib/ratelimit.ts))
+contra um Redis falso da Upstash em 127.0.0.1 (o protocolo REST, inclusive o `/pipeline` que o cliente usa
+sozinho). Dentro do limite passa, acima bloqueia, e cada identificador tem a própria contagem. O mais
+importante: Redis que recusa o token, responde 500, não responde em `RATE_LIMIT_TIMEOUT_MS` (2 s) ou está fora
+do ar **deixa passar** (fail-open) em vez de derrubar o login. O aviso `[ratelimit]` sai no máximo uma vez por
+minuto por prefixo e nunca com o e-mail, que a Upstash põe na mensagem de erro (`command was: [...]`). Não usa
+banco, rede de fora nem `.env`: as variáveis obrigatórias ganham valores falsos só para o `env.ts` carregar.
+Rode sempre que mexer nesse arquivo ou ao atualizar `@upstash/redis` ou `@upstash/ratelimit`. Para ligar o
+Redis em produção, ver o README §8 ("Limites de tentativas").
+
 `npm run check:mcp` cobre as regras puras do servidor MCP de leitura
 ([src/lib/mcp/core.ts](../../src/lib/mcp/core.ts): comparação da chave com espaço ou quebra de linha
 colados, datas `AAAA-MM-DD` como dias UTC com o fim inclusivo, período invertido ou longo demais,
