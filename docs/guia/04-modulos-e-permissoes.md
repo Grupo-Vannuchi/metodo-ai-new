@@ -148,6 +148,15 @@ lê essa variável é `isWhatsappCloudEnabled`, em
 filtro temporário por cima da interseção acima, não um quarto eixo de gating — quando a migração
 terminar, a variável e o filtro saem.
 
+**Uma rota de API ou um pedaço de tela que entrega dado de outra tela** repete a permissão dessa
+tela: o módulo **e** `canAccessScreen(ctx, "<tela>")`, porque a URL da rota não passa pelo
+`layout.tsx` que faz o `requireScreen` ([guia 05](05-rotas-e-jobs.md)). Quando a tela oferece uma
+lista de opções e uma rota serve cada uma, as duas leem a mesma função de permissão, que mora fora de
+`lib/queries/` (que é só a DAL). Real: as pizzas do painel, em
+[src/lib/dashboard-access.ts](../../src/lib/dashboard-access.ts) (`availablePieModels`), usadas pelo
+painel e por `/api/dashboard/pie`: a do Financeiro pede o módulo e a tela `finance`, e a de tarefas, o
+módulo e a tela `tasks`.
+
 **Gating cross-módulo** (uma tela de um módulo usando algo de outro) segue um padrão fixo: o
 **server** resolve `hasModule(...)` e passa o resultado como prop para o client component — nunca
 o inverso. Real, em

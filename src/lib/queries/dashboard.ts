@@ -2,8 +2,8 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { tenantDb } from "@/lib/tenant-db";
 
-/** Pie-chart breakdowns the user can pick on the dashboard. The finance one is
- * only offered when the plan includes finance (see PIE_FINANCE_MODELS). */
+/** Pie-chart breakdowns the user can pick on the dashboard. Which ones a given
+ * member gets is `availablePieModels` (src/lib/dashboard-access.ts). */
 export const PIE_MODELS = [
   "opps_by_stage",
   "value_by_stage",

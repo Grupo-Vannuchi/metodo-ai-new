@@ -732,11 +732,9 @@ Diferente da lista de produto abaixo, estes têm próximo passo conhecido e escr
    **Conte antes de agendar:** a primeira execução limpa tudo que acumulou desde que a prospecção
    entrou no ar, de uma vez, e leads nunca importados não voltam.
 
-2. **Verificação de assinatura no webhook genérico.** `src/app/api/webhooks/[provider]/route.ts`
-   carrega um `TODO(P9)` para validar a assinatura do provedor (ex.: `X-Hub-Signature-256` do Meta)
-   antes de confiar no payload. O webhook do Evolution já resolve isso de outro jeito — autentica pelo
-   token no próprio caminho da URL — e serve de referência de que o problema tem solução aqui dentro.
-   É a pendência de maior prioridade desta lista.
+2. ~~**Verificação de assinatura no webhook genérico.**~~ **Resolvido em 27/11/2026:** a rota
+   `src/app/api/webhooks/[provider]/route.ts`, que aceitava qualquer POST sem autenticação, foi apagada.
+   Nada apontava para ela: Evolution, Meta e Resend têm cada um a sua rota autenticada ([guia 05](docs/guia/05-rotas-e-jobs.md)).
 
 3. **Decidir a versão do Node.** Produção roda **20.x** e o `.nvmrc` acompanha, mas a Hostinger suporta
    22.x. O piso real da árvore hoje é 20.18.1 (`@distube/ytdl-core`) — perto do topo da linha 20. Subir

@@ -14,8 +14,7 @@ export const runtime = "nodejs";
  * anything is trusted; without the secret every call is 401. The account also
  * carries login/invite/reset mail: events that don't match a mass e-mail
  * recipient are acknowledged and NOT stored. The org comes from the matched
- * recipient row (system context); every write filters by it. Separate from
- * the generic /api/webhooks/[provider] sink (Campaigns), which stays untouched.
+ * recipient row (system context); every write filters by it.
  */
 export async function POST(req: NextRequest) {
   const secret = env.RESEND_WEBHOOK_SECRET?.trim();

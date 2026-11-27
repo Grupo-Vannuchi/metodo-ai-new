@@ -109,15 +109,26 @@ sessão, ele redireciona para `/login`. Numa rota de API isso não serve — que
 não um navegador navegando —, então o padrão é `getOrgContext()`, que devolve `null`, e a
 própria rota decide a resposta (no exemplo acima, um 401 simples).
 
-Depois da sessão, a rota ainda pode gatear por módulo, sempre pelas fontes de verdade que as
-Regras invioláveis do `CLAUDE.md` já apontam (`hasModule`, `hasFeatureByModules`). Real,
-[src/app/api/dashboard/pie/route.ts:20-22](../../src/app/api/dashboard/pie/route.ts#L20-L22):
+Depois da sessão, a rota confere **a mesma permissão da tela de onde o dado vem**: o módulo, pelas
+fontes de verdade que as Regras invioláveis do `CLAUDE.md` já apontam (`hasModule`,
+`hasFeatureByModules`), e a tela, por `canAccessScreen(ctx, "<tela>")` de
+[src/lib/access.ts](../../src/lib/access.ts). Só o módulo não basta: um membro que um modelo de acesso
+deixou fora de Contatos ou do Financeiro ainda tem o módulo instalado na empresa, e a URL da rota não passa
+pelo `layout.tsx` da tela. Real,
+[src/app/api/crm/export/route.ts](../../src/app/api/crm/export/route.ts):
 
 ```ts
-if (FINANCE.includes(model) && !hasFeatureByModules(ctx.modules, "finance")) {
+const entity = url.searchParams.get("entity") === "companies" ? "companies" : "contacts";
+if (!hasModule(ctx.modules, "crm") || !canAccessScreen(ctx, entity)) {
   return new Response("Forbidden", { status: 403 });
 }
 ```
+
+Quando a tela oferece uma lista de opções e a rota serve cada uma, as duas leem **a mesma função**, para não
+divergirem. O painel e [src/app/api/dashboard/pie/route.ts](../../src/app/api/dashboard/pie/route.ts) usam
+`availablePieModels(ctx)` ([src/lib/dashboard-access.ts](../../src/lib/dashboard-access.ts)): as pizzas do
+CRM pedem o módulo CRM, e as de tarefas e do Financeiro pedem também a tela. Até 27/11/2026 a rota da pizza
+olhava só o módulo do Financeiro, e quem não tinha a tela lia os números dele pelo gráfico.
 
 Se a rota lê ou grava tabela de negócio, autenticar a sessão é só metade do trabalho — o
 isolamento entre organizações é assunto do [guia 03](03-multi-tenancy.md), não deste.
@@ -186,6 +197,11 @@ Evolution não assina os webhooks que envia. Real,
     return new Response("Unauthorized", { status: 401 });
   }
 ```
+
+**Não existe webhook genérico.** Até 27/11/2026 havia um `/api/webhooks/[provider]` que aceitava POST de
+qualquer um, sem autenticação nenhuma, gravava o evento e aplicava os recibos de entrega nas campanhas. Nada no
+código apontava para ele (Evolution, Meta e Resend têm cada um a sua rota autenticada), e ele foi apagado.
+Provedor novo ganha rota própria, com o guard dele numa das linhas da tabela acima.
 
 Em desenvolvimento isso exige túnel (ngrok) com `NEXT_PUBLIC_SITE_URL` apontando pra ele —
 `localhost` não recebe webhook, porque é a Evolution quem precisa alcançar sua máquina pela
