@@ -20,6 +20,29 @@ export function canDecideTimeOff(actor: Actor, row: { employeeUserId: string | n
   return row.employeeUserId !== actor.userId;
 }
 
+/** Whether this actor may link employee records to logins at all (the form shows the field). */
+export function canLinkEmployeeLogins(actor: Actor): boolean {
+  return isManager(actor.role);
+}
+
+/**
+ * Link, unlink or swap the login of an employee record. The link decides whose
+ * time off the person may not decide (`canDecideTimeOff`) and who is told of the
+ * decision, so changing it is OWNER/ADMIN only, and nobody but the OWNER links
+ * or unlinks their own login: otherwise an admin could unlink their own record,
+ * file and approve their own time off, and link it back. Saving the record with
+ * the link unchanged is always allowed.
+ */
+export function canChangeEmployeeLogin(
+  actor: Actor,
+  change: { from: string | null; to: string | null },
+): boolean {
+  if (change.from === change.to) return true;
+  if (actor.role === "OWNER") return true;
+  if (actor.role !== "ADMIN") return false;
+  return change.from !== actor.userId && change.to !== actor.userId;
+}
+
 /** Delete a PENDING time-off request: whoever filed it, or OWNER/ADMIN. */
 export function canDeleteTimeOff(actor: Actor, row: { requestedById: string | null }): boolean {
   return isManager(actor.role) || (row.requestedById !== null && row.requestedById === actor.userId);

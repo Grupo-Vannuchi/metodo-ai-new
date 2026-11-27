@@ -1,7 +1,6 @@
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
-import { canAccessScreen } from "@/lib/access";
-import { hasFeatureByModules } from "@/config/modules";
+import { canUseScreen } from "@/lib/access";
 import { isPrivateRef, readPrivate } from "@/lib/storage/blob";
 
 export const runtime = "nodejs";
@@ -22,7 +21,7 @@ function contentDisposition(name: string): string {
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await getOrgContext();
   if (!ctx) return new Response("Unauthorized", { status: 401 });
-  if (!canAccessScreen(ctx, "hr") || !hasFeatureByModules(ctx.modules, "hr")) {
+  if (!canUseScreen(ctx, "hr")) {
     return new Response("Forbidden", { status: 403 });
   }
 

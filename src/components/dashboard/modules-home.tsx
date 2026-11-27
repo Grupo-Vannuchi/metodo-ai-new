@@ -31,8 +31,11 @@ const ICONS: Record<string, LucideIcon> = {
 /** Screens whose page is not at `/app/<screen>` (see components/app/app-nav.tsx). */
 const SCREEN_HREF: Partial<Record<string, string>> = {
   inboxOficial: "/app/inbox-oficial",
-  emailInbox: "/app/email",
 };
+
+/** Screens that are a tab inside another screen's page, not a page of their own:
+ *  `emailInbox` lives in E-mail, whose layout also requires the `email` screen. */
+const TAB_SCREENS = new Set(["emailInbox"]);
 
 /** Dashboard shown when the sales dashboard doesn't apply: the org hasn't
  *  installed the CRM module, or the member's access template leaves the CRM out.
@@ -49,10 +52,10 @@ export async function ModulesHome({
   userName: string;
 }) {
   const t = await getTranslations("app.dashboard");
-  const allowed = new Set(allowedScreens);
+  const opens = (s: string) => allowedScreens.includes(s) && !TAB_SCREENS.has(s);
   // A module with no screen of its own (IA) stays listed; it links to the Loja.
   const mods = MODULES.filter(
-    (m) => installed.includes(m.id) && (m.screens.length === 0 || m.screens.some((s) => allowed.has(s))),
+    (m) => installed.includes(m.id) && (m.screens.length === 0 || m.screens.some(opens)),
   );
 
   return (
@@ -85,7 +88,7 @@ export async function ModulesHome({
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {mods.map((m) => {
               const Icon = ICONS[m.icon] ?? Boxes;
-              const screen = m.screens.find((s) => allowed.has(s));
+              const screen = m.screens.find(opens);
               const href = screen ? (SCREEN_HREF[screen] ?? `/app/${screen}`) : "/app/loja";
               return (
                 <Link

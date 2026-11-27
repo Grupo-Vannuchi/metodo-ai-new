@@ -1,4 +1,5 @@
 import { getOrgContext } from "@/lib/tenant";
+import { canUseScreen } from "@/lib/access";
 import { getPayslip } from "@/lib/queries/payroll";
 import { renderPayslip } from "@/lib/hr/payslip";
 import { documentHtmlHeaders } from "@/lib/print-document";
@@ -14,6 +15,9 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await getOrgContext();
   if (!ctx) return new Response("Unauthorized", { status: 401 });
+  // The payslip shows a salary: the same permission as the HR screen (module +
+  // access template), answered as "not found" like an id from another company.
+  if (!canUseScreen(ctx, "hr")) return new Response("Not found", { status: 404 });
 
   const { id } = await params;
   const payslip = await getPayslip(ctx.organizationId, id);
