@@ -17,6 +17,7 @@ import { getSalesReport, type SalesPeriod } from "@/lib/queries/sales-report";
 import { getSalesLeaderboard, getMonthlyTrend, getTopProducts, getTopLocations } from "@/lib/queries/dashboard-extra";
 import { getGoals, currentMonth } from "@/lib/queries/goals";
 import { availablePieModels } from "@/lib/dashboard-access";
+import { canUseScreen } from "@/lib/access";
 import { hasModule } from "@/config/modules";
 import { ModulesHome } from "@/components/dashboard/modules-home";
 import { PieCard } from "@/components/dashboard/pie-card";
@@ -41,10 +42,11 @@ export default async function DashboardPage({
 }) {
   const locale = resolveLocale((await params).locale);
   const ctx = await requireOrgContext(locale);
-  // The default dashboard is the sales/CRM view. Without the CRM module, show a
-  // modular home (installed modules + a nudge to the Loja) instead.
-  if (!hasModule(ctx.modules, "crm")) {
-    return <ModulesHome installed={ctx.modules} userName={ctx.user.name} />;
+  // The default dashboard is the sales/CRM view. Without the CRM module, or for a
+  // member whose access template leaves the CRM out (the pipeline totals, goals
+  // and rankings are the CRM's data), show the modular home instead.
+  if (!canUseScreen(ctx, "crm")) {
+    return <ModulesHome installed={ctx.modules} allowedScreens={ctx.allowedScreens} userName={ctx.user.name} />;
   }
   const t = await getTranslations("app.dashboard");
   const tr = await getTranslations("crm.reports");

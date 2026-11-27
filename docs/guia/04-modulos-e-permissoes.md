@@ -154,8 +154,41 @@ tela: o módulo **e** `canAccessScreen(ctx, "<tela>")`, porque a URL da rota nã
 lista de opções e uma rota serve cada uma, as duas leem a mesma função de permissão, que mora fora de
 `lib/queries/` (que é só a DAL). Real: as pizzas do painel, em
 [src/lib/dashboard-access.ts](../../src/lib/dashboard-access.ts) (`availablePieModels`), usadas pelo
-painel e por `/api/dashboard/pie`: a do Financeiro pede o módulo e a tela `finance`, e a de tarefas, o
-módulo e a tela `tasks`.
+painel e por `/api/dashboard/pie`: toda pizza pede o módulo e a tela `crm`; a do Financeiro pede também o
+módulo e a tela `finance`, e a de tarefas, o módulo e a tela `tasks`.
+
+**O painel de vendas (`/app`) é dado do CRM.** Os cartões do topo (oportunidades abertas, valor em aberto,
+previsão, ganhos do mês), as metas, o funil e os rankings só aparecem com o módulo **e** a tela `crm`
+(`canUseScreen(ctx, "crm")` em [src/app/[locale]/app/page.tsx](<../../src/app/[locale]/app/page.tsx>)).
+Sem o módulo, ou para um membro cujo template deixa o CRM de fora, o painel é o `ModulesHome`
+([src/components/dashboard/modules-home.tsx](../../src/components/dashboard/modules-home.tsx)): só os
+módulos instalados que a pessoa pode abrir, cada um apontando para a primeira tela liberada.
+
+**Toda server action repete a permissão da tela dela.** O `layout.tsx` só protege a página: a action é
+chamada pelo id, sem carregar a página, por qualquer pessoa logada na empresa. Por isso ela abre com
+
+```ts
+const ctx = await getOrgContext();
+if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false, error: "unauthorized" };
+```
+
+`canUseScreen` ([src/lib/access.ts](../../src/lib/access.ts)) junta as duas perguntas da seção anterior:
+o módulo dono da tela (`SCREEN_MODULE`) está instalado **e** `canAccessScreen` libera a tela. Desde
+27/11/2026 está em todas as actions do RH (`hr.ts`, `time-off.ts`, `payroll.ts`, tela `hr`) e de
+Suprimentos (`stock.ts`, `purchases.ts`, `suppliers.ts`, `supply-items.ts`, `registries.ts`,
+`assets.ts`, `service-tickets.ts`, `maintenance.ts`, tela `supplies`). O Financeiro faz o mesmo com o
+`denyReason` de `actions/finance.ts`.
+
+**Dentro da tela, os passos que comprometem a empresa pedem papel.** As regras do RH ficam em
+[src/lib/hr/permissions.ts](../../src/lib/hr/permissions.ts), lidas pela action (que recusa com
+`forbidden`) e pela página (que esconde o botão):
+
+- férias: só OWNER/ADMIN aprovam ou recusam, e nunca o pedido do funcionário ligado ao próprio login
+  (`canDecideTimeOff`; o OWNER é a exceção, porque não há ninguém acima dele). Excluir um pedido
+  pendente é de quem o registrou ou de OWNER/ADMIN (`canDeleteTimeOff`);
+- folha: aprovar, reabrir, pagar (que lança uma despesa por funcionário no Financeiro) e excluir uma
+  folha aprovada são só de OWNER/ADMIN (`canApprovePayroll`). Montar e editar o rascunho continua com
+  quem tem a tela `hr`.
 
 **Gating cross-módulo** (uma tela de um módulo usando algo de outro) segue um padrão fixo: o
 **server** resolve `hasModule(...)` e passa o resultado como prop para o client component — nunca
@@ -197,7 +230,7 @@ para o tipo mas sem dono ainda — não gatear nada por elas por engano.
 
 ## Paridade de i18n
 
-`src/messages/pt.json` e `src/messages/en.json` têm **3680 chaves-folha cada um** (contagem
+`src/messages/pt.json` e `src/messages/en.json` têm **3682 chaves-folha cada um** (contagem
 própria, recursiva sobre os dois arquivos — batem exatamente). Não existe script no repositório
 que verifique a paridade inteira automaticamente: os dois arquivos em `scripts/` que leem
 `pt.json`/`en.json` só conferem as chaves de que dependem. O `check-email-broadcast.ts` (`npm run check:email`)

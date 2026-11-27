@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
+import { canUseScreen } from "@/lib/access";
 import { tenantDb, type TenantDb } from "@/lib/tenant-db";
 import {
   stockMovementSchema,
@@ -52,7 +53,7 @@ function meta(d: StockMovementInput) {
 
 export async function createStockMovement(input: unknown): Promise<StockResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   const parsed = stockMovementSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   const d = parsed.data;
@@ -108,7 +109,7 @@ export async function createStockMovement(input: unknown): Promise<StockResult> 
  */
 export async function reverseStockMovement(id: string): Promise<StockResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   try {
     const db = tenantDb(ctx.organizationId);
     const move = await db.stockMovement.findFirst({ where: { id } });
@@ -154,7 +155,7 @@ export async function reverseStockMovement(id: string): Promise<StockResult> {
  */
 export async function createReservation(input: unknown): Promise<StockResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   const parsed = stockReservationSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   const d = parsed.data;
@@ -199,7 +200,7 @@ export async function createReservation(input: unknown): Promise<StockResult> {
 /** Release an active reservation, freeing the held quantity back to available. */
 export async function releaseReservation(id: string): Promise<StockResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   try {
     const db = tenantDb(ctx.organizationId);
     const res = await db.stockReservation.findFirst({ where: { id }, select: { id: true, status: true } });
@@ -221,7 +222,7 @@ export async function releaseReservation(id: string): Promise<StockResult> {
  */
 export async function consumeReservation(id: string): Promise<StockResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   try {
     const db = tenantDb(ctx.organizationId);
     const res = await db.stockReservation.findFirst({ where: { id } });

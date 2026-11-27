@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
+import { canUseScreen } from "@/lib/access";
 import { tenantDb } from "@/lib/tenant-db";
 import { supplierSchema, type SupplierInput } from "@/lib/validations/supplier";
 
@@ -26,7 +27,7 @@ function toData(d: SupplierInput) {
 
 export async function createSupplier(input: SupplierInput): Promise<SupplierResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   const parsed = supplierSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   try {
@@ -45,7 +46,7 @@ export async function createSupplier(input: SupplierInput): Promise<SupplierResu
 
 export async function updateSupplier(id: string, input: SupplierInput): Promise<SupplierResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   const parsed = supplierSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   try {
@@ -62,7 +63,7 @@ export async function updateSupplier(id: string, input: SupplierInput): Promise<
 
 export async function deleteSupplier(id: string): Promise<{ ok: boolean }> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false };
   try {
     await tenantDb(ctx.organizationId).supplier.deleteMany({ where: { id } });
     revalidatePath("/app/supplies/suppliers");

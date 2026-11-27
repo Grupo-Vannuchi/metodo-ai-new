@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { Plus } from "lucide-react";
 import { requireOrgContext } from "@/lib/tenant";
 import { listTimeOff } from "@/lib/queries/time-off";
+import { canDecideTimeOff, canDeleteTimeOff } from "@/lib/hr/permissions";
 import { TIME_OFF_STATUS_FILTERS, type TimeOffStatusFilter } from "@/lib/validations/time-off";
 import { TimeOffList } from "@/components/hr/time-off-list";
 import { TimeOffToolbar } from "@/components/hr/time-off-toolbar";
@@ -28,8 +29,13 @@ export default async function TimeOffPage({
   ) as TimeOffStatusFilter;
 
   const rows = await listTimeOff(ctx.organizationId, { status });
-  // Only managers decide requests (they own the HR process).
-  const canDecide = ctx.role === "OWNER" || ctx.role === "ADMIN";
+  // The same rules the actions enforce: managers decide (never their own) and
+  // a request is deleted by whoever filed it or a manager.
+  const items = rows.map((r) => ({
+    ...r,
+    canDecide: canDecideTimeOff(ctx, r),
+    canDelete: canDeleteTimeOff(ctx, r),
+  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -41,7 +47,7 @@ export default async function TimeOffPage({
         </Link>
       </div>
 
-      <TimeOffList rows={rows} canDecide={canDecide} />
+      <TimeOffList rows={items} />
     </div>
   );
 }

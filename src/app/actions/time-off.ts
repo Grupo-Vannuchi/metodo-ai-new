@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
+import { canUseScreen } from "@/lib/access";
 import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
+import { canDecideTimeOff, canDeleteTimeOff } from "@/lib/hr/permissions";
 import {
   timeOffSchema,
   timeOffDecisionSchema,
@@ -14,7 +16,7 @@ import {
 
 export type TimeOffActionResult =
   | { ok: true; id: string }
-  | { ok: false; error: "unauthorized" | "invalid" | "locked" | "unknown" };
+  | { ok: false; error: "unauthorized" | "forbidden" | "invalid" | "locked" | "unknown" };
 
 /** Notify the org's managers (they are the ones who decide requests). */
 async function notifyManagers(
@@ -38,7 +40,7 @@ async function notifyManagers(
 /** Create a time-off request (PENDING) and alert the managers. */
 export async function requestTimeOff(input: TimeOffInput): Promise<TimeOffActionResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false, error: "unauthorized" };
 
   const parsed = timeOffSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
@@ -88,15 +90,15 @@ export async function requestTimeOff(input: TimeOffInput): Promise<TimeOffAction
 }
 
 /**
- * Approve or reject a pending request. The employee's linked system user (if
- * any) is notified of the decision.
+ * Approve or reject a pending request (`canDecideTimeOff`: OWNER/ADMIN, never
+ * their own). The employee's linked system user (if any) is notified.
  */
 export async function decideTimeOff(
   id: string,
   input: TimeOffDecisionInput,
 ): Promise<TimeOffActionResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false, error: "unauthorized" };
 
   const parsed = timeOffDecisionSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
@@ -114,10 +116,14 @@ export async function decideTimeOff(
       },
     });
     if (!row) return { ok: false, error: "unknown" };
+    if (!canDecideTimeOff(ctx, { employeeUserId: row.employee.userId })) {
+      return { ok: false, error: "forbidden" };
+    }
     if (row.status !== "PENDING") return { ok: false, error: "locked" };
 
-    await db.timeOff.updateMany({
-      where: { id },
+    // Still PENDING at write time, so two managers can't both decide it.
+    const updated = await db.timeOff.updateMany({
+      where: { id, status: "PENDING" },
       data: {
         status: parsed.data.status,
         decisionNote: parsed.data.decisionNote || null,
@@ -125,6 +131,7 @@ export async function decideTimeOff(
         decidedAt: new Date(),
       },
     });
+    if (updated.count === 0) return { ok: false, error: "locked" };
 
     // Tell whoever is waiting on it: the employee's own login, else the requester.
     const target = row.employee.userId ?? row.requestedById;
@@ -149,18 +156,19 @@ export async function decideTimeOff(
   }
 }
 
-/** Delete a request. Only a PENDING one can be removed. */
-export async function deleteTimeOff(id: string): Promise<{ ok: boolean; error?: "locked" }> {
+/** Delete a request (`canDeleteTimeOff`: who filed it, or OWNER/ADMIN). Only a PENDING one. */
+export async function deleteTimeOff(id: string): Promise<{ ok: boolean; error?: "locked" | "forbidden" }> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false };
+  if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false };
 
   try {
     const db = tenantDb(ctx.organizationId);
-    const row = await db.timeOff.findFirst({ where: { id }, select: { status: true } });
+    const row = await db.timeOff.findFirst({ where: { id }, select: { status: true, requestedById: true } });
     if (!row) return { ok: false };
+    if (!canDeleteTimeOff(ctx, row)) return { ok: false, error: "forbidden" };
     if (row.status !== "PENDING") return { ok: false, error: "locked" };
 
-    await db.timeOff.deleteMany({ where: { id } });
+    await db.timeOff.deleteMany({ where: { id, status: "PENDING" } });
     revalidatePath("/app/hr/timeoff");
     return { ok: true };
   } catch (error) {

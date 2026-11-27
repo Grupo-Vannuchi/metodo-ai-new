@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { type ServiceTicketStatus } from "@prisma/client";
 import { getOrgContext } from "@/lib/tenant";
+import { canUseScreen } from "@/lib/access";
 import { tenantDb, type TenantDb } from "@/lib/tenant-db";
 import { serviceTicketSchema, returnServiceSchema } from "@/lib/validations/service-ticket";
 
@@ -30,7 +31,7 @@ async function nextCode(db: TenantDb): Promise<string> {
 
 export async function createServiceTicket(input: unknown): Promise<ServiceResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   const parsed = serviceTicketSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   const d = parsed.data;
@@ -71,7 +72,7 @@ const TRANSITIONS: Record<string, { from: string[]; to: ServiceTicketStatus }> =
 
 export async function setServiceStatus(id: string, action: string): Promise<ServiceResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   const rule = TRANSITIONS[action];
   if (!rule) return { ok: false, error: "invalid" };
   try {
@@ -91,7 +92,7 @@ export async function setServiceStatus(id: string, action: string): Promise<Serv
 /** Return the equipment to the client: closes the ticket with return date + cost. */
 export async function returnServiceTicket(id: string, input: unknown): Promise<ServiceResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   const parsed = returnServiceSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   const d = parsed.data;
@@ -119,7 +120,7 @@ export async function returnServiceTicket(id: string, input: unknown): Promise<S
 
 export async function deleteServiceTicket(id: string): Promise<{ ok: boolean }> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false };
   try {
     const db = tenantDb(ctx.organizationId);
     const tk = await db.serviceTicket.findFirst({ where: { id }, select: { status: true } });

@@ -34,7 +34,13 @@ export default async function ConnectionDetailPage({
   const conn = await getConnection(ctx.organizationId, id);
   if (!conn) notFound();
 
-  const agent = conn.provider === "EVOLUTION" ? await getWhatsappAgent(ctx.organizationId, conn.id) : null;
+  // The AI agent answers the owner's chats, so only the owner sees or edits it
+  // (actions/whatsapp-agent.ts refuses everyone else).
+  const showAgent =
+    conn.provider === "EVOLUTION" &&
+    conn.ownerId === ctx.userId &&
+    hasFeatureByModules(ctx.modules, "whatsapp_agent");
+  const agent = showAgent ? await getWhatsappAgent(ctx.organizationId, conn.id) : null;
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
@@ -64,7 +70,7 @@ export default async function ConnectionDetailPage({
         </p>
       )}
 
-      {conn.provider === "EVOLUTION" && hasFeatureByModules(ctx.modules, "whatsapp_agent") ? (
+      {showAgent ? (
         <WhatsappAgentConfig connectionId={conn.id} initial={agent} />
       ) : null}
     </div>

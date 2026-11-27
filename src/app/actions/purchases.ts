@@ -5,6 +5,7 @@ import { Prisma, type PurchaseOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { orgHasFeature } from "@/lib/queries/modules";
 import { getOrgContext } from "@/lib/tenant";
+import { canUseScreen } from "@/lib/access";
 import { tenantDb, type TenantDb } from "@/lib/tenant-db";
 import { purchaseOrderSchema, receiveSchema, type PurchaseOrderInput } from "@/lib/validations/purchase";
 
@@ -64,7 +65,7 @@ async function nextCode(db: TenantDb): Promise<string> {
 
 export async function createPurchaseOrder(input: unknown): Promise<PurchaseResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   const parsed = purchaseOrderSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   const d = parsed.data;
@@ -104,7 +105,7 @@ export async function createPurchaseOrder(input: unknown): Promise<PurchaseResul
 
 export async function updatePurchaseOrder(id: string, input: unknown): Promise<PurchaseResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   const parsed = purchaseOrderSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   const d = parsed.data;
@@ -151,7 +152,7 @@ const TRANSITIONS: Record<string, { from: string[]; to: string }> = {
 
 export async function setPurchaseOrderStatus(id: string, action: string): Promise<PurchaseResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   const rule = TRANSITIONS[action];
   if (!rule) return { ok: false, error: "invalid" };
 
@@ -187,7 +188,7 @@ export async function setPurchaseOrderStatus(id: string, action: string): Promis
  */
 export async function receivePurchaseOrder(id: string, input: unknown): Promise<PurchaseResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   const parsed = receiveSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
 
@@ -282,7 +283,7 @@ export async function receivePurchaseOrder(id: string, input: unknown): Promise<
  */
 export async function postPurchaseToFinance(id: string): Promise<PurchaseResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false, error: "unauthorized" };
   const org = ctx.organizationId;
 
   try {
@@ -335,7 +336,7 @@ export async function postPurchaseToFinance(id: string): Promise<PurchaseResult>
 
 export async function deletePurchaseOrder(id: string): Promise<{ ok: boolean }> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false };
+  if (!ctx || !canUseScreen(ctx, "supplies")) return { ok: false };
   try {
     const db = tenantDb(ctx.organizationId);
     const po = await db.purchaseOrder.findFirst({ where: { id }, select: { status: true } });

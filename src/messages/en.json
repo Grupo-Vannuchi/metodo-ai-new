@@ -1067,6 +1067,7 @@
         "invalid": "Invalid data. Check the employee and the period.",
         "unauthorized": "Session expired.",
         "locked": "This request was already decided.",
+        "forbidden": "Only the owner or an admin decides time off, and nobody decides their own. Only the requester or an admin can delete it.",
         "unknown": "Something went wrong."
       }
     },
@@ -1237,6 +1238,7 @@
         "duplicate": "A payroll for that month already exists.",
         "locked": "The payroll does not allow this action in its current status.",
         "no_employees": "No active employees to build the payroll.",
+        "forbidden": "Only the owner or an admin can approve, reopen, pay or delete an approved payroll.",
         "unknown": "Something went wrong."
       }
     },

@@ -63,7 +63,7 @@ export async function getConnection(organizationId: string, id: string) {
   const db = tenantDb(organizationId);
   return db.integrationConnection.findFirst({
     where: { id },
-    select: { id: true, provider: true, label: true, status: true, lastTestAt: true },
+    select: { id: true, provider: true, label: true, status: true, lastTestAt: true, ownerId: true },
   });
 }
 

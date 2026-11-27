@@ -24,11 +24,14 @@ export function PayrollRunActions({
   status,
   totalNet,
   hasFinance = true,
+  canApprove = false,
 }: {
   id: string;
   status: PayrollStatusKey;
   totalNet: number;
   hasFinance?: boolean;
+  /** OWNER/ADMIN (`canApprovePayroll`): approve, reopen and pay. */
+  canApprove?: boolean;
 }) {
   const t = useTranslations("hr");
   const router = useRouter();
@@ -54,15 +57,17 @@ export function PayrollRunActions({
       <div className="flex flex-wrap items-center gap-2">
         {status === "DRAFT" ? (
           <>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => run(() => approvePayrollRun(id))}
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "disabled:opacity-50")}
-            >
-              {pending ? <Spinner className="size-4" /> : <CheckCircle2 className="size-4" />}
-              {t("payroll.approve")}
-            </button>
+            {canApprove ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => run(() => approvePayrollRun(id))}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "disabled:opacity-50")}
+              >
+                {pending ? <Spinner className="size-4" /> : <CheckCircle2 className="size-4" />}
+                {t("payroll.approve")}
+              </button>
+            ) : null}
             <button
               type="button"
               disabled={pending}
@@ -84,7 +89,7 @@ export function PayrollRunActions({
           </>
         ) : null}
 
-        {status === "APPROVED" ? (
+        {status === "APPROVED" && canApprove ? (
           <>
             <button
               type="button"

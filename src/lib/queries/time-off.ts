@@ -14,6 +14,9 @@ export type TimeOffRow = {
   days: number;
   reason: string | null;
   decisionNote: string | null;
+  /** The login linked to the employee (for `canDecideTimeOff`). */
+  employeeUserId: string | null;
+  requestedById: string | null;
 };
 
 /** Time-off requests for the list screen, newest period first. */
@@ -30,7 +33,7 @@ export async function listTimeOff(
     // Pending first (they need a decision), then by most recent period.
     orderBy: [{ status: "asc" }, { startDate: "desc" }],
     take: 200,
-    include: { employee: { select: { name: true } } },
+    include: { employee: { select: { name: true, userId: true } } },
   });
   return rows.map((r) => ({
     id: r.id,
@@ -43,6 +46,8 @@ export async function listTimeOff(
     days: r.days,
     reason: r.reason,
     decisionNote: r.decisionNote,
+    employeeUserId: r.employee.userId,
+    requestedById: r.requestedById,
   }));
 }
 

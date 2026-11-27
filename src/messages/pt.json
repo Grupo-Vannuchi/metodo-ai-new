@@ -1067,6 +1067,7 @@
         "invalid": "Dados inválidos. Confira o funcionário e o período.",
         "unauthorized": "Sessão expirada.",
         "locked": "Esta solicitação já foi decidida.",
+        "forbidden": "Só o dono ou um admin decide férias, e ninguém decide as próprias. Excluir, só quem pediu ou um admin.",
         "unknown": "Algo deu errado."
       }
     },
@@ -1237,6 +1238,7 @@
         "duplicate": "Já existe uma folha para esse mês.",
         "locked": "A folha não permite esta ação na situação atual.",
         "no_employees": "Nenhum funcionário ativo para gerar a folha.",
+        "forbidden": "Só o dono ou um admin aprova, reabre, paga ou exclui uma folha aprovada.",
         "unknown": "Algo deu errado."
       }
     },

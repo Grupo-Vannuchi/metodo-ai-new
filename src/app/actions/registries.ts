@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getOrgContext } from "@/lib/tenant";
+import { canUseScreen } from "@/lib/access";
 import { tenantDb } from "@/lib/tenant-db";
 
 const KINDS = ["category", "unit", "warehouse"] as const;
@@ -19,7 +20,7 @@ const schema = z.object({
 
 export async function saveRegistry(kind: string, id: string | null, input: unknown): Promise<{ ok: boolean }> {
   const ctx = await getOrgContext();
-  if (!ctx || !isKind(kind)) return { ok: false };
+  if (!ctx || !canUseScreen(ctx, "supplies") || !isKind(kind)) return { ok: false };
   const p = schema.safeParse(input);
   if (!p.success) return { ok: false };
   const name = p.data.name.trim();
@@ -48,7 +49,7 @@ export async function saveRegistry(kind: string, id: string | null, input: unkno
 
 export async function deleteRegistry(kind: string, id: string): Promise<{ ok: boolean }> {
   const ctx = await getOrgContext();
-  if (!ctx || !isKind(kind)) return { ok: false };
+  if (!ctx || !canUseScreen(ctx, "supplies") || !isKind(kind)) return { ok: false };
   const db = tenantDb(ctx.organizationId);
   try {
     if (kind === "category") await db.supplyCategory.deleteMany({ where: { id } });

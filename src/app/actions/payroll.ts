@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
+import { canUseScreen } from "@/lib/access";
 import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { orgHasFeature } from "@/lib/queries/modules";
+import { canApprovePayroll } from "@/lib/hr/permissions";
 import {
   payrollRunSchema,
   payrollLinesSchema,
@@ -14,7 +16,7 @@ import {
 
 export type PayrollActionResult =
   | { ok: true; id: string }
-  | { ok: false; error: "unauthorized" | "invalid" | "duplicate" | "locked" | "no_employees" | "unknown" };
+  | { ok: false; error: "unauthorized" | "forbidden" | "invalid" | "duplicate" | "locked" | "no_employees" | "unknown" };
 
 const money = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -52,7 +54,7 @@ async function refreshRunTotals(organizationId: string, runId: string) {
  */
 export async function createPayrollRun(input: PayrollRunInput): Promise<PayrollActionResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false, error: "unauthorized" };
 
   const parsed = payrollRunSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
@@ -133,7 +135,7 @@ export async function updatePayrollItemLines(
   lines: PayrollLineInput[],
 ): Promise<PayrollActionResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false, error: "unauthorized" };
 
   const parsed = payrollLinesSchema.safeParse(lines);
   if (!parsed.success) return { ok: false, error: "invalid" };
@@ -173,10 +175,11 @@ export async function updatePayrollItemLines(
   }
 }
 
-/** DRAFT → APPROVED (closes the run for editing). */
+/** DRAFT → APPROVED (closes the run for editing). OWNER/ADMIN only (`canApprovePayroll`). */
 export async function approvePayrollRun(id: string): Promise<PayrollActionResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false, error: "unauthorized" };
+  if (!canApprovePayroll(ctx)) return { ok: false, error: "forbidden" };
 
   try {
     const db = tenantDb(ctx.organizationId);
@@ -197,10 +200,11 @@ export async function approvePayrollRun(id: string): Promise<PayrollActionResult
   }
 }
 
-/** APPROVED → DRAFT (reopen for edits; a PAID run can never be reopened). */
+/** APPROVED → DRAFT (reopen for edits; a PAID run can never be reopened). OWNER/ADMIN only. */
 export async function reopenPayrollRun(id: string): Promise<PayrollActionResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false, error: "unauthorized" };
+  if (!canApprovePayroll(ctx)) return { ok: false, error: "forbidden" };
 
   try {
     const db = tenantDb(ctx.organizationId);
@@ -222,11 +226,12 @@ export async function reopenPayrollRun(id: string): Promise<PayrollActionResult>
  * APPROVED → PAID. THE BRIDGE: posts one EXPENSE entry per employee into the
  * finance ledger (settled on the pay date, linked back to the employee and the
  * run), so the folha shows up in Fluxo de Caixa and DRE. Idempotent per item —
- * an item that already carries a financeEntryId is skipped.
+ * an item that already carries a financeEntryId is skipped. OWNER/ADMIN only.
  */
 export async function payPayrollRun(id: string): Promise<PayrollActionResult> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false, error: "unauthorized" };
+  if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false, error: "unauthorized" };
+  if (!canApprovePayroll(ctx)) return { ok: false, error: "forbidden" };
 
   try {
     const org = ctx.organizationId;
@@ -292,18 +297,22 @@ export async function payPayrollRun(id: string): Promise<PayrollActionResult> {
   }
 }
 
-/** Delete a run. A PAID run is immutable (its entries are already in the ledger). */
-export async function deletePayrollRun(id: string): Promise<{ ok: boolean; error?: "locked" }> {
+/**
+ * Delete a run. A PAID run is immutable (its entries are already in the ledger);
+ * an APPROVED one only by OWNER/ADMIN, who approved it.
+ */
+export async function deletePayrollRun(id: string): Promise<{ ok: boolean; error?: "locked" | "forbidden" }> {
   const ctx = await getOrgContext();
-  if (!ctx) return { ok: false };
+  if (!ctx || !canUseScreen(ctx, "hr")) return { ok: false };
 
   try {
     const db = tenantDb(ctx.organizationId);
     const run = await db.payrollRun.findFirst({ where: { id }, select: { status: true } });
     if (!run) return { ok: false };
     if (run.status === "PAID") return { ok: false, error: "locked" };
+    if (run.status === "APPROVED" && !canApprovePayroll(ctx)) return { ok: false, error: "forbidden" };
 
-    await db.payrollRun.deleteMany({ where: { id } });
+    await db.payrollRun.deleteMany({ where: { id, status: run.status } });
     revalidatePath("/app/hr/payroll");
     return { ok: true };
   } catch (error) {
