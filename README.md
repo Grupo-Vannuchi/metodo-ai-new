@@ -46,7 +46,7 @@ O MétodoAI **deixou de ser um SaaS de planos fixos** e virou uma **plataforma m
 | Banco | **PostgreSQL** + **Prisma 6** (client Rust-free) |
 | i18n | **next-intl 4** (pt/en) — chaves em `src/messages/{pt,en}.json` |
 | Auth | **jose** (JWT HS256, cookie de sessão) + **bcryptjs**; OAuth Google/Microsoft/LinkedIn |
-| Jobs/Cache | **Upstash QStash** (jobs) + **Upstash Redis** (rate-limit) — opcionais |
+| Jobs/Cache | **Upstash QStash** (jobs, opcional) + **Upstash Redis** (limites de tentativas; sem ele nenhum limite vale, ver §8) |
 | Storage | **Supabase Storage** (mídia do inbox, bucket público `media`) em produção. Vercel Blob fica só como alternativa antiga, e no desenvolvimento a mídia vai para o disco (`.media/`). A escolha é pelo env, em `src/lib/storage/blob.ts`. **Arquivos privados** (hoje, os documentos de funcionário do RH, desde 24/11/2026) vão para o bucket `private` do Supabase (ou `.media-private/` no disco): a linha guarda uma referência `private:…`, nunca uma URL, e o arquivo só sai por uma rota que confere login, empresa e permissão (`/api/hr/documents/[id]`). O bucket é criado sozinho, e o código se recusa a gravar se alguém o tornar público. Os documentos de RH enviados antes continuam no bucket público até a migração (README §10) |
 | E-mail | **Resend** (conta da plataforma): transacional (verificação, convites, reset) e o submenu E-mail (envio em massa, com domínio próprio de cada empresa) |
 | IA | **Anthropic** (copiloto/agente) + **OpenAI** (transcrição de áudio, imagens) |
@@ -181,7 +181,7 @@ Validadas em `src/lib/env.ts` (zod). Obrigatórias faltando derrubam o boot.
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | p/ mídia em produção | Supabase Storage (mídia do inbox, bucket `media`, criado sozinho na primeira gravação). Com as duas, têm prioridade sobre o Blob |
 | `BLOB_READ_WRITE_TOKEN` | não | Vercel Blob, alternativa antiga ao Supabase. Sem nenhum dos dois, a mídia vai para o disco local (`.media/`, só desenvolvimento) |
 | `QSTASH_TOKEN`, `QSTASH_URL`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` | p/ jobs | fila (prospecção, mídia). Sem eles, degrada. |
-| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | não | rate-limit |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | p/ limites em produção | limites de tentativas (login, senha, convite, IA, MCP, teto do disparo). Sem as duas, nenhum limite vale; com elas, uma falha do Redis deixa passar em vez de bloquear. Roteiro no §8 ("Limites de tentativas") |
 | `GOOGLE_CLIENT_ID/SECRET`, `MICROSOFT_*`, `LINKEDIN_*` | não | login OAuth. Na Microsoft, o e-mail só vale para entrar numa conta existente ou criar uma nova quando é de conta pessoal ou quando o app pede o claim opcional `xms_edov` (Entra → Configuração de token → claim opcional do ID token). Sem esse claim, conta corporativa entra só por uma identidade já ligada ("Conectar", no perfil) |
 | `CRON_SECRET` | p/ cron | autentica os endpoints `/api/cron/*` |
 | `MCP_API_KEY` | não | chave do servidor MCP de leitura (`/api/mcp`); sem ela o endpoint responde 404 |
@@ -500,6 +500,34 @@ O que o recurso é e onde está o código: §7 ("Contatos do CRM num grupo do Wh
 6. No fim, confira cada item na tela e em `whatsapp_group_add_items.code`. Quem aceitou direto fica "Adicionado", com `code = '200'`. Quem tem a privacidade em "Meus contatos" recebe o convite por mensagem, com o link do grupo sozinho na última linha, fica "Convite enviado" e tem `code = '403'`. Quem já estava fica "Já estava no grupo", com `code = '409'`.
 7. **Se um código vier diferente**, ou um item ficar "Não deu agora" sem motivo claro, não adivinhe: o item guarda o código visto. A correção é em `outcomeFromCode` (`src/lib/whatsapp/group-add/core.ts`), com um caso novo no `check:group-add`.
 8. Depois, apague o grupo de teste e os contatos de teste, e desconecte o número de teste em Conversas (no app local).
+
+### Limites de tentativas: ligar o Redis (Upstash)
+
+Os limites de tentativas (login, reset de senha, confirmação de e-mail, convite, IA por minuto, MCP e o teto
+por empresa do disparo de campanhas) vivem em `src/lib/ratelimit.ts` e só funcionam com o Redis da Upstash:
+sem as duas variáveis, nenhum limite vale. A cota diária da IA não depende dele, porque vem do banco.
+
+O limitador **deixa passar quando o Redis falha** (token errado, erro, mais de 2 s sem resposta ou
+fora do ar) e registra `[ratelimit] <prefixo>: Redis unavailable, letting the request through (…)` no log, no
+máximo uma vez por minuto por prefixo e sem o e-mail. Então ligar o Redis nunca derruba o login: no pior caso,
+volta a ser como sem ele. **Ver essa linha no log quer dizer que os limites estão desligados** naquele momento.
+O Redis só recebe um HMAC de cada e-mail ou id, com chave derivada do `SESSION_SECRET` (`rateLimitKey`), nunca o dado em si. Coberto pelo
+`npm run check:ratelimit` ([guia 06](docs/guia/06-antes-de-commitar.md)).
+
+1. Crie um banco **Redis** no console da Upstash (plano gratuito; região mais perto do Brasil, `sa-east-1`) e
+   copie, da aba **REST API**, a `UPSTASH_REDIS_REST_URL` e o `UPSTASH_REDIS_REST_TOKEN`. Ligue também o
+   **alerta de uso** do banco no console: cada tentativa conta como comando, e quem esgota a cota do plano
+   desliga os limites em silêncio (sobra só a linha `[ratelimit]` no log).
+2. Cadastre as duas nas variáveis de ambiente do app no hPanel e **reinicie o app** (as variáveis só são lidas
+   na subida). O token é segredo: não cole em chat nem em PR.
+3. Confira: 6 tentativas de login seguidas, dentro de um minuto, com um e-mail que não existe. As 5 primeiras
+   respondem "Dados inválidos. Verifique e tente novamente." e a 6ª, "Muitas tentativas. Aguarde um minuto e
+   tente de novo." Se a 6ª também disser "Dados inválidos", procure a linha `[ratelimit]` no log de erros do
+   hPanel, que diz o motivo.
+4. O que muda além do login: o disparo de campanhas passa a respeitar o teto por empresa e canal (20/min no
+   WhatsApp comum, 60/min no oficial e 100/min no e-mail, em `RATE` de `src/lib/dispatch.ts`). O ritmo normal
+   de uma campanha de WhatsApp (1 mensagem a cada 30 a 60 s) já fica abaixo disso; quando o teto age, o lote
+   espera a janela e continua, tanto na fila quanto no disparo direto.
 
 ### Deploy — automático a cada push na `main`
 
