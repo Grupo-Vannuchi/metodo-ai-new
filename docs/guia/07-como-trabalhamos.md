@@ -43,7 +43,8 @@ O fluxo de cada entrega:
    `https://github.com/Grupo-Vannuchi/metodo-ai-new/compare/main...feature/nome-curto?expand=1`.
    A descrição explica o que muda, o que foi testado e se existe migration.
 4. **Espere o CI verde** (job `validate`, aba **Actions**). Ele refaz as cinco checagens do zero, mais o `check:devguard`,
-   com um Postgres novo.
+   com um Postgres novo. Se o PR muda o banco, o check `migration-aplicada` também precisa estar verde
+   (seção abaixo).
 5. **Merge.** A partir daqui está em produção. Teste em `https://metodotia.com` logo depois.
 
 Se a `main` andou enquanto a branch estava aberta, traga a `main` para a branch com merge (não
@@ -64,7 +65,20 @@ A Hostinger **não** aplica migration no deploy. Código novo com o banco antigo
    npx prisma db execute --file prisma/migrations/<pasta>/migration.sql --schema prisma/schema.prisma
    npx prisma migrate resolve --applied <pasta>
    ```
-3. Escreva no PR e no §8 do README o que a migration faz e se apaga algo.
+3. Confira na produção que a migration entrou (um `SELECT` na coluna ou tabela nova) e só então
+   ponha no PR o label **`migration-aplicada`**.
+4. Escreva no PR e no §8 do README o que a migration faz e se apaga algo.
+
+**A trava do label.** O check `migration-aplicada`
+([.github/workflows/migration-aplicada.yml](../../.github/workflows/migration-aplicada.yml)) roda em
+todo PR para a `main`: passa direto se o PR não mexe em `prisma/migrations/` e, se mexe, só passa com
+o label. Tirar o label faz o check falhar de novo. Ele existe por causa da queda de 25/11/2026, quando
+um PR com migration entrou na `main` antes de a migration rodar no Supabase e o login ficou fora do ar
+por quase uma hora. O label é a confirmação de quem aplicou: não o ponha "para destravar".
+
+Migration que só pode entrar **depois** do deploy (a que apaga uma coluna que o código antigo ainda
+lê) não vai no PR do código: primeiro entra o código, sem ela; depois do deploy, aplique-a no Supabase
+e abra um PR só com a pasta da migration, já com o label. Assim o label nunca precisa mentir.
 
 **Nunca** rode `migrate dev`, `migrate deploy` ou `migrate reset` contra produção. A tabela de
 controle (`_prisma_migrations`) do Supabase não tem o histórico completo, então o Prisma acha que

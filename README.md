@@ -258,6 +258,12 @@ migrations já aplicadas e tenta rodá-las de novo. As migrations são aplicadas
 npx prisma db execute --file prisma/migrations/<nome>/migration.sql --schema prisma/schema.prisma
 npx prisma migrate resolve --applied <nome>
 ```
+**Trava no GitHub (desde 27/11/2026):** um PR que muda `prisma/migrations/` só fica com o check
+`migration-aplicada` verde depois de receber o label `migration-aplicada`, que se põe quando a
+migration já foi aplicada e conferida no Supabase (guia 07). Migration que precisa entrar **depois**
+do deploy (as destrutivas, como a de `feature/email-assinatura-sem-texto` abaixo) vai num PR
+separado, só com a pasta da migration, aberto depois que o código novo estiver no ar.
+
 **Antes do merge da branch `feature/email-em-massa`:** aplicar no Supabase o SQL de `prisma/migrations/20261006120000_email_broadcasts/migration.sql` (só cria tabelas, índices e a FK da tabela nova — nada destrutivo). A Hostinger não roda migrations.
 
 **Antes do merge da branch `feature/email-anexos`:** aplicar no Supabase

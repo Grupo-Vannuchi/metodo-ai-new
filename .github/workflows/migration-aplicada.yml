@@ -1,0 +1,46 @@
+name: Trava de migration
+
+# A Hostinger não aplica migration no deploy: um PR que muda prisma/migrations/ e entra na main antes
+# de a migration rodar no Supabase derruba o app (a queda de 25/11/2026). Este check falha enquanto um
+# PR desses não tiver o label "migration-aplicada", que só se põe depois de aplicar e conferir a
+# migration na produção (guia 07). Fica num workflow próprio para rodar de novo quando o label muda.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  migration-aplicada:
+    name: migration-aplicada
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Só lê a lista de arquivos do PR; não comenta, não põe label, não faz checkout.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Confere o label quando o PR muda prisma/migrations/
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'migration-aplicada') }}
+        run: |
+          set -euo pipefail
+          # Separado da contagem: se a API falhar, o check falha (nunca passa sem ter visto os arquivos).
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')
+          changed=$(printf '%s\n' "$files" | grep -c '^prisma/migrations/' || true)
+          if [ "$changed" -eq 0 ]; then
+            echo "O PR não muda prisma/migrations/."
+            exit 0
+          fi
+          if [ "$HAS_LABEL" = "true" ]; then
+            echo "O PR muda $changed arquivo(s) de prisma/migrations/ e tem o label migration-aplicada."
+            exit 0
+          fi
+          echo "::error::Este PR muda prisma/migrations/. Aplique a migration no Supabase ANTES do merge (guia 07, 'Mudou o banco?') e só então ponha o label migration-aplicada."
+          exit 1
