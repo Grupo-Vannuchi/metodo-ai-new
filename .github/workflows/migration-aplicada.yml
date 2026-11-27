@@ -1,0 +1,59 @@
+name: Trava de migration
+
+# A Hostinger não aplica migration no deploy: um PR que muda prisma/migrations/ e entra na main antes
+# de a migration rodar no Supabase derruba o app (a queda de 25/11/2026). Este check falha enquanto um
+# PR desses não tiver o label "migration-aplicada", que só se põe depois de aplicar e conferir a
+# migration na produção (guia 07). Fica num workflow próprio para rodar de novo quando o label muda.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  migration-aplicada:
+    name: migration-aplicada
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Só lê a lista de arquivos do PR; não comenta, não põe label, não faz checkout.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Confere o label quando o PR muda prisma/migrations/
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # Labels e arquivos lidos ao vivo da API, nunca do payload do evento: um "Re-run" reaproveita o
+          # payload antigo, e um label já tirado passaria de novo. Se a API falhar, o check falha.
+          meta=$(gh api "repos/$REPO/pulls/$PR" --jq '"\(.changed_files) \([.labels[].name] | index("migration-aplicada") != null)"')
+          read -r total has_label <<<"$meta"
+          case "$total" in ''|*[!0-9]*) echo "::error::Resposta inesperada da API do GitHub ($meta)."; exit 1 ;; esac
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')
+          listed=$(printf '%s\n' "$files" | grep -c . || true)
+          # A API lista no máximo 3000 arquivos: sem ver todos, não dá para garantir nada.
+          if [ "$total" -gt 3000 ] || [ "$listed" -ne "$total" ]; then
+            echo "::error::A API listou $listed de $total arquivos do PR. Grande demais para conferir sozinho: confira à mão se há migration."
+            exit 1
+          fi
+          changed=$(printf '%s\n' "$files" | grep -c '^prisma/migrations/' || true)
+          if [ "$changed" -eq 0 ]; then
+            # Não bloqueia: tirar um campo do schema antes do DROP (guia 07) é um PR sem migration de propósito.
+            if printf '%s\n' "$files" | grep -qx 'prisma/schema.prisma'; then
+              echo "::warning::schema.prisma mudou sem migration: confira se é a primeira metade de uma migration destrutiva (guia 07) ou esquecimento."
+            fi
+            echo "O PR não muda prisma/migrations/."
+            exit 0
+          fi
+          if [ "$has_label" = "true" ]; then
+            echo "O PR muda $changed arquivo(s) de prisma/migrations/ e tem o label migration-aplicada."
+            exit 0
+          fi
+          echo "::error::Este PR muda prisma/migrations/. Aplique a migration no Supabase ANTES do merge (guia 07, 'Mudou o banco?') e só então ponha o label migration-aplicada."
+          exit 1

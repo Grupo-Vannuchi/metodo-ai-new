@@ -567,6 +567,13 @@ merge, bloqueia force-push e deleção da branch, e vale até para admin (`enfor
 **não** exige aprovação humana configurada — o gate é o CI, não um revisor. Isso não dispensa pedir
 revisão quando fizer sentido; só significa que o GitHub não vai impedir o merge por falta dela.
 
+Desde 27/11/2026 há um segundo check, `migration-aplicada`
+([.github/workflows/migration-aplicada.yml](../../.github/workflows/migration-aplicada.yml)): falha
+enquanto um PR que muda `prisma/migrations/` não tiver o label `migration-aplicada`, posto depois de
+aplicar a migration no Supabase ([guia 07](07-como-trabalhamos.md)). Ele só **bloqueia** o merge se
+estiver na lista de checks obrigatórios da proteção da `main` (Settings → Branches no GitHub, ajuste
+do admin do repositório); fora dela, aparece vermelho no PR, mas o botão de merge continua liberado.
+
 O runbook completo — o que o pipeline faz, o procedimento de migração e o histórico de incidentes — está no
 [README, seção 8 (Runbook de produção)](../../README.md) — não repetido aqui.
 
