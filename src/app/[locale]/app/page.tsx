@@ -16,8 +16,8 @@ import { getDashboardInsights, getFunnelChart } from "@/lib/queries/insights";
 import { getSalesReport, type SalesPeriod } from "@/lib/queries/sales-report";
 import { getSalesLeaderboard, getMonthlyTrend, getTopProducts, getTopLocations } from "@/lib/queries/dashboard-extra";
 import { getGoals, currentMonth } from "@/lib/queries/goals";
-import { PIE_MODELS, PIE_FINANCE_MODELS } from "@/lib/queries/dashboard";
-import { hasFeatureByModules, hasModule } from "@/config/modules";
+import { availablePieModels } from "@/lib/queries/dashboard";
+import { hasModule } from "@/config/modules";
 import { ModulesHome } from "@/components/dashboard/modules-home";
 import { PieCard } from "@/components/dashboard/pie-card";
 import { DashboardPeriod } from "@/components/dashboard/dashboard-period";
@@ -88,10 +88,8 @@ export default async function DashboardPage({
   const teamAchieved = goalsWithTarget.reduce((a, g) => a + g.achieved, 0);
   const teamPct = teamTarget > 0 ? Math.min(100, Math.round((teamAchieved / teamTarget) * 100)) : 0;
 
-  const pieModels: string[] = [
-    ...PIE_MODELS.filter((m) => m !== "tasks_by_priority" || hasModule(ctx.modules, "tasks")),
-    ...(hasFeatureByModules(ctx.modules, "finance") ? PIE_FINANCE_MODELS : []),
-  ];
+  // The same list the pie route accepts (module and, for tasks and finance, the screen).
+  const pieModels: string[] = availablePieModels(ctx);
 
   const kpis = [
     { icon: TrendingUp, label: t("openCount"), value: String(ins.pipeline.openCount) },

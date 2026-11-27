@@ -1,9 +1,11 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { tenantDb } from "@/lib/tenant-db";
+import { canAccessScreen } from "@/lib/access";
+import { hasFeatureByModules, hasModule } from "@/config/modules";
 
-/** Pie-chart breakdowns the user can pick on the dashboard. The finance one is
- * only offered when the plan includes finance (see PIE_FINANCE_MODELS). */
+/** Pie-chart breakdowns the user can pick on the dashboard. Which ones a given
+ * member gets is `availablePieModels`. */
 export const PIE_MODELS = [
   "opps_by_stage",
   "value_by_stage",
@@ -15,6 +17,23 @@ export const PIE_MODELS = [
 export const PIE_FINANCE_MODELS = ["finance_by_type"] as const;
 
 export type PieModel = (typeof PIE_MODELS)[number] | (typeof PIE_FINANCE_MODELS)[number];
+
+/**
+ * The pies this member may open: the dashboard offers exactly these and
+ * `/api/dashboard/pie` refuses the rest, so the two can't drift. CRM pies need
+ * the CRM module (the dashboard is the CRM view); the tasks and finance pies
+ * also need their screen, like the tasks and finance pages, since a member
+ * restricted by an access template must not read them through the chart.
+ */
+export function availablePieModels(ctx: { modules: string[]; allowedScreens: string[] }): PieModel[] {
+  if (!hasModule(ctx.modules, "crm")) return [];
+  return [
+    ...PIE_MODELS.filter(
+      (m) => m !== "tasks_by_priority" || (hasModule(ctx.modules, "tasks") && canAccessScreen(ctx, "tasks")),
+    ),
+    ...(hasFeatureByModules(ctx.modules, "finance") && canAccessScreen(ctx, "finance") ? PIE_FINANCE_MODELS : []),
+  ];
+}
 
 /** One slice: `key` is either a resolved display name (stage/owner/source) or a
  * raw enum value (status/priority/type) that the route localizes. */
