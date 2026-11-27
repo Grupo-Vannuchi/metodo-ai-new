@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireOrgContext } from "@/lib/tenant";
 import { employeeFormOptions, getEmployee } from "@/lib/queries/hr";
 import { EmployeeForm, type EmployeeFormDefaults } from "@/components/hr/employee-form";
+import { canLinkEmployeeLogins } from "@/lib/hr/permissions";
 import { resolveLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +60,7 @@ export default async function EditEmployeePage({
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold tracking-tight">{t("form.editTitle")}</h1>
-      <EmployeeForm id={id} defaults={defaults} options={options} />
+      <EmployeeForm id={id} defaults={defaults} options={options} canEditLogin={canLinkEmployeeLogins(ctx)} />
     </div>
   );
 }

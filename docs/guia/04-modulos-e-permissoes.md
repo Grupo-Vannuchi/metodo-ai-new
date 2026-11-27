@@ -188,7 +188,12 @@ Suprimentos (`stock.ts`, `purchases.ts`, `suppliers.ts`, `supply-items.ts`, `reg
   pendente é de quem o registrou ou de OWNER/ADMIN (`canDeleteTimeOff`);
 - folha: aprovar, reabrir, pagar (que lança uma despesa por funcionário no Financeiro) e excluir uma
   folha aprovada são só de OWNER/ADMIN (`canApprovePayroll`). Montar e editar o rascunho continua com
-  quem tem a tela `hr`.
+  quem tem a tela `hr`;
+- vínculo da ficha com um login ("Usuário do sistema"): ligar, desligar ou trocar é só de OWNER/ADMIN,
+  e só o OWNER mexe no próprio vínculo (`canChangeEmployeeLogin`). É esse vínculo que diz de quem são
+  as férias, então sem a trava um admin desligaria a própria ficha, aprovaria as próprias férias e
+  ligaria de novo. Salvar a ficha sem mudar o vínculo vale para todos com a tela; o MEMBER vê o campo
+  só para leitura.
 
 **Gating cross-módulo** (uma tela de um módulo usando algo de outro) segue um padrão fixo: o
 **server** resolve `hasModule(...)` e passa o resultado como prop para o client component — nunca
@@ -230,7 +235,7 @@ para o tipo mas sem dono ainda — não gatear nada por elas por engano.
 
 ## Paridade de i18n
 
-`src/messages/pt.json` e `src/messages/en.json` têm **3682 chaves-folha cada um** (contagem
+`src/messages/pt.json` e `src/messages/en.json` têm **3684 chaves-folha cada um** (contagem
 própria, recursiva sobre os dois arquivos — batem exatamente). Não existe script no repositório
 que verifique a paridade inteira automaticamente: os dois arquivos em `scripts/` que leem
 `pt.json`/`en.json` só conferem as chaves de que dependem. O `check-email-broadcast.ts` (`npm run check:email`)

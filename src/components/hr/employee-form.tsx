@@ -62,10 +62,14 @@ export function EmployeeForm({
   id,
   defaults,
   options,
+  canEditLogin = false,
 }: {
   id?: string; // present = edit mode
   defaults: EmployeeFormDefaults;
   options: EmployeeFormOptions;
+  /** OWNER/ADMIN (`canLinkEmployeeLogins`). Others see the link read-only and the
+   *  form keeps sending the current value, which the action accepts unchanged. */
+  canEditLogin?: boolean;
 }) {
   const t = useTranslations("hr");
   const tv = useTranslations("validation");
@@ -195,13 +199,25 @@ export function EmployeeForm({
           </div>
           <div>
             <Label htmlFor="userId">{t("form.systemUser")}</Label>
-            <select id="userId" className={selectCls} {...register("userId")}>
-              <option value="">{t("form.noSystemUser")}</option>
-              {options.users.map((u) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-muted-foreground">{t("form.systemUserHint")}</p>
+            {canEditLogin ? (
+              <>
+                <select id="userId" className={selectCls} {...register("userId")}>
+                  <option value="">{t("form.noSystemUser")}</option>
+                  {options.users.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">{t("form.systemUserHint")}</p>
+              </>
+            ) : (
+              <>
+                {/* Not registered: the form submits the default (current) link. */}
+                <p id="userId" className="flex h-10 items-center rounded-md border border-border bg-muted/40 px-3 text-sm text-muted-foreground">
+                  {options.users.find((u) => u.id === defaults.userId)?.name ?? t("form.noSystemUser")}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{t("form.systemUserLocked")}</p>
+              </>
+            )}
           </div>
         </div>
       </fieldset>

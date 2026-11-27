@@ -6,11 +6,12 @@ import { canUseScreen } from "@/lib/access";
 import { tenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { deleteMedia } from "@/lib/storage/blob";
+import { canChangeEmployeeLogin } from "@/lib/hr/permissions";
 import { employeeSchema, catalogSchema, type EmployeeInput, type CatalogInput } from "@/lib/validations/employee";
 
 export type HrActionResult =
   | { ok: true; id: string }
-  | { ok: false; error: "unauthorized" | "invalid" | "duplicate" | "unknown" };
+  | { ok: false; error: "unauthorized" | "forbidden" | "invalid" | "duplicate" | "unknown" };
 
 const money = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 const dateOrNull = (s?: string) => (s && s.trim() ? new Date(s) : null);
@@ -94,6 +95,7 @@ export async function createEmployee(input: EmployeeInput): Promise<HrActionResu
   try {
     const org = ctx.organizationId;
     const data = await toData(org, parsed.data);
+    if (!canChangeEmployeeLogin(ctx, { from: null, to: data.userId })) return { ok: false, error: "forbidden" };
 
     // One employee per system user (enforced by a unique index too).
     if (data.userId) {
@@ -128,10 +130,14 @@ export async function updateEmployee(id: string, input: EmployeeInput): Promise<
   try {
     const org = ctx.organizationId;
     const db = tenantDb(org);
-    const current = await db.employee.findFirst({ where: { id }, select: { id: true } });
+    const current = await db.employee.findFirst({ where: { id }, select: { id: true, userId: true } });
     if (!current) return { ok: false, error: "unknown" };
 
     const data = await toData(org, parsed.data);
+    // The current link counts only while that login is still in the org (toData
+    // drops a departed one), so saving such a record isn't read as a change.
+    const linked = await memberInOrg(org, current.userId ?? undefined);
+    if (!canChangeEmployeeLogin(ctx, { from: linked, to: data.userId })) return { ok: false, error: "forbidden" };
 
     if (data.userId) {
       const taken = await db.employee.findFirst({

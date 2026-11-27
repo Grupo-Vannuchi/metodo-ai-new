@@ -1067,7 +1067,7 @@
         "invalid": "Dados inválidos. Confira o funcionário e o período.",
         "unauthorized": "Sessão expirada.",
         "locked": "Esta solicitação já foi decidida.",
-        "forbidden": "Só o dono ou um admin decide férias, e ninguém decide as próprias. Excluir, só quem pediu ou um admin.",
+        "forbidden": "Só o dono ou um admin decide férias, e o admin não decide as próprias. Excluir, só quem pediu ou um admin.",
         "unknown": "Algo deu errado."
       }
     },
@@ -1088,6 +1088,7 @@
       "systemUser": "Usuário do sistema",
       "noSystemUser": "Sem acesso ao sistema",
       "systemUserHint": "Opcional. Vincule se a pessoa usa o CRM — só assim ela consome um assento do plano.",
+      "systemUserLocked": "Só o dono ou um admin muda este vínculo.",
       "address": "Endereço",
       "zip": "CEP",
       "cepLookup": "Buscar endereço pelo CEP",
@@ -1246,6 +1247,7 @@
       "invalid": "Dados inválidos.",
       "unauthorized": "Sessão expirada.",
       "duplicate": "Já existe um registro com esse nome/vínculo.",
+      "forbidden": "Só o dono ou um admin muda o usuário do sistema vinculado, e o admin não muda o próprio vínculo.",
       "unknown": "Algo deu errado."
     }
   },

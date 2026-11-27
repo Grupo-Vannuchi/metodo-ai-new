@@ -136,8 +136,11 @@ isolamento entre organizações é assunto do [guia 03](03-multi-tenancy.md), n�
 
 **Rota que entrega um arquivo privado** (hoje, o documento de funcionário,
 [src/app/api/hr/documents/[id]/route.ts](../../src/app/api/hr/documents/[id]/route.ts)):
-- confira a mesma permissão da tela, e não só o login. Para o RH, isso é `canAccessScreen(ctx, "hr")` e
-  `hasFeatureByModules(ctx.modules, "hr")`, como no `hr/layout.tsx`;
+- confira a mesma permissão da tela, e não só o login. Para o RH, isso é `canUseScreen(ctx, "hr")`
+  ([src/lib/access.ts](../../src/lib/access.ts): o módulo e a tela, como no `hr/layout.tsx`). As três
+  rotas do RH fazem isso: os dois documentos e o holerite
+  ([src/app/api/hr/payroll/items/[id]/payslip/route.ts](<../../src/app/api/hr/payroll/items/[id]/payslip/route.ts>)),
+  que até 27/11/2026 só conferia o login e mostrava o salário a quem tivesse o id;
 - ache o registro pelo `tenantDb`, para um id de outra empresa dar 404;
 - envie os bytes com `readPrivate` ([src/lib/storage/blob.ts](../../src/lib/storage/blob.ts)), como anexo e sem cache.
 

@@ -3,8 +3,7 @@ import { revalidatePath } from "next/cache";
 import { getOrgContext } from "@/lib/tenant";
 import { tenantDb } from "@/lib/tenant-db";
 import { putPrivate } from "@/lib/storage/blob";
-import { canAccessScreen } from "@/lib/access";
-import { hasFeatureByModules } from "@/config/modules";
+import { canUseScreen } from "@/lib/access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,7 +35,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const ctx = await getOrgContext();
   if (!ctx) return new Response("Unauthorized", { status: 401 });
   // Same gate as the HR pages.
-  if (!canAccessScreen(ctx, "hr") || !hasFeatureByModules(ctx.modules, "hr")) {
+  if (!canUseScreen(ctx, "hr")) {
     return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 

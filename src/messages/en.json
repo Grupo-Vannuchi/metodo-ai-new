@@ -1067,7 +1067,7 @@
         "invalid": "Invalid data. Check the employee and the period.",
         "unauthorized": "Session expired.",
         "locked": "This request was already decided.",
-        "forbidden": "Only the owner or an admin decides time off, and nobody decides their own. Only the requester or an admin can delete it.",
+        "forbidden": "Only the owner or an admin decides time off, and an admin can't decide their own. Only the requester or an admin can delete it.",
         "unknown": "Something went wrong."
       }
     },
@@ -1088,6 +1088,7 @@
       "systemUser": "System user",
       "noSystemUser": "No system access",
       "systemUserHint": "Optional. Link if the person uses the CRM — only then do they take a plan seat.",
+      "systemUserLocked": "Only the owner or an admin can change this link.",
       "address": "Address",
       "zip": "ZIP",
       "cepLookup": "Look up address by postal code",
@@ -1246,6 +1247,7 @@
       "invalid": "Invalid data.",
       "unauthorized": "Session expired.",
       "duplicate": "A record with that name/link already exists.",
+      "forbidden": "Only the owner or an admin can change the linked system user, and an admin can't change their own link.",
       "unknown": "Something went wrong."
     }
   },
