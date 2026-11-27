@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { createHash } from "crypto";
+import { createHash, timingSafeEqual } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { parseInboundMessages, parseInboundReactions } from "@/lib/whatsapp/inbound";
@@ -33,7 +33,10 @@ export async function POST(
     return new Response("Unknown connection", { status: 404 });
   }
   const expected = (conn.meta as { webhookToken?: string } | null)?.webhookToken;
-  if (!expected || token !== expected) {
+  // Constant-time, like the cron and MCP guards: the token is the only proof of who calls.
+  const given = Buffer.from(token);
+  const want = Buffer.from(expected ?? "");
+  if (!expected || given.length !== want.length || !timingSafeEqual(given, want)) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -92,7 +95,7 @@ export async function POST(
     } else if (ev.includes("messages.update") || ev.includes("messages_update")) {
       const updates = parseDeliveryUpdates("EVOLUTION", payload);
       if (updates.length > 0) {
-        await applyCampaignDeliveryUpdates(updates);
+        await applyCampaignDeliveryUpdates(conn.organizationId, updates);
         await applyInboxMessageStatus(conn.organizationId, updates);
       }
     }
