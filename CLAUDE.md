@@ -106,6 +106,10 @@ aviso pro npm. `.nvmrc` é a fonte da verdade do major ([detalhe](docs/guia/06-a
 **Variáveis de ambiente.** Nunca leia `process.env.X` direto no código da app — declare em
 [src/lib/env.ts](src/lib/env.ts) (zod) e importe de lá. Obrigatórias faltando derrubam o boot.
 
+**Usuário por e-mail.** Busque sempre por `findUserIdByEmail`/`isEmailTaken` de
+[src/lib/user-email.ts](src/lib/user-email.ts), nunca `prisma.user.findUnique({ where: { email } })`: contas antigas têm
+maiúsculas, e o `@unique` diferencia. Detalhe no README §3.2.
+
 **Webhooks em dev** exigem túnel (ngrok) com `NEXT_PUBLIC_SITE_URL` apontando pra ele; localhost não recebe webhook.
 
 ## Convenções

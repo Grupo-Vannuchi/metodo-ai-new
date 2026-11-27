@@ -6,8 +6,9 @@
  * Covers: when Microsoft counts an address as verified (`microsoftEmailVerified`); an identity already
  * linked signs in without looking at the address; an unverified address never links nor creates; a
  * verified address links to the user with that address, keeping the password of a confirmed account
- * and dropping the password of an account whose address was never confirmed; a new address creates a
- * user and a company.
+ * and dropping the password of an account whose address was never confirmed; an old account saved with
+ * capitals is found, not duplicated; a new address creates a user and a company. Also the lookup of a
+ * user by e-mail (src/lib/user-email.ts): case ignored, `_` and `%` literal, a legacy duplicate resolved.
  *
  * Creates a company `OAUTH-DB-<stamp>` and users `oauth-db-*-<stamp>@test.local`, and ALWAYS deletes what
  * it created, even when a check fails. A run that is killed leaves them behind: delete by hand the users
@@ -22,6 +23,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { assertLocalDatabase } from "./lib/local-db";
 import { resolveOAuthSession } from "@/lib/oauth/session";
 import { microsoftEmailVerified } from "@/lib/oauth/providers";
+import { findUserIdByEmail, isEmailTaken, normalizeEmail } from "@/lib/user-email";
 
 const connectionString = process.env.DATABASE_URL;
 assertLocalDatabase("check:oauth:db", connectionString);
@@ -113,6 +115,40 @@ check("an identity already linked signs in without looking at the address", asyn
     name: "x",
   });
   assert.equal(r.ok && r.session.userId, ctx.confirmed);
+});
+
+check("a verified address links to an old account saved with capitals instead of creating a second one", async () => {
+  // Providers hand the address in lower case; the account was saved before 27/11/2026 with capitals.
+  const legacy = await prisma.user.create({
+    data: { name: "legacy", email: `oauth-db-Legado-${stamp}@test.local`, passwordHash: "x", emailVerified: new Date() },
+  });
+  await prisma.membership.create({ data: { organizationId: ctx.orgId, userId: legacy.id, role: "MEMBER" } });
+  const r = await resolveOAuthSession("google", {
+    sub: `g-legacy-${stamp}`,
+    email: mail("legado"),
+    emailVerified: true,
+    name: "x",
+  });
+  assert.equal(r.ok && r.session.userId, legacy.id);
+  const sameInbox = await prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM "users" WHERE lower(email) = ${mail("legado")}`;
+  assert.equal(Number(sameInbox[0].n), 1, "no second account for the same inbox");
+});
+
+check("lookup by e-mail: case ignored, the lower-case address wins a legacy duplicate, `_` and `%` are literal", async () => {
+  const lower = await prisma.user.create({ data: { name: "dup", email: mail("dup"), passwordHash: "x" } });
+  await prisma.user.create({ data: { name: "dup", email: `oauth-db-DUP-${stamp}@test.local`, passwordHash: "x" } });
+  assert.equal(await findUserIdByEmail(`OAUTH-DB-Dup-${stamp}@TEST.local`), lower.id);
+  assert.equal(await findUserIdByEmail(mail("confirmed").toUpperCase()), ctx.confirmed);
+
+  const underscore = await prisma.user.create({ data: { name: "u", email: mail("un_der"), passwordHash: "x" } });
+  assert.equal(await findUserIdByEmail(mail("UN_DER")), underscore.id);
+  assert.equal(await findUserIdByEmail(mail("unxder")), null, "`_` is not a wildcard");
+  assert.equal(await isEmailTaken(mail("unxder")), false);
+  assert.equal(await findUserIdByEmail(`oauth-db-%-${stamp}@test.local`), null, "`%` is not a wildcard");
+
+  assert.equal(await isEmailTaken(mail("CONFIRMED")), true, "taken in another case");
+  assert.equal(await isEmailTaken(mail("CONFIRMED"), ctx.confirmed), false, "but not by the account itself");
+  assert.equal(normalizeEmail("  Fulano@Exemplo.COM "), "fulano@exemplo.com");
 });
 
 check("a new verified address creates a user and a company", async () => {

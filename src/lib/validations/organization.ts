@@ -4,7 +4,7 @@ import { z } from "zod";
 export const invitableRoles = ["ADMIN", "MEMBER"] as const;
 
 export const inviteSchema = z.object({
-  email: z.string().trim().email("E-mail inválido.").max(200),
+  email: z.string().trim().toLowerCase().email("E-mail inválido.").max(200),
   role: z.enum(invitableRoles).default("MEMBER"),
 });
 
