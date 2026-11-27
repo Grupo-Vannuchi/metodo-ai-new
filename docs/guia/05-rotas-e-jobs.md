@@ -126,7 +126,7 @@ if (!hasModule(ctx.modules, "crm") || !canAccessScreen(ctx, entity)) {
 
 Quando a tela oferece uma lista de opções e a rota serve cada uma, as duas leem **a mesma função**, para não
 divergirem. O painel e [src/app/api/dashboard/pie/route.ts](../../src/app/api/dashboard/pie/route.ts) usam
-`availablePieModels(ctx)` ([src/lib/queries/dashboard.ts](../../src/lib/queries/dashboard.ts)): as pizzas do
+`availablePieModels(ctx)` ([src/lib/dashboard-access.ts](../../src/lib/dashboard-access.ts)): as pizzas do
 CRM pedem o módulo CRM, e as de tarefas e do Financeiro pedem também a tela. Até 27/11/2026 a rota da pizza
 olhava só o módulo do Financeiro, e quem não tinha a tela lia os números dele pelo gráfico.
 

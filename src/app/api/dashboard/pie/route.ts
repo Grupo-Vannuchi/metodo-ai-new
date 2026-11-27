@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { getOrgContext } from "@/lib/tenant";
-import { availablePieModels, dashboardPie, PIE_MODELS, PIE_FINANCE_MODELS, type PieModel } from "@/lib/queries/dashboard";
+import { dashboardPie, PIE_MODELS, PIE_FINANCE_MODELS, type PieModel } from "@/lib/queries/dashboard";
+import { availablePieModels } from "@/lib/dashboard-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -16,7 +16,7 @@ import { getDashboardInsights, getFunnelChart } from "@/lib/queries/insights";
 import { getSalesReport, type SalesPeriod } from "@/lib/queries/sales-report";
 import { getSalesLeaderboard, getMonthlyTrend, getTopProducts, getTopLocations } from "@/lib/queries/dashboard-extra";
 import { getGoals, currentMonth } from "@/lib/queries/goals";
-import { availablePieModels } from "@/lib/queries/dashboard";
+import { availablePieModels } from "@/lib/dashboard-access";
 import { hasModule } from "@/config/modules";
 import { ModulesHome } from "@/components/dashboard/modules-home";
 import { PieCard } from "@/components/dashboard/pie-card";
