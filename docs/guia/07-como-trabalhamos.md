@@ -74,7 +74,13 @@ A Hostinger **não** aplica migration no deploy. Código novo com o banco antigo
 todo PR para a `main`: passa direto se o PR não mexe em `prisma/migrations/` e, se mexe, só passa com
 o label. Tirar o label faz o check falhar de novo. Ele existe por causa da queda de 25/11/2026, quando
 um PR com migration entrou na `main` antes de a migration rodar no Supabase e o login ficou fora do ar
-por quase uma hora. O label é a confirmação de quem aplicou: não o ponha "para destravar".
+por quase uma hora. O label é a confirmação de quem aplicou: não o ponha "para destravar". É uma
+trava contra esquecimento, não contra intenção — qualquer um com acesso de escrita põe o label.
+
+O check lê os labels e a lista de arquivos direto da API a cada execução (um "Re-run" depois de tirar o
+label não passa). PR com mais de 3000 arquivos falha, porque a API não lista todos: confira à mão. E um
+PR que muda `prisma/schema.prisma` sem migration passa com um aviso amarelo, porque às vezes é de
+propósito (o parágrafo abaixo).
 
 Migration que só pode entrar **depois** do deploy (a que apaga uma coluna que o código antigo ainda
 lê) não vai no PR do código: primeiro entra o código, sem ela; depois do deploy, aplique-a no Supabase
